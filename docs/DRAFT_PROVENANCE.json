@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
-  "source_tree": "ea9b0414b22a431cf87413da7a83b680214b6f45",
+  "source_commit": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
+  "source_tree": "31a3d7affb9363292254b78bdbcbc32a363f0353",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -94,6 +94,11 @@
       "commit": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
       "tree": "ea9b0414b22a431cf87413da7a83b680214b6f45",
       "subject": "feat(streaming-speech): add owned Cartesia Live STT sessions"
+    },
+    {
+      "commit": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
+      "tree": "31a3d7affb9363292254b78bdbcbc32a363f0353",
+      "subject": "Add bounded native voicemail detection and ordered speech gate"
     }
   ],
   "scope_evidence": [
@@ -168,6 +173,13 @@
       "scope": "cartesia_stt",
       "report_sha256": "9bdd3ffb3e4e49b1b68580c2d6a0217b97f0b6f32ca69a90cf517ed7021833fa",
       "qualified_source_manifest_sha256": "51c7495a21362023b6b6e6f4eb094cd60aabfada5ac479eb1214f495e0a887ab"
+    },
+    {
+      "scope": "voicemail_compact_tts",
+      "report_sha256": "9ed2b64cbc1ea267e00fde85302927a4368086d71814188b49bc81f170928cea",
+      "machine_qualification_sha256": "eda9ef8dd94ce8d0a7c938f2d66969725fc4da8e34c22a51ef91943d349bb40d",
+      "qualified_source_manifest_sha256": "ec520d8116412b68c8a507fbffe97647ffa299b66ee955e7f5893c94a0617c72",
+      "integration_patch_sha256": "41677dcdc2d08f6bb16d4605f30e91c363dc8309ddabef81d2e795daa070b1fa"
     }
   ],
   "omitted_native_administrative_paths": [
@@ -183,9 +195,39 @@
     "src/pipecat/audio/vad/data/silero_vad.onnx",
     "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
   ],
-  "raw_source_entries": 1445,
+  "raw_source_entries": 1455,
   "readme_bytes": 0,
   "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
   "new_execution": "NONE",
-  "release_ready": false
+  "release_ready": false,
+  "previous_public_draft": {
+    "branch": "draft/native-reviewed-2026-10-10-fcf1752",
+    "commit": "9b91a55ee7133c94f3c5454b7a3bab96ce2c6d27",
+    "tree": "3fc257ce9a4d48248088c5cd2e2e49b50a6e4103",
+    "canonical_source": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
+    "update_requires_expected_head": "9b91a55ee7133c94f3c5454b7a3bab96ce2c6d27"
+  },
+  "voicemail_scoped_results": {
+    "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
+    "positive_tests": {
+      "processors_voicemail_first": 135,
+      "processors_voicemail_restored": 135,
+      "processors_feature_off": 92,
+      "classifiers": 36,
+      "media_transport_with_assistant_history_and_turn_recording": 208,
+      "independently_authored_voicemail_tests": 31,
+      "author_voicemail_tests": 12
+    },
+    "checks": {
+      "strict_processors_all_targets_clippy_no_deps": "passed twice",
+      "facade_no_defaults_voicemail": "passed",
+      "explicit_early_final_fmt": "passed",
+      "default_production_closure": "no classifier dependency",
+      "enabled_and_baseline_closure": "no WebRTC/LiveKit",
+      "unchanged_source_after_restoration": "all 1452 files match"
+    },
+    "isolated_compiling_controls": 5,
+    "combined_projection_full_gate": "NOT_RUN",
+    "counts_are_source_bound_and_overlap": true
+  }
 }

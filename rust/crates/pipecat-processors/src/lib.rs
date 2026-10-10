@@ -246,3 +246,6 @@ pub use full_response::{
     FullResponseAggregatorConfig, FullResponseCallback, FullResponseCompletion, FullResponseStats,
     LlmFullResponseAggregator,
 };
+
+#[cfg(feature = "voicemail")]
+pub mod voicemail;

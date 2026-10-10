@@ -80,3 +80,6 @@ pub use pipecat_turns as turns;
 pub use pipecat_vad as vad;
 #[cfg(feature = "webrtc")]
 pub use pipecat_webrtc as webrtc;
+
+#[cfg(feature = "voicemail")]
+pub use pipecat_processors::voicemail;
