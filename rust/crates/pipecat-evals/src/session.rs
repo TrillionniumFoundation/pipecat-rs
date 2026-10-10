@@ -1,12 +1,15 @@
 //! Owned native sessions with bounded transport, handshake, runtime, and cancellation.
 use crate::{
     events::{EventLimits, EventStream},
+    judge::JudgeRequest,
     matcher::{
         AssertionFailure, ExpectationMatcher, ExpectationResult, MatchOutcome, PendingCheck,
         ScriptResult,
     },
-    serializer, EvalError, ScriptScenario, ScriptTurn,
+    serializer, EvalError, EvalJudge, Expectation, JudgeDecision, JudgeVerdict, ScriptScenario,
+    ScriptTurn,
 };
+use pipecat_classifiers::{CallOptions, ClassifierError};
 use pipecat_protocol::rtvi::{Envelope, PROTOCOL_VERSION};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
 use serde_json::{json, Value};
@@ -119,6 +122,8 @@ pub struct EvalSession {
     phase: &'static str,
     wire_messages: usize,
     wire_bytes: usize,
+    judge: Option<EvalJudge>,
+    active_expectation: i64,
 }
 impl EvalSession {
     pub fn new(
@@ -127,8 +132,33 @@ impl EvalSession {
         options: SessionOptions,
     ) -> Result<Self, EvalError> {
         scenario.validate()?;
+        let judge = if scenario.needs_judge() {
+            Some(scenario.judge.as_ref().and_then(|j| j.eval.as_ref())
+                .ok_or_else(|| EvalError::Scenario("eval assertions require judge.eval configuration or EvalSession::with_judge".into()))?.build()?)
+        } else {
+            None
+        };
+        Self::construct(scenario, url.into(), options, judge)
+    }
+    /// Use a native classifier-backed judge owned exclusively by this run.
+    /// The supplied judge takes precedence over any scenario provider configuration.
+    pub fn with_judge(
+        scenario: ScriptScenario,
+        url: impl Into<String>,
+        options: SessionOptions,
+        judge: EvalJudge,
+    ) -> Result<Self, EvalError> {
+        Self::construct(scenario, url.into(), options, Some(judge))
+    }
+    fn construct(
+        scenario: ScriptScenario,
+        url: String,
+        options: SessionOptions,
+        judge: Option<EvalJudge>,
+    ) -> Result<Self, EvalError> {
+        scenario.validate()?;
         options.validate()?;
-        let url = connect_url(&url.into(), &scenario)?;
+        let url = connect_url(&url, &scenario)?;
         let result = ScriptResult::new(&scenario.name, scenario.turns.len());
         Ok(Self {
             scenario,
@@ -147,6 +177,8 @@ impl EvalSession {
             phase: "connect",
             wire_messages: 0,
             wire_bytes: 0,
+            judge,
+            active_expectation: -1,
         })
     }
     /// Dropping this future also drops its transport owner; no reader task is detached.
@@ -160,6 +192,13 @@ impl EvalSession {
             _=tokio::time::sleep(max_duration)=>Err(EvalError::Timeout("session")),
             result=self.drive()=>result,
         };
+        // A classifier can finish synchronously in the same poll that the
+        // caller cancels. Fence final publication as well as the select branch.
+        let outcome = if cancel.is_cancelled() {
+            Err(EvalError::Cancelled)
+        } else {
+            outcome
+        };
         if let Err(error) = outcome {
             if let (Ok(index), Some(started)) =
                 (usize::try_from(self.active_turn), self.active_turn_started)
@@ -168,6 +207,10 @@ impl EvalSession {
             }
             let kind = match &error {
                 EvalError::Cancelled => "cancelled",
+                EvalError::Judge(ClassifierError::Cancelled) => "cancelled",
+                EvalError::Judge(ClassifierError::Deadline) => "judge_timeout",
+                EvalError::Judge(ClassifierError::Limit(_)) => "limit_exceeded",
+                EvalError::Judge(_) => "judge_error",
                 EvalError::Limit(_) => "limit_exceeded",
                 EvalError::Disconnected => "disconnected",
                 _ if self.phase == "connect" => "connect_failed",
@@ -178,8 +221,16 @@ impl EvalSession {
             };
             self.result.fail(AssertionFailure {
                 turn_index: self.active_turn,
-                expectation_index: -1,
-                event_name: self.phase.into(),
+                expectation_index: self.active_expectation,
+                event_name: usize::try_from(self.active_turn)
+                    .ok()
+                    .and_then(|ti| self.scenario.turns.get(ti))
+                    .and_then(|turn| {
+                        usize::try_from(self.active_expectation)
+                            .ok()
+                            .and_then(|ei| turn.expect.get(ei))
+                    })
+                    .map_or_else(|| self.phase.into(), |exp| exp.event.clone()),
                 reason: error.to_string(),
                 kind: kind.into(),
             });
@@ -238,6 +289,7 @@ impl EvalSession {
         self.phase = "turn";
         for index in 0..self.scenario.turns.len() {
             self.active_turn = index as i64;
+            self.active_expectation = -1;
             let started = Instant::now();
             self.active_turn_started = Some(started);
             let turn = self.scenario.turns[index].clone();
@@ -268,6 +320,7 @@ impl EvalSession {
             }
         }
         self.active_turn = -1;
+        self.active_expectation = -1;
         self.active_turn_started = None;
         Ok(())
     }
@@ -312,14 +365,22 @@ impl EvalSession {
             }
         }
         if let Some(user) = turn.user {
+            self.record_pending_reply()?;
             self.stream.turn_boundary();
+            if let Some(judge) = &mut self.judge {
+                judge.add_user_message(&user)?;
+            }
             self.send(
                 "send-text",
                 json!({"content":user,"options":{"run_immediately":true,"audio_response":false}}),
             )
             .await?;
         } else if let Some(dtmf) = turn.dtmf {
+            self.record_pending_reply()?;
             self.stream.turn_boundary();
+            if let Some(judge) = &mut self.judge {
+                judge.add_user_message(&format!("(DTMF keypad input: {dtmf})"))?;
+            }
             self.send(
                 "dtmf",
                 json!({"buttons":dtmf.chars().map(|c|c.to_string()).collect::<Vec<_>>()}),
@@ -328,33 +389,14 @@ impl EvalSession {
         }
         let anchor = Instant::now();
         for (ei, expectation) in turn.expect.into_iter().enumerate() {
+            self.active_expectation = ei as i64;
             let deadline = anchor
                 + expectation
                     .within_ms
                     .map(Duration::from_millis)
                     .unwrap_or(self.options.default_timeout);
             let name = expectation.event.clone();
-            let mut check = PendingCheck::new(expectation);
-            let mut outcome = self.matcher.buffered(&mut check);
-            while outcome == MatchOutcome::Pending {
-                if Instant::now() >= deadline {
-                    outcome = self.matcher.timeout(&check);
-                    break;
-                }
-                if let Some(event) = self.stream.pop() {
-                    outcome = self.matcher.feed(&mut check, event)?;
-                    continue;
-                }
-                match self.pump(deadline).await {
-                    Err(EvalError::Timeout(_)) => {
-                        outcome = self.matcher.timeout(&check);
-                        break;
-                    }
-                    other => {
-                        other?;
-                    }
-                }
-            }
+            let (outcome, judgments) = self.match_expectation(expectation, deadline).await?;
             let (passed, matched, timeout) = match outcome {
                 MatchOutcome::Passed(text) => (true, text, false),
                 MatchOutcome::Failed { kind, reason } => {
@@ -377,12 +419,171 @@ impl EvalSession {
                     event_name: name,
                     passed,
                     matched,
+                    judgments,
                 });
             if timeout {
                 break;
             }
         }
         Ok(())
+    }
+    fn record_event(&mut self, event: &Value) -> Result<(), EvalError> {
+        if event["type"] == "llm_response" {
+            if let Some(judge) = &mut self.judge {
+                judge.add_assistant_message(event["text"].as_str().unwrap_or(""))?;
+            }
+        }
+        Ok(())
+    }
+    fn record_pending_reply(&mut self) -> Result<(), EvalError> {
+        if self.judge.is_some() {
+            // Only output before the send boundary is attributed to the old turn.
+            // Preserve other pending events for the normal turn-boundary filter.
+            for event in self.stream.pending_responses() {
+                self.record_event(&event)?;
+            }
+        }
+        Ok(())
+    }
+    async fn match_expectation(
+        &mut self,
+        expectation: Expectation,
+        deadline: Instant,
+    ) -> Result<(MatchOutcome, Vec<JudgeVerdict>), EvalError> {
+        let criterion = expectation.eval.clone();
+        let is_call = expectation.is_call();
+        let mut judgments = Vec::new();
+        let mut check = PendingCheck::for_session(expectation);
+        let mut outcome = self.matcher.buffered(&mut check);
+        let mut no_deadline = None;
+        let mut last_decision = None;
+        loop {
+            if let Some(criterion) = &criterion {
+                for event in check.take_judged_calls() {
+                    let request = self.judge.as_mut().expect("validated judge").prepare_call(
+                        event["name"].as_str().unwrap_or("?"),
+                        &event["args"],
+                        criterion,
+                    )?;
+                    let Some(verdict) = self.run_judgment(request, deadline).await? else {
+                        return Ok((judge_interrupted(), judgments));
+                    };
+                    let decision = verdict.decision;
+                    judgments.push(verdict);
+                    if decision != JudgeDecision::Yes {
+                        return Ok((judge_no(), judgments));
+                    }
+                }
+                if !is_call && matches!(outcome, MatchOutcome::Passed(_)) {
+                    let request = self
+                        .judge
+                        .as_mut()
+                        .expect("validated judge")
+                        .prepare_reply(criterion)?;
+                    let Some(verdict) = self.run_judgment(request, deadline).await? else {
+                        return Ok((judge_interrupted(), judgments));
+                    };
+                    let decision = verdict.decision;
+                    judgments.push(verdict);
+                    if decision == JudgeDecision::Yes {
+                        return Ok((outcome, judgments));
+                    }
+                    last_decision = Some(decision);
+                    no_deadline = if decision == JudgeDecision::No {
+                        Some(if self.stream.bot_speaking {
+                            deadline
+                        } else {
+                            (Instant::now() + self.judge.as_ref().unwrap().no_grace()).min(deadline)
+                        })
+                    } else {
+                        None
+                    };
+                    outcome = MatchOutcome::Pending;
+                }
+            }
+            if outcome != MatchOutcome::Pending {
+                break;
+            }
+            let until = no_deadline.unwrap_or(deadline);
+            if Instant::now() >= until {
+                outcome = if last_decision == Some(JudgeDecision::No) {
+                    judge_no()
+                } else if last_decision == Some(JudgeDecision::Continue) {
+                    MatchOutcome::Failed {
+                        kind: "judge_continue".into(),
+                        reason: "judge still required more reply at the shared turn deadline"
+                            .into(),
+                    }
+                } else {
+                    self.matcher.timeout(&check)
+                };
+                break;
+            }
+            if let Some(event) = self.stream.pop() {
+                if criterion.is_some()
+                    && !is_call
+                    && event["type"] == "llm_response"
+                    && event["text"].as_str().is_none_or(|s| s.trim().is_empty())
+                {
+                    continue;
+                }
+                self.record_event(&event)?;
+                outcome = self.matcher.feed(&mut check, event)?;
+                continue;
+            }
+            match self.pump(until).await {
+                Err(EvalError::Timeout(_)) => {}
+                other => {
+                    other?;
+                }
+            }
+        }
+        Ok((outcome, judgments))
+    }
+    async fn run_judgment(
+        &mut self,
+        request: JudgeRequest,
+        deadline: Instant,
+    ) -> Result<Option<JudgeVerdict>, EvalError> {
+        let epoch = self.stream.epoch();
+        let future = request.run(CallOptions {
+            deadline: Some(deadline),
+            ..Default::default()
+        });
+        tokio::pin!(future);
+        loop {
+            let verdict = tokio::select! {
+                biased;
+                result = &mut future => Some(result?),
+                packet = self.pump(deadline) => {
+                    match packet {
+                        Err(EvalError::Timeout(_)) => return Err(EvalError::Judge(ClassifierError::Deadline)),
+                        other => { other?; }
+                    }
+                    None
+                }
+            };
+            if self.stream.epoch() != epoch {
+                return Ok(None);
+            }
+            if let Some(verdict) = verdict {
+                tokio::time::timeout_at(deadline, self.drain_received())
+                    .await
+                    .map_err(|_| EvalError::Judge(ClassifierError::Deadline))??;
+                if Instant::now() >= deadline {
+                    return Err(EvalError::Judge(ClassifierError::Deadline));
+                }
+                if self.stream.epoch() != epoch {
+                    return Ok(None);
+                }
+                return self
+                    .judge
+                    .as_mut()
+                    .expect("validated judge")
+                    .commit(&request, verdict)
+                    .map(Some);
+            }
+        }
     }
     async fn send(&mut self, kind: &str, data: Value) -> Result<(), EvalError> {
         self.next_id += 1;
@@ -505,6 +706,18 @@ impl EvalSession {
                     .push("transport cleanup exceeded deadline; connection aborted".into()),
             }
         }
+    }
+}
+fn judge_no() -> MatchOutcome {
+    MatchOutcome::Failed {
+        kind: "judge_no".into(),
+        reason: "classifier judged that the criterion was not satisfied".into(),
+    }
+}
+fn judge_interrupted() -> MatchOutcome {
+    MatchOutcome::Failed {
+        kind: "judge_interrupted".into(),
+        reason: "reply was interrupted before its judgment could be accepted".into(),
     }
 }
 fn connect_url(raw: &str, scenario: &ScriptScenario) -> Result<String, EvalError> {

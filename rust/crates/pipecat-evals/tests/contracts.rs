@@ -60,7 +60,7 @@ fn strict_invalid_and_unsupported_features_do_not_become_pass_only_checks() {
         json!({"name":"x","turns":[],"user":{"modality":"audio"}}),
         json!({"name":"x","turns":[{"user":"x","audio":"x.wav"}]}),
         json!({"name":"x","turns":[{"image":"x.png"}]}),
-        json!({"name":"x","turns":[{"expect":[{"event":"response","eval":"correct"}]}]}),
+        json!({"name":"x","turns":[{"expect":[{"event":"function_call_stopped","eval":"correct"}]}]}),
         json!({"name":"x","turns":[{"expect":[{"event":"tts_response"}]}]}),
         json!({"name":"x","turns":[{"expect":[{"event":"typo"}]}]}),
         json!({"name":"x","turns":[{"expect":[{"event":"response","absent":true,"text_contains":"x"}]}]}),

@@ -58,8 +58,8 @@ depth and node budgets, including null option descriptions and protocol fields.
 Final Jev encoded-request and full response byte limits
 are checked separately. Streamed responses are capped even without Content-Length.
 A serde DeserializeSeed visitor admits depth/nodes before constructing each JSON
-value, including overwritten duplicate keys; serde retains full grammar validation
-and last-key-wins semantics.
+value; serde retains full grammar validation. Duplicate object keys are rejected
+before their values are constructed, including conflicting answer/verdict fields.
 
 One total deadline includes admission, transport, response reading and retry
 sleep; an earlier absolute caller deadline can only shorten the configured

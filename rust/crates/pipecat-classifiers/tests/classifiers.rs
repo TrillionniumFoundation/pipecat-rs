@@ -1251,12 +1251,17 @@ async fn jev_final_envelope_counts_null_options_in_node_budget() {
 }
 
 #[tokio::test]
-async fn node_budget_admission_precedes_huge_flat_parse_and_duplicate_keys_remain_last_wins() {
+async fn node_budget_admission_precedes_huge_flat_parse_and_duplicate_keys_are_rejected() {
     // Malformed tail distinguishes admission during parsing from allocating the
     // entire Value first: node exhaustion must win long before the invalid tail.
     for body in [
         format!("[{}BROKEN]", "0,".repeat(100_000)),
-        format!("{{{}BROKEN}}", "\"same\":0,".repeat(40_000)),
+        format!(
+            "{{{}BROKEN}}",
+            (0..40_000)
+                .map(|i| format!("\"key{i}\":0,"))
+                .collect::<String>()
+        ),
     ] {
         let server = peer(vec![Reply {
             body,
@@ -1280,18 +1285,17 @@ async fn node_budget_admission_precedes_huge_flat_parse_and_duplicate_keys_remai
         ..yes_response()
     }])
     .await;
-    let batch = JevClassifier::shared(client(&server))
+    let error = JevClassifier::shared(client(&server))
         .ask(&json!("x"), &q(), CallOptions::default())
         .await
-        .unwrap();
-    assert_eq!(
-        batch.answers["q"],
-        ClassifierResult::YesNo(YesNoResult { probability: 0.8 })
-    );
+        .unwrap_err();
+    assert_eq!(error, ClassifierError::Response("not valid JSON"));
     for body in [
         r#"{"answers":{"q":{"noul":0.8,}}}"#,
         r#"{"answers":{"q":{"noul":0.8}}} trailing"#,
         r#"{"answers":{"q":{"noul":NaN}}}"#,
+        r#"{"answers":{"q":{"noul":0.1},"q":{"noul":0.9}}}"#,
+        r#"{"answers":{"q":{"noul":0.1}},"answers":{"q":{"noul":0.9}}}"#,
     ] {
         let server = peer(vec![Reply {
             body: body.into(),

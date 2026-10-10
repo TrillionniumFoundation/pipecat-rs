@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 mod bounded_yaml;
 pub mod events;
+pub mod judge;
 pub mod matcher;
 pub mod process;
 pub mod release;
@@ -9,12 +10,15 @@ pub mod scenario;
 pub mod serializer;
 pub mod session;
 pub mod suite;
+pub use judge::{EvalJudge, JudgeConfig, JudgeDecision, JudgeOptions, JudgeSettings, JudgeVerdict};
 pub use scenario::{
     Expectation, FunctionCall, ScenarioFile, ScriptScenario, ScriptTurn, SendAfter,
 };
 pub use session::{Cancellation, EvalSession, SessionOptions};
 #[derive(Debug, thiserror::Error)]
 pub enum EvalError {
+    #[error("evaluation judge: {0}")]
+    Judge(pipecat_classifiers::ClassifierError),
     #[error("invalid scenario: {0}")]
     Scenario(String),
     #[error("unsupported native evaluation feature: {0}")]

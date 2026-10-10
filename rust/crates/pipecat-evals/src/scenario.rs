@@ -20,6 +20,7 @@ pub struct FunctionCall {
 #[serde(deny_unknown_fields)]
 pub struct Expectation {
     pub event: String,
+    pub eval: Option<String>,
     pub within_ms: Option<u64>,
     pub text_contains: Option<String>,
     pub text_excludes: Option<String>,
@@ -39,7 +40,7 @@ impl Expectation {
         )
     }
     pub fn aggregates(&self) -> bool {
-        self.text_contains.is_some()
+        (self.text_contains.is_some() || self.eval.is_some())
             && matches!(self.event.as_str(), "llm_response" | "user_transcription")
     }
 }
@@ -63,6 +64,7 @@ pub struct ScriptTurn {
 #[serde(deny_unknown_fields)]
 pub struct ScriptScenario {
     pub name: String,
+    pub judge: Option<crate::JudgeSettings>,
     pub turns: Vec<ScriptTurn>,
     #[serde(default)]
     pub context: Vec<Map<String, Value>>,
@@ -138,6 +140,9 @@ impl ScenarioFile {
 impl ScriptScenario {
     /// Validate programmatically constructed scenarios using the same limits as files.
     pub fn validate(&self) -> Result<(), EvalError> {
+        if let Some(judge) = &self.judge {
+            judge.validate()?;
+        }
         if self.name.trim().is_empty() {
             return Err(invalid("scenario name must not be empty"));
         }
@@ -194,6 +199,7 @@ impl ScriptScenario {
                 .is_some_and(|s| s.starts_with("vad_"));
             for exp in &turn.expect {
                 vad |= exp.event.starts_with("vad_");
+                full |= exp.event == "function_call" && exp.eval.is_some();
                 if exp.event == "llm_marker" {
                     config.insert("llm_markers".into(), true.into());
                 }
@@ -220,6 +226,12 @@ impl ScriptScenario {
             .flat_map(|t| &t.expect)
             .any(|e| e.event == "image")
     }
+    pub fn needs_judge(&self) -> bool {
+        self.turns
+            .iter()
+            .flat_map(|t| &t.expect)
+            .any(|e| e.eval.is_some())
+    }
 }
 fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError> {
     for key in ["persona", "goal", "success", "metrics", "simulation"] {
@@ -229,22 +241,31 @@ fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError
             )));
         }
     }
-    for key in ["user", "judge"] {
-        if let Some(block) = raw.remove(key) {
-            let mut block = object(block, key)?;
-            if let Some(mode) = block.remove("modality") {
-                if mode != "text" {
-                    return Err(EvalError::Unsupported(format!(
-                        "{key}.modality other than text"
-                    )));
-                }
+    if let Some(value) = raw.get("judge") {
+        if !value.is_null() {
+            let settings: crate::JudgeSettings =
+                serde_json::from_value(value.clone()).map_err(|_| {
+                    EvalError::Unsupported(
+                        "judge provider configuration: unsupported field or type".into(),
+                    )
+                })?;
+            settings.validate()?;
+        }
+    }
+    if let Some(block) = raw.remove("user") {
+        let mut block = object(block, "user")?;
+        if let Some(mode) = block.remove("modality") {
+            if mode != "text" {
+                return Err(EvalError::Unsupported(
+                    "user.modality other than text".into(),
+                ));
             }
-            if !block.is_empty() {
-                return Err(EvalError::Unsupported(format!(
-                    "{key} provider configuration: {}",
-                    block.keys().cloned().collect::<Vec<_>>().join(", ")
-                )));
-            }
+        }
+        if !block.is_empty() {
+            return Err(EvalError::Unsupported(format!(
+                "user provider configuration: {}",
+                block.keys().cloned().collect::<Vec<_>>().join(", ")
+            )));
         }
     }
     let turns = raw
@@ -274,9 +295,6 @@ fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError
                 let exp = exp
                     .as_object_mut()
                     .ok_or_else(|| invalid("expectation must be a mapping"))?;
-                if exp.contains_key("eval") {
-                    return Err(EvalError::Unsupported("LLM eval judge assertions".into()));
-                }
                 if exp.get("event") == Some(&Value::String("response".into())) {
                     exp.insert("event".into(), "llm_response".into());
                 }
@@ -327,6 +345,18 @@ fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError
 }
 fn validate_expectation(exp: &Expectation) -> Result<(), EvalError> {
     validate_event(&exp.event)?;
+    if let Some(criterion) = &exp.eval {
+        if !matches!(exp.event.as_str(), "llm_response" | "function_call") {
+            return Err(EvalError::Unsupported(
+                "eval is supported only for text llm_response and function_call".into(),
+            ));
+        }
+        if criterion.trim().is_empty() || criterion.len() > 8192 {
+            return Err(invalid(
+                "eval criterion must be nonempty and at most 8192 bytes",
+            ));
+        }
+    }
     if exp.calls.as_ref().is_some_and(|calls| calls.len() > 256) {
         return Err(EvalError::Limit("function calls per expectation"));
     }
@@ -349,6 +379,7 @@ fn validate_expectation(exp: &Expectation) -> Result<(), EvalError> {
     }
     if exp.absent
         && (marker
+            || exp.eval.is_some()
             || exp.text_contains.is_some()
             || exp.text_excludes.is_some()
             || exp.calls.is_some())

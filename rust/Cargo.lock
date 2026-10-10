@@ -3473,6 +3473,7 @@ dependencies = [
  "pipecat-moq",
  "pipecat-network-bus",
  "pipecat-observers",
+ "pipecat-openclaw",
  "pipecat-pipeline",
  "pipecat-piper",
  "pipecat-processors",
@@ -3715,6 +3716,7 @@ name = "pipecat-evals"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "pipecat-classifiers",
  "pipecat-protocol",
  "pipecat-transports",
  "serde",
@@ -3966,6 +3968,21 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "pipecat-openclaw"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "pipecat-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+ "uuid",
 ]
 
 [[package]]

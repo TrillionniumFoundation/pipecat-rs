@@ -965,3 +965,51 @@ pub struct TtsAlignmentDiagnosticFrame {
 
 #[cfg(test)]
 mod review_handler_identity;
+
+/// Typed Gateway command. The message is sent verbatim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawSendFrame {
+    pub message: String,
+    pub session_key: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawSteerFrame {
+    pub message: String,
+}
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawAbortFrame {
+    pub reason: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawStartedFrame {
+    pub run_id: String,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawTextFrame {
+    pub text: String,
+    pub run_id: String,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenClawRunStatus {
+    #[default]
+    Completed,
+    Cancelled,
+    Failed,
+}
+/// Unknown means local observation ended without proof the remote run stopped.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenClawRemoteOutcome {
+    Settled,
+    #[default]
+    Unknown,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenClawEndFrame {
+    pub run_id: String,
+    pub status: OpenClawRunStatus,
+    pub text: String,
+    #[serde(default)]
+    pub remote_outcome: OpenClawRemoteOutcome,
+}

@@ -208,9 +208,9 @@ fn llm(reply: &str) -> (LlmClassifier, Arc<Scripted>) {
 }
 // Independent reviewer adversarial cases, using the author's socket scaffolding.
 #[tokio::test]
-async fn reviewer_llm_parser_preserves_unicode_and_charges_duplicate_values() {
+async fn reviewer_llm_parser_preserves_unicode_and_rejects_duplicate_values() {
     for reply in [
-        r#"{"q":{"probability":0.1,"probability":0.6},"ignored":"\uD83D\uDE00 { [ \\\""}"#,
+        r#"{"q":{"probability":0.6},"ignored":"\uD83D\uDE00 { [ \\\""}"#,
         "prefix ```json\n{\"q\":{\"probability\":0.6}}\n``` suffix",
     ] {
         let (classifier, _) = llm(reply);
@@ -223,10 +223,20 @@ async fn reviewer_llm_parser_preserves_unicode_and_charges_duplicate_values() {
             ClassifierResult::YesNo(YesNoResult { probability: 0.6 })
         );
     }
+    let (classifier, _) = llm(r#"{"q":{"probability":0.1,"probability":0.6}}"#);
+    assert_eq!(
+        classifier
+            .ask(&json!("x"), &q(), CallOptions::default())
+            .await
+            .unwrap_err(),
+        ClassifierError::Response("not valid JSON")
+    );
     for tail in ["", ",BROKEN"] {
         let reply = format!(
             "{{\"q\":{{\"probability\":0.6}},{}\"last\":null{tail}}}",
-            "\"same\":null,".repeat(10000)
+            (0..10000)
+                .map(|i| format!("\"key{i}\":null,"))
+                .collect::<String>()
         );
         let scripted = Arc::new(Scripted {
             replies: Mutex::new(VecDeque::from([Some(reply)])),

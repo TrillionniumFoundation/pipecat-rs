@@ -128,3 +128,23 @@ pub(crate) fn check_size(len: usize, limit: usize) -> Result<(), ProtocolError> 
         Ok(())
     }
 }
+
+/// Gateway traffic has its own authenticated wire protocol; generic transport
+/// serializers must not silently discard it or reinterpret it as spoken text.
+pub(crate) fn reject_openclaw(frame: &pipecat_core::Frame) -> Result<(), ProtocolError> {
+    use pipecat_core::FrameData;
+    if matches!(
+        frame.data,
+        FrameData::OpenClawSend(_)
+            | FrameData::OpenClawSteer(_)
+            | FrameData::OpenClawAbort(_)
+            | FrameData::OpenClawStarted(_)
+            | FrameData::OpenClawText(_)
+            | FrameData::OpenClawEnd(_)
+    ) {
+        return Err(ProtocolError::UnsupportedMessage(
+            frame.data.source_class_name().into(),
+        ));
+    }
+    Ok(())
+}

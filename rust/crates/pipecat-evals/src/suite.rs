@@ -269,6 +269,7 @@ mod tests {
             event_name: "llm_response".into(),
             passed: true,
             matched: "large matched reply".repeat(4096),
+            judgments: vec![],
         });
         // No events at all: clearing events_seen cannot fix this result.
         result.debug_log.push("large diagnostic".repeat(4096));

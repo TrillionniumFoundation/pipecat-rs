@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+pipecat-openclaw = { path = "../pipecat-openclaw", optional = true }
 pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 pipecat-deepgram-flux = { path = "../pipecat-deepgram-flux", optional = true }
 pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
@@ -55,6 +56,7 @@ pipecat-realtime = { path = "../pipecat-realtime", optional = true }
 pipecat-responses = { path = "../pipecat-responses", optional = true }
 
 [features]
+openclaw = ["dep:pipecat-openclaw"]
 classifiers = ["dep:pipecat-classifiers"]
 deepgram-flux = ["dep:pipecat-deepgram-flux"]
 grok-realtime = ["dep:pipecat-grok-realtime"]

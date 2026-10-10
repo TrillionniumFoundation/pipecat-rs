@@ -31,6 +31,7 @@ pub struct EventStream {
     started: Instant,
     bytes_seen: usize,
     limits: EventLimits,
+    epoch: u64,
 }
 impl EventStream {
     pub fn new(limits: EventLimits) -> Self {
@@ -45,12 +46,14 @@ impl EventStream {
             started: Instant::now(),
             bytes_seen: 0,
             limits,
+            epoch: 0,
         }
     }
     pub fn pop(&mut self) -> Option<Value> {
         self.queue.pop_front()
     }
     pub fn drop_pending_bot_output(&mut self) {
+        self.epoch += 1;
         self.text.clear();
         self.started_at = None;
         self.queue
@@ -59,6 +62,16 @@ impl EventStream {
     pub fn turn_boundary(&mut self) {
         self.drop_pending_bot_output();
         self.awaiting_reply = true;
+    }
+    pub(crate) fn epoch(&self) -> u64 {
+        self.epoch
+    }
+    pub(crate) fn pending_responses(&self) -> Vec<Value> {
+        self.queue
+            .iter()
+            .filter(|event| event["type"] == "llm_response")
+            .cloned()
+            .collect()
     }
     pub fn ingest(&mut self, envelope: &Envelope) -> Result<(), EvalError> {
         let payload = envelope.data.as_ref().unwrap_or(&Value::Null);

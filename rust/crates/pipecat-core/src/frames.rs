@@ -590,6 +590,12 @@ impl DirectedFrame {
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum FrameData {
+    OpenClawSend(OpenClawSendFrame),
+    OpenClawSteer(OpenClawSteerFrame),
+    OpenClawAbort(OpenClawAbortFrame),
+    OpenClawStarted(OpenClawStartedFrame),
+    OpenClawText(OpenClawTextFrame),
+    OpenClawEnd(OpenClawEndFrame),
     Start(StartFrame),
     End(EndFrame),
     Stop,

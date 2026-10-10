@@ -213,8 +213,8 @@ source `{python}` / `{bot}` spawn templates are rejected.
 
 Paths resolve relative to the manifest. Bot paths additionally use `bots_dir`;
 scenario references ending in `.yaml`, `.yml` or `.json` resolve directly, while
-other names resolve below `scenarios_dir` with `.yaml` added. Scenario files use
-the existing bounded loader; judges, audio and simulated scenarios fail before
+other names resolve below `scenarios_dir` with `.yaml` added. scenario files use
+the existing bounded loader; unsupported judge providers, audio and simulated scenarios fail before
 any process launches. All scenario/config inputs are validated before execution.
 
 `runner_body` accepts exactly one `path` or inline mapping `data`. A path must
@@ -301,7 +301,7 @@ the source schema, but still require a successful connection and handshake.
 
 Unsupported capabilities fail validation rather than being approximated:
 
-- LLM `eval:` judges, judge/provider factory configuration, simulated personas,
+- Judge/provider Python factory configuration, explainers, simulated personas,
   goals/metrics, provider services, Python bot subprocesses, Python suite manifests,
   runner HTTP requests, recording and cache orchestration
 - Audio modalities, TTS/STT/VAD inference, file playback, transcript-audio alignment,
@@ -349,3 +349,93 @@ run and cleanup, blocked pipe writers on a single-thread runtime, already-exited
 children, bounded logs/results, clean environment, literal argv, body file cleanup,
 release repeats/cancellation, 32-way distinct-port launches, cancelled/timed
 launcher admission, Linux `/proc` absence after reap and owned-task quiescence. No test calls a provider or executes an original Python bot.
+
+## Native scripted classifier judging
+
+Scripted text `response`/`llm_response` and `function_call` expectations accept
+`eval: <criterion>` (1..8192 UTF-8 bytes). Deterministic text/name/argument checks
+still apply before classifier inference. `function_call_stopped`, image, audio,
+simulation, metrics, and other event types do not support native `eval`.
+
+The CLI, independent endpoint suites, and native hosted release sessions use:
+
+```yaml
+name: geography
+judge:
+  modality: text
+  eval:
+    service: jev
+    api_key_env: TYPESAFE_API_KEY
+    model: jev-1.13.0
+    timeout_ms: 10000
+    allow_continue: true
+    explainer: false
+turns:
+  - user: Where is Paris?
+    expect:
+      - event: response
+        text_contains: France
+        eval: Answers that Paris is in France
+        within_ms: 10000
+```
+
+Only the explicitly named environment variable supplies the credential. There is
+no default judge, implicit model download, Python factory, dotenv import, warmup,
+or automatic outer retry. The native Jev builder also disables Jev's provider
+retries, so one uncached judgment makes exactly one HTTP request. `base_url` may
+specify an HTTPS origin or HTTP loopback for local fixtures; redirects, proxy
+inheritance, userinfo, query strings and path prefixes are disallowed by the
+classifier. Non-Jev provider configuration and explainers are rejected.
+
+For another native provider, construct `EvalJudge::new(Arc<dyn Classifier>,
+JudgeOptions)` and pass it to `EvalSession::with_judge`. This accepts the existing
+`LlmClassifier` over a native `LlmInference` implementation. Injection takes
+precedence over the scenario's provider settings and does not read its credential
+environment variable. The classifier owns wire response limits and any explicitly
+chosen retries; the judge enforces its own deadline/cancellation and validates the
+typed answer. Provider probability provenance is retained; these numbers are not
+claims of measured calibration. Direct `evaluate_reply` and `evaluate_call` are
+also available with absolute `CallOptions` deadlines and cancellation tokens.
+
+Each consumed reply segment is recorded once. Consecutive bot segments are merged
+into one numbered bot turn; each new user/DTMF input delimits the next turn.
+Responses consumed by deterministic checks and pending responses discarded at a
+new input boundary remain conversation context. Calls are judged by their actual
+matched name/arguments, independently of later bot promises. Tool entries are not
+inserted into scripted reply/call conversation state. Scenario initial `context`
+is sent to the bot; it is not silently copied to the judge.
+
+Reply verdicts are `yes`, `no`, or `continue` (the latter is optional). A `no`
+waits for another segment for up to two seconds when the bot is quiet, or until
+the shared turn deadline when speaking. `continue` waits within that same turn
+budget. New segments rejudge the changed snapshot, without appending the entire
+aggregate a second time. Function judgments use a yes/no probability threshold
+of 0.5. Per-expectation `judgments` retain decisions, numeric probabilities,
+provenance and transcript revision; no classifier prompt or provider response
+body is placed in results. The original bot `events_seen` and matched text remain
+ordinary, potentially private run evidence.
+
+During inference the session keeps ingesting bounded RTVI traffic. Interruptions
+invalidate in-flight verdicts; late results never satisfy a replacement turn.
+Cancellation, owner drop, provider deadline, malformed or duplicate-key replies,
+and transport failures cannot pass an assertion. `judge_no` and `judge_continue`
+are behavioral failures; `judge_error` and `judge_timeout` are infrastructure
+failures. An in-flight interruption is `judge_interrupted`. No canceled or failed
+provider response is cached. Duplicate empty LLM stop events are not new evidence.
+Without wire-level bot turn identifiers, network-in-flight old output arriving
+with a fresh start after the next input cannot be perfectly attributed.
+
+Defaults per judge: one serial inference, 256 requests, 512 evaluations (including
+cache hits), 2048 transcript entries / 256 KiB transcript text, 1 MiB rendered
+request, 64 KiB native Jev response, 256 cache entries / 4 MiB cache keys plus reserved verdict bytes, 10-second
+request deadline, and two-second no grace. All limits have finite hard ceilings.
+Cache keys include judgment kind, trimmed criterion and exact structured state;
+the cache belongs to one owned judge/run. Exhaustion fails rather than silently
+truncating evidence. Native Jev retains its bounded JSON depth/node decoder; the
+judge never executes content or gives the provider tools or external-agent access.
+
+Intentional source differences: no failure retry, no optional LLM explanations,
+no implicit Ollama default, only reply/function-call judging, explicit native
+provider schema, bounded session-local cache, and infrastructure failures kept
+separate from classifier `no`. Existing non-judge scenarios keep their matching
+semantics. All tests use native localhost HTTP/RTVI peers and synthetic credentials.

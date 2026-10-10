@@ -41,6 +41,8 @@ pub use pipecat_moonshine as moonshine;
 #[cfg(feature = "moq")]
 pub use pipecat_moq as moq;
 pub use pipecat_observers as observers;
+#[cfg(feature = "openclaw")]
+pub use pipecat_openclaw as openclaw;
 pub use pipecat_protocol as protocol;
 pub use pipecat_services as services;
 #[cfg(feature = "soniox")]

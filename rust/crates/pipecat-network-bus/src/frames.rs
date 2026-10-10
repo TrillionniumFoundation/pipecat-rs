@@ -359,6 +359,18 @@ pub(crate) fn encode_frame(frame: &Frame) -> Result<Value, CodecError> {
         FrameData::Heartbeat { timestamp } => ("HeartbeatFrame", json!({"timestamp":timestamp})),
         FrameData::AudioBufferStartRecording => ("AudioBufferStartRecordingFrame", json!({})),
         FrameData::AudioBufferStopRecording => ("AudioBufferStopRecordingFrame", json!({})),
+        // Gateway frames have a service-specific source module and native
+        // outcome semantics. Reject rather than invent a Python wire type.
+        FrameData::OpenClawSend(_)
+        | FrameData::OpenClawSteer(_)
+        | FrameData::OpenClawAbort(_)
+        | FrameData::OpenClawStarted(_)
+        | FrameData::OpenClawText(_)
+        | FrameData::OpenClawEnd(_) => {
+            return Err(CodecError::UnsupportedFrame(
+                frame.data.source_class_name().into(),
+            ));
+        }
         // Diagnostics contain class names, never payloads.
         other => extended::encode(other)?
             .ok_or_else(|| CodecError::UnsupportedFrame(other.source_class_name().into()))?,

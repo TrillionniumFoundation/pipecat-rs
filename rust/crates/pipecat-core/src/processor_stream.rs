@@ -181,7 +181,10 @@ async fn any_change(changed: &mut [Pin<Box<Notified<'_>>>]) {
 fn stream_data(data: &FrameData) -> bool {
     matches!(
         data,
-        FrameData::Text(_)
+        FrameData::OpenClawStarted(_)
+            | FrameData::OpenClawText(_)
+            | FrameData::OpenClawEnd(_)
+            | FrameData::Text(_)
             | FrameData::LlmText(_)
             | FrameData::InputText(_)
             | FrameData::VisionText(_)

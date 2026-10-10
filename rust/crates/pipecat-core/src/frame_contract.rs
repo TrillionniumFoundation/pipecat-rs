@@ -984,6 +984,12 @@ impl FrameData {
     /// for extensions absent from the pinned Python frame catalog.
     pub fn source_class_name(&self) -> &'static str {
         match self {
+            Self::OpenClawSend(..) => "OpenClawSendFrame",
+            Self::OpenClawSteer(..) => "OpenClawSteerFrame",
+            Self::OpenClawAbort(..) => "OpenClawAbortFrame",
+            Self::OpenClawStarted(..) => "OpenClawStartedFrame",
+            Self::OpenClawText(..) => "OpenClawTextFrame",
+            Self::OpenClawEnd(..) => "OpenClawEndFrame",
             Self::RtviClientMessage(..) => "RTVIClientMessageFrame",
             Self::RtviServerMessage(..) => "RTVIServerMessageFrame",
             Self::RtviServerResponse(..) => "RTVIServerResponseFrame",
@@ -1162,6 +1168,12 @@ impl FrameData {
     }
     pub fn priority(&self) -> FramePriority {
         match self {
+            Self::OpenClawSend(..) => FramePriority::Normal,
+            Self::OpenClawSteer(..) => FramePriority::Normal,
+            Self::OpenClawAbort(..) => FramePriority::System,
+            Self::OpenClawStarted(..) => FramePriority::Normal,
+            Self::OpenClawText(..) => FramePriority::Normal,
+            Self::OpenClawEnd(..) => FramePriority::Normal,
             Self::RtviClientMessage(..) => FramePriority::System,
             Self::RtviServerMessage(..) => FramePriority::System,
             Self::RtviServerResponse(..) => FramePriority::System,
@@ -1339,6 +1351,12 @@ impl FrameData {
     }
     pub fn default_interruptible(&self) -> bool {
         match self {
+            Self::OpenClawSend(..) => true,
+            Self::OpenClawSteer(..) => true,
+            Self::OpenClawAbort(..) => true,
+            Self::OpenClawStarted(..) => true,
+            Self::OpenClawText(..) => true,
+            Self::OpenClawEnd(..) => true,
             Self::RtviClientMessage(..) => true,
             Self::RtviServerMessage(..) => true,
             Self::RtviServerResponse(..) => true,

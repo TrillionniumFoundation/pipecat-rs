@@ -149,9 +149,10 @@ impl ClassifierLimits {
     }
 }
 // Values are charged before serde is allowed to construct them. This retains
-// serde_json's full grammar and last-key-wins behavior while bounding temporary
-// allocation even for duplicate-key or huge flat input. Map keys are bounded by
-// response bytes; every key's value is separately charged before construction.
+// serde_json's grammar while bounding temporary allocation for huge flat input.
+// Duplicate keys are rejected before their values are constructed: collapsing
+// contradictory answers would make a malformed response look authoritative.
+// Map keys are bounded by response bytes.
 struct ParseBudget<'a> {
     limits: &'a ClassifierLimits,
     nodes: usize,
@@ -233,6 +234,9 @@ impl<'de> Visitor<'de> for NodeVisitor<'_, '_> {
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> std::result::Result<Value, A::Error> {
         let mut values = serde_json::Map::new();
         while let Some(key) = map.next_key::<String>()? {
+            if values.contains_key(&key) {
+                return Err(de::Error::custom("duplicate JSON key"));
+            }
             let value = map.next_value_seed(NodeSeed {
                 budget: self.budget,
                 depth: self.depth + 1,

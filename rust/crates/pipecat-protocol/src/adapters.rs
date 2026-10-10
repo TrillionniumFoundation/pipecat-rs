@@ -88,6 +88,7 @@ impl TelephonyFrameSerializer {
 }
 impl FrameSerializer for TelephonyFrameSerializer {
     fn serialize(&mut self, frame: &Frame) -> Result<Option<WireMessage>, ProtocolError> {
+        crate::reject_openclaw(frame)?;
         frame
             .require_no_native_llm_continuation()
             .map_err(|_| ProtocolError::InvalidField("unconsumed native LLM continuation"))?;
@@ -170,6 +171,7 @@ pub struct RtviClientFrameSerializer {
 }
 impl FrameSerializer for RtviClientFrameSerializer {
     fn serialize(&mut self, frame: &Frame) -> Result<Option<WireMessage>, ProtocolError> {
+        crate::reject_openclaw(frame)?;
         frame
             .require_no_native_llm_continuation()
             .map_err(|_| ProtocolError::InvalidField("unconsumed native LLM continuation"))?;

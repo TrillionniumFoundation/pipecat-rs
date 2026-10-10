@@ -15,6 +15,7 @@ path = "tests/support/process_fixture.rs"
 required-features = ["process-fixtures"]
 
 [dependencies]
+pipecat-classifiers = { path = "../pipecat-classifiers" }
 pipecat-protocol = { path = "../pipecat-protocol" }
 pipecat-transports = { path = "../pipecat-transports" }
 tokio = { workspace = true, features = ["signal", "fs", "process"] }

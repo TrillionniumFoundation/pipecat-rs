@@ -31,6 +31,8 @@ pub struct ExpectationResult {
     pub event_name: String,
     pub passed: bool,
     pub matched: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub judgments: Vec<crate::JudgeVerdict>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnResult {
@@ -99,6 +101,8 @@ pub struct PendingCheck {
     seen: bool,
     remaining: Vec<FunctionCall>,
     matched: Vec<String>,
+    judged_calls: Vec<Value>,
+    judge_enabled: bool,
 }
 impl PendingCheck {
     pub fn new(expectation: Expectation) -> Self {
@@ -109,7 +113,18 @@ impl PendingCheck {
             seen: false,
             remaining,
             matched: vec![],
+            judged_calls: vec![],
+            judge_enabled: false,
         }
+    }
+    pub(crate) fn for_session(expectation: Expectation) -> Self {
+        Self {
+            judge_enabled: true,
+            ..Self::new(expectation)
+        }
+    }
+    pub(crate) fn take_judged_calls(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.judged_calls)
     }
 }
 pub struct ExpectationMatcher {
@@ -129,6 +144,12 @@ impl ExpectationMatcher {
         self.pending_calls.clear();
     }
     pub fn buffered(&mut self, check: &mut PendingCheck) -> MatchOutcome {
+        if check.expectation.eval.is_some() && !check.judge_enabled {
+            return MatchOutcome::failed(
+                "no_judge",
+                "eval requires an EvalSession with a native judge",
+            );
+        }
         if !check.expectation.is_call() || check.expectation.absent {
             return MatchOutcome::Pending;
         }
@@ -144,6 +165,9 @@ impl ExpectationMatcher {
             check
                 .matched
                 .push(event["name"].as_str().unwrap_or("?").into());
+            if check.expectation.eval.is_some() {
+                check.judged_calls.push(event);
+            }
             check.remaining.remove(0);
         }
         MatchOutcome::Passed(check.matched.join(", "))
@@ -153,6 +177,11 @@ impl ExpectationMatcher {
         check: &mut PendingCheck,
         event: Value,
     ) -> Result<MatchOutcome, EvalError> {
+        if check.expectation.eval.is_some() && !check.judge_enabled {
+            return Err(EvalError::Unsupported(
+                "eval requires an EvalSession with a native judge".into(),
+            ));
+        }
         let exp = &check.expectation;
         if exp.absent {
             return Ok(if event["type"] == exp.event {
@@ -250,6 +279,12 @@ impl ExpectationMatcher {
         Ok(MatchOutcome::Passed(text.into()))
     }
     pub fn timeout(&self, check: &PendingCheck) -> MatchOutcome {
+        if check.expectation.eval.is_some() && !check.judge_enabled {
+            return MatchOutcome::failed(
+                "no_judge",
+                "eval requires an EvalSession with a native judge",
+            );
+        }
         let exp = &check.expectation;
         if exp.absent {
             return MatchOutcome::Passed(format!("no {:?} during quiet window", exp.event));
