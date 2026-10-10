@@ -126,3 +126,38 @@ native member (map key and completed-order identity). This cost is reserved befo
 callback effects, together with policy and the conservatively repeated whole batch.
 Independent consumer mirrors and legacy compatibility metadata have separately
 documented count/encoded-byte limits.
+
+## DTMF aggregation
+
+`DtmfAggregator::new(DtmfAggregatorConfig { ..Default::default() })` converts
+native `InputDtmf` keypad frames into finalized `TranscriptionDetailed` frames.
+Place it after a transport/RTVI decoder and before `LLMUserAggregator`. It is also
+available through `pipecat::processors`. No provider, decoder, user-turn strategy
+or realtime aggregation mode is replaced or implicitly reconfigured.
+
+Defaults are a two-second idle timeout, `#` terminator, `DTMF: ` prefix, 256-digit
+capacity and a 60-second maximum sequence lifetime. The terminator is included.
+Each first key interrupts both directions; raw keys retain their identity and
+original direction. Derived transcripts always go downstream, with empty user
+ID, UTC timestamp and `finalized: true`.
+
+The telephone keys `0–9`, `*`, `#` are accepted. Configuration rejects extended
+A–D keys as terminators, zero/oversized limits, and durations outside 1ms–1h.
+Prefix is limited to 4096 UTF-8 bytes and configured digit capacity to 4096.
+Extended input keys and digit overflow discard the whole pending entry and emit
+an error without echoing keypad content. An exact-deadline key begins a new entry.
+
+Graceful End flushes. External interruption, Cancel, Stop and cleanup discard
+pending entries; Cancel cannot preserve the Python normal-frame flush because
+native urgent cancellation preempts downstream normal processing. A single owned
+timer is canceled before End/Stop drains. Reuse after cleanup is supported, with
+separate instances required for concurrent pipelines. Native duplicate Start is
+rejected by the pipeline before processor delivery.
+
+Self-interruption retains only exact previously admitted input scopes in a
+bounded, time-limited bridge; inherited origins and external interruption fences
+remain intact. At most 64 most-recent scopes are retained for the fixed maximum
+sequence duration. A stale scope outside this bound cannot seed a transcript.
+Output always uses the original invocation fence, including timer callbacks and
+inherited owner closure. Queue saturation fails explicitly rather than silently
+truncating input or retrying a possibly committed transcript.

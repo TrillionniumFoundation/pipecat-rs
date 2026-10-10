@@ -1,0 +1,8 @@
+[
+  {"name":"basic","keys":["1","2","3","#"],"prefix":"DTMF: ","terminator":"#","expected":"DTMF: 123#"},
+  {"name":"all telephone keys","keys":["0","1","2","3","4","5","6","7","8","9","*","#"],"prefix":"DTMF: ","terminator":"#","expected":"DTMF: 0123456789*#"},
+  {"name":"custom prefix","keys":["1","#"],"prefix":"Menu: ","terminator":"#","expected":"Menu: 1#"},
+  {"name":"custom terminator","keys":["1","2","*"],"prefix":"DTMF: ","terminator":"*","expected":"DTMF: 12*"},
+  {"name":"leading zeros and repeated keys","keys":["0","0","1","1","#"],"prefix":"","terminator":"#","expected":"0011#"},
+  {"name":"terminator alone","keys":["#"],"prefix":"DTMF: ","terminator":"#","expected":"DTMF: #"}
+]

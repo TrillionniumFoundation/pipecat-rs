@@ -10,3 +10,6 @@ serde_json.workspace = true
 futures-util = "0.3"
 [lints]
 workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

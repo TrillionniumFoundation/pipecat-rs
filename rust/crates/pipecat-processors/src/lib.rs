@@ -237,3 +237,6 @@ impl FrameProcessor for GatedAggregator {
 }
 
 pub mod tools;
+
+pub mod dtmf;
+pub use dtmf::{DtmfAggregator, DtmfAggregatorConfig};
