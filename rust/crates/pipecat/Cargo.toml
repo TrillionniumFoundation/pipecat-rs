@@ -12,6 +12,7 @@ pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
 pipecat-images = { path = "../pipecat-images", optional = true }
 pipecat-soniox = { path = "../pipecat-soniox", optional = true }
 pipecat-gladia = { path = "../pipecat-gladia", optional = true }
+pipecat-gradium = { path = "../pipecat-gradium", optional = true }
 pipecat-moonshine = { path = "../pipecat-moonshine", optional = true }
 pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
 pipecat-aws-bedrock = { path = "../pipecat-aws-bedrock", optional = true }
@@ -63,6 +64,7 @@ grok-realtime = ["dep:pipecat-grok-realtime"]
 images = ["dep:pipecat-images"]
 soniox = ["dep:pipecat-soniox"]
 gladia = ["dep:pipecat-gladia"]
+gradium = ["dep:pipecat-gradium"]
 moonshine = ["dep:pipecat-moonshine"]
 assemblyai = ["dep:pipecat-assemblyai"]
 aws-bedrock = ["dep:pipecat-aws-bedrock"]

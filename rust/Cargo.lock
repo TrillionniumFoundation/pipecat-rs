@@ -3463,6 +3463,7 @@ dependencies = [
  "pipecat-flows",
  "pipecat-gemini-live",
  "pipecat-gladia",
+ "pipecat-gradium",
  "pipecat-grok-realtime",
  "pipecat-images",
  "pipecat-livekit",
@@ -3797,6 +3798,25 @@ dependencies = [
  "pipecat-services",
  "pipecat-turns",
  "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
+name = "pipecat-gradium"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "pipecat-audio",
+ "pipecat-core",
+ "pipecat-services",
+ "pipecat-turns",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

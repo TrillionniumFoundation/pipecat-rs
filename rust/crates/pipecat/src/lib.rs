@@ -25,6 +25,8 @@ pub use pipecat_flows as flows;
 pub use pipecat_gemini_live as gemini_live;
 #[cfg(feature = "gladia")]
 pub use pipecat_gladia as gladia;
+#[cfg(feature = "gradium")]
+pub use pipecat_gradium as gradium;
 #[cfg(feature = "grok-realtime")]
 pub use pipecat_grok_realtime as grok_realtime;
 #[cfg(feature = "images")]
