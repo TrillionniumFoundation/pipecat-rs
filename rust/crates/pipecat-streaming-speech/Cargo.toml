@@ -21,3 +21,7 @@ url = "2"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+pipecat-turns = { path = "../pipecat-turns" }
+tokio = { workspace = true, features = ["test-util"] }

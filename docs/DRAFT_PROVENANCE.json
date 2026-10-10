@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "edae99e6741e8675376497f8736e49e8d4203926",
-  "source_tree": "8e12c2df7ed8566907e10e0c6dc8a59ead979c55",
+  "source_commit": "d021c4db10f56a6c1651bf9597390824773a5d43",
+  "source_tree": "ccb5a4cdd6d85f632d119040b2743629ee165bd2",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -104,6 +104,11 @@
       "commit": "edae99e6741e8675376497f8736e49e8d4203926",
       "tree": "8e12c2df7ed8566907e10e0c6dc8a59ead979c55",
       "subject": "Generate optional native text evaluation starter and qualify real tool flow"
+    },
+    {
+      "commit": "d021c4db10f56a6c1651bf9597390824773a5d43",
+      "tree": "ccb5a4cdd6d85f632d119040b2743629ee165bd2",
+      "subject": "Add bounded Cartesia Turns client and committed-turn processor"
     }
   ],
   "scope_evidence": [
@@ -192,6 +197,14 @@
       "author_report_sha256": "91f81fa39d4c1b05ce14c5c9945d3dba868f80ee2224980808a022b461f1cac0",
       "qualified_source_manifest_sha256": "f67b9c4d7f6bc3f13c84f27cdda6adb33aecb9c11c461e8c14e3de181bd63a8a",
       "integration_patch_sha256": "6a3a399e83802c7c3d227d78143369ec28c530c74b86453f4e3cb5334d413402"
+    },
+    {
+      "scope": "cartesia_turns_committed_only",
+      "report_sha256": "728365b168560155b3d80fc48e94aa3740aa723e2dcc51f2a7620df6e7200234",
+      "author_source_archive_sha256": "d821d49ffeca1a349f24ce05631e3e9b5bc31a98faff32c04fd1711dbb5f64ef",
+      "qualified_source_manifest_sha256": "3a5287cb6ee7ffaf08637a234fb3375c7ffbaeaf352d1551cfc5561b3f394bd1",
+      "owner_patch_sha256": "c5c98a49f00c90aace719cd0c5e55fb302d38720732819f5d2d0d41c4eb53e3b",
+      "independent_tests_patch_sha256": "708ac261f6693565dc0f903f4959faef73c38bcf3e6a9cdacb6ef1657e74d211"
     }
   ],
   "omitted_native_administrative_paths": [
@@ -207,17 +220,17 @@
     "src/pipecat/audio/vad/data/silero_vad.onnx",
     "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
   ],
-  "raw_source_entries": 1462,
+  "raw_source_entries": 1469,
   "readme_bytes": 0,
   "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
   "new_execution": "NONE",
   "release_ready": false,
   "previous_public_draft": {
     "branch": "draft/native-reviewed-2026-10-10-fcf1752",
-    "commit": "48d31d59a8b660c901e4c7f71666d7e69607b7e3",
-    "tree": "ceafafb28eadc8eb25140825baa58d3fa59d974d",
-    "canonical_source": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
-    "update_requires_expected_head": "48d31d59a8b660c901e4c7f71666d7e69607b7e3"
+    "commit": "301610999e0ecb3432c28356324e696105f41a2d",
+    "tree": "4de4c9abdbbbfcd4da5fec2d2179e18ac6e230ae",
+    "canonical_source": "edae99e6741e8675376497f8736e49e8d4203926",
+    "update_requires_expected_head": "301610999e0ecb3432c28356324e696105f41a2d"
   },
   "voicemail_scoped_results": {
     "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
@@ -255,6 +268,23 @@
     "normal_dependency_closure": "unchanged after source-root normalization; 38 lines",
     "successful_release_process_forced": false,
     "blocked_inference_cancel_process_forced": true,
+    "combined_projection_full_gate": "NOT_RUN",
+    "counts_are_source_bound_and_overlap": true
+  },
+  "cartesia_turns_scoped_results": {
+    "package_tests": 140,
+    "existing_and_author_tests_included": 129,
+    "independent_tests_included": 11,
+    "independent_actual_aggregator_tests": 3,
+    "independent_session_lifecycle_tests": 8,
+    "isolated_compiling_controls": 3,
+    "restored_fresh_target_package_tests": 140,
+    "strict_package_clippy": "passed",
+    "scoped_formatting": "passed",
+    "production_dependencies": "unchanged; no pipecat-turns, pipecat-vad or ort production edge; existing aggregator dependency is test-only",
+    "committed_only": true,
+    "eager_pipeline_qualified": false,
+    "live_provider_qualified": false,
     "combined_projection_full_gate": "NOT_RUN",
     "counts_are_source_bound_and_overlap": true
   }

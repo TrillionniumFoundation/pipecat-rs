@@ -39,35 +39,13 @@ pub struct CartesiaKeyterms {
 }
 impl CartesiaSttSettings {
     pub fn prepared_keyterms(&self) -> CartesiaKeyterms {
-        let nonblank: Vec<_> = self
-            .keyterm
-            .iter()
-            .map(|s| {
-                s.trim_matches(|c: char| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}'))
-            })
-            .filter(|s| !s.is_empty())
-            .collect();
-        let mut terms = vec![];
-        let mut chars = 0;
-        for term in &nonblank {
-            let count = term.chars().count();
-            if terms.len() == 100 || chars + count > 1200 {
-                break;
-            }
-            terms.push((*term).to_owned());
-            chars += count;
-        }
-        let dropped = nonblank.len() - terms.len();
-        let ignored_model = !terms.is_empty()
+        let mut prepared = normalize_keyterms(&self.keyterm);
+        prepared.ignored_model = !prepared.terms.is_empty()
             && !(self.model.starts_with("ink-2") || self.model.starts_with("ink-preview"));
-        if ignored_model {
-            terms.clear();
+        if prepared.ignored_model {
+            prepared.terms.clear();
         }
-        CartesiaKeyterms {
-            terms,
-            dropped,
-            ignored_model,
-        }
+        prepared
     }
     pub fn merge(&self, delta: &SttSettings) -> Result<Self, StreamingError> {
         let mut values = delta.base.extra.clone();
@@ -140,6 +118,29 @@ impl CartesiaSttSettings {
             return Err(StreamingError::TooLarge);
         }
         Ok(())
+    }
+}
+pub(crate) fn normalize_keyterms(keyterm: &[String]) -> CartesiaKeyterms {
+    let nonblank: Vec<_> = keyterm
+        .iter()
+        .map(|s| s.trim_matches(|c: char| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}')))
+        .filter(|s| !s.is_empty())
+        .collect();
+    let mut terms = vec![];
+    let mut chars = 0;
+    for term in &nonblank {
+        let count = term.chars().count();
+        if terms.len() == 100 || chars + count > 1200 {
+            break;
+        }
+        terms.push((*term).to_owned());
+        chars += count;
+    }
+    let dropped = nonblank.len() - terms.len();
+    CartesiaKeyterms {
+        terms,
+        dropped,
+        ignored_model: false,
     }
 }
 #[derive(Clone, PartialEq)]
@@ -240,7 +241,7 @@ impl CartesiaSttConfig {
         Ok(url.into())
     }
 }
-fn quote(value: &str) -> String {
+pub(crate) fn quote(value: &str) -> String {
     let mut out = String::new();
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {

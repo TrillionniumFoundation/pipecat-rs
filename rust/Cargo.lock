@@ -4267,6 +4267,7 @@ dependencies = [
  "pipecat-core",
  "pipecat-services",
  "pipecat-text",
+ "pipecat-turns",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

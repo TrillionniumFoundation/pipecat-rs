@@ -1,4 +1,4 @@
-//! Native Deepgram Listen v1 STT, Cartesia Live STT and Cartesia streaming TTS.
+//! Native Deepgram Listen v1 STT, Cartesia Live/Turns STT and Cartesia streaming TTS.
 //!
 //! Each session owns bounded input/output queues and its WebSocket. Cancellation
 //! bypasses those queues, discards pending events, and performs bounded cleanup.
@@ -31,3 +31,11 @@ pub use cartesia_stt::{
     CartesiaSttSession, CartesiaSttSettings, CartesiaSttTranscript, CARTESIA_STT_VERSION,
 };
 pub use cartesia_stt_processor::CartesiaSttProcessor;
+
+pub mod cartesia_turns;
+mod cartesia_turns_processor;
+pub use cartesia_turns::{
+    CartesiaTurnsClient, CartesiaTurnsConfig, CartesiaTurnsEvent, CartesiaTurnsSender,
+    CartesiaTurnsSession, CartesiaTurnsSettings, CartesiaTurnsWatchdog, CARTESIA_TURNS_VERSION,
+};
+pub use cartesia_turns_processor::CartesiaTurnsProcessor;

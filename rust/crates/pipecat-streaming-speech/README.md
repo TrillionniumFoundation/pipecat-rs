@@ -270,3 +270,7 @@ Cartesia Live STT protocol. See [CARTESIA_STT.md](CARTESIA_STT.md) for exact wir
 mapping, keyterm diagnostics, immutable settings, explicit owner-bound restart,
 keepalive/local-duration differences, qualification and remaining parity gaps.
 Cartesia Turns is not included. Existing `CartesiaClient` remains the TTS API.
+
+Cartesia v2 committed-turn STT is available through `CartesiaTurnsClient` and
+`CartesiaTurnsProcessor`. See [CARTESIA_TURNS.md](CARTESIA_TURNS.md) for readiness,
+watchdog budgets, External strategy integration and explicit native narrowings.
