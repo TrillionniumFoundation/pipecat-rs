@@ -7,6 +7,11 @@ license.workspace = true
 [dependencies]
 pipecat-moonshine = { path = "../pipecat-moonshine", optional = true }
 pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
+pipecat-aws-bedrock = { path = "../pipecat-aws-bedrock", optional = true }
+pipecat-aws-speech = { path = "../pipecat-aws-speech", optional = true }
+pipecat-moq = { path = "../pipecat-moq", optional = true }
+pipecat-piper = { path = "../pipecat-piper", optional = true }
+pipecat-rnnoise = { path = "../pipecat-rnnoise", optional = true }
 pipecat-core = { path = "../pipecat-core" }
 pipecat-audio = { path = "../pipecat-audio" }
 pipecat-protocol = { path = "../pipecat-protocol" }
@@ -46,6 +51,11 @@ pipecat-responses = { path = "../pipecat-responses", optional = true }
 [features]
 moonshine = ["dep:pipecat-moonshine"]
 assemblyai = ["dep:pipecat-assemblyai"]
+aws-bedrock = ["dep:pipecat-aws-bedrock"]
+aws-speech = ["dep:pipecat-aws-speech"]
+moq = ["dep:pipecat-moq"]
+piper = ["dep:pipecat-piper"]
+rnnoise = ["dep:pipecat-rnnoise"]
 agent-workers = ["dep:pipecat-agent-workers"]
 whisper = ["dep:pipecat-whisper"]
 livekit = ["dep:pipecat-livekit"]

@@ -76,6 +76,9 @@ The `pipecat` facade reexports the common components. Its optional `webrtc`,
 and `client-server` features expose optional transport/service and native
 browser-hosting paths. Flow execution, global observers, and shared
 media transport are also reexported.
+Optional `aws-bedrock`, `aws-speech`, `moq`, `piper`, and `rnnoise` features expose
+the corresponding native crates. See the [facade feature guide](crates/pipecat/README.md)
+for public module paths and explicit native-backend opt-ins.
 The optional `assemblyai` feature exposes native streaming WebSocket STT and
 segmented Sync HTTP recognition, with bounded queues and owned cancellation.
 See [AssemblyAI](crates/pipecat-assemblyai/README.md) for source mappings,

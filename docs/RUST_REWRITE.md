@@ -2,7 +2,7 @@
 
 The homepage README is intentionally empty. Native implementation and technical documentation are in `rust/`. Run Cargo from that directory. This is an in-progress rewrite, not a full parity or production-readiness certificate.
 
-Source: local rewrite commit `67f9b26a269b0937cfdaa0062d09c6f786cb28b5`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
+Source: local rewrite commit `90ed8921053db1e4ffe5af7a0f80c917064bc3a9`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
 
 Three original Python files are retained solely because Rust source-parity tests use `include_str!` to read them as text (Azure and Grok contracts). Two existing licensed ONNX model fixtures are retained at the paths used by native VAD/Smart Turn tests; their provenance/license records are in `rust/crates/pipecat-vad/`. Rust runtime and Cargo tests do not invoke Python. Python fixture-generation utilities inside `rust/` are offline developer reference tools, not runtime dependencies.
 
@@ -17,3 +17,5 @@ Live provider accounts, actual browser/device audio, hosted SFU operation and no
 ## Public projection portability correction
 
 The first frozen full public-projection test run at remote commit `51e79e0e90aa4dd08dab2c0470c0e6c0cd9ea8a5` failed only the eval process-hosting target: its Python-manifest rejection test depended on an excluded parent-directory fixture. The test now uses a provenance-marked, crate-local minimal fixture and checks the specific `Unsupported` diagnostic. The isolated package gate passed 73 tests, strict all-target/all-feature Clippy and formatting. Deleting the fixture, changing the error variant, and changing the diagnostic each fail the strengthened regression. This is not yet a full-workspace pass for this updated source.
+
+The optional facade now exposes AWS Bedrock, AWS speech, MoQ, Piper and RNNoise. Five no-I/O API tests, strict all-target/all-feature facade Clippy and format checks passed. Default dependencies exclude all five; Piper ONNX/GPL and RNNoise native backends still require separate explicit opt-in. This API-wiring gate does not claim hosted-provider or physical-device acceptance.

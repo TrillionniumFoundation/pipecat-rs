@@ -5,6 +5,10 @@ pub use pipecat_agent_workers as agent_workers;
 #[cfg(feature = "assemblyai")]
 pub use pipecat_assemblyai as assemblyai;
 pub use pipecat_audio as audio;
+#[cfg(feature = "aws-bedrock")]
+pub use pipecat_aws_bedrock as aws_bedrock;
+#[cfg(feature = "aws-speech")]
+pub use pipecat_aws_speech as aws_speech;
 #[cfg(feature = "client-server")]
 pub use pipecat_client_server as client_server;
 pub use pipecat_core as core;
@@ -24,6 +28,8 @@ pub use pipecat_mcp as mcp;
 pub use pipecat_media_transport as media_transport;
 #[cfg(feature = "moonshine")]
 pub use pipecat_moonshine as moonshine;
+#[cfg(feature = "moq")]
+pub use pipecat_moq as moq;
 pub use pipecat_observers as observers;
 pub use pipecat_protocol as protocol;
 pub use pipecat_services as services;
@@ -37,11 +43,15 @@ pub mod wire;
 
 pub use pipecat_network_bus as network_bus;
 pub use pipecat_pipeline as pipeline;
+#[cfg(feature = "piper")]
+pub use pipecat_piper as piper;
 pub use pipecat_processors as processors;
 #[cfg(feature = "realtime")]
 pub use pipecat_realtime as realtime;
 #[cfg(feature = "responses")]
 pub use pipecat_responses as responses;
+#[cfg(feature = "rnnoise")]
+pub use pipecat_rnnoise as rnnoise;
 pub use pipecat_rtvi as rtvi;
 pub use pipecat_speech as speech;
 pub use pipecat_streaming_speech as streaming_speech;
