@@ -1,0 +1,9 @@
+# Copyright (c) 2024-2026, Daily
+# SPDX-License-Identifier: BSD-2-Clause
+# Minimal extract of evals/release/manifest.yaml from ProfHepta/pipecat
+# baseline af9f9da9d7afddaa8811c0e0251b32566c980bdf.
+# The Python schema has no native_version; reject it before resolving its paths.
+spawn: "{python} {bot} -t eval --port {port}"
+suite:
+  - bot: voice/voice-aicoustics.py
+    scenarios: [scripted/capital_question]

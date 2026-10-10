@@ -436,12 +436,16 @@ async fn runner_body_path_and_inline_are_supplied_and_inline_file_removed() {
 }
 #[test]
 fn source_python_manifest_and_unsupported_audio_are_explicitly_rejected() {
-    let original =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../evals/release/manifest.yaml");
-    assert!(matches!(
-        ReleaseManifest::load(original),
-        Err(pipecat_evals::EvalError::Unsupported(_))
-    ));
+    let python_manifest =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/source_python_manifest.yaml");
+    let error = ReleaseManifest::load(python_manifest)
+        .err()
+        .expect("Python spawn manifests must not be accepted");
+    assert!(
+        matches!(&error, pipecat_evals::EvalError::Unsupported(message)
+            if message.contains("Python spawn templates are unsupported")),
+        "expected Python spawn template rejection, got {error}"
+    );
     let dir = Temp::new();
     let path = write_manifest(&dir.0, "echo", port());
     for scenario in [
