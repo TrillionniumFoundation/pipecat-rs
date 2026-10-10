@@ -7,6 +7,9 @@ license.workspace = true
 [dependencies]
 pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 pipecat-deepgram-flux = { path = "../pipecat-deepgram-flux", optional = true }
+pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
+pipecat-images = { path = "../pipecat-images", optional = true }
+pipecat-soniox = { path = "../pipecat-soniox", optional = true }
 pipecat-moonshine = { path = "../pipecat-moonshine", optional = true }
 pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
 pipecat-aws-bedrock = { path = "../pipecat-aws-bedrock", optional = true }
@@ -53,6 +56,9 @@ pipecat-responses = { path = "../pipecat-responses", optional = true }
 [features]
 classifiers = ["dep:pipecat-classifiers"]
 deepgram-flux = ["dep:pipecat-deepgram-flux"]
+grok-realtime = ["dep:pipecat-grok-realtime"]
+images = ["dep:pipecat-images"]
+soniox = ["dep:pipecat-soniox"]
 moonshine = ["dep:pipecat-moonshine"]
 assemblyai = ["dep:pipecat-assemblyai"]
 aws-bedrock = ["dep:pipecat-aws-bedrock"]

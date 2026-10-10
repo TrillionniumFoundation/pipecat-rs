@@ -77,9 +77,15 @@ and `client-server` features expose optional transport/service and native
 browser-hosting paths. Flow execution, global observers, and shared
 media transport are also reexported.
 Optional `aws-bedrock`, `aws-speech`, `classifiers`, `deepgram-flux`, `moq`, `piper`,
-and `rnnoise` features expose
+`rnnoise`, `images`, `soniox`, and `grok-realtime` features expose
 the corresponding native crates. See the [facade feature guide](crates/pipecat/README.md)
-for public module paths and explicit native-backend opt-ins.
+for public module paths and explicit native-backend opt-ins. The image feature
+retains the unpublished source-tree package and patched JPEG path dependency.
+Soniox provides streaming STT and multiplexed TTS. Grok Realtime provides the
+provider adapter and tool-result relay; generic realtime aggregation, reliable
+executor cancellation, and arbitrary upstream context reconciliation remain
+separate prerequisites. These facade exports do not establish live-provider,
+physical-output, or full workspace parity.
 The optional `classifiers` feature exposes standalone typed batches through native
 LLM inference or Jev HTTP; it does not add pipeline/UI-worker or evaluation-runner
 integration. The optional `deepgram-flux` feature exposes Listen v2 WebSocket STT

@@ -23,6 +23,10 @@ pub use pipecat_evals as evals;
 pub use pipecat_flows as flows;
 #[cfg(feature = "gemini-live")]
 pub use pipecat_gemini_live as gemini_live;
+#[cfg(feature = "grok-realtime")]
+pub use pipecat_grok_realtime as grok_realtime;
+#[cfg(feature = "images")]
+pub use pipecat_images as images;
 #[cfg(feature = "livekit")]
 pub use pipecat_livekit as livekit;
 #[cfg(feature = "local-audio")]
@@ -37,6 +41,8 @@ pub use pipecat_moq as moq;
 pub use pipecat_observers as observers;
 pub use pipecat_protocol as protocol;
 pub use pipecat_services as services;
+#[cfg(feature = "soniox")]
+pub use pipecat_soniox as soniox;
 pub use pipecat_transports as transports;
 #[cfg(feature = "whisper")]
 pub use pipecat_whisper as whisper;

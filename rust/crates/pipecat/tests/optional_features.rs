@@ -107,3 +107,67 @@ fn deepgram_flux_exposes_listen_v2_settings_and_pipeline_processor() {
     assert!(!config.eager_end_of_turn);
     assert!(config.should_interrupt);
 }
+
+#[cfg(feature = "images")]
+#[test]
+fn images_expose_bounded_settings_and_pipeline_processor_without_decoding() {
+    use pipecat::images::{
+        ImageGenProcessor, ImageGenerationConfig, ImageGenerationSettingsDelta, OpenAiImageClient,
+        SOURCE_DEFAULT_MODEL,
+    };
+
+    fn assert_processor<T: pipecat::core::FrameProcessor>() {}
+    assert_processor::<ImageGenProcessor>();
+    assert!(std::mem::size_of::<OpenAiImageClient>() > 0);
+    let config = ImageGenerationConfig::new(String::new());
+    assert_eq!(config.settings.model.as_deref(), Some(SOURCE_DEFAULT_MODEL));
+    assert_eq!(config.settings.image_size, None);
+    assert!(!config.allow_loopback_api);
+    assert!(config.limits.max_pending > 0);
+    let settings = config
+        .settings
+        .apply(&ImageGenerationSettingsDelta {
+            image_size: pipecat::core::Setting::Value("1024x1024".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(settings.image_size.as_deref(), Some("1024x1024"));
+}
+
+#[cfg(feature = "soniox")]
+#[test]
+fn soniox_exposes_streaming_speech_configuration_and_pipeline_processors() {
+    use pipecat::soniox::{
+        SonioxSttConfig, SonioxSttProcessor, SonioxTtsConfig, SonioxTtsProcessor,
+    };
+
+    fn assert_processor<T: pipecat::core::FrameProcessor>() {}
+    assert_processor::<SonioxSttProcessor>();
+    assert_processor::<SonioxTtsProcessor>();
+    let stt = SonioxSttConfig::new(String::new());
+    let tts = SonioxTtsConfig::new(String::new());
+    stt.settings.validate().unwrap();
+    tts.settings.validate().unwrap();
+    assert_eq!(stt.sample_rate, 16_000);
+    assert!(stt.vad_force_turn_endpoint);
+    assert_eq!(tts.sample_rate, 24_000);
+    assert_eq!(tts.max_streams, 5);
+}
+
+#[cfg(feature = "grok-realtime")]
+#[test]
+fn grok_realtime_exposes_configuration_processor_and_explicit_tool_relay() {
+    use pipecat::grok_realtime::{
+        GrokRealtimeProcessor, GrokToolResultRelay, RealtimeClient, RealtimeConfig,
+    };
+
+    fn assert_processor<T: pipecat::core::FrameProcessor>() {}
+    assert_processor::<GrokRealtimeProcessor>();
+    assert_processor::<GrokToolResultRelay>();
+    assert!(std::mem::size_of::<RealtimeClient>() > 0);
+    let config = RealtimeConfig::new(String::new());
+    assert_eq!(config.model, "grok-voice-latest");
+    assert_eq!(config.session.voice.as_deref(), Some("eve"));
+    assert!(config.session.audio.is_some());
+    assert!(config.limits.max_message_bytes > 0);
+}
