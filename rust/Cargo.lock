@@ -3486,6 +3486,7 @@ dependencies = [
  "pipecat-services",
  "pipecat-soniox",
  "pipecat-speech",
+ "pipecat-speechmatics",
  "pipecat-streaming-speech",
  "pipecat-text",
  "pipecat-transports",
@@ -4215,6 +4216,25 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "pipecat-speechmatics"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "pipecat-core",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+ "uuid",
 ]
 
 [[package]]

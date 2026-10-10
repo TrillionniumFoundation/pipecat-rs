@@ -10,6 +10,7 @@ pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 pipecat-deepgram-flux = { path = "../pipecat-deepgram-flux", optional = true }
 pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
 pipecat-images = { path = "../pipecat-images", optional = true }
+pipecat-speechmatics = { path = "../pipecat-speechmatics", optional = true }
 pipecat-soniox = { path = "../pipecat-soniox", optional = true }
 pipecat-gladia = { path = "../pipecat-gladia", optional = true }
 pipecat-gradium = { path = "../pipecat-gradium", optional = true }
@@ -62,6 +63,7 @@ classifiers = ["dep:pipecat-classifiers"]
 deepgram-flux = ["dep:pipecat-deepgram-flux"]
 grok-realtime = ["dep:pipecat-grok-realtime"]
 images = ["dep:pipecat-images"]
+speechmatics = ["dep:pipecat-speechmatics"]
 soniox = ["dep:pipecat-soniox"]
 gladia = ["dep:pipecat-gladia"]
 gradium = ["dep:pipecat-gradium"]
