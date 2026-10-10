@@ -1,0 +1,30 @@
+[package]
+name = "pipecat-images"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+futures-util = "0.3"
+base64 = "0.22"
+url = "2"
+png = "=0.18.1"
+jpeg-decoder = { version = "=0.3.2", path = "../../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }
+
+[dev-dependencies]
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+pipecat-audio = { path = "../pipecat-audio" }
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

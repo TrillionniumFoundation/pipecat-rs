@@ -2,7 +2,7 @@
 
 The homepage README is intentionally empty. Native implementation and technical documentation are in `rust/`. Run Cargo from that directory. This is an in-progress rewrite, not a full parity or production-readiness certificate.
 
-Source: local rewrite commit `9ac529b9fafc831b3a0f68b9b86bf6a9dfaada2f`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
+Source: local rewrite commit `4e61f1bbae360420ee28cce87d861f8d7a243643`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
 
 Three original Python files are retained solely because Rust source-parity tests use `include_str!` to read them as text (Azure and Grok contracts). Two existing licensed ONNX model fixtures are retained at the paths used by native VAD/Smart Turn tests; their provenance/license records are in `rust/crates/pipecat-vad/`. Rust runtime and Cargo tests do not invoke Python. Python fixture-generation utilities inside `rust/` are offline developer reference tools, not runtime dependencies.
 
@@ -39,3 +39,11 @@ The typed LLM/Jev classifiers crate passed 36 tests (one private unit, 23 author
 These exact crate files were integrated without modification, and the combined lock was checked offline. A new full-workspace qualification of this extended publication remains pending; prior checkpoint and slice counts cannot be added or transferred as whole-source acceptance.
 
 The optional facade now exposes `classifiers` and `deepgram-flux` without changing its default dependency closure. Isolated feature and combined public-API smoke tests passed, as did strict all-target facade Clippy and formatting; independent review verified the exact six-file patch and unchanged runtime bytes. This is API wiring, not a new whole-workspace qualification.
+
+## Native OpenAI image generation
+
+Native bounded generation, explicit-origin credential-free hosted download, PNG/JPEG RGB decoding and shared cancellable output delivery are implemented. Independent qualification passed 433 native all-feature core/media/image tests and 6 vendor tests with zero failures/ignores, strict all-target Clippy, native formatting and source integrity. Sixteen independent regressions ship with the crate. Original JPEG and pre-slice media negative controls failed as intended.
+
+Disabling Rayon did not prevent upstream JPEG detached threads. The direct-path, exact-version jpeg-decoder 0.3.2 dependency now unconditionally selects the existing immediate worker and synchronous conversion; only src/worker/mod.rs differs from the official archive implementation. Licenses, original member hashes and exact patch are retained. Its upstream .github workflow and appveyor.yml are omitted from this public projection, consistently with the existing workflow exclusion. These two omissions do not change implementation bytes; UPSTREAM_SHA256.json intentionally lists the complete upstream archive. Cargo registry publishing of pipecat-images is disabled to avoid path stripping restoring detached behavior; GitHub source consumers retain the patch.
+
+The source-cat JPEG is byte-identical to the pinned public Python baseline examples/assets/cat.jpg; the flower benchmark JPEG is byte-identical to the official jpeg-decoder 0.3.2 archive. These are public upstream fixtures, not user media. Neither provider availability, other image adapters, physical rendering nor a new whole-workspace pass is claimed. The frozen fe48acc facade/Flux/classifier workspace gate runs independently and does not include this image slice.

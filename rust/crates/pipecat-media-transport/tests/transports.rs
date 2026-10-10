@@ -1468,3 +1468,51 @@ async fn bounded_wait_backend_failure_drains_without_fabricating_receipts() {
         FrameData::TtsAudio(_) | FrameData::BotStartedSpeaking
     )));
 }
+
+#[tokio::test]
+async fn review_url_image_backend_is_cancelled_and_joined_on_interrupt_or_cancel() {
+    for cancel in [false, true] {
+        let sink = Arc::new(Sink::new(true));
+        let output = Arc::new(
+            OutputTransport::new("out", config(), sink.clone(), None, BTreeMap::new()).unwrap(),
+        );
+        let worker = start(output).await;
+        send(
+            &worker,
+            Frame::new(FrameData::UrlImage(UrlImageRawFrame {
+                image: OutputImageRawFrame {
+                    image: ImageRawFrame {
+                        image: vec![1, 2, 3],
+                        size: (1, 1),
+                        format: Some("RGB".into()),
+                    },
+                    sync_with_audio: false,
+                },
+                url: Some("https://images.example/original".into()),
+            })),
+        )
+        .await;
+        sink.wait_calls(1).await;
+        assert_eq!(sink.active.load(Ordering::SeqCst), 1);
+        send(
+            &worker,
+            if cancel {
+                Frame::cancel("review")
+            } else {
+                Frame::interruption()
+            },
+        )
+        .await;
+        if !cancel {
+            send(&worker, Frame::end()).await;
+        }
+        let (frames, report) = worker.collect().await.unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(sink.active.load(Ordering::SeqCst), 0);
+        assert_eq!(sink.stopped.load(Ordering::SeqCst), 1);
+        assert!(sink.written.lock().unwrap().is_empty());
+        assert!(!frames
+            .iter()
+            .any(|e| matches!(e.frame.data, FrameData::UrlImage(_))));
+    }
+}

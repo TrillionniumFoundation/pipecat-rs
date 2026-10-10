@@ -1,0 +1,93 @@
+--- upstream/src/worker/mod.rs
++++ local/src/worker/mod.rs
+@@ -1,10 +1,7 @@
++// Pipecat's owned outer decoder thread requires all component work to finish
++// synchronously, including malformed/cancelled inputs. Do not compile either
++// detached component workers or a feature-dependent Rayon execution path.
+ mod immediate;
+-mod multithreaded;
+-#[cfg(all(
+-    not(any(target_arch = "asmjs", target_arch = "wasm32")),
+-    feature = "rayon"
+-))]
+-mod rayon;
+ 
+ use crate::decoder::{choose_color_convert_func, ColorTransform};
+ use crate::error::Result;
+@@ -46,13 +43,6 @@
+ }
+ 
+ enum WorkerScopeInner {
+-    #[cfg(all(
+-        not(any(target_arch = "asmjs", target_arch = "wasm32")),
+-        feature = "rayon"
+-    ))]
+-    Rayon(Box<rayon::Scoped>),
+-    #[cfg(not(any(target_arch = "asmjs", target_arch = "wasm32")))]
+-    Multithreaded(multithreaded::MpscWorker),
+     Immediate(immediate::ImmediateWorker),
+ }
+ 
+@@ -69,26 +59,9 @@
+         f: impl FnOnce(&mut dyn Worker) -> T,
+     ) -> T {
+         let mut inner = self.inner.borrow_mut();
+-        let inner = inner.get_or_insert_with(move || match prefer {
+-            #[cfg(all(
+-                not(any(target_arch = "asmjs", target_arch = "wasm32")),
+-                feature = "rayon"
+-            ))]
+-            PreferWorkerKind::Multithreaded => WorkerScopeInner::Rayon(Default::default()),
+-            #[allow(unreachable_patterns)]
+-            #[cfg(not(any(target_arch = "asmjs", target_arch = "wasm32")))]
+-            PreferWorkerKind::Multithreaded => WorkerScopeInner::Multithreaded(Default::default()),
+-            _ => WorkerScopeInner::Immediate(Default::default()),
+-        });
+-
++        let _ = prefer;
++        let inner = inner.get_or_insert_with(|| WorkerScopeInner::Immediate(Default::default()));
+         f(match &mut *inner {
+-            #[cfg(all(
+-                not(any(target_arch = "asmjs", target_arch = "wasm32")),
+-                feature = "rayon"
+-            ))]
+-            WorkerScopeInner::Rayon(worker) => worker.as_mut(),
+-            #[cfg(not(any(target_arch = "asmjs", target_arch = "wasm32")))]
+-            WorkerScopeInner::Multithreaded(worker) => worker,
+             WorkerScopeInner::Immediate(worker) => worker,
+         })
+     }
+@@ -100,13 +73,6 @@
+     output_size: Dimensions,
+     color_transform: ColorTransform,
+ ) -> Result<Vec<u8>> {
+-    #[cfg(all(
+-        not(any(target_arch = "asmjs", target_arch = "wasm32")),
+-        feature = "rayon"
+-    ))]
+-    return rayon::compute_image_parallel(components, data, output_size, color_transform);
+-
+-    #[allow(unreachable_code)]
+     {
+         let color_convert_func = choose_color_convert_func(components.len(), color_transform)?;
+         let upsampler = Upsampler::new(components, output_size.width, output_size.height)?;
+@@ -126,3 +92,19 @@
+         Ok(image)
+     }
+ }
++
++#[cfg(test)]
++mod ownership_tests {
++    use super::*;
++
++    #[test]
++    fn multithreaded_preference_still_uses_immediate_worker() {
++        WorkerScope::with(|scope| {
++            scope.get_or_init_worker(PreferWorkerKind::Multithreaded, |_| ());
++            assert!(matches!(
++                *scope.inner.borrow(),
++                Some(WorkerScopeInner::Immediate(_))
++            ));
++        });
++    }
++}

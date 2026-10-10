@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/*"]
 exclude = [
+    "vendor/jpeg-decoder-0.3.2",
     "vendor/moq-tokio-0.19.19",
     "vendor/webrtc-0.14.0",
     "client-templates",

@@ -570,9 +570,46 @@ mod admission_wait_tests {
     }
 }
 pub(crate) fn frame_bytes(frame: &Frame) -> usize {
+    let output_image = match &frame.data {
+        FrameData::OutputImage(image) => Some((image, None)),
+        FrameData::OutputImageDetailed(image) => Some((&image.image, None)),
+        FrameData::UrlImage(image) => Some((&image.image.image, image.url.as_ref())),
+        _ => None,
+    };
+    if let Some((image, url)) = output_image {
+        // Count retained allocations, including spare capacity and nested metadata.
+        // The bounded-depth walker allocates no temporary metadata work queue.
+        let entry = 12
+            * (std::mem::size_of::<(String, serde_json::Value)>() + std::mem::size_of::<usize>());
+        let bytes = image
+            .image
+            .capacity()
+            .saturating_add(image.format.as_ref().map_or(0, String::capacity))
+            .saturating_add(url.map_or(0, String::capacity))
+            .saturating_add(frame.name.capacity())
+            .saturating_add(frame.transport_source.as_ref().map_or(0, String::capacity))
+            .saturating_add(
+                frame
+                    .transport_destination
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
+            .saturating_add(frame.native_llm_continuation_retained_bytes())
+            .saturating_add(frame.metadata.len().saturating_mul(entry));
+        return frame.metadata.iter().fold(bytes, |bytes, (key, value)| {
+            bytes
+                .saturating_add(key.capacity())
+                .saturating_add(continuation_argument_bytes(value, 0))
+        });
+    }
+
     let image_envelope = matches!(
         frame.data,
-        FrameData::InputImage(_) | FrameData::UserImage(_)
+        FrameData::InputImage(_)
+            | FrameData::UserImage(_)
+            | FrameData::OutputImage(_)
+            | FrameData::OutputImageDetailed(_)
+            | FrameData::UrlImage(_)
     );
     let envelope = if matches!(
         frame.data,
@@ -582,6 +619,9 @@ pub(crate) fn frame_bytes(frame: &Frame) -> usize {
             | FrameData::TtsAlignmentDiagnostic(_)
             | FrameData::InputImage(_)
             | FrameData::UserImage(_)
+            | FrameData::OutputImage(_)
+            | FrameData::OutputImageDetailed(_)
+            | FrameData::UrlImage(_)
     ) {
         let mut bytes = frame
             .name
@@ -623,7 +663,22 @@ pub(crate) fn frame_bytes(frame: &Frame) -> usize {
             .image
             .len()
             .saturating_add(i.format.as_ref().map_or(0, String::len)),
-        FrameData::OutputImage(i) => i.image.len(),
+        FrameData::OutputImage(i) => i
+            .image
+            .len()
+            .saturating_add(i.format.as_ref().map_or(0, String::len)),
+        FrameData::OutputImageDetailed(i) => i
+            .image
+            .image
+            .len()
+            .saturating_add(i.image.format.as_ref().map_or(0, String::len)),
+        FrameData::UrlImage(i) => i
+            .image
+            .image
+            .image
+            .len()
+            .saturating_add(i.image.image.format.as_ref().map_or(0, String::len))
+            .saturating_add(i.url.as_ref().map_or(0, String::len)),
         FrameData::UserImage(i) => i
             .image
             .image
@@ -636,7 +691,6 @@ pub(crate) fn frame_bytes(frame: &Frame) -> usize {
                     .as_ref()
                     .map_or(0, |request| crate::input_video::request_bytes(request)),
             ),
-        FrameData::OutputImageDetailed(i) => i.image.image.len(),
         FrameData::Flush(_) | FrameData::FlushDetailed(_) => flush_retained_bytes(frame),
         FrameData::FunctionCallsStarted(calls)
             if frame.native_llm_continuation_retained_bytes() != 0 =>
@@ -1083,3 +1137,59 @@ mod native_history_budget_tests {
 #[cfg(test)]
 #[path = "queue/recovered_admission_tests.rs"]
 mod recovered_admission_tests;
+
+#[cfg(test)]
+mod image_queue_tests {
+    use super::*;
+    use pipecat_core::{ImageRawFrame, OutputImageRawFrame, UrlImageRawFrame};
+    fn image() -> Frame {
+        Frame::new(FrameData::UrlImage(UrlImageRawFrame {
+            image: OutputImageRawFrame {
+                image: ImageRawFrame {
+                    image: vec![1, 2, 3],
+                    size: (1, 1),
+                    format: Some("RGB".into()),
+                },
+                sync_with_audio: false,
+            },
+            url: Some("https://images.example/test".into()),
+        }))
+    }
+    #[test]
+    fn url_image_charges_pixels_url_envelope_and_releases_capacity() {
+        let mut frame = image();
+        frame.metadata.insert(
+            "nested".into(),
+            serde_json::json!({"lots": [null,null,null]}),
+        );
+        let bytes = frame_bytes(&frame);
+        assert!(bytes > 3 + "https://images.example/test".len());
+        assert!(MediaQueue::new(1, frame_bytes(&frame.clone()) - 1)
+            .push(frame.clone())
+            .is_err());
+        let queue = MediaQueue::new(1, bytes);
+        queue.push(frame.clone()).unwrap();
+        assert!(queue.push(frame.clone()).is_err());
+        queue.pop().unwrap();
+        queue.push(frame).unwrap();
+        queue.interrupt();
+        assert!(queue.is_empty());
+    }
+    #[test]
+    fn spare_capacity_and_deep_image_metadata_cannot_bypass_budget() {
+        let mut frame = image();
+        if let FrameData::UrlImage(image) = &mut frame.data {
+            image.image.image.image.reserve(4096);
+            image.url.as_mut().unwrap().reserve(4096);
+        }
+        assert!(frame_bytes(&frame) >= 8192);
+        assert!(MediaQueue::new(1, 1024).push(frame).is_err());
+        let mut frame = image();
+        let mut metadata = serde_json::Value::Null;
+        for _ in 0..=pipecat_core::NativeLlmContinuation::MAX_ARGUMENT_DEPTH {
+            metadata = serde_json::json!([metadata]);
+        }
+        frame.metadata.insert("deep".into(), metadata);
+        assert_eq!(frame_bytes(&frame), usize::MAX);
+    }
+}
