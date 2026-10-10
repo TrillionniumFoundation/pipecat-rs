@@ -1,0 +1,27 @@
+[package]
+name = "pipecat-grok-realtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", features = ["sink"] }
+base64 = "0.22"
+url = "2"
+
+[dev-dependencies]
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+pipecat-processors = { path = "../pipecat-processors" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-turns = { path = "../pipecat-turns" }
+
+[lints]
+workspace = true

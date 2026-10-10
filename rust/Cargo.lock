@@ -3744,6 +3744,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-grok-realtime"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "pipecat-audio",
+ "pipecat-core",
+ "pipecat-media-transport",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
 name = "pipecat-gemini-live"
 version = "0.1.0"
 dependencies = [
