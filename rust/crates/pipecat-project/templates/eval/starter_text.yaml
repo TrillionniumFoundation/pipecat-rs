@@ -1,0 +1,21 @@
+name: starter_text
+user: {modality: text}
+judge: {modality: text}
+scenarios:
+  - name: two_turn_tool
+    turns:
+      - user: "Use the add tool to add 2 and 3. Say the result as a number."
+        expect:
+          - event: function_call
+            calls:
+              - name: add
+                args: {a: 2, b: 3}
+            within_ms: 10000
+          - event: response
+            text_contains: "5"
+            within_ms: 10000
+      - user: "What was that result? Include the same number."
+        expect:
+          - event: response
+            text_contains: "5"
+            within_ms: 10000

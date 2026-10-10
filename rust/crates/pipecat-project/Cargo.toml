@@ -17,6 +17,7 @@ tokio = { workspace = true, features = ["signal"] }
 
 [dev-dependencies]
 tempfile = "3"
+pipecat-evals = { path = "../pipecat-evals" }
 
 [lints]
 workspace = true

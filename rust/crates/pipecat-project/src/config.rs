@@ -14,6 +14,7 @@ pub struct ProjectConfig {
     pub llm: String,
     pub tts: String,
     pub client: String,
+    pub eval: String,
     pub deploy_to_cloud: bool,
 }
 impl Default for ProjectConfig {
@@ -26,6 +27,7 @@ impl Default for ProjectConfig {
             llm: "openai".into(),
             tts: "cartesia".into(),
             client: "none".into(),
+            eval: "none".into(),
             deploy_to_cloud: false,
         }
     }
@@ -74,9 +76,30 @@ impl ProjectConfig {
         if self.deploy_to_cloud {
             return Err(ProjectError::Configuration("cloud deployment has no native implementation; no deployment files will be generated"));
         }
+        if self.eval != "none" && self.eval != "text" {
+            return Err(ProjectError::Configuration("eval must be none or text"));
+        }
+        if self.eval == "text" && EVAL_RESERVED.contains(&self.name.replace('-', "_").as_str()) {
+            return Err(ProjectError::Configuration(
+                "name conflicts with the eval binary or a direct eval dependency",
+            ));
+        }
         Ok(())
     }
 }
+
+const EVAL_RESERVED: &[&str] = &[
+    "eval_bot",
+    "pipecat_core",
+    "pipecat_evals",
+    "pipecat_processors",
+    "pipecat_services",
+    "pipecat_turns",
+    "reqwest",
+    "serde",
+    "serde_json",
+    "url",
+];
 
 /// Restricts Cargo package names to portable single directory components.
 pub fn validate_name(name: &str) -> Result<(), ProjectError> {
@@ -186,6 +209,7 @@ pub fn supported_options() -> serde_json::Value {
         "transport": ["websocket"], "mode": ["cascade"],
         "stt": ["deepgram"], "llm": ["openai"], "tts": ["cartesia"],
         "client": ["none", "rust-wasm"], "deploy_to_cloud": [false],
+        "eval": ["none", "text"],
         "source": "existing local Rust workspace (--source-rust)",
         "overwrite": false
     })

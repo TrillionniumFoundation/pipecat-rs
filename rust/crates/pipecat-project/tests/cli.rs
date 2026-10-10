@@ -65,7 +65,14 @@ fn unsupported_and_malicious_input_does_not_create_anything() {
 fn process_environment_secrets_never_appear_in_generated_files() {
     let temp = tempfile::tempdir().unwrap();
     let output = command()
-        .args(["secret-free", "--client", "rust-wasm", "--parent"])
+        .args([
+            "secret-free",
+            "--client",
+            "rust-wasm",
+            "--eval",
+            "text",
+            "--parent",
+        ])
         .arg(temp.path())
         .arg("--source-rust")
         .arg(source())

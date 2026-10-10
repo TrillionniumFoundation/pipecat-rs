@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
-  "source_tree": "31a3d7affb9363292254b78bdbcbc32a363f0353",
+  "source_commit": "edae99e6741e8675376497f8736e49e8d4203926",
+  "source_tree": "8e12c2df7ed8566907e10e0c6dc8a59ead979c55",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -99,6 +99,11 @@
       "commit": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
       "tree": "31a3d7affb9363292254b78bdbcbc32a363f0353",
       "subject": "Add bounded native voicemail detection and ordered speech gate"
+    },
+    {
+      "commit": "edae99e6741e8675376497f8736e49e8d4203926",
+      "tree": "8e12c2df7ed8566907e10e0c6dc8a59ead979c55",
+      "subject": "Generate optional native text evaluation starter and qualify real tool flow"
     }
   ],
   "scope_evidence": [
@@ -180,6 +185,13 @@
       "machine_qualification_sha256": "eda9ef8dd94ce8d0a7c938f2d66969725fc4da8e34c22a51ef91943d349bb40d",
       "qualified_source_manifest_sha256": "ec520d8116412b68c8a507fbffe97647ffa299b66ee955e7f5893c94a0617c72",
       "integration_patch_sha256": "41677dcdc2d08f6bb16d4605f30e91c363dc8309ddabef81d2e795daa070b1fa"
+    },
+    {
+      "scope": "native_text_eval_starter",
+      "report_sha256": "e9e3907612c475a92a9f01f83ae7369815e86c376ceb5aff40653e39f20bf992",
+      "author_report_sha256": "91f81fa39d4c1b05ce14c5c9945d3dba868f80ee2224980808a022b461f1cac0",
+      "qualified_source_manifest_sha256": "f67b9c4d7f6bc3f13c84f27cdda6adb33aecb9c11c461e8c14e3de181bd63a8a",
+      "integration_patch_sha256": "6a3a399e83802c7c3d227d78143369ec28c530c74b86453f4e3cb5334d413402"
     }
   ],
   "omitted_native_administrative_paths": [
@@ -195,17 +207,17 @@
     "src/pipecat/audio/vad/data/silero_vad.onnx",
     "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
   ],
-  "raw_source_entries": 1455,
+  "raw_source_entries": 1462,
   "readme_bytes": 0,
   "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
   "new_execution": "NONE",
   "release_ready": false,
   "previous_public_draft": {
     "branch": "draft/native-reviewed-2026-10-10-fcf1752",
-    "commit": "9b91a55ee7133c94f3c5454b7a3bab96ce2c6d27",
-    "tree": "3fc257ce9a4d48248088c5cd2e2e49b50a6e4103",
-    "canonical_source": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
-    "update_requires_expected_head": "9b91a55ee7133c94f3c5454b7a3bab96ce2c6d27"
+    "commit": "48d31d59a8b660c901e4c7f71666d7e69607b7e3",
+    "tree": "ceafafb28eadc8eb25140825baa58d3fa59d974d",
+    "canonical_source": "4ff95320e750527ff8d98d28de0a0880f9d126a6",
+    "update_requires_expected_head": "48d31d59a8b660c901e4c7f71666d7e69607b7e3"
   },
   "voicemail_scoped_results": {
     "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
@@ -227,6 +239,22 @@
       "unchanged_source_after_restoration": "all 1452 files match"
     },
     "isolated_compiling_controls": 5,
+    "combined_projection_full_gate": "NOT_RUN",
+    "counts_are_source_bound_and_overlap": true
+  },
+  "native_text_eval_starter_scoped_results": {
+    "independent_project_tests": 31,
+    "project_heavy_tests_initially_ignored": 2,
+    "independent_host_process_regressions": 54,
+    "runner_eval_ingress_isolation": 3,
+    "generated_runtime_unit_tests": 3,
+    "new_generated_text_application_and_release": "passed",
+    "unchanged_default_voice_generated_build_help": "passed separately",
+    "isolated_compiling_controls": 3,
+    "restored_generated_runtime_and_release": "passed; exact source/executable hashes restored",
+    "normal_dependency_closure": "unchanged after source-root normalization; 38 lines",
+    "successful_release_process_forced": false,
+    "blocked_inference_cancel_process_forced": true,
     "combined_projection_full_gate": "NOT_RUN",
     "counts_are_source_bound_and_overlap": true
   }

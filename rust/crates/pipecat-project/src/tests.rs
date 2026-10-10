@@ -373,3 +373,343 @@ fn config_fifo_is_rejected_before_opening() {
     let error = Command::parse(vec!["--config".into(), fifo.display().to_string()]).unwrap_err();
     assert!(error.to_string().contains("regular JSON file"));
 }
+
+fn eval_plan(temp: &tempfile::TempDir, client: &str) -> ProjectPlan {
+    let mut config = ProjectConfig::new("eval-starter");
+    config.eval = "text".into();
+    config.client = client.into();
+    ProjectPlan::new(config, temp.path(), &source()).unwrap()
+}
+
+#[test]
+fn eval_selection_is_strict_optional_and_reserves_only_introduced_collisions() {
+    let config = ProjectConfig::from_json(br#"{"name":"bot"}"#).unwrap();
+    assert_eq!(config.eval, "none");
+    assert_eq!(
+        supported_options()["eval"],
+        serde_json::json!(["none", "text"])
+    );
+    for selection in ["audio", "realtime", "Text", "", "python", "none,text"] {
+        let mut config = ProjectConfig::new("bot");
+        config.eval = selection.into();
+        assert!(config.validate().is_err());
+    }
+    for bytes in [
+        br#"{"name":"bot","eval":true}"#.as_slice(),
+        br#"{"name":"bot","eval":"text","eval":"none"}"#,
+        br#"{"name":"bot","enable_eval":true}"#,
+        br#"{"name":"bot","eval":"text","llm_url":"SECRET"}"#,
+    ] {
+        let error = ProjectConfig::from_json(bytes).unwrap_err().to_string();
+        assert!(!error.contains("SECRET"));
+    }
+    for name in [
+        "eval-bot",
+        "eval_bot",
+        "pipecat-core",
+        "pipecat_evals",
+        "pipecat-processors",
+        "pipecat_services",
+        "pipecat-turns",
+        "reqwest",
+        "serde",
+        "serde-json",
+        "serde_json",
+        "url",
+    ] {
+        let mut config = ProjectConfig::new(name);
+        config.validate().unwrap();
+        config.eval = "text".into();
+        assert!(config.validate().is_err(), "accepted collision {name}");
+    }
+}
+
+#[test]
+fn eval_plan_has_exact_allowlist_and_preserves_default_voice_and_client() {
+    const EXTRA: &[&str] = &[
+        "evals/bot.json",
+        "evals/native-manifest.yaml",
+        "evals/starter_text.yaml",
+        "src/bin/eval-bot.rs",
+        "src/eval_app.rs",
+    ];
+    for client in ["none", "rust-wasm"] {
+        let temp = tempfile::tempdir().unwrap();
+        let mut config = ProjectConfig::new("eval-starter");
+        config.client = client.into();
+        let plain = ProjectPlan::new(config, temp.path(), &source()).unwrap();
+        let eval = eval_plan(&temp, client);
+        assert_eq!(eval.files, eval_plan(&temp, client).files);
+        assert_eq!(plain.files.len() + EXTRA.len(), eval.files.len());
+        let extra = eval
+            .files
+            .keys()
+            .filter(|key| !plain.files.contains_key(*key))
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(extra, EXTRA);
+        for (path, bytes) in &plain.files {
+            if !["Cargo.toml", "README.md", "pipecat-project.json"].contains(&path.as_str()) {
+                assert_eq!(bytes, &eval.files[path], "unexpected change: {path}");
+            }
+        }
+        let plain_cargo = std::str::from_utf8(&plain.files["Cargo.toml"]).unwrap();
+        assert!(!plain_cargo.contains("pipecat-evals"));
+        assert!(!plain_cargo.contains("eval-bot"));
+        let cargo = std::str::from_utf8(&eval.files["Cargo.toml"]).unwrap();
+        assert!(cargo.contains("default-run = \"eval-starter\""));
+        assert!(cargo.contains("name = \"eval-bot\""));
+        assert!(!cargo.contains("native-bot-example"));
+        assert!(!cargo.contains("process-fixtures"));
+        assert!(!cargo.contains("git ="));
+        for dependency in EVAL_CRATES {
+            assert!(cargo.contains(&format!("{dependency} = {{ path = ")));
+        }
+        let entry = std::str::from_utf8(&eval.files["src/bin/eval-bot.rs"]).unwrap();
+        assert!(entry.contains("#[path = \"../eval_app.rs\"]"));
+        assert!(!entry.contains("examples/"));
+        let choices: serde_json::Value =
+            serde_json::from_slice(&eval.files["pipecat-project.json"]).unwrap();
+        assert_eq!(choices["eval"], "text");
+        assert!(!eval.target.exists());
+    }
+}
+
+#[test]
+fn generated_eval_scenario_and_manifest_use_existing_native_loaders() {
+    let temp = tempfile::tempdir().unwrap();
+    let plan = eval_plan(&temp, "none");
+    let root = generate(&plan).unwrap();
+    let file = pipecat_evals::ScenarioFile::load(root.join("evals/starter_text.yaml")).unwrap();
+    assert_eq!(file.name, "starter_text");
+    assert_eq!(file.scenarios.len(), 1);
+    let scenario = &file.scenarios[0];
+    assert_eq!(scenario.name, "starter_text/two_turn_tool");
+    assert_eq!(scenario.turns.len(), 2);
+    assert!(scenario.turns.iter().all(|turn| turn.user.is_some()));
+    assert!(!scenario.needs_judge());
+    assert!(scenario.judge.as_ref().unwrap().eval.is_none());
+    assert_eq!(scenario.turns[0].expect[0].event, "function_call");
+    let call = &scenario.turns[0].expect[0].calls.as_ref().unwrap()[0];
+    assert_eq!(call.name.as_deref(), Some("add"));
+    assert_eq!(
+        call.args.as_ref().unwrap().get("a"),
+        Some(&serde_json::json!(2))
+    );
+    assert_eq!(
+        call.args.as_ref().unwrap().get("b"),
+        Some(&serde_json::json!(3))
+    );
+    assert_eq!(scenario.turns[0].expect[1].event, "llm_response");
+    assert_eq!(
+        scenario.turns[1].expect[0].text_contains.as_deref(),
+        Some("5")
+    );
+    let manifest =
+        pipecat_evals::release::ReleaseManifest::load(root.join("evals/native-manifest.yaml"))
+            .unwrap();
+    assert_eq!(manifest.concurrency, 1);
+    assert_eq!(manifest.jobs.len(), 1);
+    let job = &manifest.jobs[0];
+    assert_eq!(job.scenario.name, scenario.name);
+    assert_eq!(job.name, "native-text-starter");
+    assert_eq!(job.port, 7900);
+    assert_eq!(job.attempt, 1);
+    assert_eq!(
+        job.bot,
+        root.join("evals/../target/debug")
+            .join(format!("eval-bot{}", std::env::consts::EXE_SUFFIX))
+    );
+    let config: serde_json::Value = serde_json::from_slice(&plan.files["evals/bot.json"]).unwrap();
+    assert_eq!(
+        config,
+        serde_json::json!({"native_text_bot_version":1,"llm_url":"","model":""})
+    );
+    // The manifest validates mapping shape; the bot validates model semantics before bind.
+    assert!(!job.bot.exists());
+}
+
+#[test]
+fn eval_cli_precedence_and_invalid_flags_do_not_write() {
+    let temp = tempfile::tempdir().unwrap();
+    let file = temp.path().join("config.json");
+    fs::write(&file, r#"{"name":"eval-starter","eval":"text"}"#).unwrap();
+    for config_first in [true, false] {
+        for eval in ["none", "text"] {
+            let mut args = strings(&["--eval", eval, "--dry-run", "--source-rust"]);
+            args.push(source().display().to_string());
+            args.extend(strings(&["--parent"]));
+            args.push(temp.path().display().to_string());
+            let config = vec!["--config".into(), file.display().to_string()];
+            if config_first {
+                args.splice(0..0, config);
+            } else {
+                args.extend(config);
+            }
+            let Command::Generate { plan, dry_run } = Command::parse(args).unwrap() else {
+                panic!("expected plan");
+            };
+            assert!(dry_run);
+            assert_eq!(plan.config.eval, eval);
+            assert_eq!(plan.files.contains_key("evals/bot.json"), eval == "text");
+            assert!(!plan.target.exists());
+        }
+    }
+    for args in [
+        vec!["--eval"],
+        vec!["--eval", "text", "--eval", "none"],
+        vec!["safe-bot", "--eval", "audio"],
+        vec!["safe-bot", "--enable-eval"],
+    ] {
+        assert!(Command::parse(strings(&args)).is_err());
+    }
+    assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+    assert!(crate::cli::HELP.contains("--eval none|text"));
+}
+
+#[test]
+fn eval_cancellation_rolls_back_every_boundary_including_final_commit() {
+    for client in ["none", "rust-wasm"] {
+        let temp = tempfile::tempdir().unwrap();
+        let plan = eval_plan(&temp, client);
+        // Initial pre-create checkpoint, then every file and final commit checkpoint.
+        for cancel_call in 0..plan.files.len() + 2 {
+            let mut calls = 0;
+            let result = generate_cancellable(&plan, |_| {
+                let cancel = calls == cancel_call;
+                calls += 1;
+                cancel
+            });
+            assert!(matches!(result, Err(ProjectError::Cancelled)));
+            assert!(!plan.target.exists(), "residue at callback {cancel_call}");
+        }
+    }
+}
+
+#[test]
+fn eval_io_failure_panic_and_nested_unrelated_files_use_owned_rollback() {
+    let temp = tempfile::tempdir().unwrap();
+    let plan = eval_plan(&temp, "none");
+    let mut broken = plan.clone();
+    broken
+        .files
+        .insert("evals/conflict".into(), b"file".to_vec());
+    broken
+        .files
+        .insert("evals/conflict/file".into(), b"bad".to_vec());
+    assert!(matches!(generate(&broken), Err(ProjectError::Io(_))));
+    assert!(!plan.target.exists());
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        generate_cancellable(&plan, |progress| {
+            if progress.completed_files == progress.total_files {
+                panic!("after eval writes");
+            }
+            false
+        })
+    }));
+    assert!(result.is_err());
+    assert!(!plan.target.exists());
+    let result = generate_cancellable(&plan, |progress| {
+        if progress.completed_files == progress.total_files {
+            fs::write(plan.target.join("evals/keep.txt"), "unrelated").unwrap();
+            true
+        } else {
+            false
+        }
+    });
+    assert!(matches!(result, Err(ProjectError::Cancelled)));
+    assert_eq!(
+        fs::read_to_string(plan.target.join("evals/keep.txt")).unwrap(),
+        "unrelated"
+    );
+    assert_eq!(fs::read_dir(plan.target.join("evals")).unwrap().count(), 1);
+    assert_eq!(fs::read_dir(plan.target()).unwrap().count(), 1);
+}
+
+fn make_source_fixture(path: &Path) {
+    fs::create_dir_all(path).unwrap();
+    fs::write(path.join("Cargo.toml"), "[workspace]").unwrap();
+    for name in std::iter::once("pipecat-runner").chain(EVAL_CRATES.iter().copied()) {
+        let crate_path = path.join("crates").join(name);
+        fs::create_dir_all(crate_path.join("src")).unwrap();
+        fs::write(crate_path.join("Cargo.toml"), "[package]").unwrap();
+        fs::write(crate_path.join("src/lib.rs"), "").unwrap();
+    }
+}
+
+#[test]
+fn every_eval_dependency_is_validated_before_creating_target() {
+    for name in EVAL_CRATES {
+        for missing in ["Cargo.toml", "src/lib.rs"] {
+            let temp = tempfile::tempdir().unwrap();
+            let source = temp.path().join("source");
+            make_source_fixture(&source);
+            fs::remove_file(source.join("crates").join(name).join(missing)).unwrap();
+            let mut config = ProjectConfig::new("eval-starter");
+            config.eval = "text".into();
+            assert!(ProjectPlan::new(config, temp.path(), &source).is_err());
+            assert!(!temp.path().join("eval-starter").exists());
+            // Unselected eval crates must not become requirements for the default.
+            ProjectPlan::new(ProjectConfig::new("voice-bot"), temp.path(), &source).unwrap();
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn all_eval_paths_escape_toml_and_reject_source_symlink_escapes() {
+    use std::os::unix::fs::symlink;
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source space-\"quote\"-\\slash");
+    make_source_fixture(&source);
+    let mut config = ProjectConfig::new("eval-starter");
+    config.eval = "text".into();
+    let plan = ProjectPlan::new(config.clone(), temp.path(), &source).unwrap();
+    let cargo = std::str::from_utf8(&plan.files["Cargo.toml"]).unwrap();
+    for line in cargo
+        .lines()
+        .filter(|line| line.contains("path = ") && line.contains("crates"))
+    {
+        assert!(
+            line.contains("source space-\\\"quote\\\"-\\\\slash"),
+            "unescaped dependency: {line}"
+        );
+    }
+    for name in EVAL_CRATES {
+        for component in ["Cargo.toml", "src/lib.rs"] {
+            let inside = source.join("crates").join(name).join(component);
+            let outside = temp.path().join("outside");
+            fs::write(&outside, "keep").unwrap();
+            fs::remove_file(&inside).unwrap();
+            symlink(&outside, &inside).unwrap();
+            assert!(ProjectPlan::new(config.clone(), temp.path(), &source).is_err());
+            assert!(!plan.target.exists());
+            fs::remove_file(&inside).unwrap();
+            fs::write(&inside, "").unwrap();
+        }
+    }
+    let escaped = source.join("crates/pipecat-evals");
+    let moved = temp.path().join("moved-evals");
+    fs::rename(&escaped, &moved).unwrap();
+    symlink(&moved, &escaped).unwrap();
+    assert!(ProjectPlan::new(config, temp.path(), &source).is_err());
+    assert!(!plan.target.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn eval_source_paths_reject_non_unicode_and_controls_before_writes() {
+    use std::os::unix::ffi::OsStringExt;
+    let temp = tempfile::tempdir().unwrap();
+    for suffix in [
+        std::ffi::OsString::from_vec(vec![b's', 0xff]),
+        std::ffi::OsString::from("source\ncontrol"),
+    ] {
+        let source = temp.path().join(suffix);
+        make_source_fixture(&source);
+        let mut config = ProjectConfig::new("eval-starter");
+        config.eval = "text".into();
+        assert!(ProjectPlan::new(config, temp.path(), &source).is_err());
+        assert!(!temp.path().join("eval-starter").exists());
+    }
+}

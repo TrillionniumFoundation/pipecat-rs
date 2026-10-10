@@ -58,24 +58,27 @@ impl ProjectPlan {
         {
             return Err(ProjectError::Configuration("--source-rust must name a local Rust workspace containing pipecat-runner's library"));
         }
-        let runner_path = source_rust.join("crates/pipecat-runner").canonicalize()?;
-        if !runner_path.starts_with(&source_rust) {
-            return Err(ProjectError::Configuration(
-                "runner dependency escapes the selected local workspace",
-            ));
-        }
-        let runner_string = runner_path.to_str().ok_or(ProjectError::Configuration(
-            "local source path must be UTF-8 for Cargo.toml",
-        ))?;
-        if runner_string.chars().any(char::is_control) {
-            return Err(ProjectError::Configuration(
-                "local source path must not contain control characters",
-            ));
-        }
-        let runner_literal =
-            serde_json::to_string(runner_string).map_err(|_| ProjectError::Serialization)?;
+        let runner_literal = dependency_literal(&source_rust, "pipecat-runner")?;
+        let (package_options, eval_dependencies, eval_binary, signal_feature) = if config.eval
+            == "text"
+        {
+            let mut dependencies = String::new();
+            for name in EVAL_CRATES {
+                let literal = dependency_literal(&source_rust, name)?;
+                dependencies.push_str(&format!("{name} = {{ path = {literal} }}\n"));
+            }
+            dependencies.push_str("serde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\nurl = \"2\"\nreqwest = { version = \"0.12.28\", default-features = false, features = [\"json\", \"stream\", \"rustls-tls\"] }\n");
+            (
+                format!("default-run = \"{}\"\n", config.name),
+                dependencies,
+                "[[bin]]\nname = \"eval-bot\"\npath = \"src/bin/eval-bot.rs\"\n\n",
+                ", \"signal\"",
+            )
+        } else {
+            (String::new(), String::new(), "", "")
+        };
         let cargo = format!(
-            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nrust-version = \"1.99\"\npublish = false\n\n# Independent application, even when generated beneath another workspace.\n[workspace]\n\n[dependencies]\npipecat-runner = {{ path = {} }}\ntokio = {{ version = \"1\", features = [\"rt-multi-thread\", \"macros\"] }}\n\n[profile.dev]\ndebug = 1\nincremental = false\n\n[lints.rust]\nunsafe_code = \"forbid\"\n",
+            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nrust-version = \"1.99\"\npublish = false\n{package_options}\n# Independent application, even when generated beneath another workspace.\n[workspace]\n\n{eval_binary}[dependencies]\npipecat-runner = {{ path = {} }}\ntokio = {{ version = \"1\", features = [\"rt-multi-thread\", \"macros\"{signal_feature}] }}\n{eval_dependencies}\n[profile.dev]\ndebug = 1\nincremental = false\n\n[lints.rust]\nunsafe_code = \"forbid\"\n",
             config.name, runner_literal
         );
         let mut files = BTreeMap::new();
@@ -98,9 +101,13 @@ impl ProjectPlan {
         } else {
             "```sh\ncargo run\n```\n\nThis API-only scaffold has no browser assets. Its `/api/start` accepts a same-origin\nPOST with `{\"transport\":\"websocket\"}` from a compatible RTVI 2.2/protobuf client.\nTo serve the existing Rust browser bundle, build that bundle and pass\n`--assets /absolute/path/to/client/dist`; or generate a new project with\n`--client rust-wasm` for the complete client source. A bare static file server\ndoes not supply the native `/api/start` endpoint."
         };
-        let readme = include_str!("../templates/README.md")
+        let mut readme = include_str!("../templates/README.md")
             .replace("{{name}}", &config.name)
             .replace("{{client_instructions}}", client_instructions);
+        if config.eval == "text" {
+            include_eval(&mut files);
+            readme.push_str(include_str!("../templates/eval/README.md"));
+        }
         files.insert("README.md".into(), readme.into_bytes());
         let mut config_json =
             serde_json::to_vec_pretty(&config).map_err(|_| ProjectError::Serialization)?;
@@ -135,6 +142,65 @@ impl ProjectPlan {
             "files": self.files.keys().collect::<Vec<_>>(), "overwrite": false,
         })
     }
+}
+
+const EVAL_CRATES: &[&str] = &[
+    "pipecat-core",
+    "pipecat-evals",
+    "pipecat-processors",
+    "pipecat-services",
+    "pipecat-turns",
+];
+
+fn dependency_literal(source_rust: &Path, name: &str) -> Result<String, ProjectError> {
+    let directory = source_rust.join("crates").join(name).canonicalize()?;
+    if !directory.is_dir() || !directory.starts_with(source_rust) {
+        return Err(ProjectError::Configuration(
+            "dependency must be a directory inside the selected local workspace",
+        ));
+    }
+    for relative in ["Cargo.toml", "src/lib.rs"] {
+        let file = directory.join(relative).canonicalize()?;
+        if !file.is_file() || !file.starts_with(source_rust) {
+            return Err(ProjectError::Configuration(
+                "dependency manifest and library must remain inside the selected local workspace",
+            ));
+        }
+        checked_source_string(&file)?;
+    }
+    serde_json::to_string(checked_source_string(&directory)?)
+        .map_err(|_| ProjectError::Serialization)
+}
+
+fn checked_source_string(path: &Path) -> Result<&str, ProjectError> {
+    let value = path.to_str().ok_or(ProjectError::Configuration(
+        "local source path must be UTF-8 for Cargo.toml",
+    ))?;
+    if value.chars().any(char::is_control) {
+        return Err(ProjectError::Configuration(
+            "local source path must not contain control characters",
+        ));
+    }
+    Ok(value)
+}
+
+fn include_eval(files: &mut BTreeMap<String, Vec<u8>>) {
+    // Every generated source is embedded explicitly; no checkout files are copied.
+    macro_rules! source {
+        ($output:literal, $template:literal) => {
+            files.insert(
+                $output.into(),
+                include_bytes!(concat!("../templates/eval/", $template)).to_vec(),
+            );
+        };
+    }
+    source!("src/bin/eval-bot.rs", "eval-bot.rs");
+    source!("src/eval_app.rs", "eval_app.rs");
+    source!("evals/starter_text.yaml", "starter_text.yaml");
+    source!("evals/bot.json", "bot.json");
+    let manifest = include_str!("../templates/eval/native-manifest.yaml")
+        .replace("{{exe_suffix}}", std::env::consts::EXE_SUFFIX);
+    files.insert("evals/native-manifest.yaml".into(), manifest.into_bytes());
 }
 
 fn include_client(files: &mut BTreeMap<String, Vec<u8>>, name: &str) -> Result<(), ProjectError> {

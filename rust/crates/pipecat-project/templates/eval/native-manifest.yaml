@@ -1,0 +1,14 @@
+native_version: 1
+concurrency: 1
+repeat: 1
+base_port: 7900
+bots_dir: ../target/debug
+scenarios_dir: .
+suite:
+  - name: native-text-starter
+    bot: eval-bot{{exe_suffix}}
+    args: ["--port", "{port}", "--config", "{runner_body}"]
+    runner_body:
+      path: bot.json
+    env: {}
+    scenarios: [starter_text.yaml]

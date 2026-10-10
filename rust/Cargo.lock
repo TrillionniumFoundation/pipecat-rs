@@ -4066,6 +4066,7 @@ dependencies = [
 name = "pipecat-project"
 version = "0.1.0"
 dependencies = [
+ "pipecat-evals",
  "serde",
  "serde_json",
  "tempfile",

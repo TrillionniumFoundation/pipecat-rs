@@ -2,7 +2,7 @@
 use crate::{ProjectConfig, ProjectError, ProjectPlan};
 use std::{collections::BTreeMap, fs::File, io::Read, path::PathBuf};
 
-pub const HELP: &str = "pipecat-init [NAME] --source-rust PATH [OPTIONS]\n\nGenerate a native Rust browser voice agent using an existing local Pipecat workspace.\n\n  --help, -h             Show help without writing files or reading credentials\n  --list-options         Print supported native integrations as JSON\n  --name NAME            Project name (or use positional NAME)\n  --parent DIRECTORY     Existing parent directory (default current directory)\n  --source-rust PATH     Existing workspace containing crates/pipecat-runner\n  --config FILE          Strict JSON ProjectConfig; explicit flags override it\n  --transport websocket  Only the integrated native WebSocket transport\n  --mode cascade        Deepgram STT → OpenAI chat completions → Cartesia TTS\n  --stt deepgram         Supported native runner STT\n  --llm openai           Supported native runner LLM\n  --tts cartesia         Supported native runner TTS\n  --client rust-wasm     Include Rust/WASM client source (default none)\n  --deploy-to-cloud      Explicitly rejected: native deployment is not implemented\n  --no-deploy-to-cloud   Explicit local-only configuration\n  --dry-run             Validate and show planned paths without creating anything\n\nThe destination must not exist, even if empty. No overwrite option is available.\nCtrl-C cooperatively cancels generation and cleans up this invocation's files.\nNo credentials, .env, build outputs, remote dependencies, or Python are copied.\n";
+pub const HELP: &str = "pipecat-init [NAME] --source-rust PATH [OPTIONS]\n\nGenerate a native Rust browser voice agent using an existing local Pipecat workspace.\n\n  --help, -h             Show help without writing files or reading credentials\n  --list-options         Print supported native integrations as JSON\n  --name NAME            Project name (or use positional NAME)\n  --parent DIRECTORY     Existing parent directory (default current directory)\n  --source-rust PATH     Existing workspace containing crates/pipecat-runner\n  --config FILE          Strict JSON ProjectConfig; explicit flags override it\n  --transport websocket  Only the integrated native WebSocket transport\n  --mode cascade        Deepgram STT → OpenAI chat completions → Cartesia TTS\n  --stt deepgram         Supported native runner STT\n  --llm openai           Supported native runner LLM\n  --tts cartesia         Supported native runner TTS\n  --client rust-wasm     Include Rust/WASM client source (default none)\n  --eval none|text      Add a separate native text-eval starter (default none)\n  --deploy-to-cloud      Explicitly rejected: native deployment is not implemented\n  --no-deploy-to-cloud   Explicit local-only configuration\n  --dry-run             Validate and show planned paths without creating anything\n\nThe destination must not exist, even if empty. No overwrite option is available.\nCtrl-C cooperatively cancels generation and cleans up this invocation's files.\nNo credentials, .env, build outputs, remote dependencies, or Python are copied.\n";
 
 #[derive(Debug)]
 pub enum Command {
@@ -28,7 +28,7 @@ impl Command {
                     cloud = Some(arg == "--deploy-to-cloud");
                 }
                 "--name" | "--parent" | "--source-rust" | "--config" | "--transport" | "--mode"
-                | "--stt" | "--llm" | "--tts" | "--client" => {
+                | "--stt" | "--llm" | "--tts" | "--client" | "--eval" => {
                     let value = args.next().filter(|s| !s.starts_with("--")).ok_or(
                         ProjectError::Configuration("option requires a value; use --help"),
                     )?;
@@ -81,6 +81,7 @@ impl Command {
         apply!("--llm", llm);
         apply!("--tts", tts);
         apply!("--client", client);
+        apply!("--eval", eval);
         if let Some(cloud) = cloud {
             config.deploy_to_cloud = cloud;
         }
