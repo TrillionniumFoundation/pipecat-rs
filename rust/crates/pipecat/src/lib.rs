@@ -9,9 +9,13 @@ pub use pipecat_audio as audio;
 pub use pipecat_aws_bedrock as aws_bedrock;
 #[cfg(feature = "aws-speech")]
 pub use pipecat_aws_speech as aws_speech;
+#[cfg(feature = "classifiers")]
+pub use pipecat_classifiers as classifiers;
 #[cfg(feature = "client-server")]
 pub use pipecat_client_server as client_server;
 pub use pipecat_core as core;
+#[cfg(feature = "deepgram-flux")]
+pub use pipecat_deepgram_flux as deepgram_flux;
 #[cfg(feature = "elevenlabs")]
 pub use pipecat_elevenlabs as elevenlabs;
 #[cfg(feature = "evals")]

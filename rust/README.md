@@ -76,9 +76,18 @@ The `pipecat` facade reexports the common components. Its optional `webrtc`,
 and `client-server` features expose optional transport/service and native
 browser-hosting paths. Flow execution, global observers, and shared
 media transport are also reexported.
-Optional `aws-bedrock`, `aws-speech`, `moq`, `piper`, and `rnnoise` features expose
+Optional `aws-bedrock`, `aws-speech`, `classifiers`, `deepgram-flux`, `moq`, `piper`,
+and `rnnoise` features expose
 the corresponding native crates. See the [facade feature guide](crates/pipecat/README.md)
 for public module paths and explicit native-backend opt-ins.
+The optional `classifiers` feature exposes standalone typed batches through native
+LLM inference or Jev HTTP; it does not add pipeline/UI-worker or evaluation-runner
+integration. The optional `deepgram-flux` feature exposes Listen v2 WebSocket STT
+and its native pipeline processor, separately from Listen v1. User-aggregator
+configuration remains explicit and eager turn prediction is opt-in. See
+[Classifiers](crates/pipecat-classifiers/README.md) and
+[Deepgram Flux](crates/pipecat-deepgram-flux/README.md) for bounds, deliberate
+source differences, and live-provider qualification gaps.
 The optional `assemblyai` feature exposes native streaming WebSocket STT and
 segmented Sync HTTP recognition, with bounded queues and owned cancellation.
 See [AssemblyAI](crates/pipecat-assemblyai/README.md) for source mappings,
