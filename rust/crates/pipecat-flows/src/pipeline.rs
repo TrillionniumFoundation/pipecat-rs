@@ -148,10 +148,11 @@ impl FrameProcessor for FlowProcessor {
     }
     async fn process(
         &self,
-        frame: Frame,
+        mut frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let admission = frame.native_speculation().cloned();
         let calls = if direction == Direction::Downstream
             && frame
                 .metadata
@@ -181,11 +182,21 @@ impl FrameProcessor for FlowProcessor {
         if direction == Direction::Downstream && matches!(frame.data, FrameData::Interruption) {
             self.manager.interrupt();
         }
+        if calls.is_some() {
+            if admission
+                .as_ref()
+                .is_some_and(|capability| !capability.admits_effect())
+            {
+                return Ok(());
+            }
+            // Keep the capability in the owned tool task, not a wire-bound declaration.
+            frame.take_native_speculation();
+        }
         ctx.push(frame, direction).await?;
         if let Some(calls) = calls {
             let manager = self.manager.clone();
             ctx.spawn("flow-tool-batch", false, async move {
-                match manager.execute_started_tools(calls).await {
+                match manager.execute_started_tools(calls, admission).await {
                     Ok(_) | Err(FlowError::Cancelled | FlowError::Stale | FlowError::Closed) => {
                         Ok(())
                     }

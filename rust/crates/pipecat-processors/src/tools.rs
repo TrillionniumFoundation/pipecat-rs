@@ -160,6 +160,7 @@ impl ToolExecutor {
         &self,
         call: FunctionCall,
         ctx: &ProcessorContext,
+        admission: Option<pipecat_core::NativeSpeculation>,
     ) -> Result<(), ProcessorError> {
         let lease = ActiveLease {
             id: call.tool_call_id.clone(),
@@ -180,15 +181,34 @@ impl ToolExecutor {
         let task_id = ctx.spawn("tool-call", tool.cancel_on_interruption, async move {
             let _permit = permit;
             let _lease = lease;
-            let outcome = tokio::time::timeout(
-                tool.timeout,
+            let callback =
                 std::panic::AssertUnwindSafe(async { (tool.callback)(call.clone()).await })
-                    .catch_unwind(),
-            )
-            .await;
+                    .catch_unwind();
+            let guarded = async {
+                match &admission {
+                    Some(capability) => capability.run_effect(callback).await,
+                    None => Some(callback.await),
+                }
+            };
+            let outcome = tokio::time::timeout(tool.timeout, guarded).await;
+            if matches!(outcome, Ok(None)) {
+                return output
+                    .push(
+                        Frame::new(FrameData::FunctionCallCancel(
+                            pipecat_core::FunctionCallCancelFrame {
+                                function_name: call.function_name,
+                                tool_call_id: call.tool_call_id,
+                                run_llm: false,
+                            },
+                        )),
+                        Direction::Downstream,
+                    )
+                    .await;
+            }
             let outcome = match outcome {
-                Ok(Ok(result)) => result,
-                Ok(Err(_)) => Err("tool callback panicked".into()),
+                Ok(Some(Ok(result))) => result,
+                Ok(Some(Err(_))) => Err("tool callback panicked".into()),
+                Ok(None) => unreachable!("cancelled above"),
                 Err(_) => Err("tool call timed out".into()),
             };
             emit_result(call, outcome, &output).await
@@ -235,10 +255,11 @@ impl FrameProcessor for ToolExecutor {
     }
     async fn process(
         &self,
-        frame: Frame,
+        mut frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let admission = frame.native_speculation().cloned();
         let signed = frame
             .native_llm_continuation()
             .map_err(|error| ProcessorError::new(error.to_string()))?
@@ -270,6 +291,13 @@ impl FrameProcessor for ToolExecutor {
         let Some(calls) = calls else {
             return ctx.push(frame, direction).await;
         };
+        if admission
+            .as_ref()
+            .is_some_and(|capability| !capability.admits_effect())
+        {
+            return Ok(());
+        }
+        frame.take_native_speculation();
         if calls.len() > self.max_batch {
             return Err(ProcessorError::new("tool batch exceeds configured limit"));
         }
@@ -340,7 +368,7 @@ impl FrameProcessor for ToolExecutor {
             .await?;
         }
         for (call, mut guard) in fresh.into_iter().zip(guards) {
-            self.dispatch(call, ctx).await?;
+            self.dispatch(call, ctx, admission.clone()).await?;
             guard.id.clear(); // Ownership moved to dispatch's lease.
         }
         Ok(())

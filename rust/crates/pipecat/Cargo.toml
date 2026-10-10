@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+pipecat-moonshine = { path = "../pipecat-moonshine", optional = true }
 pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
 pipecat-core = { path = "../pipecat-core" }
 pipecat-audio = { path = "../pipecat-audio" }
@@ -43,6 +44,7 @@ pipecat-realtime = { path = "../pipecat-realtime", optional = true }
 pipecat-responses = { path = "../pipecat-responses", optional = true }
 
 [features]
+moonshine = ["dep:pipecat-moonshine"]
 assemblyai = ["dep:pipecat-assemblyai"]
 agent-workers = ["dep:pipecat-agent-workers"]
 whisper = ["dep:pipecat-whisper"]

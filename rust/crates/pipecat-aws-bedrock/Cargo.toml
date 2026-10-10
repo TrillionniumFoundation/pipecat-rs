@@ -1,0 +1,26 @@
+[package]
+name = "pipecat-aws-bedrock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-aws-common = { path = "../pipecat-aws-common" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3"
+url = "2"
+base64 = "0.22"
+[dev-dependencies]
+pipecat-processors = { path = "../pipecat-processors" }
+pipecat-pipeline = { path = "../pipecat-pipeline" }
+pipecat-turns = { path = "../pipecat-turns" }
+hmac = "0.12"
+sha2 = "0.10"
+[lints]
+workspace = true

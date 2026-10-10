@@ -407,6 +407,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "caseless"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b6fd507454086c8edfd769ca6ada439193cdb209c7681712ef6275cccbfe5d8"
+dependencies = [
+ "unicode-normalization",
+]
+
+[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3409,6 +3418,7 @@ dependencies = [
  "pipecat-local-audio",
  "pipecat-mcp",
  "pipecat-media-transport",
+ "pipecat-moonshine",
  "pipecat-network-bus",
  "pipecat-observers",
  "pipecat-pipeline",
@@ -3475,6 +3485,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-aws-bedrock"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "hmac 0.12.1",
+ "pipecat-aws-common",
+ "pipecat-core",
+ "pipecat-pipeline",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "pipecat-aws-common"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crc32fast",
+ "hmac 0.12.1",
+ "reqwest",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "url",
+]
+
+[[package]]
 name = "pipecat-aws-speech"
 version = "0.1.0"
 dependencies = [
@@ -3483,6 +3528,7 @@ dependencies = [
  "futures-util",
  "hmac 0.12.1",
  "pipecat-audio",
+ "pipecat-aws-common",
  "pipecat-core",
  "pipecat-pipeline",
  "pipecat-services",
@@ -3705,6 +3751,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-moonshine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "libloading",
+ "pipecat-audio",
+ "pipecat-core",
+ "pipecat-pipeline",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "pipecat-moq"
 version = "0.1.0"
 dependencies = [
@@ -3719,6 +3782,7 @@ dependencies = [
  "pipecat-core",
  "rcgen",
  "rustls",
+ "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
@@ -3989,6 +4053,7 @@ dependencies = [
 name = "pipecat-turns"
 version = "0.1.0"
 dependencies = [
+ "caseless",
  "pipecat-core",
  "pipecat-processors",
  "pipecat-services",
@@ -3997,6 +4062,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "unicode-normalization",
 ]
 
 [[package]]

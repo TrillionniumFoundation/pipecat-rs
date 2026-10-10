@@ -16,6 +16,8 @@ use tokio::time::Instant;
 #[derive(Debug, Clone)]
 pub struct UserAggregatorConfig {
     pub turn: UserTurnConfig,
+    /// Opt in to provider-owned eager turn prediction and bounded speculation.
+    pub eager: Option<crate::EagerUserTurnConfig>,
     pub initially_muted: bool,
     /// Silence after the bot finishes responding; zero disables idle events.
     pub user_idle_timeout: Duration,
@@ -29,6 +31,7 @@ impl Default for UserAggregatorConfig {
     fn default() -> Self {
         Self {
             turn: UserTurnConfig::default(),
+            eager: None,
             initially_muted: false,
             user_idle_timeout: Duration::ZERO,
             mute_strategies: vec![],
@@ -38,6 +41,7 @@ impl Default for UserAggregatorConfig {
 }
 struct UserState {
     controller: UserTurnController,
+    eager: Option<crate::eager::EagerState>,
     idle: Arc<crate::idle::UserIdleTracker>,
     now: Duration,
     paired_assistant: Option<std::sync::Weak<crate::LLMAssistantAggregator>>,
@@ -71,8 +75,31 @@ pub struct LLMUserAggregator {
 }
 type InferenceHandler =
     Arc<dyn Fn(crate::UserTurnInferenceRequest) -> Result<(), ProcessorError> + Send + Sync>;
+impl UserState {
+    fn deadline(&self) -> Option<Duration> {
+        [
+            self.controller.deadline(),
+            self.eager
+                .as_ref()
+                .and_then(crate::eager::EagerState::deadline),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+    }
+    fn cancel_eager(&mut self, output: &mut AggregationOutput) -> Result<(), ProcessorError> {
+        if let Some(eager) = &mut self.eager {
+            eager.cancel(output)?;
+        }
+        Ok(())
+    }
+}
 impl LLMUserAggregator {
     pub fn new(context: SharedContext, config: UserAggregatorConfig) -> Self {
+        let mut config = config;
+        if let Some(eager) = &config.eager {
+            eager.configure_turn(&mut config.turn);
+        }
         let origin = Instant::now();
         let idle = Arc::new(crate::idle::UserIdleTracker::new(
             config.user_idle_timeout,
@@ -82,6 +109,7 @@ impl LLMUserAggregator {
             context,
             state: Arc::new(Mutex::new(UserState {
                 controller: UserTurnController::new(config.turn),
+                eager: config.eager.map(crate::eager::EagerState::new),
                 idle: idle.clone(),
                 now: Duration::ZERO,
                 paired_assistant: None,
@@ -194,7 +222,7 @@ impl LLMUserAggregator {
         Ok(self.lock()?.muted)
     }
     pub fn deadline(&self) -> Result<Option<Duration>, ProcessorError> {
-        Ok(self.lock()?.controller.deadline())
+        Ok(self.lock()?.deadline())
     }
     /// Deadline for user idleness, independent of the turn-stop watchdog.
     pub fn idle_deadline(&self) -> Result<Option<Duration>, ProcessorError> {
@@ -245,6 +273,8 @@ impl LLMUserAggregator {
                 | FrameData::InterimTranscription(_)
                 | FrameData::TranscriptionDetailed(_)
                 | FrameData::InterimTranscriptionDetailed(_)
+                | FrameData::EagerTranscription(_)
+                | FrameData::EagerTranscriptionDetailed(_)
                 | FrameData::LlmMessagesAppendDetailed(_)
                 | FrameData::LlmMessagesUpdateDetailed(_)
                 | FrameData::LlmMessagesTransform(_)
@@ -291,6 +321,7 @@ impl LLMUserAggregator {
                 return Ok(output);
             }
             FrameData::UserMuteStarted | FrameData::SttMute(true) => {
+                state.cancel_eager(&mut output)?;
                 state.manual_muted = true;
                 if !state.muted {
                     state.muted = true;
@@ -316,6 +347,7 @@ impl LLMUserAggregator {
             | FrameData::Stop
             | FrameData::Cancel(_)
             | FrameData::CancelDetailed(_) => {
+                state.cancel_eager(&mut output)?;
                 let run_llm = !matches!(
                     frame.data,
                     FrameData::Cancel(_) | FrameData::CancelDetailed(_)
@@ -351,6 +383,7 @@ impl LLMUserAggregator {
         if muted != state.muted {
             state.muted = muted;
             if muted {
+                state.cancel_eager(&mut output)?;
                 state.interim.clear();
                 let events = state.controller.finish(true, TurnStopReason::Muted);
                 Self::apply_events(&mut state, &self.context, events, false, &mut output)?;
@@ -387,6 +420,28 @@ impl LLMUserAggregator {
             )
         {
             return Ok(output);
+        }
+        if matches!(frame.data, FrameData::EagerEndOfTurnCancel) {
+            let before = output.actions.len();
+            if let Some(eager) = &mut state.eager {
+                eager.cancel_matching(frame.native_speculation(), &mut output)?;
+            }
+            // The incoming cancellation already travels through the pipeline.
+            output.actions.truncate(before);
+        }
+        if matches!(
+            frame.data,
+            FrameData::Interruption
+                | FrameData::UserStartedSpeaking
+                | FrameData::ProposedUserStartedSpeaking
+                | FrameData::InputText(_)
+                | FrameData::LlmMessagesUpdate(_)
+                | FrameData::LlmMessagesAppend(_)
+                | FrameData::LlmMessagesUpdateDetailed(_)
+                | FrameData::LlmMessagesAppendDetailed(_)
+                | FrameData::LlmMessagesTransform(_)
+        ) {
+            state.cancel_eager(&mut output)?;
         }
         // Adopted external starts also reach the idle tracker below. Capture
         // its waiting window before that frame closes it.
@@ -426,7 +481,16 @@ impl LLMUserAggregator {
                     ),
                     _ => unreachable!(),
                 };
-                if text.trim().is_empty() {
+                if text.trim().is_empty()
+                    && !state
+                        .controller
+                        .config()
+                        .stop_strategies
+                        .as_ref()
+                        .is_some_and(
+                            crate::UserTurnStopStrategies::resolves_proposed_turn_stop_frames,
+                        )
+                {
                     return Ok(output);
                 }
                 if !state.controller.is_active()
@@ -448,7 +512,10 @@ impl LLMUserAggregator {
                         state.transcript_ids.pop_front();
                     }
                 }
-                if append {
+                if let Some(eager) = &mut state.eager {
+                    eager.record_transcript(text, &mut output)?;
+                }
+                if append && !text.trim().is_empty() {
                     state.aggregation.append(text, spaces);
                 }
                 Self::remember_transcript(&mut state, frame.clone());
@@ -462,10 +529,35 @@ impl LLMUserAggregator {
                 state.interim.clone_from(&text.text.text);
                 Self::remember_transcript(&mut state, frame.clone());
             }
-            FrameData::EagerTranscription(_)
-            | FrameData::Translation(_)
-            | FrameData::EagerTranscriptionDetailed(_)
-            | FrameData::TranslationDetailed(_) => return Ok(output),
+            FrameData::EagerTranscription(_) | FrameData::EagerTranscriptionDetailed(_) => {
+                if direction != Direction::Downstream
+                    || !state.controller.is_active()
+                    || state.eager.is_none()
+                {
+                    return Ok(output);
+                }
+                let text = match &frame.data {
+                    FrameData::EagerTranscription(text) => &text.text,
+                    FrameData::EagerTranscriptionDetailed(text) => &text.text.text,
+                    _ => unreachable!(),
+                };
+                if let Some(assistant) = state
+                    .paired_assistant
+                    .as_ref()
+                    .and_then(std::sync::Weak::upgrade)
+                {
+                    assistant.prepare_user_context()?;
+                }
+                let now = state.now;
+                state.eager.as_mut().expect("enabled").begin(
+                    text,
+                    &self.context,
+                    now,
+                    &mut output,
+                )?;
+                return Ok(output);
+            }
+            FrameData::Translation(_) | FrameData::TranslationDetailed(_) => return Ok(output),
             FrameData::InputText(text) => {
                 if text.append_to_context && !text.text.trim().is_empty() {
                     // Typed input is already final and does not need VAD/STT timers.
@@ -638,6 +730,9 @@ impl LLMUserAggregator {
         let mut output = AggregationOutput::default();
         if !state.ended && !state.timer_disabled {
             state.now = state.now.max(now);
+            if let Some(eager) = &mut state.eager {
+                eager.advance(now, &mut output)?;
+            }
             let events = state.controller.advance(now);
             Self::apply_events(&mut state, context, events, true, &mut output)?;
         }
@@ -670,6 +765,9 @@ impl LLMUserAggregator {
                 }
                 UserTurnEvent::ResetAggregation => {
                     state.aggregation.take();
+                    if let Some(eager) = &mut state.eager {
+                        eager.reset_transcript();
+                    }
                     state.interim.clear();
                 }
                 UserTurnEvent::StartStrategy(event) => {
@@ -681,6 +779,9 @@ impl LLMUserAggregator {
                     emit_speaking,
                     interrupt,
                 } => {
+                    if let Some(eager) = &mut state.eager {
+                        eager.reset_transcript();
+                    }
                     state
                         .idle
                         .process(&FrameData::UserStartedSpeaking, state.now)?;
@@ -715,9 +816,22 @@ impl LLMUserAggregator {
                     state
                         .idle
                         .process(&FrameData::UserStoppedSpeaking, state.now)?;
+                    let confirmation = match &mut state.eager {
+                        Some(eager) => eager.finish(
+                            &state.aggregation.text,
+                            reason,
+                            state.now,
+                            context,
+                            output,
+                        )?,
+                        None => None,
+                    };
                     let held = state.held_external_stop.take();
                     if !emit_speaking && !matches!(reason, TurnStopReason::SessionEnd) {
-                        if let Some(held) = held {
+                        if let Some(mut held) = held {
+                            if let Some(capability) = &confirmation {
+                                held.frame.set_native_speculation(capability.clone())?;
+                            }
                             output.push(held.frame, held.direction);
                         }
                     }
@@ -725,14 +839,19 @@ impl LLMUserAggregator {
                     // complete speaking boundary before results can request a rerun.
                     if emit_speaking {
                         let mut boundary = Frame::new(FrameData::UserStoppedSpeaking);
+                        if let Some(capability) = &confirmation {
+                            boundary.set_native_speculation(capability.clone())?;
+                        }
                         boundary
                             .metadata
                             .insert("user_context_follows".into(), false.into());
                         output.actions.push(AggregationAction::Broadcast(boundary));
                     }
                     let interrupted_bot = std::mem::take(&mut state.interrupted_bot);
-                    let text = Self::commit(state, context, run_llm, output)?;
+                    let text =
+                        Self::commit(state, context, run_llm && confirmation.is_none(), output)?;
                     if text.is_empty()
+                        && confirmation.is_none()
                         && !state.timer_disabled
                         && !matches!(reason, TurnStopReason::SessionEnd | TurnStopReason::Muted)
                         && !(run_llm
@@ -756,6 +875,9 @@ impl LLMUserAggregator {
         output: &mut AggregationOutput,
     ) -> Result<String, ProcessorError> {
         let text = state.aggregation.take();
+        if let Some(eager) = &mut state.eager {
+            eager.reset_transcript();
+        }
         if !text.is_empty() {
             context.append(Message::text(Role::User, text.clone()))?;
             state.consecutive_empty_recoveries = 0;
@@ -813,10 +935,7 @@ impl LLMUserAggregator {
         self.schedule_idle_timer(ctx)?;
         self.changed.notify_one();
         let mut state = self.lock()?;
-        if state.timer_disabled
-            || state.ended
-            || state.timer_running
-            || state.controller.deadline().is_none()
+        if state.timer_disabled || state.ended || state.timer_running || state.deadline().is_none()
         {
             return Ok(());
         }
@@ -838,7 +957,7 @@ impl LLMUserAggregator {
                     if state.timer_disabled || state.ended {
                         return Ok(());
                     }
-                    state.controller.deadline()
+                    state.deadline()
                 };
                 tokio::select! {
                     _ = async {
@@ -898,6 +1017,7 @@ impl FrameProcessor for LLMUserAggregator {
     async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         self.idle.stop(Some(ctx))?;
         let mut state = self.lock()?;
+        state.cancel_eager(&mut AggregationOutput::default())?;
         state.timer_disabled = true;
         if let Some(id) = state.timer_id.take() {
             ctx.cancel_task(id);
@@ -913,6 +1033,7 @@ impl FrameProcessor for LLMUserAggregator {
             .map_err(|_| ProcessorError::fatal("inference notification lock poisoned"))?
             .clear();
         let mut state = self.lock()?;
+        state.cancel_eager(&mut AggregationOutput::default())?;
         state.ended = true;
         state.timer_disabled = true;
         state.controller.cleanup();

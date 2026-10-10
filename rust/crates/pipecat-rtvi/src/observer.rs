@@ -134,6 +134,17 @@ impl RtviObserver {
         frame: &Frame,
         observation: Observation<'_>,
     ) -> Result<Vec<Envelope>, ProcessorError> {
+        // Provisional prompts and unconsumed local tool capabilities are not
+        // client-facing transcript or function-call observations.
+        if matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
+            || (frame.native_speculation().is_some()
+                && matches!(
+                    frame.data,
+                    FrameData::FunctionCallsStarted(_) | FrameData::FunctionCallsStartedDetailed(_)
+                ))
+        {
+            return Ok(vec![]);
+        }
         let legacy = self.session.as_ref().is_some_and(|s| s.state().legacy);
         let mut state = self.state.lock().unwrap();
         if state.params.ignored_sources.contains(observation.source)

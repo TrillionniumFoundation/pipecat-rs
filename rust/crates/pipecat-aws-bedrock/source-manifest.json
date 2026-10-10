@@ -1,0 +1,30 @@
+{
+  "python_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "rust_base": "b078b8fcaa550dc7fd492fb6b4c47a49790c92ab",
+  "source_files": {
+    "src/pipecat/services/aws/llm.py": "302274bc3f03b08f29667bab6e84c784733ca156836599c4b954bff42fc64fbc",
+    "src/pipecat/adapters/services/bedrock_adapter.py": "b25a4a8455a0acd84e085aa5ebc418c376389906b203f98c47a650db76bfd60c",
+    "src/pipecat/services/aws/utils.py": "864fdd54ceb8441d3c8bffab623fe15f94cfbc87c02525484c69e51990470df4",
+    "tests/test_aws_bedrock_llm_context_conversion.py": "248d1253c534f3a95400a6b85dcdf0abc4b7cfbebf3df9508e6ce9c275a8bf60",
+    "tests/test_run_inference.py": "23019de849aa81ebdc27d13621f3e5db9d45735bb208da036dd97df18c98c04f",
+    "tests/test_llm_token_usage_totals.py": "0c7451dbaa646351480c24a3ea4185d0c08882948add5f663fe27054f45814a1",
+    "tests/test_get_llm_invocation_params.py": "afd10be7defd055c4abd55e9d0ff40197887bef2b9d4e83b1c47780b0e9a7ef5",
+    "tests/test_function_calling_adapters.py": "354feb9a1375e12e8550b613fd00c102403b8a59a2bf218c06b05fdc1449a9e3",
+    "src/pipecat/adapters/base_llm_adapter.py": "b6c4db487397ebac19e365e74cf9171276a611f218404a70ff9e6c919e79e96e"
+  },
+  "native_gates": {
+    "adapter": "tests/adapter.rs",
+    "eventstream": "tests/protocol.rs",
+    "signed_http": "tests/http.rs",
+    "pipeline_and_history": "tests/pipeline.rs",
+    "independent_terminal_and_redaction": "tests/review_adversarial.rs",
+    "independent_tool_declarations": "tests/review_unoffered.rs",
+    "independent_response_id_admission": "tests/review_response_ids.rs"
+  },
+  "excluded_families": [
+    "Nova Sonic",
+    "Bedrock AgentCore",
+    "SageMaker"
+  ],
+  "live_provider_calls": false
+}

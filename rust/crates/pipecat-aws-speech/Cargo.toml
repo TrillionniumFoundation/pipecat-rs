@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+pipecat-aws-common = { path = "../pipecat-aws-common" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -20,12 +21,12 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3", features = ["sink"] }
 url = "2"
-hmac = "0.12"
-sha2 = "0.10"
-crc32fast = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
+hmac = "0.12"
+sha2 = "0.10"
+crc32fast = "1"
 pipecat-pipeline = { path = "../pipecat-pipeline" }
 
 [lints]

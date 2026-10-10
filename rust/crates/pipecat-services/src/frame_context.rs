@@ -137,6 +137,15 @@ pub fn message(message: &ContextMessage) -> Result<Message, ServiceError> {
                             tool_call_id: tool_call_id.clone(),
                             signature: signature.clone(),
                         },
+                        MessagePart::BedrockReasoning { text, signature } => {
+                            ContentPart::BedrockReasoning {
+                                text: text.clone(),
+                                signature: signature.clone(),
+                            }
+                        }
+                        MessagePart::BedrockRedacted { data } => {
+                            ContentPart::BedrockRedacted { data: data.clone() }
+                        }
                         MessagePart::Text { text } => ContentPart::Text { text: text.clone() },
                         MessagePart::Image { url, detail } => match detail {
                             None => ContentPart::ImageUrl { url: url.clone() },
@@ -217,6 +226,15 @@ pub fn to_core_message(message: &Message) -> ContextMessage {
                             tool_call_id: tool_call_id.clone(),
                             signature: signature.clone(),
                         },
+                        ContentPart::BedrockReasoning { text, signature } => {
+                            MessagePart::BedrockReasoning {
+                                text: text.clone(),
+                                signature: signature.clone(),
+                            }
+                        }
+                        ContentPart::BedrockRedacted { data } => {
+                            MessagePart::BedrockRedacted { data: data.clone() }
+                        }
                         ContentPart::Text { text } => MessagePart::Text { text: text.clone() },
                         ContentPart::ImageUrl { url } => MessagePart::Image {
                             url: url.clone(),

@@ -798,3 +798,6 @@ fn escaped_sequence_keys_and_json_whitespace_keep_replay_filtering() {
         transcript::Record::Replay
     );
 }
+
+#[path = "tests/transcript_fields.rs"]
+mod transcript_fields;

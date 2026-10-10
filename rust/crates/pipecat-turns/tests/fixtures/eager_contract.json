@@ -1,0 +1,37 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "basis": "Manually source-mapped deterministic assertions, not a Python execution oracle",
+  "sources": [
+    "src/pipecat/turns/speculation_gate.py",
+    "src/pipecat/turns/eager_end_of_turn_mixin.py",
+    "src/pipecat/turns/user_stop/eager_user_turn_stop_strategy.py",
+    "src/pipecat/turns/user_stop/eager_match_policy.py",
+    "src/pipecat/turns/user_stop/external_user_turn_stop_strategy.py",
+    "src/pipecat/processors/aggregators/llm_response_universal.py::_run_speculative_inference",
+    "src/pipecat/services/llm_service.py::run_function_calls",
+    "tests/test_speculation_gate.py::TestEagerMatchPolicies",
+    "tests/test_eager_user_turn_strategies.py",
+    "tests/test_eager_end_of_turn_mixin.py::test_the_recommendation_carries_the_match_policy_and_interruptions"
+  ],
+  "native_strengthening": "Opaque owner capability, bounded frames/bytes/transcript/deadline, raw causal epoch and health generation rechecked at actual callback construction and every future poll. Generated tool declarations remain held until confirmed stop. Cancellation cannot retract already admitted effects. Native committed history keeps its existing spacing formatter, while provisional text and comparison use the source external strategy's verbatim concatenation.",
+  "match_cases": [
+    {"policy":"exact","eager":"book a flight","final":"book a flight","matches":true},
+    {"policy":"exact","eager":"book a flight","final":"Book a flight.","matches":false},
+    {"policy":"exact","eager":"book a flight","final":"book a flight tomorrow","matches":false},
+    {"policy":"normalized","eager":"book a flight","final":"Book a flight.","matches":true},
+    {"policy":"normalized","eager":"book  a flight","final":"book a flight","matches":true},
+    {"policy":"normalized","eager":"its ready","final":"It's ready!","matches":true},
+    {"policy":"normalized","eager":"book a flight","final":"book a flight tomorrow","matches":false},
+    {"policy":"normalized","eager":"i want to cancel","final":"I want to reschedule.","matches":false}
+  ],
+  "turn_cases": [
+    {"name":"exact_committed","policy":"exact","prefix":[],"eager":"book a flight","final":["book a flight"],"provisional":"book a flight","committed":"book a flight","confirms":true},
+    {"name":"normalized_formatting","policy":"normalized","prefix":[],"eager":"book a flight to tokyo","final":["Book a flight to Tokyo."],"provisional":"book a flight to tokyo","committed":"Book a flight to Tokyo.","confirms":true},
+    {"name":"exact_formatting_withdraws","policy":"exact","prefix":[],"eager":"book a flight","final":["Book a flight."],"provisional":"book a flight","committed":"Book a flight.","confirms":false},
+    {"name":"raw_segment_comparison_does_not_insert_spaces","policy":"exact","prefix":[],"eager":"book a flight","final":["book","a flight"],"provisional":"book a flight","committed":"book a flight","confirms":false},
+    {"name":"whitespace_segment_exact_false_acceptance","policy":"exact","prefix":[],"eager":"ab","final":["a"," ","b"],"provisional":"ab","committed":"a b","confirms":false},
+    {"name":"whitespace_segment_normalized_false_acceptance","policy":"normalized","prefix":[],"eager":"ab","final":["a"," ","b"],"provisional":"ab","committed":"a b","confirms":false},
+    {"name":"whitespace_segment_exact_positive_control","policy":"exact","prefix":[],"eager":"a b","final":["a"," ","b"],"provisional":"a b","committed":"a b","confirms":true},
+    {"name":"prior_segment_is_in_prediction","policy":"exact","prefix":["book"],"eager":" a flight","final":[" a flight"],"provisional":"book a flight","committed":"book  a flight","confirms":true}
+  ]
+}

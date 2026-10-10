@@ -623,11 +623,12 @@ impl FlowManager {
         self.inner.sink.observe_frame(frame);
     }
     pub async fn execute_tools(&self, calls: Vec<FunctionCall>) -> Result<BatchOutcome, FlowError> {
-        self.execute_tools_inner(calls, false).await
+        self.execute_tools_inner(calls, false, None).await
     }
     pub(crate) async fn execute_started_tools(
         &self,
         calls: Vec<FunctionCall>,
+        admission: Option<pipecat_core::NativeSpeculation>,
     ) -> Result<BatchOutcome, FlowError> {
         // Retransmitted declarations must not execute or cancel a live call a
         // second time. Public execute_tools still reports duplicate admission.
@@ -645,7 +646,14 @@ impl FlowManager {
         if calls.is_empty() {
             return Ok(BatchOutcome::default());
         }
-        let result = self.execute_tools_inner(calls.clone(), true).await;
+        let execution = self.execute_tools_inner(calls.clone(), true, admission.clone());
+        let result = match &admission {
+            Some(capability) => capability
+                .run_effect(execution)
+                .await
+                .unwrap_or(Err(FlowError::Cancelled)),
+            None => execution.await,
+        };
         if result.is_err() {
             // A rejected declaration must not leave the assistant waiting for
             // results that no handler will ever produce.
@@ -670,7 +678,14 @@ impl FlowManager {
         &self,
         calls: Vec<FunctionCall>,
         already_started: bool,
+        admission: Option<pipecat_core::NativeSpeculation>,
     ) -> Result<BatchOutcome, FlowError> {
+        if admission
+            .as_ref()
+            .is_some_and(|capability| !capability.admits_effect())
+        {
+            return Err(FlowError::Cancelled);
+        }
         if calls.is_empty() {
             return Ok(BatchOutcome::default());
         }
@@ -798,8 +813,20 @@ impl FlowManager {
             let this = self.clone();
             let call = call.clone();
             let failed_call = call.clone();
+            let admission = admission.clone();
             let job = jobs.spawn(async move {
-                let future = this.invoke(&call, &function, tool_handle.clone());
+                // Construction of the application future can itself perform a
+                // side effect, so admission precedes its first invocation.
+                let future = async {
+                    let invocation = this.invoke(&call, &function, tool_handle.clone());
+                    match admission {
+                        None => invocation.await,
+                        Some(capability) => capability
+                            .run_effect(invocation)
+                            .await
+                            .unwrap_or(Err(FlowError::Cancelled)),
+                    }
+                };
                 let result = tool_handle
                     .cancellable(async {
                         match options.timeout.or(this.inner.options.tool_timeout) {

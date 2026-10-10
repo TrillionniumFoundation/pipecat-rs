@@ -117,10 +117,10 @@ correction disabling its unconditional Rustls defaults; no private protocol shim
 or copied adapter is substituted. All seven upstream crates declare
 `MIT OR Apache-2.0`.
 
-The `serde_json/raw_value` feature preserves bounded wire tokens for sequence
-classification. Cargo unifies this additive feature across the workspace; it
-does not enable `arbitrary_precision` or change `Value`'s numeric representation,
-and introduces no additional dependency or archive download.
+Transcript sequence classification uses validated JSON token spans, preserving
+arbitrary-width integer sequences without enabling serde_json's `raw_value` or
+`arbitrary_precision` features. Literal user objects, including serde-looking
+private marker keys, retain ordinary JSON map semantics.
 
 The pinned direct path dependency retains the unmodified upstream Rust adapter.
 See `../../vendor/moq-tokio-0.19.19/PATCHES.md` for archive hashes, license,

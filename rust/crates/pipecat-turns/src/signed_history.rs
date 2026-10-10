@@ -195,6 +195,21 @@ impl SignedHistory {
                     }
                     remaining -= take;
                 }
+                LlmContinuationBlock::BedrockReasoning { text, signature } => {
+                    let mut message = Message::text(Role::Assistant, "");
+                    message.content = Some(Content::Parts(vec![ContentPart::BedrockReasoning {
+                        text: text.clone(),
+                        signature: signature.clone(),
+                    }]));
+                    messages.push(message);
+                }
+                LlmContinuationBlock::BedrockRedacted(data) => {
+                    let mut message = Message::text(Role::Assistant, "");
+                    message.content = Some(Content::Parts(vec![ContentPart::BedrockRedacted {
+                        data: data.clone(),
+                    }]));
+                    messages.push(message);
+                }
                 LlmContinuationBlock::Thinking { text, signature } => {
                     let mut message = Message::text(Role::Assistant, "");
                     message.content = Some(Content::Parts(vec![ContentPart::Thinking {

@@ -80,6 +80,11 @@ The optional `assemblyai` feature exposes native streaming WebSocket STT and
 segmented Sync HTTP recognition, with bounded queues and owned cancellation.
 See [AssemblyAI](crates/pipecat-assemblyai/README.md) for source mappings,
 independent protocol tests and explicit live-provider/base-service gaps.
+The optional `moonshine` facade exposes local native Moonshine batch/segmented STT.
+Audited Linux x86_64 libraries and model bundles are explicit, hash-verified inputs;
+no Python runtime or automatic download is used. In-flight native inference cannot
+be aborted, so shutdown waits for it. See [Moonshine](crates/pipecat-moonshine/README.md)
+for exact scope, licensing and real-engine qualification.
 The optional ElevenLabs crate implements native realtime STT and single-context
 WebSocket TTS, alongside the separate HTTP implementations in `pipecat-speech`.
 Its README distinguishes actual protocol/pipeline coverage from unsupported

@@ -264,10 +264,14 @@ impl UserTurnStopStrategies {
                         FrameData::TranscriptionDetailed(t) => (&t.text.text, t.finalized),
                         _ => unreachable!(),
                     };
-                    if text.trim().is_empty() {
+                    if text.trim().is_empty() && !matches!(strategy.kind, StopKind::External { .. })
+                    {
                         continue;
                     }
-                    state.has_text = true;
+                    // External source transcripts concatenate verbatim. Even a
+                    // whitespace/empty final clears an outstanding interim and
+                    // resets its aggregation timer, without inventing words.
+                    state.has_text |= !text.is_empty();
                     state.finalized |= finalized;
                     state.interim = false;
                     state.fired = false;

@@ -1,0 +1,459 @@
+use crate::{
+    model::decode_pcm, Cancellation, MoonshineConfig, MoonshineError, MoonshineModel,
+    MoonshineSettings, Result, Transcript,
+};
+use pipecat_core::AudioRawFrame;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Condvar, Mutex,
+};
+use tokio::sync::{mpsc, oneshot, Notify, OwnedSemaphorePermit, Semaphore};
+
+struct Request {
+    samples: Vec<f32>,
+    settings: MoonshineSettings,
+    cancel: Cancellation,
+    reply: oneshot::Sender<Result<Transcript>>,
+    permit: Arc<OwnedSemaphorePermit>,
+}
+struct Worker {
+    sender: Option<mpsc::Sender<Request>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    reaper: Option<std::thread::JoinHandle<()>>,
+}
+
+#[derive(Default)]
+struct JoinCompletion {
+    result: Mutex<Option<std::result::Result<(), String>>>,
+    ready: Condvar,
+    notified: Notify,
+}
+impl JoinCompletion {
+    fn complete(&self, result: std::result::Result<(), String>) {
+        *self
+            .result
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(result);
+        self.ready.notify_all();
+        self.notified.notify_waiters();
+    }
+    fn wait_blocking(&self) {
+        let mut result = self
+            .result
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        while result.is_none() {
+            result = self
+                .ready
+                .wait(result)
+                .unwrap_or_else(|poison| poison.into_inner());
+        }
+    }
+    async fn wait(&self) -> Result<()> {
+        loop {
+            let notification = self.notified.notified();
+            tokio::pin!(notification);
+            notification.as_mut().enable();
+            if let Some(result) = self
+                .result
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner())
+                .clone()
+            {
+                return result.map_err(MoonshineError::Worker);
+            }
+            notification.await;
+        }
+    }
+}
+// Ownership survives cancellation of any async join waiter. If a reaper cannot
+// be started, dropping its guard synchronously joins the native thread instead.
+struct JoinGuard {
+    thread: Option<std::thread::JoinHandle<()>>,
+    completion: Arc<JoinCompletion>,
+}
+impl JoinGuard {
+    fn run(mut self) {
+        self.finish();
+    }
+    fn finish(&mut self) {
+        if let Some(thread) = self.thread.take() {
+            self.completion.complete(
+                thread
+                    .join()
+                    .map_err(|_| "native inference thread panicked".into()),
+            );
+        }
+    }
+}
+impl Drop for JoinGuard {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+fn launch_reaper(
+    guard: JoinGuard,
+    builder: std::thread::Builder,
+) -> Option<std::thread::JoinHandle<()>> {
+    builder.spawn(move || guard.run()).ok()
+}
+
+/// One inference thread owns one model. Capacity includes outstanding replies,
+/// and submission fails immediately with Backpressure instead of blocking the
+/// pipeline audio path. Drop cancels and joins the native thread synchronously;
+/// call shutdown().await to join without blocking an async executor thread.
+pub struct MoonshineService {
+    config: MoonshineConfig,
+    worker: Mutex<Worker>,
+    stop: Cancellation,
+    running: Arc<AtomicBool>,
+    permits: Arc<Semaphore>,
+    joined: Arc<JoinCompletion>,
+}
+pub struct PendingTranscription {
+    receiver: oneshot::Receiver<Result<Transcript>>,
+    cancel: Cancellation,
+    stop: Cancellation,
+    _permit: Arc<OwnedSemaphorePermit>,
+}
+impl PendingTranscription {
+    pub fn cancellation(&self) -> Cancellation {
+        self.cancel.clone()
+    }
+    pub fn cancel(&self) {
+        self.cancel.cancel();
+    }
+    /// Resolves after the non-abortable native call returns, not merely
+    /// after its consumer loses interest. Dropping this future also cancels it.
+    pub async fn result(mut self) -> Result<Transcript> {
+        let result = (&mut self.receiver).await;
+        if self.cancel.is_cancelled() || self.stop.is_cancelled() {
+            return Err(MoonshineError::Cancelled);
+        }
+        result.map_err(|_| MoonshineError::Closed)?
+    }
+}
+impl Drop for PendingTranscription {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+impl MoonshineService {
+    /// Loads on the owned inference thread. Native model loading itself has no
+    /// abort hook; cancellation joins after loading or inference returns.
+    pub async fn load(config: MoonshineConfig) -> Result<Self> {
+        config.validate()?;
+        let (sender, mut receiver) = mpsc::channel::<Request>(config.queue_capacity);
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let stop = Cancellation::new();
+        let running = Arc::new(AtomicBool::new(true));
+        let thread_stop = stop.clone();
+        let thread_running = running.clone();
+        let thread_config = config.clone();
+        let thread = std::thread::Builder::new()
+            .name("pipecat-moonshine".into())
+            .spawn(move || {
+                struct Running(Arc<AtomicBool>);
+                impl Drop for Running {
+                    fn drop(&mut self) {
+                        self.0.store(false, Ordering::SeqCst);
+                    }
+                }
+                let _running = Running(thread_running);
+                let mut model = match MoonshineModel::load(thread_config) {
+                    Ok(model) => model,
+                    Err(error) => {
+                        let _ = ready_tx.send(Err(error));
+                        return;
+                    }
+                };
+                if ready_tx.send(Ok(())).is_err() {
+                    return;
+                }
+                while let Some(request) = receiver.blocking_recv() {
+                    if thread_stop.is_cancelled() {
+                        break;
+                    }
+                    if request.reply.is_closed() {
+                        continue;
+                    }
+                    let result = model.transcribe_samples(
+                        &request.samples,
+                        &request.settings,
+                        &request.cancel,
+                        &thread_stop,
+                    );
+                    // Consumers may drop their handle before native cancellation
+                    // is acknowledged. Hold admission until both owners finish.
+                    drop(request.permit);
+                    let _ = request.reply.send(result);
+                }
+            })
+            .map_err(|e| MoonshineError::Worker(e.to_string()))?;
+        let service = Self {
+            permits: Arc::new(Semaphore::new(config.queue_capacity)),
+            config,
+            stop,
+            running,
+            joined: Arc::default(),
+            worker: Mutex::new(Worker {
+                sender: Some(sender),
+                thread: Some(thread),
+                reaper: None,
+            }),
+        };
+        ready_rx
+            .await
+            .map_err(|_| MoonshineError::Worker("model loader exited".into()))??;
+        Ok(service)
+    }
+    pub fn config(&self) -> &MoonshineConfig {
+        &self.config
+    }
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+    pub fn validate_settings(&self, settings: &MoonshineSettings) -> Result<()> {
+        self.config.bundle(settings).map(|_| ())
+    }
+    pub fn submit(
+        &self,
+        audio: &AudioRawFrame,
+        settings: MoonshineSettings,
+    ) -> Result<PendingTranscription> {
+        self.validate_settings(&settings)?;
+        if self.stop.is_cancelled() {
+            return Err(MoonshineError::Closed);
+        }
+        let worker = self
+            .worker
+            .lock()
+            .map_err(|_| MoonshineError::Worker("worker lock poisoned".into()))?;
+        if worker.sender.is_none() {
+            return Err(MoonshineError::Closed);
+        }
+        let permit = Arc::new(
+            self.permits
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| MoonshineError::Backpressure)?,
+        );
+        let samples = decode_pcm(audio, self.config.max_samples())?;
+        let settings = settings.resolved();
+        let cancel = Cancellation::new();
+        let (reply, receiver) = oneshot::channel();
+        worker
+            .sender
+            .as_ref()
+            .ok_or(MoonshineError::Closed)?
+            .try_send(Request {
+                samples,
+                settings,
+                cancel: cancel.clone(),
+                reply,
+                permit: permit.clone(),
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => MoonshineError::Backpressure,
+                mpsc::error::TrySendError::Closed(_) => MoonshineError::Closed,
+            })?;
+        Ok(PendingTranscription {
+            receiver,
+            cancel,
+            stop: self.stop.clone(),
+            _permit: permit,
+        })
+    }
+    /// Close admission and drain already accepted requests. This does not join;
+    /// drain() waits for the native thread, shutdown() cancels it instead.
+    pub fn finish(&self) -> Result<()> {
+        self.worker
+            .lock()
+            .map_err(|_| MoonshineError::Worker("worker lock poisoned".into()))?
+            .sender
+            .take();
+        Ok(())
+    }
+    pub fn cancel(&self) -> Result<()> {
+        self.stop.cancel();
+        self.finish()
+    }
+    pub async fn drain(&self) -> Result<()> {
+        self.finish()?;
+        self.join().await
+    }
+    pub async fn shutdown(&self) -> Result<()> {
+        self.cancel()?;
+        self.join().await
+    }
+    async fn join(&self) -> Result<()> {
+        {
+            let mut worker = self
+                .worker
+                .lock()
+                .map_err(|_| MoonshineError::Worker("worker lock poisoned".into()))?;
+            if let Some(handle) = worker.thread.take() {
+                let guard = JoinGuard {
+                    thread: Some(handle),
+                    completion: self.joined.clone(),
+                };
+                // Drop may run inside a saturated Tokio blocking pool, so native
+                // completion must not depend on any job queued to that executor.
+                worker.reaper = launch_reaper(
+                    guard,
+                    std::thread::Builder::new().name("pipecat-moonshine-join".into()),
+                );
+            }
+        }
+        self.joined.wait().await
+    }
+}
+impl Drop for MoonshineService {
+    fn drop(&mut self) {
+        self.stop.cancel();
+        let worker = self
+            .worker
+            .get_mut()
+            .unwrap_or_else(|poison| poison.into_inner());
+        worker.sender.take();
+        if let Some(handle) = worker.thread.take() {
+            JoinGuard {
+                thread: Some(handle),
+                completion: self.joined.clone(),
+            }
+            .run();
+        }
+        if let Some(reaper) = worker.reaper.take() {
+            let _ = reaper.join();
+        }
+        self.joined.wait_blocking();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Artifact, Model, ModelBundle, ModelFile, NativeLibraries};
+    use std::time::Duration;
+    fn test_config() -> MoonshineConfig {
+        MoonshineConfig::new(
+            NativeLibraries::from_wheel_directory("unused"),
+            vec![ModelBundle {
+                language: "en".parse().unwrap(),
+                model: Model::SmallStreaming,
+                community_license_granted: false,
+                files: vec![ModelFile {
+                    name: "unused".into(),
+                    artifact: Artifact::new("unused", "0".repeat(64)),
+                }],
+            }],
+        )
+    }
+
+    #[test]
+    fn dropping_pending_keeps_capacity_reserved_until_native_request_exits() {
+        let (sender, mut receiver) = mpsc::channel::<Request>(1);
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let request = receiver.blocking_recv().unwrap();
+            entered_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            drop(request);
+        });
+        let service = MoonshineService {
+            config: test_config(),
+            worker: Mutex::new(Worker {
+                sender: Some(sender),
+                thread: Some(thread),
+                reaper: None,
+            }),
+            stop: Cancellation::new(),
+            running: Arc::new(AtomicBool::new(true)),
+            permits: Arc::new(Semaphore::new(1)),
+            joined: Arc::default(),
+        };
+        let audio = AudioRawFrame::new(vec![0; 2], 16_000, 1).unwrap();
+        let pending = service
+            .submit(&audio, MoonshineSettings::default())
+            .unwrap();
+        entered_rx.recv().unwrap();
+        drop(pending);
+        let reserved = matches!(
+            service.submit(&audio, MoonshineSettings::default()),
+            Err(MoonshineError::Backpressure)
+        );
+        release_tx.send(()).unwrap();
+        drop(service);
+        assert!(
+            reserved,
+            "cancelled native request released capacity before exiting"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn rejected_reaper_spawn_still_joins_the_native_thread() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let thread_completed = completed.clone();
+        let thread = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            thread_completed.store(true, Ordering::SeqCst);
+        });
+        let joined = Arc::new(JoinCompletion::default());
+        let reaper = launch_reaper(
+            JoinGuard {
+                thread: Some(thread),
+                completion: joined.clone(),
+            },
+            // Linux rejects this impossible stack allocation with EINVAL.
+            std::thread::Builder::new().stack_size(usize::MAX),
+        );
+        assert!(reaper.is_none());
+        assert!(completed.load(Ordering::SeqCst));
+        assert_eq!(*joined.result.lock().unwrap(), Some(Ok(())));
+    }
+
+    #[test]
+    fn panicking_reaper_spawn_still_joins_the_native_thread() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let thread_completed = completed.clone();
+        let thread = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            thread_completed.store(true, Ordering::SeqCst);
+        });
+        let joined = Arc::new(JoinCompletion::default());
+        let guard = JoinGuard {
+            thread: Some(thread),
+            completion: joined.clone(),
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            launch_reaper(guard, std::thread::Builder::new().name("bad\0name".into()))
+        }));
+        assert!(result.is_err());
+        assert!(completed.load(Ordering::SeqCst));
+        assert_eq!(*joined.result.lock().unwrap(), Some(Ok(())));
+    }
+
+    #[tokio::test]
+    async fn panicked_native_thread_has_a_persistent_shared_join_error() {
+        let joined = Arc::new(JoinCompletion::default());
+        let reaper = launch_reaper(
+            JoinGuard {
+                thread: Some(std::thread::spawn(|| panic!("native worker failed"))),
+                completion: joined.clone(),
+            },
+            std::thread::Builder::new(),
+        )
+        .unwrap();
+        let (first, second) = tokio::join!(joined.wait(), joined.wait());
+        assert!(matches!(first, Err(MoonshineError::Worker(_))));
+        assert!(matches!(second, Err(MoonshineError::Worker(_))));
+        assert!(matches!(
+            joined.wait().await,
+            Err(MoonshineError::Worker(_))
+        ));
+        reaper.join().unwrap();
+    }
+}

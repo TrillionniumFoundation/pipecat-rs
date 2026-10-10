@@ -207,8 +207,10 @@ pub fn estimate_context_tokens(messages: &[ContextMessage]) -> usize {
                 .map(|part| match part {
                     MessagePart::Text { text }
                     | MessagePart::GeminiText { text, .. }
+                    | MessagePart::BedrockReasoning { text, .. }
                     | MessagePart::Thinking { text, .. }
                     | MessagePart::Refusal { text } => text_tokens(text),
+                    MessagePart::BedrockRedacted { data } => data.len(),
                     MessagePart::Image { .. } => 500,
                     MessagePart::GeminiToolMetadata { .. } => 0,
                     MessagePart::Audio { data, .. } | MessagePart::File { data, .. } => {

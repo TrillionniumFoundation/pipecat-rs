@@ -88,6 +88,7 @@ pub struct Frame {
     local_tags: Vec<LocalFrameTag>,
     pipeline_pts: bool,
     native_llm_continuation: Option<Arc<crate::NativeLlmContinuation>>,
+    native_speculation: Option<crate::NativeSpeculation>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
     pub(crate) observed_runtimes: crate::observer::ObservedRuntimes,
     pub(crate) interruption_epoch: Option<Arc<AtomicU64>>,
@@ -141,6 +142,11 @@ pub enum FrameTimingError {
 impl Serialize for Frame {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.require_wire_pts().map_err(serde::ser::Error::custom)?;
+        if self.native_speculation.is_some() {
+            return Err(serde::ser::Error::custom(
+                "unconsumed native speculation on wire",
+            ));
+        }
         self.require_no_native_llm_continuation()
             .map_err(serde::ser::Error::custom)?;
         #[derive(Serialize)]
@@ -213,6 +219,7 @@ impl<'de> Deserialize<'de> for Frame {
             local_tags: vec![],
             pipeline_pts: false,
             native_llm_continuation: None,
+            native_speculation: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,
@@ -228,6 +235,7 @@ impl PartialEq for Frame {
             && self.pts == other.pts
             && self.pipeline_pts == other.pipeline_pts
             && self.native_llm_continuation == other.native_llm_continuation
+            && self.native_speculation == other.native_speculation
             && self.metadata == other.metadata
             && self.transport_source == other.transport_source
             && self.transport_destination == other.transport_destination
@@ -238,6 +246,26 @@ impl PartialEq for Frame {
 }
 
 impl Frame {
+    /// Attach a native eager-turn capability. It is never decoded from metadata.
+    pub fn set_native_speculation(
+        &mut self,
+        capability: crate::NativeSpeculation,
+    ) -> Result<(), crate::ProcessorError> {
+        if self.native_speculation.is_some() {
+            return Err(crate::ProcessorError::new(
+                "speculation capability already attached",
+            ));
+        }
+        self.native_speculation = Some(capability);
+        Ok(())
+    }
+    pub fn native_speculation(&self) -> Option<&crate::NativeSpeculation> {
+        self.native_speculation.as_ref()
+    }
+    /// Consume the effect capability only at an explicitly admitted local boundary.
+    pub fn take_native_speculation(&mut self) -> Option<crate::NativeSpeculation> {
+        self.native_speculation.take()
+    }
     /// Attach validated provider history only to its matching native boundary.
     /// Existing semantic history cannot be silently replaced.
     pub fn set_native_llm_continuation(
@@ -281,6 +309,9 @@ impl Frame {
     pub fn require_no_native_llm_continuation(
         &self,
     ) -> Result<(), crate::NativeLlmContinuationError> {
+        if self.native_speculation.is_some() {
+            return Err(crate::NativeLlmContinuationError::UnconsumedSpeculation);
+        }
         if self.native_llm_continuation.is_some()
             || matches!(self.data, FrameData::LlmContinuationCheckpoint)
         {
@@ -351,6 +382,7 @@ impl Frame {
             local_tags: vec![],
             pipeline_pts: false,
             native_llm_continuation: None,
+            native_speculation: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,

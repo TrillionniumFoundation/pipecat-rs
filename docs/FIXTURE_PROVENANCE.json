@@ -1,0 +1,13 @@
+{
+  "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "public_source_path": "scripts/provider-watch/assets/speech-16k.wav",
+  "source_wav_sha256": "dbfccc2e39b708ff8cad6ec3139e87e42004be04b6328ad42304ff215e80d8ad",
+  "pcm_sha256": "ba61fe4440ff35e585bbd8ae418a0f6e08fc08485a578466155c1320a3c796f5",
+  "exact_decoded_pcm_match": true,
+  "format": {
+    "channels": 1,
+    "rate": 16000,
+    "width": 2
+  },
+  "pcm_bytes": 161998
+}

@@ -8,7 +8,6 @@ use pipecat_core::{
     ProcessorError, ProcessorHealth, ProcessorReference, ServiceMetadataFrame, TextFrame,
 };
 use std::future::{poll_fn, Future};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use tokio::time::Instant;
@@ -50,11 +49,13 @@ pub struct LlmProcessor {
     client: LlmClient,
     state: Mutex<State>,
     completion_lock: Arc<tokio::sync::Mutex<()>>,
+    speculation_gate: crate::speculation::OutputGate,
 }
 #[derive(Clone)]
 struct State {
     request: CompletionRequest,
     skip_tts: Option<bool>,
+    speculation: Option<pipecat_core::NativeSpeculation>,
 }
 enum Consumption {
     Forward,
@@ -70,9 +71,23 @@ impl LlmProcessor {
             state: Mutex::new(State {
                 request,
                 skip_tts: None,
+                speculation: None,
             }),
             completion_lock: Arc::new(tokio::sync::Mutex::new(())),
+            speculation_gate: crate::speculation::OutputGate::new(Default::default()),
         }
+    }
+    /// Current bounded retention, for diagnostics without exposing generated text.
+    pub async fn speculation_snapshot(&self) -> crate::SpeculationSnapshot {
+        self.speculation_gate.snapshot().await
+    }
+    /// Configure finite eager output retention before starting the pipeline.
+    pub fn with_speculation_limits(
+        mut self,
+        limits: crate::SpeculationLimits,
+    ) -> Result<Self, ProcessorError> {
+        self.speculation_gate = crate::speculation::OutputGate::new(limits.validate()?);
+        Ok(self)
     }
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
@@ -177,16 +192,37 @@ impl LlmProcessor {
         let mut next = state.clone();
         let run = match &frame.data {
             FrameData::LlmContext(context) => {
+                if frame.native_speculation().is_some() {
+                    return Err(ServiceError::InvalidRequest(
+                        "native speculation requires a speculative detailed context".into(),
+                    ));
+                }
                 next.request.context = frame_context::legacy_context(context);
                 true
             }
             FrameData::LlmContextDetailed(context) => {
-                if context.speculation {
-                    return Err(ServiceError::Unsupported(
-                        "speculative context requires an output gate".into(),
+                if !context.speculation && frame.native_speculation().is_some() {
+                    return Err(ServiceError::InvalidRequest(
+                        "speculation capability on ordinary context".into(),
                     ));
                 }
-                next.request.context = frame_context::context(&context.context)?;
+                if context.speculation {
+                    let capability = frame
+                        .native_speculation()
+                        .ok_or_else(|| {
+                            ServiceError::Unsupported(
+                                "speculative context requires its native turn owner".into(),
+                            )
+                        })?
+                        .clone();
+                    next.speculation = Some(capability);
+                }
+                let committed = next
+                    .speculation
+                    .as_ref()
+                    .and_then(pipecat_core::NativeSpeculation::confirmed_context);
+                next.request.context =
+                    frame_context::context(committed.as_ref().unwrap_or(&context.context))?;
                 true
             }
             FrameData::LlmRun => return Ok(Consumption::Run(Box::new(next))),
@@ -243,7 +279,14 @@ impl LlmProcessor {
             _ => return Ok(Consumption::Forward),
         };
         self.client.request_body(&next.request)?;
-        *state = next.clone();
+        if let Some(capability) = &next.speculation {
+            if !capability.claim_inference() {
+                return Ok(Consumption::Consumed);
+            }
+            // The provisional user message must never replace the live request.
+        } else {
+            *state = next.clone();
+        }
         Ok(if run {
             Consumption::Run(Box::new(next))
         } else {
@@ -251,17 +294,88 @@ impl LlmProcessor {
         })
     }
     async fn launch(&self, state: State, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        if let Some(capability) = &state.speculation {
+            if !capability.bind_admission(ctx.clone(), ctx.health().generation()) {
+                return Ok(());
+            }
+        }
+        self.speculation_gate
+            .begin(state.speculation.clone())
+            .await?;
         let client = self.client.clone();
-        let output = ctx.clone();
+        let output = CompletionOutput {
+            context: ctx.clone(),
+            gate: self.speculation_gate.clone(),
+            speculation: state.speculation.clone(),
+            health_generation: ctx.health().generation(),
+        };
         let mut guard = Box::pin(self.completion_lock.clone().lock_owned());
         // Reserve the FIFO position before background task scheduling can reorder it.
         let acquired = poll_fn(|cx| Poll::Ready(guard.as_mut().poll(cx))).await;
         ctx.spawn("llm-completion", true, async move {
-            let _guard = match acquired {
-                Poll::Ready(guard) => guard,
-                Poll::Pending => guard.await,
+            let capability = state.speculation.clone();
+            let completion = async {
+                let _guard = match acquired {
+                    Poll::Ready(guard) => guard,
+                    Poll::Pending => guard.await,
+                };
+                process_completion(client, state.request, state.skip_tts, output.clone()).await
             };
-            process_completion(client, state.request, state.skip_tts, output).await
+            let result = match capability {
+                Some(capability) => {
+                    let mut changed = capability.watch();
+                    let mut health_changed = output.context.health().watch();
+                    tokio::pin!(completion);
+                    let guarded = poll_fn(|cx| {
+                        if !output.context.is_current()
+                            || output.context.health().generation() != output.health_generation
+                        {
+                            capability.cancel();
+                            return Poll::Ready(Ok(()));
+                        }
+                        completion.as_mut().poll(cx)
+                    });
+                    tokio::pin!(guarded);
+                    loop {
+                        if capability.status() == pipecat_core::SpeculationStatus::Cancelled {
+                            break Ok(());
+                        }
+                        tokio::select! {
+                            biased;
+                            _ = changed.changed() => {},
+                            _ = health_changed.changed() => {},
+                            result = &mut guarded => break result,
+                        }
+                    }
+                }
+                None => completion.await,
+            };
+            let result = match result {
+                Err(error) if output.speculation.is_some() => {
+                    output
+                        .speculation
+                        .as_ref()
+                        .expect("speculative output")
+                        .cancel();
+                    output
+                        .push_error(ErrorFrame {
+                            error: error.message,
+                            fatal: error.fatal,
+                            processor: None,
+                            category: error.category,
+                        })
+                        .await?;
+                    Ok(())
+                }
+                result => result,
+            };
+            output.gate.discard_cancelled().await?;
+            if let Some(capability) = &output.speculation {
+                if capability.status() == pipecat_core::SpeculationStatus::Cancelled {
+                    crate::speculation::withdraw(&output.context, capability.clone()).await?;
+                }
+            }
+            result
         })?;
         Ok(())
     }
@@ -347,6 +461,7 @@ impl FrameProcessor for LlmProcessor {
                 if !flush.returning && flush.origin.as_deref() == Some("pipecat.flows"))
         {
             let output = ctx.clone();
+            let gate = self.speculation_gate.clone();
             let mut guard = Box::pin(self.completion_lock.clone().lock_owned());
             // Join the same FIFO as completions at admission, before spawning.
             // Waiting inside process() would prevent interruption/terminal work.
@@ -356,13 +471,49 @@ impl FrameProcessor for LlmProcessor {
                     Poll::Ready(guard) => guard,
                     Poll::Pending => guard.await,
                 };
-                output.push(frame, direction).await
+                gate.push(frame, direction, &output, None).await
             })?;
             return Ok(());
         }
+        if direction == Direction::Downstream
+            && matches!(frame.data, FrameData::UserStoppedSpeaking)
+        {
+            if let Some(capability) = frame.native_speculation() {
+                if let Some(context) = capability
+                    .confirmed_context()
+                    .filter(|_| capability.status() == pipecat_core::SpeculationStatus::Confirmed)
+                {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("LLM state lock poisoned"))?;
+                    let mut next = state.clone();
+                    next.request.context = frame_context::context(&context)
+                        .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    self.client
+                        .request_body(&next.request)
+                        .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    *state = next;
+                }
+            }
+        }
+        if matches!(
+            frame.data,
+            FrameData::EagerEndOfTurnCancel
+                | FrameData::UserStoppedSpeaking
+                | FrameData::UserStartedSpeaking
+                | FrameData::Interruption
+        ) || frame.is_terminal()
+        {
+            return self.speculation_gate.control(frame, direction, ctx).await;
+        }
         match self.consume(&frame) {
             Ok(Consumption::Run(state)) => self.launch(*state, ctx).await?,
-            Ok(Consumption::Forward) => ctx.push(frame, direction).await?,
+            Ok(Consumption::Forward) => {
+                self.speculation_gate
+                    .push(frame, direction, ctx, None)
+                    .await?
+            }
             Ok(Consumption::Consumed) => {}
             Err(error) => {
                 let proposal = matches!(
@@ -377,6 +528,12 @@ impl FrameProcessor for LlmProcessor {
             }
         }
         Ok(())
+    }
+    async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        self.speculation_gate.close().await
+    }
+    async fn cleanup(&self) -> Result<(), ProcessorError> {
+        self.speculation_gate.close().await
     }
 }
 
@@ -419,11 +576,61 @@ impl LlmInference for LlmProcessor {
     }
 }
 
+#[derive(Clone)]
+struct CompletionOutput {
+    context: ProcessorContext,
+    gate: crate::speculation::OutputGate,
+    speculation: Option<pipecat_core::NativeSpeculation>,
+    health_generation: pipecat_core::ProcessorHealthGeneration,
+}
+impl CompletionOutput {
+    fn configuration(&self) -> &pipecat_core::StartFrame {
+        self.context.configuration()
+    }
+    fn name(&self) -> &str {
+        self.context.name()
+    }
+    async fn push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
+        if self.speculation.is_some()
+            && self.context.health().generation() != self.health_generation
+        {
+            if let Some(capability) = &self.speculation {
+                capability.cancel();
+            }
+            return Ok(());
+        }
+        self.gate
+            .push(frame, direction, &self.context, self.speculation.as_ref())
+            .await
+    }
+    async fn push_error(&self, error: ErrorFrame) -> Result<(), ProcessorError> {
+        self.context
+            .push_error_if_health_generation(error, false, self.health_generation)
+            .await
+            .map(|_| ())
+    }
+    async fn admit_tool_intent(&self) -> Result<bool, ProcessorError> {
+        let Some(capability) = &self.speculation else {
+            return Ok(true);
+        };
+        if !self.context.is_current()
+            || self.context.health().generation() != self.health_generation
+        {
+            capability.cancel();
+        }
+        if capability.admit_tool_intent() {
+            return Ok(true);
+        }
+        crate::speculation::withdraw(&self.context, capability.clone()).await?;
+        Ok(false)
+    }
+}
+
 async fn process_completion(
     client: LlmClient,
     request: CompletionRequest,
     skip_tts: Option<bool>,
-    ctx: ProcessorContext,
+    ctx: CompletionOutput,
 ) -> Result<(), ProcessorError> {
     let started = Instant::now();
     let mut ttfb_reported = false;
@@ -443,8 +650,8 @@ async fn process_completion(
         crate::Provider::Gemini => Some(LlmContinuationProvider::Gemini),
         _ => None,
     };
-    static RESPONSE_ID: AtomicU64 = AtomicU64::new(1);
-    let response_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
+    let response_id = NativeLlmContinuation::next_response_id()
+        .map_err(|error| ProcessorError::new(error.to_string()))?;
     let mut start = response_boundary(FrameData::LlmResponseStart, skip_tts);
     if let Some(provider) = history_provider {
         start
@@ -603,11 +810,16 @@ async fn process_completion(
                 )
                 .await?;
             }
-            Ok(StreamEvent::ToolCall(call)) => calls.push(FunctionCall {
-                function_name: call.name,
-                tool_call_id: call.id,
-                arguments: call.arguments,
-            }),
+            Ok(StreamEvent::ToolCall(call)) => {
+                if !ctx.admit_tool_intent().await? {
+                    return Ok(());
+                }
+                calls.push(FunctionCall {
+                    function_name: call.name,
+                    tool_call_id: call.id,
+                    arguments: call.arguments,
+                });
+            }
             Ok(StreamEvent::Usage(usage)) => {
                 if ctx.configuration().enable_usage_metrics {
                     let mut frame = Frame::new(FrameData::Metrics(vec![Metric::LlmUsage {
@@ -661,6 +873,9 @@ async fn process_completion(
                         frame
                             .set_native_llm_continuation(history)
                             .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    }
+                    if let Some(capability) = &ctx.speculation {
+                        frame.set_native_speculation(capability.clone())?;
                     }
                     ctx.push(frame, Direction::Downstream).await?;
                 }

@@ -28,5 +28,7 @@ pub use types::{
 };
 
 pub mod processor;
+mod speculation;
 pub use pipecat_core::{LlmSettings, ServiceSettings, Setting};
 pub use processor::{InferenceOptions, LlmInference, LlmProcessor};
+pub use speculation::{SpeculationLimits, SpeculationSnapshot};

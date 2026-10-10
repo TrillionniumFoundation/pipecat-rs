@@ -22,6 +22,8 @@ pub use pipecat_local_audio as local_audio;
 #[cfg(feature = "mcp")]
 pub use pipecat_mcp as mcp;
 pub use pipecat_media_transport as media_transport;
+#[cfg(feature = "moonshine")]
+pub use pipecat_moonshine as moonshine;
 pub use pipecat_observers as observers;
 pub use pipecat_protocol as protocol;
 pub use pipecat_services as services;

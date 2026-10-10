@@ -151,12 +151,11 @@ impl Subscriber {
         self.records += 1;
         self.compressed_bytes += bytes.len();
         self.expanded_bytes += plain.len();
-        let mut fields: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
-            serde_json::from_slice(&plain).map_err(Error::protocol)?;
+        let mut fields = object_fields(&plain)?;
         // Preserve the JSON token: Value's default numeric representation rounds
         // integers above u64, which must not turn sequenced records into legacy ones.
         let integer = fields.get("seq").and_then(|value| {
-            let token = value.get().trim();
+            let token = value.trim();
             let magnitude = token.strip_prefix('-').unwrap_or(token);
             (!magnitude.is_empty() && magnitude.bytes().all(|byte| byte.is_ascii_digit()))
                 .then_some((token.starts_with('-'), magnitude))
@@ -164,7 +163,7 @@ impl Subscriber {
         if let Some((negative, magnitude)) = integer {
             let epoch = match fields.get("epoch") {
                 None => None,
-                Some(raw) => match serde_json::from_str(raw.get()).map_err(Error::protocol)? {
+                Some(raw) => match serde_json::from_str(raw).map_err(Error::protocol)? {
                     Value::Null => None,
                     Value::String(epoch) => Some(epoch),
                     _ => {
@@ -195,7 +194,7 @@ impl Subscriber {
         let map = fields
             .into_iter()
             .map(|(key, raw)| {
-                serde_json::from_str(raw.get())
+                serde_json::from_str(raw)
                     .map(|value| (key, value))
                     .map_err(Error::protocol)
             })
@@ -211,4 +210,66 @@ impl Subscriber {
         }
         Ok(Record::Message(Value::Object(map)))
     }
+}
+
+/// Extract spans only after serde validates the complete, byte-bounded JSON.
+/// IgnoredAny checks syntax without narrowing arbitrary-width integer tokens.
+/// Unlike serde_json's raw_value feature, it does not change the interpretation
+/// of literal user map keys throughout the workspace.
+fn object_fields(plain: &[u8]) -> Result<std::collections::BTreeMap<String, &str>> {
+    serde_json::from_slice::<serde::de::IgnoredAny>(plain).map_err(Error::protocol)?;
+    let text = std::str::from_utf8(plain).map_err(Error::protocol)?;
+    fn whitespace(bytes: &[u8], position: &mut usize) {
+        while bytes
+            .get(*position)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+        {
+            *position += 1;
+        }
+    }
+    let mut position = 0;
+    whitespace(plain, &mut position);
+    if plain.get(position) != Some(&b'{') {
+        return Err(Error::Protocol(
+            "transcript record must be an object".into(),
+        ));
+    }
+    position += 1;
+    let mut fields = std::collections::BTreeMap::new();
+    loop {
+        whitespace(plain, &mut position);
+        if plain.get(position) == Some(&b'}') {
+            break;
+        }
+        let mut key =
+            serde_json::Deserializer::from_slice(&plain[position..]).into_iter::<String>();
+        let name = key
+            .next()
+            .ok_or_else(|| Error::Protocol("missing JSON object key".into()))?
+            .map_err(Error::protocol)?;
+        position += key.byte_offset();
+        whitespace(plain, &mut position);
+        if plain.get(position) != Some(&b':') {
+            return Err(Error::Protocol("missing JSON object colon".into()));
+        }
+        position += 1;
+        whitespace(plain, &mut position);
+        let start = position;
+        let mut value = serde_json::Deserializer::from_slice(&plain[position..])
+            .into_iter::<serde::de::IgnoredAny>();
+        value
+            .next()
+            .ok_or_else(|| Error::Protocol("missing JSON object value".into()))?
+            .map_err(Error::protocol)?;
+        position += value.byte_offset();
+        // Match serde map semantics: duplicate decoded keys use the last value.
+        fields.insert(name, &text[start..position]);
+        whitespace(plain, &mut position);
+        match plain.get(position) {
+            Some(b',') => position += 1,
+            Some(b'}') => break,
+            _ => return Err(Error::Protocol("invalid JSON object delimiter".into())),
+        }
+    }
+    Ok(fields)
 }

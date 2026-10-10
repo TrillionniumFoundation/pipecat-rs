@@ -212,6 +212,11 @@ fn encode_part(part: &MessagePart) -> Result<Value, CodecError> {
             }
             out
         }
+        MessagePart::BedrockReasoning { .. } | MessagePart::BedrockRedacted { .. } => {
+            return Err(invalid(
+                "native Bedrock history cannot cross this wire protocol",
+            ))
+        }
         MessagePart::Refusal { text } => json!({"type":"refusal","refusal":text}),
     })
 }

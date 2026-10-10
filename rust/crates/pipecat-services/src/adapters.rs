@@ -186,6 +186,7 @@ fn openai_content(content: &Content) -> Result<Value, ServiceError> {
                 if let Some(filename) = filename { file["filename"] = json!(filename); }
                 Ok(json!({"type":"file","file":file}))
             }
+            ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => Err(ServiceError::Unsupported("Bedrock history in Chat Completions".into())),
             ContentPart::Refusal { text } => Ok(json!({"type":"refusal","refusal":text})),
             ContentPart::Thinking { .. } => Err(ServiceError::Unsupported("signed thinking replay in Chat Completions".into())),
         }).collect::<Result<Vec<_>,_>>().map(Value::Array),
@@ -347,6 +348,9 @@ fn anthropic_content(content: Option<&Content>) -> Result<Vec<Value>, ServiceErr
                 ContentPart::InputAudio { .. } => {
                     Err(ServiceError::Unsupported("Anthropic input audio".into()))
                 }
+                ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => Err(
+                    ServiceError::Unsupported("Bedrock history in Anthropic Messages".into()),
+                ),
                 ContentPart::Refusal { .. } => Err(ServiceError::Unsupported(
                     "Anthropic refusal content parts".into(),
                 )),
@@ -460,6 +464,7 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                         ContentPart::InputAudio{data,format} if matches!(format.as_str(),"wav"|"mp3")=>json!({"inlineData":{"mimeType":if format=="wav"{"audio/wav"}else{"audio/mp3"},"data":data}}),
                         ContentPart::InputAudio{..}=>return Err(ServiceError::Unsupported("Gemini input audio format".into())),
                         ContentPart::ImageUrlDetailed{..}=>return Err(ServiceError::Unsupported("Gemini image detail or remote image URL".into())),
+                        ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => return Err(ServiceError::Unsupported("Bedrock history in Gemini".into())),
                         ContentPart::Thinking{..}=>return Err(ServiceError::Unsupported("Gemini thought-signature context replay".into())),
                         ContentPart::Refusal{..}=>return Err(ServiceError::Unsupported("Gemini refusal content parts".into())),
                     };

@@ -10,7 +10,8 @@ publish = false
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 tokio.workspace = true
-serde_json = { workspace = true, features = ["raw_value"] }
+serde_json.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
 moq-net = "=0.3.7"

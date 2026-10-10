@@ -4,16 +4,24 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::mem::size_of;
+use std::sync::atomic::{AtomicU64, Ordering};
+static NEXT_RESPONSE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlmContinuationProvider {
     Anthropic,
     Gemini,
+    AwsBedrock,
 }
 
 /// Ordered provider blocks. Signatures are never included in debug output.
 #[derive(Clone, PartialEq)]
 pub enum LlmContinuationBlock {
+    BedrockReasoning {
+        text: String,
+        signature: Option<String>,
+    },
+    BedrockRedacted(Vec<u8>),
     Text(String),
     Thinking {
         text: String,
@@ -33,6 +41,15 @@ pub enum LlmContinuationBlock {
 impl fmt::Debug for LlmContinuationBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BedrockReasoning { text, signature } => f
+                .debug_struct("BedrockReasoning")
+                .field("text_bytes", &text.len())
+                .field("signature_bytes", &signature.as_ref().map(String::len))
+                .finish(),
+            Self::BedrockRedacted(data) => f
+                .debug_struct("BedrockRedacted")
+                .field("bytes", &data.len())
+                .finish(),
             Self::Text(text) => f.debug_struct("Text").field("bytes", &text.len()).finish(),
             Self::Thinking { text, signature } => f
                 .debug_struct("Thinking")
@@ -63,6 +80,8 @@ impl fmt::Debug for LlmContinuationBlock {
 pub enum NativeLlmContinuationError {
     #[error("native LLM continuation requires a nonzero response ID")]
     InvalidResponseId,
+    #[error("native LLM response identity allocator is exhausted")]
+    ResponseIdExhausted,
     #[error("native LLM continuation exceeds its block limit")]
     TooManyBlocks,
     #[error("native LLM continuation exceeds its retained-byte limit")]
@@ -85,6 +104,8 @@ pub enum NativeLlmContinuationError {
     AlreadyAttached,
     #[error("native LLM continuation must be consumed before wire encoding")]
     UnconsumedOnWire,
+    #[error("native speculation capability must be consumed before wire encoding")]
+    UnconsumedSpeculation,
 }
 
 /// Immutable response identity and ordered provider history, shared by frame
@@ -116,6 +137,12 @@ impl fmt::Debug for NativeLlmContinuation {
     }
 }
 impl NativeLlmContinuation {
+    /// Allocates a process-local response identity shared by all native providers.
+    /// IDs distinguish responses; they are not cryptographic authentication.
+    pub fn next_response_id() -> Result<u64, NativeLlmContinuationError> {
+        allocate_response_id(&NEXT_RESPONSE_ID)
+    }
+
     pub const MAX_BLOCKS: usize = 1024;
     pub const MAX_RETAINED_BYTES: usize = 8 * 1024 * 1024;
     pub const MAX_SIGNATURE_BYTES: usize = 1024 * 1024;
@@ -150,8 +177,25 @@ impl NativeLlmContinuation {
         let mut ids = BTreeSet::new();
         for (index, block) in blocks.iter().enumerate() {
             match block {
+                LlmContinuationBlock::BedrockReasoning { text, signature } => {
+                    if provider != LlmContinuationProvider::AwsBedrock {
+                        return Err(NativeLlmContinuationError::InvalidProviderBlock);
+                    }
+                    charge(&mut bytes, text.capacity())?;
+                    gemini_signature_bytes(signature, &mut bytes)?;
+                }
+                LlmContinuationBlock::BedrockRedacted(data) => {
+                    if provider != LlmContinuationProvider::AwsBedrock || data.is_empty() {
+                        return Err(NativeLlmContinuationError::InvalidProviderBlock);
+                    }
+                    charge(&mut bytes, data.capacity())?;
+                }
+
                 LlmContinuationBlock::Text(text) => {
-                    if provider != LlmContinuationProvider::Anthropic {
+                    if !matches!(
+                        provider,
+                        LlmContinuationProvider::Anthropic | LlmContinuationProvider::AwsBedrock
+                    ) {
                         return Err(NativeLlmContinuationError::InvalidProviderBlock);
                     }
                     charge(&mut bytes, text.capacity())?;
@@ -225,7 +269,11 @@ impl NativeLlmContinuation {
         if !value.blocks.iter().any(|block| {
             matches!(
                 block,
-                LlmContinuationBlock::Thinking { .. }
+                LlmContinuationBlock::BedrockReasoning {
+                    signature: Some(_),
+                    ..
+                } | LlmContinuationBlock::BedrockRedacted(_)
+                    | LlmContinuationBlock::Thinking { .. }
                     | LlmContinuationBlock::GeminiText {
                         signature: Some(_),
                         ..
@@ -354,4 +402,32 @@ fn argument_bytes(
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
     Ok(())
+}
+
+fn allocate_response_id(next: &AtomicU64) -> Result<u64, NativeLlmContinuationError> {
+    next.try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+        if value == 0 {
+            None
+        } else {
+            value.checked_add(1)
+        }
+    })
+    .map_err(|_| NativeLlmContinuationError::ResponseIdExhausted)
+}
+#[cfg(test)]
+mod response_identity_tests {
+    use super::*;
+    #[test]
+    fn exhaustion_is_sticky_and_never_wraps() {
+        let next = AtomicU64::new(u64::MAX - 1);
+        assert_eq!(allocate_response_id(&next).unwrap(), u64::MAX - 1);
+        for _ in 0..2 {
+            assert_eq!(
+                allocate_response_id(&next),
+                Err(NativeLlmContinuationError::ResponseIdExhausted)
+            );
+        }
+        assert_eq!(next.load(Ordering::Relaxed), u64::MAX);
+        assert!(allocate_response_id(&AtomicU64::new(0)).is_err());
+    }
 }

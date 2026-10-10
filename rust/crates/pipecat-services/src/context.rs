@@ -32,6 +32,13 @@ impl From<String> for Content {
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
+    BedrockReasoning {
+        text: String,
+        signature: Option<String>,
+    },
+    BedrockRedacted {
+        data: Vec<u8>,
+    },
     GeminiText {
         text: String,
         thought: bool,
@@ -79,6 +86,15 @@ pub enum ContentPart {
 impl std::fmt::Debug for ContentPart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BedrockReasoning { text, signature } => f
+                .debug_struct("BedrockReasoning")
+                .field("text_bytes", &text.len())
+                .field("signature_bytes", &signature.as_ref().map(String::len))
+                .finish(),
+            Self::BedrockRedacted { data } => f
+                .debug_struct("BedrockRedacted")
+                .field("bytes", &data.len())
+                .finish(),
             Self::GeminiText {
                 text,
                 thought,
@@ -213,6 +229,33 @@ impl Context {
             if let Some(Content::Parts(parts)) = &message.content {
                 let mut gemini_ids = std::collections::HashSet::new();
                 for part in parts {
+                    if let ContentPart::BedrockReasoning { text, signature } = part {
+                        if message.role != Role::Assistant
+                            || signature.as_ref().is_some_and(|s| {
+                                s.is_empty() || s.len() > crate::protocol::MAX_SIGNATURE_BYTES
+                            })
+                        {
+                            return Err(ServiceError::InvalidRequest(
+                                "invalid Bedrock reasoning role or signature".into(),
+                            ));
+                        }
+                        thinking_bytes = thinking_bytes
+                            .saturating_add(text.len())
+                            .saturating_add(signature.as_ref().map_or(0, String::len));
+                    }
+                    if let ContentPart::BedrockRedacted { data } = part {
+                        if message.role != Role::Assistant || data.is_empty() {
+                            return Err(ServiceError::InvalidRequest(
+                                "invalid Bedrock redacted content".into(),
+                            ));
+                        }
+                        thinking_bytes = thinking_bytes.saturating_add(data.len());
+                    }
+                    if thinking_bytes > crate::protocol::MAX_HISTORY_BYTES {
+                        return Err(ServiceError::InvalidRequest(
+                            "Bedrock history exceeds limit".into(),
+                        ));
+                    }
                     let gemini_bytes = match part {
                         ContentPart::GeminiText {
                             text,
