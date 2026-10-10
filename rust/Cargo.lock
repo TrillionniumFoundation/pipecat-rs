@@ -1592,6 +1592,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d29020232d6aa3fb1daca64c1127cf662cf97f254ae16c18c05b8ab635fc118"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "http",
+ "indexmap 2.14.2",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "hang"
 version = "0.21.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1758,7 +1777,9 @@ checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
 dependencies = [
  "atomic-waker",
  "bytes",
+ "futures-channel",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -3565,6 +3586,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-classifiers"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "pipecat-core",
+ "pipecat-services",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "pipecat-cli"
 version = "0.1.0"
 dependencies = [
@@ -3622,6 +3657,24 @@ dependencies = [
  "pipecat-text",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
+name = "pipecat-deepgram-flux"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "pipecat-core",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "url",
@@ -4622,6 +4675,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
