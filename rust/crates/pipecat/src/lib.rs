@@ -23,6 +23,8 @@ pub use pipecat_evals as evals;
 pub use pipecat_flows as flows;
 #[cfg(feature = "gemini-live")]
 pub use pipecat_gemini_live as gemini_live;
+#[cfg(feature = "gladia")]
+pub use pipecat_gladia as gladia;
 #[cfg(feature = "grok-realtime")]
 pub use pipecat_grok_realtime as grok_realtime;
 #[cfg(feature = "images")]
