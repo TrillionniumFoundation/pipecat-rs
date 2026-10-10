@@ -1,19 +1,20 @@
-//! Registered native function callbacks with bounded admission and typed results.
+//! Registered native function callbacks with bounded admission and typed settlement.
 use futures_util::FutureExt;
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, FunctionCallResultFrame, LlmContinuationBlock,
-    NativeLlmContinuation, ProcessorContext, ProcessorError,
+    FunctionCallInProgressFrame, LlmContinuationBlock, NativeLlmContinuation, NativeToolCallBatch,
+    ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt,
+    ToolOutcomeAdmission, ToolOutcomePublisher,
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     future::Future,
     pin::Pin,
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::sync::Semaphore;
+use tokio::sync::{oneshot, OwnedSemaphorePermit, Semaphore};
 
 pub type ToolFuture = Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>;
 pub type ToolCallback = Arc<dyn Fn(FunctionCall) -> ToolFuture + Send + Sync>;
@@ -32,33 +33,95 @@ impl RegisteredTool {
         }
     }
 }
-/// Duplicate prevention is bounded to the latest `duplicate_window` call IDs.
-/// Callbacks must be cancellation-safe; detached tasks/external side effects cannot be undone.
+/// Active settlements cannot be evicted. Terminal receipts retain the latest
+/// `duplicate_window` entries; counters include entries no longer retained.
+#[derive(Debug, Clone)]
+pub struct ToolOutcomeSnapshot {
+    pub active: Vec<FunctionCall>,
+    pub terminal: Vec<ToolCallReceipt>,
+    pub total_terminal: u64,
+    pub evicted_terminal: u64,
+    pub unadmitted_terminal: u64,
+    pub retained_payload_bytes: usize,
+    pub payload_byte_limit: usize,
+    pub recent_identity_bytes: usize,
+    pub evicted_identities: u64,
+}
+#[derive(Clone)]
+pub struct ToolOutcomeJournal(Arc<Mutex<History>>);
+impl ToolOutcomeJournal {
+    pub fn snapshot(&self) -> ToolOutcomeSnapshot {
+        let history = self.0.lock().unwrap_or_else(|error| error.into_inner());
+        ToolOutcomeSnapshot {
+            active: history
+                .active
+                .values()
+                .map(|active| active.call.as_ref().clone())
+                .collect(),
+            terminal: history
+                .terminal
+                .iter()
+                .map(|(receipt, _)| receipt.clone())
+                .collect(),
+            total_terminal: history.total_terminal,
+            evicted_terminal: history.evicted_terminal,
+            unadmitted_terminal: history.unadmitted_terminal,
+            retained_payload_bytes: history.active_bytes + history.terminal_bytes,
+            payload_byte_limit: ToolExecutor::MAX_OUTCOME_PAYLOAD_BYTES,
+            recent_identity_bytes: history.recent_bytes,
+            evicted_identities: history.evicted_identities,
+        }
+    }
+}
+/// Duplicate prevention retains at most `duplicate_window` call IDs and
+/// `MAX_RECENT_IDENTITY_BYTES`. IDs can execute again after eviction. Exactly-once
+/// settlement is per admitted lease, not durable or external exactly-once execution.
+/// Callbacks must be cancellation-safe. Dropping them cannot undo external effects.
+/// Every admitted identity first reserves a finite journal slot. Full pipeline
+/// lanes fail the session closed; inspect `outcomes()` for undelivered receipts.
 pub struct ToolExecutor {
     tools: BTreeMap<String, RegisteredTool>,
     slots: Arc<Semaphore>,
+    settlement_slots: Arc<Semaphore>,
     seen: Arc<Mutex<History>>,
     duplicate_window: usize,
     max_argument_bytes: usize,
     max_batch: usize,
 }
 impl ToolExecutor {
+    /// Aggregate encoded identity/argument bytes retained by active and terminal receipts.
+    pub const MAX_OUTCOME_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
+    /// Separate finite byte bound for recent duplicate identities.
+    pub const MAX_RECENT_IDENTITY_BYTES: usize = 8 * 1024 * 1024;
     pub fn new(
         max_in_flight: usize,
         duplicate_window: usize,
         max_argument_bytes: usize,
     ) -> Result<Self, ProcessorError> {
-        if max_in_flight == 0 || duplicate_window == 0 || max_argument_bytes == 0 {
-            return Err(ProcessorError::new("tool limits must be positive"));
+        let settlement_capacity = max_in_flight
+            .checked_mul(2)
+            .filter(|value| *value <= u32::MAX as usize && *value <= Semaphore::MAX_PERMITS);
+        if max_in_flight == 0
+            || duplicate_window == 0
+            || max_argument_bytes == 0
+            || settlement_capacity.is_none()
+        {
+            return Err(ProcessorError::new(
+                "tool limits must be positive and bounded",
+            ));
         }
         Ok(Self {
             tools: BTreeMap::new(),
             slots: Arc::new(Semaphore::new(max_in_flight)),
+            settlement_slots: Arc::new(Semaphore::new(settlement_capacity.unwrap())),
             seen: Arc::new(Mutex::new(History::default())),
             duplicate_window,
             max_argument_bytes,
             max_batch: max_in_flight,
         })
+    }
+    pub fn outcomes(&self) -> ToolOutcomeJournal {
+        ToolOutcomeJournal(self.seen.clone())
     }
     pub fn register(
         &mut self,
@@ -74,179 +137,253 @@ impl ToolExecutor {
         self.tools.insert(name, tool);
         Ok(())
     }
-    fn remember(&self, call: &FunctionCall) -> Result<bool, ProcessorError> {
-        let id = call.tool_call_id.as_str();
-        let mut seen = self
-            .seen
-            .lock()
-            .map_err(|_| ProcessorError::fatal("tool history poisoned"))?;
-        if seen.active.contains_key(id) || seen.recent.iter().any(|known| known == id) {
-            return Ok(false);
-        }
-        if seen.recent.len() == self.duplicate_window {
-            seen.recent.pop_front();
-        }
-        seen.recent.push_back(id.into());
-        seen.active.insert(
-            id.into(),
-            ActiveCall {
-                function_name: call.function_name.clone(),
-                task: None,
-            },
-        );
-        Ok(true)
-    }
-    fn remember_signed(
+    fn reserve(
         &self,
         calls: &[FunctionCall],
-        history: Arc<NativeLlmContinuation>,
-    ) -> Result<bool, ProcessorError> {
+        signed: Option<Arc<NativeLlmContinuation>>,
+        group_id: &str,
+        ctx: &ProcessorContext,
+    ) -> Result<Vec<ActiveLease>, ProcessorError> {
         let mut seen = self
             .seen
             .lock()
             .map_err(|_| ProcessorError::fatal("tool history poisoned"))?;
-        let retained: std::collections::BTreeSet<_> = seen
+        let retained: BTreeSet<&str> = seen
             .active
             .keys()
             .chain(seen.recent.iter())
-            .cloned()
+            .map(String::as_str)
             .collect();
-        let live: Vec<_> = seen.signed.iter().filter(|(_, history)| history.blocks().iter().any(|block| matches!(block, LlmContinuationBlock::ToolCall(call) if retained.contains(&call.tool_call_id)))).map(|(id, history)| (*id, history.clone())).collect();
-        if let Some((_, previous)) = live.iter().find(|(id, _)| *id == history.response_id()) {
-            return if previous.as_ref() == history.as_ref() {
-                Ok(false)
-            } else {
-                Err(ProcessorError::new("conflicting signed response identity"))
-            };
-        }
-        if calls
-            .iter()
-            .any(|call| retained.contains(&call.tool_call_id))
-        {
-            return Err(ProcessorError::new(
-                "partially duplicate or conflicting signed tool batch",
-            ));
-        }
-        let bytes = live
-            .iter()
-            .try_fold(history.retained_bytes(), |bytes, (_, entry)| {
-                bytes.checked_add(entry.retained_bytes())
-            })
-            .filter(|bytes| *bytes <= NativeLlmContinuation::MAX_RETAINED_BYTES);
-        if bytes.is_none() {
-            return Err(ProcessorError::new(
-                "aggregate signed tool history exceeds byte limit",
-            ));
-        }
-        // Only publish identities once all effects and retained history are admissible.
-        seen.signed = live.into_iter().collect();
-        seen.signed.insert(history.response_id(), history);
-        for call in calls {
-            if seen.recent.len() == self.duplicate_window {
-                seen.recent.pop_front();
+        let live: BTreeMap<_, _> = seen.signed.iter().filter(|(_, history)| history.blocks().iter().any(|block|
+            matches!(block, LlmContinuationBlock::ToolCall(call) if retained.contains(call.tool_call_id.as_str()))))
+            .map(|(id, history)| (*id, history.clone())).collect();
+        let fresh: Vec<&FunctionCall> = if let Some(history) = &signed {
+            if let Some(previous) = live.get(&history.response_id()) {
+                return if previous.as_ref() == history.as_ref() {
+                    Ok(vec![])
+                } else {
+                    Err(ProcessorError::new("conflicting signed response identity"))
+                };
             }
-            seen.recent.push_back(call.tool_call_id.clone());
-            seen.active.insert(
-                call.tool_call_id.clone(),
-                ActiveCall {
-                    function_name: call.function_name.clone(),
-                    task: None,
-                },
-            );
+            if calls
+                .iter()
+                .any(|call| retained.contains(call.tool_call_id.as_str()))
+            {
+                return Err(ProcessorError::new(
+                    "partially duplicate or conflicting signed tool batch",
+                ));
+            }
+            if live
+                .values()
+                .try_fold(history.retained_bytes(), |bytes, entry| {
+                    bytes.checked_add(entry.retained_bytes())
+                })
+                .is_none_or(|bytes| bytes > NativeLlmContinuation::MAX_RETAINED_BYTES)
+            {
+                return Err(ProcessorError::new(
+                    "aggregate signed tool history exceeds byte limit",
+                ));
+            }
+            calls.iter().collect()
+        } else {
+            let mut unique = retained.clone();
+            calls
+                .iter()
+                .filter(|call| unique.insert(call.tool_call_id.as_str()))
+                .collect()
+        };
+        drop(retained);
+        if fresh.is_empty() {
+            return Ok(vec![]);
         }
-        Ok(true)
+        // Reserve every reachable shared batch conservatively for each lease.
+        // A sibling can retain that batch after any other member has settled.
+        let members: Vec<_> = fresh
+            .iter()
+            .map(|call| {
+                (
+                    *call,
+                    self.tools
+                        .get(&call.function_name)
+                        .is_none_or(|tool| tool.cancel_on_interruption),
+                )
+            })
+            .collect();
+        let batch_bytes = NativeToolCallBatch::measure(group_id, &members)?;
+        let sizes: Vec<_> = members
+            .iter()
+            .map(|(call, policy)| {
+                NativeToolCallBatch::policy_bytes(call, *policy, Some(group_id)).and_then(|bytes| {
+                    batch_bytes
+                        .checked_add(bytes)
+                        .and_then(|bytes| {
+                            bytes.checked_add(call.tool_call_id.len().saturating_mul(2))
+                        })
+                        .ok_or_else(|| ProcessorError::new("tool tracking byte overflow"))
+                })
+            })
+            .collect::<Result<_, _>>()?;
+        let needed = sizes
+            .iter()
+            .try_fold(0_usize, |total, bytes| total.checked_add(*bytes))
+            .ok_or_else(|| ProcessorError::fatal("tool outcome byte budget overflow"))?;
+        let active_bytes = seen
+            .active_bytes
+            .checked_add(needed)
+            .filter(|bytes| *bytes <= Self::MAX_OUTCOME_PAYLOAD_BYTES)
+            .ok_or_else(|| {
+                ProcessorError::fatal("active tool outcomes exceed aggregate byte limit")
+            })?;
+        // Both count and byte reservations precede identity publication and payload cloning.
+        let mut reservations = self
+            .settlement_slots
+            .clone()
+            .try_acquire_many_owned(fresh.len() as u32)
+            .map_err(|_| ProcessorError::fatal("tool settlement capacity exceeded"))?;
+        let batch = NativeToolCallBatch::new(
+            group_id.into(),
+            members
+                .into_iter()
+                .map(|(call, policy)| (Arc::new(call.clone()), policy))
+                .collect(),
+        )?;
+        let mut publishers = Vec::with_capacity(fresh.len());
+        for (call, interruptible) in batch.members() {
+            let publisher = ctx
+                .tool_outcome_publisher(call.clone(), *interruptible)?
+                .with_batch(batch.clone())?;
+            publishers.push((call.clone(), publisher));
+        }
+        while active_bytes + seen.terminal_bytes > Self::MAX_OUTCOME_PAYLOAD_BYTES {
+            seen.evict_terminal();
+        }
+        seen.active_bytes = active_bytes;
+        seen.signed = live;
+        if let Some(history) = signed {
+            seen.signed.insert(history.response_id(), history);
+        }
+        let mut leases = Vec::with_capacity(publishers.len());
+        for ((call, publisher), bytes) in publishers.into_iter().zip(sizes) {
+            let control = Arc::new(Mutex::new(Control::default()));
+            let active = ActiveCall {
+                call: call.clone(),
+                bytes,
+                control: control.clone(),
+                context: ctx.clone(),
+            };
+            while seen.recent.len() >= self.duplicate_window
+                || seen.recent_bytes + call.tool_call_id.len() > Self::MAX_RECENT_IDENTITY_BYTES
+            {
+                let Some(old) = seen.recent.pop_front() else {
+                    break;
+                };
+                seen.recent_bytes -= old.len();
+                seen.evicted_identities = seen.evicted_identities.saturating_add(1);
+            }
+            seen.recent_bytes += call.tool_call_id.len();
+            seen.recent.push_back(call.tool_call_id.clone());
+            seen.active.insert(call.tool_call_id.clone(), active);
+            leases.push(ActiveLease {
+                call,
+                publisher: Some(publisher),
+                control,
+                history: self.seen.clone(),
+                retention: self.duplicate_window,
+                _reservation: reservations.split(1).expect("reserved complete batch"),
+            });
+        }
+        Ok(leases)
     }
-    async fn dispatch(
+    fn dispatch(
         &self,
-        call: FunctionCall,
+        mut lease: ActiveLease,
         ctx: &ProcessorContext,
         admission: Option<pipecat_core::NativeSpeculation>,
     ) -> Result<(), ProcessorError> {
-        let lease = ActiveLease {
-            id: call.tool_call_id.clone(),
-            history: self.seen.clone(),
-        };
-        let Some(tool) = self.tools.get(&call.function_name).cloned() else {
-            return emit_result(call, Err("tool is not registered".into()), ctx).await;
+        let Some(tool) = self.tools.get(&lease.call.function_name).cloned() else {
+            lease.complete(
+                Err("tool is not registered".into()),
+                ToolCallEndReason::NotRegistered,
+            );
+            return Ok(());
         };
         let permit = match self.slots.clone().try_acquire_owned() {
             Ok(permit) => permit,
             Err(_) => {
-                return emit_result(call, Err("tool concurrency capacity exceeded".into()), ctx)
-                    .await
+                lease.complete(
+                    Err("tool concurrency capacity exceeded".into()),
+                    ToolCallEndReason::ConcurrencyLimit,
+                );
+                return Ok(());
             }
         };
-        let output = ctx.clone();
-        let call_id = call.tool_call_id.clone();
-        let task_id = ctx.spawn("tool-call", tool.cancel_on_interruption, async move {
+        let control = lease.control.clone();
+        // The settlement lease is handed over only AFTER spawn releases runtime
+        // admission locks. Rejected futures therefore cannot deadlock in Drop.
+        let (handoff, receive) = oneshot::channel::<ActiveLease>();
+        let task = ctx.spawn("tool-call", tool.cancel_on_interruption, async move {
             let _permit = permit;
-            let _lease = lease;
-            let callback =
-                std::panic::AssertUnwindSafe(async { (tool.callback)(call.clone()).await })
-                    .catch_unwind();
+            let Ok(mut lease) = receive.await else {
+                return Ok(());
+            };
+            let call = lease.call.as_ref().clone();
+            let callback = std::panic::AssertUnwindSafe(async {
+                if !lease.enter() {
+                    return None;
+                }
+                Some((tool.callback)(call).await)
+            })
+            .catch_unwind();
             let guarded = async {
                 match &admission {
                     Some(capability) => capability.run_effect(callback).await,
                     None => Some(callback.await),
                 }
             };
-            let outcome = tokio::time::timeout(tool.timeout, guarded).await;
-            if matches!(outcome, Ok(None)) {
-                return output
-                    .push(
-                        Frame::new(FrameData::FunctionCallCancel(
-                            pipecat_core::FunctionCallCancelFrame {
-                                function_name: call.function_name,
-                                tool_call_id: call.tool_call_id,
-                                run_llm: false,
-                            },
-                        )),
-                        Direction::Downstream,
-                    )
-                    .await;
+            match tokio::time::timeout(tool.timeout, guarded).await {
+                Ok(Some(Ok(Some(result)))) => {
+                    let reason = if result.is_ok() {
+                        ToolCallEndReason::CallbackReturned
+                    } else {
+                        ToolCallEndReason::CallbackError
+                    };
+                    lease.complete(result, reason);
+                }
+                Ok(Some(Err(_))) => lease.complete(
+                    Err("tool callback panicked".into()),
+                    ToolCallEndReason::CallbackPanicked,
+                ),
+                Err(_) => lease.complete(
+                    Err("tool call timed out".into()),
+                    ToolCallEndReason::TimedOut,
+                ),
+                Ok(None) => lease.cancel(ToolCallEndReason::SpeculationDenied),
+                Ok(Some(Ok(None))) => lease.cancel(ToolCallEndReason::ExplicitCancel),
             }
-            let outcome = match outcome {
-                Ok(Some(Ok(result))) => result,
-                Ok(Some(Err(_))) => Err("tool callback panicked".into()),
-                Ok(None) => unreachable!("cancelled above"),
-                Err(_) => Err("tool call timed out".into()),
-            };
-            emit_result(call, outcome, &output).await
-        })?;
-        if let Some(active) = self
-            .seen
-            .lock()
-            .map_err(|_| ProcessorError::fatal("tool history poisoned"))?
-            .active
-            .get_mut(&call_id)
-        {
-            active.task = Some(task_id);
+            Ok(())
+        });
+        match task {
+            Ok(id) => {
+                let cancel = {
+                    let mut state = control.lock().unwrap_or_else(|error| error.into_inner());
+                    state.task = Some(id);
+                    state.cancel.is_some()
+                };
+                if cancel {
+                    ctx.cancel_task(id);
+                }
+                // A dropped receiver returns the still-owned lease to this stack.
+                if let Err(mut lease) = handoff.send(lease) {
+                    lease.cancel(ToolCallEndReason::TaskDropped);
+                }
+                Ok(())
+            }
+            Err(error) => {
+                lease.cancel(ToolCallEndReason::AdmissionRejected);
+                Err(error)
+            }
         }
-        Ok(())
     }
-}
-async fn emit_result(
-    call: FunctionCall,
-    result: Result<Value, String>,
-    ctx: &ProcessorContext,
-) -> Result<(), ProcessorError> {
-    let (result, error) = match result {
-        Ok(result) => (result, None),
-        Err(error) => (json!({"error":error}), Some(error)),
-    };
-    ctx.push(
-        Frame::new(FrameData::FunctionCallResult(FunctionCallResultFrame {
-            function_name: call.function_name,
-            tool_call_id: call.tool_call_id,
-            arguments: call.arguments,
-            result,
-            run_llm: None,
-            is_final: true,
-            error,
-        })),
-        Direction::Downstream,
-    )
-    .await
 }
 #[async_trait]
 impl FrameProcessor for ToolExecutor {
@@ -259,37 +396,52 @@ impl FrameProcessor for ToolExecutor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        if frame.native_tool_batch()?.is_some() {
+            return ctx.push(frame, direction).await;
+        }
         let admission = frame.native_speculation().cloned();
         let signed = frame
             .native_llm_continuation()
             .map_err(|error| ProcessorError::new(error.to_string()))?
             .cloned();
         if let FrameData::FunctionCallCancel(cancel) = &frame.data {
-            let task = {
+            // A verified acknowledgment is data, never a fresh cancellation command.
+            if frame.native_tool_outcome()?.is_some() {
+                return ctx.push(frame, direction).await;
+            }
+            let target = {
                 let history = self
                     .seen
                     .lock()
                     .map_err(|_| ProcessorError::fatal("tool history poisoned"))?;
-                history
+                if history
                     .active
                     .get(&cancel.tool_call_id)
-                    .filter(|active| active.function_name == cancel.function_name)
-                    .and_then(|active| active.task)
+                    .is_some_and(|active| active.call.function_name != cancel.function_name)
+                {
+                    return Err(ProcessorError::new("tool cancellation identity mismatch"));
+                }
+                history.active.get(&cancel.tool_call_id).map(|active| {
+                    let mut control = active
+                        .control
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner());
+                    control.cancel.get_or_insert(cancel.run_llm);
+                    (active.context.clone(), control.task)
+                })
             };
-            if let Some(task) = task {
-                ctx.cancel_task(task);
+            if let Some((origin, task)) = target {
+                if let Some(task) = task {
+                    origin.cancel_task(task);
+                }
+                return Ok(());
             }
+            // Unknown or already-settled identities cannot produce a new receipt.
+            return Ok(());
         }
-        let calls = if direction == Direction::Downstream {
-            match &frame.data {
-                FrameData::FunctionCallsStarted(calls) => Some(calls.clone()),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        let Some(calls) = calls else {
-            return ctx.push(frame, direction).await;
+        let calls = match (&frame.data, direction) {
+            (FrameData::FunctionCallsStarted(calls), Direction::Downstream) => calls,
+            _ => return ctx.push(frame, direction).await,
         };
         if admission
             .as_ref()
@@ -297,11 +449,10 @@ impl FrameProcessor for ToolExecutor {
         {
             return Ok(());
         }
-        frame.take_native_speculation();
         if calls.len() > self.max_batch {
             return Err(ProcessorError::new("tool batch exceeds configured limit"));
         }
-        for call in &calls {
+        for call in calls {
             if call.tool_call_id.is_empty()
                 || call.function_name.is_empty()
                 || !call.arguments.is_object()
@@ -310,66 +461,61 @@ impl FrameProcessor for ToolExecutor {
                     "invalid tool call identity or arguments",
                 ));
             }
-            if serde_json::to_vec(&call.arguments)
-                .map_err(|e| ProcessorError::new(e.to_string()))?
-                .len()
-                > self.max_argument_bytes
+            if call.tool_call_id.len() > self.max_argument_bytes
+                || call.function_name.len() > self.max_argument_bytes
+                || serde_json::to_vec(&call.arguments)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?
+                    .len()
+                    > self.max_argument_bytes
             {
                 return Err(ProcessorError::new(
-                    "tool arguments exceed configured limit",
+                    "tool arguments or identity exceed configured limit",
                 ));
             }
         }
-        let mut fresh = Vec::new();
-        if let Some(history) = signed {
-            if !self.remember_signed(&calls, history)? {
-                return ctx.push(frame, direction).await;
-            }
-            fresh = calls;
-        } else {
-            for call in calls {
-                if self.remember(&call)? {
-                    fresh.push(call);
-                }
-            }
+        let signed_duplicate = signed.is_some();
+        let group_id = format!("tool-batch-{}", Frame::new(FrameData::LlmRun).id);
+        let leases = self.reserve(calls, signed, &group_id, ctx)?;
+        frame.take_native_speculation();
+        if leases.is_empty() {
+            return if signed_duplicate {
+                ctx.push(frame, direction).await
+            } else {
+                Ok(())
+            };
         }
-        if fresh.is_empty() {
-            return Ok(());
+        let batch = leases[0]
+            .publisher
+            .as_ref()
+            .and_then(ToolOutcomePublisher::batch)
+            .expect("reserved native batch")
+            .clone();
+        frame.data = FrameData::FunctionCallsStarted(
+            leases
+                .iter()
+                .map(|lease| lease.call.as_ref().clone())
+                .collect(),
+        );
+        frame.set_native_tool_batch(batch.clone())?;
+        ctx.push(frame, direction).await?;
+        for lease in &leases {
+            let mut frame = Frame::new(FrameData::FunctionCallInProgress(
+                FunctionCallInProgressFrame {
+                    function_name: lease.call.function_name.clone(),
+                    tool_call_id: lease.call.tool_call_id.clone(),
+                    arguments: lease.call.arguments.clone(),
+                    cancel_on_interruption: self
+                        .tools
+                        .get(&lease.call.function_name)
+                        .is_none_or(|tool| tool.cancel_on_interruption),
+                    group_id: Some(group_id.clone()),
+                },
+            ));
+            frame.set_native_tool_batch(batch.clone())?;
+            ctx.push(frame, Direction::Downstream).await?;
         }
-        // Guards cover failure before callbacks are spawned as well as dropped futures.
-        let guards: Vec<_> = fresh
-            .iter()
-            .map(|call| ActiveLease {
-                id: call.tool_call_id.clone(),
-                history: self.seen.clone(),
-            })
-            .collect();
-        let group_id = format!("tool-batch-{}", frame.id);
-        let mut started = frame;
-        started.data = FrameData::FunctionCallsStarted(fresh.clone());
-        ctx.push(started, direction).await?;
-        // Admit all placeholders before any completion can reach the aggregator.
-        for call in &fresh {
-            ctx.push(
-                Frame::new(FrameData::FunctionCallInProgress(
-                    FunctionCallInProgressFrame {
-                        function_name: call.function_name.clone(),
-                        tool_call_id: call.tool_call_id.clone(),
-                        arguments: call.arguments.clone(),
-                        cancel_on_interruption: self
-                            .tools
-                            .get(&call.function_name)
-                            .is_none_or(|tool| tool.cancel_on_interruption),
-                        group_id: Some(group_id.clone()),
-                    },
-                )),
-                Direction::Downstream,
-            )
-            .await?;
-        }
-        for (call, mut guard) in fresh.into_iter().zip(guards) {
-            self.dispatch(call, ctx, admission.clone()).await?;
-            guard.id.clear(); // Ownership moved to dispatch's lease.
+        for lease in leases {
+            self.dispatch(lease, ctx, admission.clone())?;
         }
         Ok(())
     }
@@ -379,19 +525,140 @@ struct History {
     recent: VecDeque<String>,
     active: BTreeMap<String, ActiveCall>,
     signed: BTreeMap<u64, Arc<NativeLlmContinuation>>,
+    terminal: VecDeque<(ToolCallReceipt, usize)>,
+    active_bytes: usize,
+    terminal_bytes: usize,
+    recent_bytes: usize,
+    evicted_identities: u64,
+    total_terminal: u64,
+    evicted_terminal: u64,
+    unadmitted_terminal: u64,
 }
-struct ActiveCall {
-    function_name: String,
-    task: Option<u64>,
-}
-struct ActiveLease {
-    id: String,
-    history: Arc<Mutex<History>>,
-}
-impl Drop for ActiveLease {
-    fn drop(&mut self) {
-        if let Ok(mut history) = self.history.lock() {
-            history.active.remove(&self.id);
+impl History {
+    fn evict_terminal(&mut self) {
+        if let Some((_, bytes)) = self.terminal.pop_front() {
+            self.terminal_bytes -= bytes;
+            self.evicted_terminal = self.evicted_terminal.saturating_add(1);
         }
     }
 }
+struct ActiveCall {
+    call: Arc<FunctionCall>,
+    bytes: usize,
+    control: Arc<Mutex<Control>>,
+    context: ProcessorContext,
+}
+#[derive(Default)]
+struct Control {
+    task: Option<u64>,
+    entered: bool,
+    cancel: Option<bool>,
+}
+struct ActiveLease {
+    call: Arc<FunctionCall>,
+    publisher: Option<ToolOutcomePublisher>,
+    control: Arc<Mutex<Control>>,
+    history: Arc<Mutex<History>>,
+    retention: usize,
+    _reservation: OwnedSemaphorePermit,
+}
+impl ActiveLease {
+    fn enter(&self) -> bool {
+        let mut control = self
+            .control
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if control.cancel.is_some() {
+            return false;
+        }
+        control.entered = true;
+        true
+    }
+    fn complete(&mut self, result: Result<Value, String>, reason: ToolCallEndReason) {
+        let Some(publisher) = self.publisher.take() else {
+            return;
+        };
+        let control = self
+            .control
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let effects = if control.entered {
+            ToolCallEffectStatus::ExternalEffectsUnknown
+        } else {
+            ToolCallEffectStatus::NotStarted
+        };
+        let receipt = if let Some(run_llm) = control.cancel {
+            publisher.cancel(effects, ToolCallEndReason::ExplicitCancel, run_llm)
+        } else {
+            publisher.complete(result, effects, reason)
+        };
+        drop(control);
+        self.record(receipt);
+    }
+    fn cancel(&mut self, reason: ToolCallEndReason) {
+        let Some(publisher) = self.publisher.take() else {
+            return;
+        };
+        let control = self
+            .control
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let effects = if control.entered {
+            ToolCallEffectStatus::ExternalEffectsUnknown
+        } else {
+            ToolCallEffectStatus::NotStarted
+        };
+        let reason = if control.cancel.is_some() {
+            ToolCallEndReason::ExplicitCancel
+        } else {
+            reason
+        };
+        let receipt = publisher.cancel(effects, reason, control.cancel.unwrap_or(false));
+        drop(control);
+        self.record(receipt);
+    }
+    fn record(&self, receipt: ToolCallReceipt) {
+        let mut history = self
+            .history
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let bytes = history
+            .active
+            .remove(&self.call.tool_call_id)
+            .expect("owned active settlement")
+            .bytes;
+        history.active_bytes -= bytes;
+        history.total_terminal = history.total_terminal.saturating_add(1);
+        if receipt.admission != ToolOutcomeAdmission::Admitted {
+            history.unadmitted_terminal = history.unadmitted_terminal.saturating_add(1);
+        }
+        let bytes = receipt.outcome.retained_bytes();
+        while history.terminal.len() >= self.retention
+            || history
+                .active_bytes
+                .saturating_add(history.terminal_bytes)
+                .saturating_add(bytes)
+                > ToolExecutor::MAX_OUTCOME_PAYLOAD_BYTES
+        {
+            if history.terminal.is_empty() {
+                break;
+            }
+            history.evict_terminal();
+        }
+        if history.active_bytes.saturating_add(bytes) > ToolExecutor::MAX_OUTCOME_PAYLOAD_BYTES {
+            history.evicted_terminal = history.evicted_terminal.saturating_add(1);
+            return;
+        }
+        history.terminal_bytes += bytes;
+        history.terminal.push_back((receipt, bytes));
+    }
+}
+impl Drop for ActiveLease {
+    fn drop(&mut self) {
+        self.cancel(ToolCallEndReason::TaskDropped);
+    }
+}
+
+#[cfg(test)]
+#[path = "tools_settlement_tests.rs"]
+mod settlement_tests;

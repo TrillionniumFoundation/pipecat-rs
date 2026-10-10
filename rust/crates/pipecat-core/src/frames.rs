@@ -94,6 +94,9 @@ pub struct Frame {
     pipeline_pts: bool,
     native_llm_continuation: Option<Arc<crate::NativeLlmContinuation>>,
     native_speculation: Option<crate::NativeSpeculation>,
+    native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
+    native_tool_timeout_projected: bool,
+    native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
     pub(crate) observed_runtimes: crate::observer::ObservedRuntimes,
     pub(crate) interruption_epoch: Option<Arc<AtomicU64>>,
@@ -225,6 +228,9 @@ impl<'de> Deserialize<'de> for Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_tool_outcome: None,
+            native_tool_timeout_projected: false,
+            native_tool_batch: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,
@@ -241,6 +247,9 @@ impl PartialEq for Frame {
             && self.pipeline_pts == other.pipeline_pts
             && self.native_llm_continuation == other.native_llm_continuation
             && self.native_speculation == other.native_speculation
+            && self.native_tool_outcome == other.native_tool_outcome
+            && self.native_tool_timeout_projected == other.native_tool_timeout_projected
+            && self.native_tool_batch == other.native_tool_batch
             && self.metadata == other.metadata
             && self.transport_source == other.transport_source
             && self.transport_destination == other.transport_destination
@@ -251,6 +260,76 @@ impl PartialEq for Frame {
 }
 
 impl Frame {
+    /// Attach the immutable executor ownership descriptor to a matching declaration.
+    pub fn set_native_tool_batch(
+        &mut self,
+        batch: Arc<crate::NativeToolCallBatch>,
+    ) -> Result<(), crate::ProcessorError> {
+        batch.validate(&self.data)?;
+        if self.native_tool_batch.is_some() {
+            return Err(crate::ProcessorError::new(
+                "native tool batch already attached",
+            ));
+        }
+        self.native_tool_batch = Some(batch);
+        Ok(())
+    }
+    pub fn native_tool_batch(
+        &self,
+    ) -> Result<Option<&Arc<crate::NativeToolCallBatch>>, crate::ProcessorError> {
+        if let Some(batch) = &self.native_tool_batch {
+            batch.validate(&self.data)?;
+        }
+        Ok(self.native_tool_batch.as_ref())
+    }
+    pub fn take_native_tool_batch(
+        &mut self,
+    ) -> Result<Option<Arc<crate::NativeToolCallBatch>>, crate::ProcessorError> {
+        self.native_tool_batch()?;
+        Ok(self.native_tool_batch.take())
+    }
+    pub(crate) fn attach_tool_outcome(&mut self, outcome: Arc<crate::NativeToolCallOutcome>) {
+        self.native_tool_timeout_projected = false;
+        self.native_tool_outcome = Some(outcome);
+    }
+    /// Validated local terminal acknowledgment, distinct from an external cancel request.
+    pub fn native_tool_outcome(
+        &self,
+    ) -> Result<Option<&Arc<crate::NativeToolCallOutcome>>, crate::ProcessorError> {
+        if let Some(outcome) = &self.native_tool_outcome {
+            outcome.validate(&self.data, self.native_tool_timeout_projected)?;
+        }
+        Ok(self.native_tool_outcome.as_ref())
+    }
+    /// Consume the local acknowledgment only at an explicit native/wire boundary.
+    pub fn take_native_tool_outcome(
+        &mut self,
+    ) -> Result<Option<Arc<crate::NativeToolCallOutcome>>, crate::ProcessorError> {
+        self.native_tool_outcome()?;
+        self.native_tool_timeout_projected = false;
+        Ok(self.native_tool_outcome.take())
+    }
+    /// Project a verified timeout to the provider cancellation convention while
+    /// retaining its original Failed/TimedOut receipt for the native consumer.
+    pub fn project_native_tool_timeout_as_cancel(&mut self) -> Result<(), crate::ProcessorError> {
+        let outcome = self.native_tool_outcome()?.ok_or_else(|| {
+            crate::ProcessorError::new("timeout projection requires a native receipt")
+        })?;
+        if outcome.state() != crate::ToolCallTerminalState::Failed
+            || outcome.reason() != crate::ToolCallEndReason::TimedOut
+        {
+            return Err(crate::ProcessorError::new(
+                "only a native failed timeout can project to cancellation",
+            ));
+        }
+        self.data = FrameData::FunctionCallCancel(FunctionCallCancelFrame {
+            function_name: outcome.call().function_name.clone(),
+            tool_call_id: outcome.call().tool_call_id.clone(),
+            run_llm: true,
+        });
+        self.native_tool_timeout_projected = true;
+        Ok(())
+    }
     /// Attach a native eager-turn capability. It is never decoded from metadata.
     pub fn set_native_speculation(
         &mut self,
@@ -314,6 +393,12 @@ impl Frame {
     pub fn require_no_native_llm_continuation(
         &self,
     ) -> Result<(), crate::NativeLlmContinuationError> {
+        if self.native_tool_batch.is_some() {
+            return Err(crate::NativeLlmContinuationError::UnconsumedToolBatch);
+        }
+        if self.native_tool_outcome.is_some() {
+            return Err(crate::NativeLlmContinuationError::UnconsumedToolOutcome);
+        }
         if self.native_speculation.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedSpeculation);
         }
@@ -388,6 +473,9 @@ impl Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_tool_outcome: None,
+            native_tool_timeout_projected: false,
+            native_tool_batch: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,

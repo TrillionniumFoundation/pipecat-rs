@@ -106,6 +106,10 @@ pub enum NativeLlmContinuationError {
     UnconsumedOnWire,
     #[error("native speculation capability must be consumed before wire encoding")]
     UnconsumedSpeculation,
+    #[error("native tool outcome must be consumed before wire encoding")]
+    UnconsumedToolOutcome,
+    #[error("native tool batch must be consumed before wire encoding")]
+    UnconsumedToolBatch,
 }
 
 /// Immutable response identity and ordered provider history, shared by frame

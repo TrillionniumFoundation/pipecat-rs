@@ -109,6 +109,12 @@ pub(crate) struct ForwardingOrigin {
     generation: u64,
 }
 
+impl ForwardingOrigin {
+    pub(crate) fn is_stale(&self) -> bool {
+        self.runtime.queues[self.index].generation() > self.generation
+    }
+}
+
 pub struct ProcessorContext {
     pub(crate) runtime: Arc<Runtime>,
     pub(crate) node: Arc<NodeState>,

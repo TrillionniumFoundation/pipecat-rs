@@ -43,8 +43,10 @@ async fn quiet(ws: &mut Ws) {
 async fn response(ws: &mut Ws, id: &str, done: bool) {
     send(ws, json!({"type":if done {"response.done"} else {"response.created"},"response":{"id":id,"status":if done {"completed"} else {"in_progress"},"output":[]}})).await;
 }
-// The real executor completes once. This pipeline adapter supplies progress and
-// chooses run_llm, just as a registered streaming tool's result callback would.
+// The real executor completes once. This application boundary explicitly consumes
+// its native receipt before issuing caller-controlled legacy progress/results.
+// Declaration ownership and terminal proof are explicitly consumed here.
+// Those downstream frames no longer carry native terminal integrity guarantees.
 struct ResultPolicy {
     run: bool,
 }
@@ -60,6 +62,10 @@ impl FrameProcessor for ResultPolicy {
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
         if direction == Direction::Downstream {
+            frame.take_native_tool_batch()?;
+            if matches!(frame.data, FrameData::FunctionCallResult(_)) {
+                frame.take_native_tool_outcome()?;
+            }
             if let FrameData::FunctionCallResult(result) = &mut frame.data {
                 let mut progress = result.clone();
                 progress.is_final = false;

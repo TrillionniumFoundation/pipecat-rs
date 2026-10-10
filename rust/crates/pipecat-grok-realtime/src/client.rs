@@ -1,6 +1,9 @@
 use crate::types::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use futures_util::{SinkExt, StreamExt};
+use pipecat_core::{
+    FunctionCallInProgressFrame, NativeToolCallOutcome, ToolCallEndReason, ToolCallTerminalState,
+};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -55,6 +58,8 @@ pub enum RealtimeError {
     TooLarge,
     #[error("unknown, stale, or already completed tool call")]
     UnknownToolCall,
+    #[error("realtime connection ended with unsettled native tools")]
+    UnsettledTools,
 }
 #[derive(Debug, Clone)]
 pub struct RealtimeLimits {
@@ -361,6 +366,11 @@ impl RealtimeClient {
         let mut actor = Actor::new(c.clone(), generation.clone(), events_tx, ready, health_gate);
         let task = tokio::spawn(async move {
             let result = actor.run(&mut socket, rx, control_rx).await;
+            let result = if result.is_err() && !actor.tools.is_empty() {
+                Err(RealtimeError::UnsettledTools)
+            } else {
+                result
+            };
             terminal_tx.send_replace(Some(result.clone()));
             actor.shared_ready.store(false, Ordering::Release);
             let _ = timeout(actor.config.limits.close_timeout, socket.close(None)).await;
@@ -380,8 +390,16 @@ struct Control {
     playback: Option<PlaybackPosition>,
     close: bool,
 }
+enum QueuedAction {
+    Public(Action),
+    ToolPolicy(FunctionCallInProgressFrame),
+    ToolOutcome {
+        outcome: Arc<NativeToolCallOutcome>,
+        output: Value,
+    },
+}
 struct Command {
-    action: Action,
+    action: QueuedAction,
     generation: u64,
     reply: Option<oneshot::Sender<Result<(), RealtimeError>>>,
 }
@@ -442,6 +460,39 @@ impl RealtimeSender {
         }
         self.enqueue_command(action, None)
     }
+    // These commands carry native admission state and survive later turn changes.
+    // Queue admission is not proof of a socket write or provider observation.
+    fn enqueue_native(&self, action: QueuedAction) -> Result<(), RealtimeError> {
+        if !health_current(&self.health_gate) {
+            self.close();
+            return Err(RealtimeError::Closed);
+        }
+        self.tx
+            .try_send(Command {
+                action,
+                generation: self.generation(),
+                reply: None,
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
+                mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
+            })
+    }
+    pub(crate) fn register_tool_policy(
+        &self,
+        call: FunctionCallInProgressFrame,
+    ) -> Result<(), RealtimeError> {
+        bounded_serialized(&call, self.limits.max_message_bytes)?;
+        self.enqueue_native(QueuedAction::ToolPolicy(call))
+    }
+    pub(crate) fn send_tool_outcome(
+        &self,
+        outcome: Arc<NativeToolCallOutcome>,
+        output: Value,
+    ) -> Result<(), RealtimeError> {
+        bounded_serialized(&(outcome.call(), &output), self.limits.max_message_bytes)?;
+        self.enqueue_native(QueuedAction::ToolOutcome { outcome, output })
+    }
     fn projected_update(
         &self,
         current: &SessionProperties,
@@ -483,7 +534,7 @@ impl RealtimeSender {
             mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
         })?;
         permit.send(Command {
-            action,
+            action: QueuedAction::Public(action),
             generation: self.generation(),
             reply,
         });
@@ -530,7 +581,7 @@ impl RealtimeSender {
             })?;
         for (permit, action) in permits.zip(actions) {
             permit.send(Command {
-                action,
+                action: QueuedAction::Public(action),
                 generation,
                 reply: None,
             });
@@ -707,6 +758,8 @@ struct ToolState {
     generation: u64,
     arguments: String,
     announced: bool,
+    cancel_on_interruption: Option<bool>,
+    pending_outcome: Option<(Arc<NativeToolCallOutcome>, Value)>,
     context_id: Option<String>,
     response_id: String,
 }
@@ -934,6 +987,13 @@ impl Actor {
             }
             Action::RequestInference(options) => {
                 if !self.results_awaiting_response {
+                    if self
+                        .tools
+                        .values()
+                        .any(|tool| tool.pending_outcome.is_some())
+                    {
+                        self.deferred_response = Some((options, generation));
+                    }
                     return Ok(());
                 }
                 if self.active.is_some() || self.pending.is_some() {
@@ -979,70 +1039,191 @@ impl Actor {
                 output,
                 is_final,
             } => {
-                if self.completed_tools.contains(&call_id)
-                    || self.cancelled_tools.contains(&call_id)
-                    || self.discarded_calls.contains(&call_id)
+                return self
+                    .write_tool_result(
+                        socket,
+                        call_id,
+                        output,
+                        is_final,
+                        cancellation.then_some(false),
+                    )
+                    .await;
+            }
+        };
+        self.write(socket, value).await
+    }
+    async fn write_tool_result(
+        &mut self,
+        socket: &mut Socket,
+        call_id: String,
+        output: Value,
+        is_final: bool,
+        cancellation: Option<bool>,
+    ) -> Result<(), RealtimeError> {
+        if self.completed_tools.contains(&call_id)
+            || self.cancelled_tools.contains(&call_id)
+            || self.discarded_calls.contains(&call_id)
+        {
+            return Ok(());
+        }
+        let tool = self
+            .tools
+            .get(&call_id)
+            .ok_or(RealtimeError::UnknownToolCall)?;
+        if !tool.announced {
+            return Err(RealtimeError::UnknownToolCall);
+        }
+        let output = match output {
+            Value::String(text) => text,
+            Value::Null => "COMPLETED".into(),
+            other => other.to_string(),
+        };
+        // An intermediate result is context, never the call's one final output.
+        if !is_final {
+            let text = json!({
+                        "type":"async_tool", "status":"running", "tool_call_id":call_id,
+                        "description":"This is a partial result and the task is still running. More may follow. Do not call this tool again and do not treat this as the final answer.",
+                        "result":output
+                    }).to_string();
+            let item = ConversationItem::Message {
+                id: format!("pc_progress_{}", self.sequence + 1),
+                role: Role::User,
+                content: vec![ItemContent::InputText { text }],
+            };
+            self.results_awaiting_response = true;
+            return self
+                .write(
+                    socket,
+                    json!({"type":"conversation.item.create", "item":item}),
+                )
+                .await;
+        }
+        let item = ConversationItem::FunctionCallOutput {
+            id: format!("pc_tool_{}", self.sequence + 1),
+            call_id: call_id.clone(),
+            output,
+        };
+        self.write(
+            socket,
+            json!({"type":"conversation.item.create", "item":item}),
+        )
+        .await?;
+        self.tools.remove(&call_id);
+        if let Some(run_llm) = cancellation {
+            self.cancelled_tools.insert(call_id);
+            self.results_awaiting_response |= run_llm;
+        } else {
+            self.completed_tools.insert(call_id);
+            self.results_awaiting_response = true;
+        }
+        // Grok's aggregator owns inference. A tool result never creates
+        // a response, even when all calls have completed.
+        Ok(())
+    }
+    async fn write_command(
+        &mut self,
+        socket: &mut Socket,
+        action: QueuedAction,
+        generation: u64,
+    ) -> Result<(), RealtimeError> {
+        match action {
+            QueuedAction::Public(action) => self.write_action(socket, action, generation).await,
+            QueuedAction::ToolPolicy(call) => {
+                if self.completed_tools.contains(&call.tool_call_id)
+                    || self.cancelled_tools.contains(&call.tool_call_id)
                 {
                     return Ok(());
                 }
                 let tool = self
                     .tools
-                    .get(&call_id)
+                    .get_mut(&call.tool_call_id)
                     .ok_or(RealtimeError::UnknownToolCall)?;
-                if !tool.announced {
-                    return Err(RealtimeError::UnknownToolCall);
+                if !tool.announced
+                    || tool.name != call.function_name
+                    || serde_json::from_str::<Value>(&tool.arguments).ok().as_ref()
+                        != Some(&call.arguments)
+                    || tool
+                        .cancel_on_interruption
+                        .is_some_and(|policy| policy != call.cancel_on_interruption)
+                {
+                    return Err(RealtimeError::Invalid(
+                        "native tool policy does not match admitted call",
+                    ));
                 }
-                let output = match output {
-                    Value::String(text) => text,
-                    Value::Null => "COMPLETED".into(),
-                    other => other.to_string(),
-                };
-                // An intermediate result is context, never the call's one final output.
-                if !is_final {
-                    let text = json!({
-                        "type":"async_tool", "status":"running", "tool_call_id":call_id,
-                        "description":"This is a partial result and the task is still running. More may follow. Do not call this tool again and do not treat this as the final answer.",
-                        "result":output
-                    }).to_string();
-                    let item = ConversationItem::Message {
-                        id: format!("pc_progress_{}", self.sequence + 1),
-                        role: Role::User,
-                        content: vec![ItemContent::InputText { text }],
-                    };
-                    self.results_awaiting_response = true;
-                    return self
-                        .write(
-                            socket,
-                            json!({"type":"conversation.item.create", "item":item}),
-                        )
-                        .await;
+                tool.cancel_on_interruption = Some(call.cancel_on_interruption);
+                let pending = tool.pending_outcome.take();
+                if let Some((outcome, output)) = pending {
+                    self.write_native_outcome(socket, outcome, output).await?;
+                    self.maybe_continue(socket).await?;
                 }
-                let item = ConversationItem::FunctionCallOutput {
-                    id: format!("pc_tool_{}", self.sequence + 1),
-                    call_id: call_id.clone(),
-                    output,
-                };
-                self.write(
-                    socket,
-                    json!({"type":"conversation.item.create", "item":item}),
-                )
-                .await?;
-                self.tools.remove(&call_id);
-                if cancellation {
-                    self.cancelled_tools.insert(call_id);
-                } else {
-                    self.completed_tools.insert(call_id);
-                    self.results_awaiting_response = true;
-                }
-                // Grok's aggregator owns inference. A tool result never creates
-                // a response, even when all calls have completed.
-                return Ok(());
+                Ok(())
             }
-        };
-        self.write(socket, value).await
+            QueuedAction::ToolOutcome { outcome, output } => {
+                self.write_native_outcome(socket, outcome, output).await
+            }
+        }
     }
+    async fn write_native_outcome(
+        &mut self,
+        socket: &mut Socket,
+        outcome: Arc<NativeToolCallOutcome>,
+        output: Value,
+    ) -> Result<(), RealtimeError> {
+        let call = outcome.call();
+        if self.completed_tools.contains(&call.tool_call_id)
+            || self.cancelled_tools.contains(&call.tool_call_id)
+        {
+            return Ok(());
+        }
+        let tool = self
+            .tools
+            .get_mut(&call.tool_call_id)
+            .ok_or(RealtimeError::UnknownToolCall)?;
+        if !tool.announced
+            || tool.name != call.function_name
+            || serde_json::from_str::<Value>(&tool.arguments).ok().as_ref() != Some(&call.arguments)
+            || tool
+                .cancel_on_interruption
+                .is_some_and(|policy| policy != outcome.cancel_on_interruption())
+        {
+            return Err(RealtimeError::Invalid(
+                "native tool outcome does not match admitted call policy",
+            ));
+        }
+        // System cancellation may overtake the uninterruptible normal-lane
+        // declaration. Retain at most one bounded receipt per admitted call;
+        // never guess the missing execution policy or fabricate settlement.
+        if tool.cancel_on_interruption.is_none() {
+            if tool.pending_outcome.is_none() {
+                tool.pending_outcome = Some((outcome, output));
+            }
+            return Ok(());
+        }
+        let timeout = outcome.state() == ToolCallTerminalState::Failed
+            && outcome.reason() == ToolCallEndReason::TimedOut;
+        let cancellation = timeout || outcome.state() == ToolCallTerminalState::Cancelled;
+        let run_llm = timeout || outcome.run_llm();
+        let output = if cancellation {
+            json!("CANCELLED")
+        } else {
+            output
+        };
+        self.write_tool_result(
+            socket,
+            call.tool_call_id.clone(),
+            output,
+            true,
+            cancellation.then_some(run_llm),
+        )
+        .await
+    }
+
     async fn maybe_continue(&mut self, socket: &mut Socket) -> Result<(), RealtimeError> {
-        if self.deferred_response.is_some() && self.active.is_none() && self.pending.is_none() {
+        if self.deferred_response.is_some()
+            && self.active.is_none()
+            && self.pending.is_none()
+            && self.results_awaiting_response
+        {
             let (options, generation) = self
                 .deferred_response
                 .take()
@@ -1131,6 +1312,7 @@ impl Actor {
                         }
                         Some(Ok(Message::Ping(p))) => { timeout(self.config.limits.operation_timeout, socket.send(Message::Pong(p))).await.map_err(|_| RealtimeError::Timeout("pong"))?.map_err(transport)?; }
                         Some(Ok(Message::Pong(_))) => {}
+                        Some(Ok(Message::Close(_))) | None if !self.tools.is_empty() => return Err(RealtimeError::UnsettledTools),
                         Some(Ok(Message::Close(_))) | None => return if self.active.is_some() || self.pending.is_some() { Err(RealtimeError::Protocol("response ended before response.done")) } else { Ok(()) },
                         Some(Ok(_)) => return Err(RealtimeError::Protocol("expected JSON text")),
                         Some(Err(e)) => return Err(transport(e)),
@@ -1140,12 +1322,12 @@ impl Actor {
                     let Some(command) = command else { return Ok(()); };
                     // Settings are connection state, not interruptible turn work.
                     // Once admitted they must not disappear after projection.
-                    let persistent = matches!(command.action, Action::Finish | Action::UpdateSession(_));
+                    let persistent = !matches!(command.action, QueuedAction::Public(ref action) if !matches!(action, Action::Finish | Action::UpdateSession(_)));
                     if !persistent && command.reply.as_ref().is_some_and(|r| r.is_closed()) { continue; }
                     if !persistent && command.generation != self.epoch() {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); } continue;
                     }
-                    let result = self.write_action(socket, command.action, command.generation).await;
+                    let result = self.write_command(socket, command.action, command.generation).await;
                     let fatal = matches!(result, Err(RealtimeError::Transport | RealtimeError::Closed | RealtimeError::Timeout(_)));
                     let failure = result.clone();
                     let unacknowledged = command.reply.is_none();
@@ -1374,6 +1556,8 @@ impl Actor {
                                 generation: response_context.generation,
                                 arguments: arguments.clone(),
                                 announced: false,
+                                cancel_on_interruption: None,
+                                pending_outcome: None,
                                 context_id: response_context.context_id,
                                 response_id,
                             },

@@ -680,3 +680,66 @@ for structure and bounds, not locally authenticated cryptography.
 Gemini-specific Part metadata, receipt-backed truncation, strict terminal policy,
 and foreign-only unsigned-history migration are described in
 [the Gemini continuation contract](../pipecat-services/GEMINI.md).
+
+## Native terminal ownership
+
+`LLMAssistantAggregator` consumes validated `NativeToolCallOutcome` receipts at
+its history boundary. The receipt seals call identity, interruption policy,
+result/error/inference policy, original outcome identity, and optional complete
+batch membership. Executor Started/InProgress declarations carry that same sealed batch descriptor,
+establishing native active ownership before any terminal. Both declarations and
+terminal frames retain their process-local proof through any provider relay; ordinary frame serialization rejects it until consumption.
+A provider can use `Frame::project_native_tool_timeout_as_cancel()` only for a
+validated Failed/TimedOut receipt. The projection preserves the original receipt
+and permits exactly the original name/ID plus cancellation with `run_llm=true`.
+
+A native terminal can reconstruct missing declarations and all admitted siblings.
+The last sibling releases grouped inference. Results admitted before interruption
+can replace only this aggregator's own provisional legacy cancellation; committed native
+terminals never change. Publication identity makes duplicate clones idempotent,
+including concurrent calls and changes to the public frame ID. Full batch
+membership and policy must agree across all siblings. Signed declaration identity
+survives response end so reconstruction preserves the original signed reasoning.
+Spoken mode still waits for actual playback confirmation before inference.
+
+Interruption keeps native-owned calls pending until an actual terminal receipt
+arrives. Those active identities never evict to admit other work. Either native
+declaration establishes ownership if the other is filtered; when both are lost,
+the self-contained terminal reconstructs the same batch.
+
+Raw upstream cancellation is a request and is forwarded to the executor. Raw
+cancellation cannot settle a call already owned by a native batch. Legacy result,
+detailed-result callbacks, and downstream legacy cancellation keep their existing
+contracts. An application that validates and explicitly consumes a native receipt
+and declaration batch before modifying an ordinary result opts into that legacy contract and forfeits
+native restoration, immutability, and terminal-ownership guarantees downstream.
+
+Native bookkeeping holds at most 1,024 calls and an 8 MiB conservative encoded
+budget. Closed-group terminal markers retain the latest 512 entries; a live
+batch's completed siblings remain until that group closes, within the same hard
+call/byte bounds. Large payload Arcs can evict independently of compact sealed
+publication IDs. Provisional legacy cancellations have a separate 1,024-entry/8 MiB window.
+Native restoration over a legacy provisional cancellation requires that marker
+to remain in this window; expired authority fails closed. Ordinary and
+signed active declarations each allow 1,024 entries/8 MiB and reject new work
+rather than evict unsettled authority. No bookkeeping retains a
+processor or runtime. End, Stop, Cancel, and cleanup clear it. Conversation messages
+are not removed by metadata eviction. Outside the identity window, a receipt
+cannot adopt or overwrite an existing conversation call. Explicit context
+replacement can admit a new call identity after old bookkeeping expires.
+
+Executor admission accounts for the default consumer's policy-plus-batch storage
+before callback effects. Independently saturated consumers still fail closed.
+These are encoded-retention budgets, not process RSS bounds. A terminal delivered
+after the assistant closes is ignored; first-hop executor admission does not
+promise durable or end-to-end consumption. Cancellation never proves rollback of
+external effects.
+
+Tool metadata uses separate component limits, including copied ID keys/queues:
+active pending policies and both legacy tombstone caches have explicit byte/count
+bounds. Closed cancelled groups coalesce to one inference bit instead of retaining
+labels during a long speech wait. Signed history's validation mirror is separately
+bounded to 4,096 entries/32 MiB, measured before history mutation, with no eviction
+of signed authority. Whole native batches preflight both pending ownership and
+combined signed reconstruction/result additions. See [the complete state ownership
+and budget table](TOOL_HISTORY.md); there is no global 8 MiB or RSS-bound claim.

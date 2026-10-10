@@ -7,7 +7,7 @@ use pipecat_core::{
 };
 use serde_json::json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -67,6 +67,7 @@ pub struct GrokRealtimeProcessor {
     client: RealtimeClient,
     sender: Arc<Mutex<Option<RealtimeSender>>>,
     result_tag: LocalFrameTag,
+    tool_delivery: Arc<Mutex<ToolDelivery>>,
     playback: Arc<Mutex<PlaybackState>>,
     context_initialized: Mutex<bool>,
     input_rate: u32,
@@ -105,6 +106,7 @@ impl GrokRealtimeProcessor {
             client,
             sender: Arc::new(Mutex::new(None)),
             result_tag: LocalFrameTag::new(),
+            tool_delivery: Arc::new(Mutex::new(ToolDelivery::default())),
             playback: Arc::new(Mutex::new(PlaybackState::default())),
             context_initialized: Mutex::new(false),
             input_rate,
@@ -122,6 +124,7 @@ impl GrokRealtimeProcessor {
         GrokToolResultRelay {
             sender: self.sender.clone(),
             tag: self.result_tag.clone(),
+            delivery: self.tool_delivery.clone(),
             limits: self.client.config().limits.clone(),
             health: self.health.clone(),
             health_admission: self.health_admission.clone(),
@@ -452,8 +455,11 @@ impl FrameProcessor for GrokRealtimeProcessor {
                 let event = match result {
                     Ok(event) => event,
                     Err(e) => {
+                        let fatal = e == RealtimeError::UnsettledTools;
+                        let mut error = error_frame(e);
+                        error.fatal = fatal;
                         output
-                            .push_error_if_health_generation(error_frame(e), false, admission)
+                            .push_error_if_health_generation(error, false, admission)
                             .await?;
                         break;
                     }
@@ -867,18 +873,53 @@ impl FrameProcessor for GrokRealtimeProcessor {
     }
 }
 
+#[derive(Default)]
+struct ToolDelivery {
+    declared: HashSet<String>,
+    policies: HashSet<String>,
+    deferred: HashMap<String, Frame>,
+}
+
 /// Result bridge for `[GrokRealtimeProcessor, ToolExecutor, relay, assistant]`.
 /// It delivers results as context without independently requesting inference.
 pub struct GrokToolResultRelay {
     sender: Arc<Mutex<Option<RealtimeSender>>>,
     tag: LocalFrameTag,
+    delivery: Arc<Mutex<ToolDelivery>>,
     limits: RealtimeLimits,
     health: pipecat_core::ProcessorHealth,
     health_admission: Arc<Mutex<Option<pipecat_core::ProcessorHealthGeneration>>>,
 }
 impl GrokToolResultRelay {
     fn relay(&self, frame: &mut Frame) -> Result<(), ProcessorError> {
+        let native = frame.native_tool_outcome()?.cloned();
         if self.tag.contains(frame) {
+            return Ok(());
+        }
+        if let FrameData::FunctionCallInProgress(call) = &frame.data {
+            self.sender()?
+                .register_tool_policy(call.clone())
+                .map_err(processor_error)?;
+            self.tag.mark(frame)?;
+            return Ok(());
+        }
+        if let Some(outcome) = native {
+            let output = match &frame.data {
+                FrameData::FunctionCallResult(result) => result.result.clone(),
+                FrameData::FunctionCallCancel(_) => serde_json::Value::Null,
+                _ => unreachable!("validated native outcome"),
+            };
+            self.sender()?
+                .send_tool_outcome(outcome.clone(), output)
+                .map_err(processor_error)?;
+            // The actor serializes only the provider command. Preserve native
+            // ownership on the pipeline copy until the assistant reconciles it.
+            if outcome.state() == pipecat_core::ToolCallTerminalState::Failed
+                && outcome.reason() == pipecat_core::ToolCallEndReason::TimedOut
+            {
+                frame.project_native_tool_timeout_as_cancel()?;
+            }
+            self.tag.mark(frame)?;
             return Ok(());
         }
         let action = match &frame.data {
@@ -908,29 +949,24 @@ impl GrokToolResultRelay {
                     is_final: result.properties.as_ref().is_none_or(|p| p.is_final),
                 })
             }
-            FrameData::FunctionCallCancel(call) => {
-                if call.tool_call_id.len() > 256 {
-                    return Err(processor_error(RealtimeError::TooLarge));
-                }
-                Some(Action::CancelTool {
-                    call_id: call.tool_call_id.clone(),
-                    function_name: call.function_name.clone(),
-                })
-            }
+            // A raw cancellation is a request for ToolExecutor, never evidence
+            // that an admitted callback has reached terminal settlement.
+            FrameData::FunctionCallCancel(_) => None,
             _ => None,
         };
         if let Some(action) = action {
-            check_health(&self.health, &self.health_admission)?;
-            let sender = self
-                .sender
-                .lock()
-                .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
-                .clone()
-                .ok_or_else(|| ProcessorError::new("realtime session is not connected"))?;
-            sender.try_send(action).map_err(processor_error)?;
+            self.sender()?.try_send(action).map_err(processor_error)?;
             self.tag.mark(frame)?;
         }
         Ok(())
+    }
+    fn sender(&self) -> Result<RealtimeSender, ProcessorError> {
+        check_health(&self.health, &self.health_admission)?;
+        self.sender
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
+            .clone()
+            .ok_or_else(|| ProcessorError::new("realtime session is not connected"))
     }
 }
 #[async_trait]
@@ -944,10 +980,106 @@ impl FrameProcessor for GrokToolResultRelay {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        if direction == Direction::Downstream {
-            self.relay(&mut frame)?;
+        if direction != Direction::Downstream {
+            return ctx.push(frame, direction).await;
         }
-        ctx.push(frame, direction).await
+        let native = match frame.native_tool_outcome() {
+            Ok(outcome) => outcome.cloned(),
+            Err(error) => {
+                if let Ok(sender) = self.sender() {
+                    sender.close();
+                }
+                return Err(ProcessorError::fatal(error.to_string()));
+            }
+        };
+        if matches!(frame.data, FrameData::FunctionCallCancel(_))
+            && native.is_none()
+            && !self.tag.contains(&frame)
+        {
+            // Do not let an unhandled request settle the assistant's state.
+            return Ok(());
+        }
+        if let Err(error) = self.relay(&mut frame) {
+            if let Ok(sender) = self.sender() {
+                sender.close();
+            }
+            return Err(ProcessorError::fatal(error.to_string()));
+        }
+        let ready = {
+            let mut delivery = self
+                .delivery
+                .lock()
+                .map_err(|_| ProcessorError::fatal("tool delivery lock poisoned"))?;
+            if let Some(outcome) = native {
+                let id = &outcome.call().tool_call_id;
+                if !delivery.declared.contains(id)
+                    || (matches!(frame.data, FrameData::FunctionCallResult(_))
+                        && !delivery.policies.contains(id))
+                {
+                    if delivery.deferred.len() >= self.limits.max_outstanding_tools
+                        && !delivery.deferred.contains_key(id)
+                    {
+                        return Err(ProcessorError::fatal("native tool delivery limit exceeded"));
+                    }
+                    delivery.deferred.entry(id.clone()).or_insert(frame);
+                    return Ok(());
+                }
+            }
+            let mut ready = Vec::new();
+            if let FrameData::FunctionCallsStarted(calls) = &frame.data {
+                for call in calls {
+                    if delivery.declared.len() >= self.limits.max_session_tool_calls
+                        && !delivery.declared.contains(&call.tool_call_id)
+                    {
+                        return Err(ProcessorError::fatal(
+                            "native tool declaration limit exceeded",
+                        ));
+                    }
+                    delivery.declared.insert(call.tool_call_id.clone());
+                    if delivery.policies.contains(&call.tool_call_id)
+                        || delivery
+                            .deferred
+                            .get(&call.tool_call_id)
+                            .is_some_and(|frame| {
+                                matches!(frame.data, FrameData::FunctionCallCancel(_))
+                            })
+                    {
+                        if let Some(terminal) = delivery.deferred.remove(&call.tool_call_id) {
+                            ready.push(terminal);
+                        }
+                    }
+                }
+            }
+            if let FrameData::FunctionCallInProgress(call) = &frame.data {
+                if delivery.policies.len() >= self.limits.max_session_tool_calls
+                    && !delivery.policies.contains(&call.tool_call_id)
+                {
+                    return Err(ProcessorError::fatal("native tool policy limit exceeded"));
+                }
+                delivery.policies.insert(call.tool_call_id.clone());
+                if delivery.declared.contains(&call.tool_call_id) {
+                    if let Some(terminal) = delivery.deferred.remove(&call.tool_call_id) {
+                        ready.push(terminal);
+                    }
+                }
+            }
+            ready
+        };
+        // Both declarations and cancellation receipts use the system lane. Enqueue
+        // the declaration first even when an upstream adapter reordered them.
+        ctx.push(frame, direction).await?;
+        for terminal in ready {
+            ctx.push(terminal, direction).await?;
+        }
+        Ok(())
+    }
+    async fn cleanup(&self) -> Result<(), ProcessorError> {
+        *self
+            .delivery
+            .lock()
+            .map_err(|_| ProcessorError::fatal("tool delivery lock poisoned"))? =
+            ToolDelivery::default();
+        Ok(())
     }
 }
 

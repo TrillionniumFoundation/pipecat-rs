@@ -178,7 +178,11 @@ async fn review_live_admission_executes_once_and_consumes_wire_capability() {
         started.frame.native_speculation().is_none(),
         "executor must retain capability privately, not leak it to the wire declaration"
     );
-    assert!(serde_json::to_value(&started.frame).is_ok());
+    assert!(started.frame.native_tool_batch().unwrap().is_some());
+    assert!(serde_json::to_value(&started.frame).is_err());
+    let mut consumed = started.frame.clone();
+    assert!(consumed.take_native_tool_batch().unwrap().is_some());
+    assert!(serde_json::to_value(&consumed).is_ok());
 }
 #[tokio::test]
 async fn review_causal_interruption_after_dispatch_blocks_noninterruptible_tool_constructor() {

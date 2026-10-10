@@ -8,6 +8,7 @@ mod context;
 mod controller;
 mod eager;
 mod empty;
+mod tool_history;
 pub use eager::{EagerEndOfTurn, EagerMatchPolicy, EagerUserTurnConfig};
 mod idle;
 mod realtime;

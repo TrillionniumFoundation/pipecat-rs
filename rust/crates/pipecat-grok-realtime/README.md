@@ -106,12 +106,36 @@ processor/session to reconnect. End/cancel still perform cleanup while unusable.
   semantics. The tool/output tests use explicitly seeded context; explicit external
   turn configuration alone does not close this gap. `service_metadata()` exposes
   the correct descriptor for capable integrations but is not broadcast automatically
-- Ordinary runtime interruption currently aborts native ToolExecutor callbacks
-  without emitting a typed cancellation outcome. Applications must explicitly
-  deliver `FunctionCallCancel`/`CancelTool` to settle those provider calls. Reliable
-  exactly-once executor cancellation outcomes are a separate shared prerequisite;
-  the relay never guesses cancellation from a missing result or timeout. Explicit
-  cancellations and async surviving results are covered independently
+- Executor cancellation is acknowledged only by a validated process-local terminal
+  receipt. A raw `FunctionCallCancel` is a request for `ToolExecutor`; the relay
+  never treats that request, arbitrary metadata, silence, or a missing result as
+  settlement. Public `CancelTool` remains an explicit caller-directed provider
+  control; it neither cancels an executor task nor supplies a native receipt
+- The native executor retains its own exactly-once local lease decision and
+  first-hop admission journal. The provider actor validates admitted
+  call identity and interruption policy before a socket write. The relay retains
+  native provenance for the assistant, which consumes it after reconciliation. Native queue admission is not a socket
+  write or proof of provider observation. No external effect is replayed
+- Native `Failed` / `TimedOut` maps to provider `CANCELLED` and an assistant
+  cancellation with `run_llm=true`, matching the pinned Grok timeout continuation.
+  Other failures remain failed results; native cancellations preserve their
+  requested inference policy. Results never independently start inference
+- Native terminal commands survive later provider turn-generation changes.
+  Policy and declaration reordering are bounded: a receipt can wait for its
+  matching policy before wire settlement, and for declarations before assistant
+  delivery. A missing declaration/policy never fabricates settlement
+- Full native outcome routes and invalid/mismatched receipts fail the session
+  closed. Provider closure with outstanding tools retires the pipeline and
+  releases callback leases. Local cleanup cannot certify remote rollback
+- The relay requires native terminal-aware assistant reconciliation. Its pipeline
+  copy retains immutable outcome provenance, including the original failed timeout
+  decision after a narrowly validated cancellation projection. Ordinary frame wire
+  encoders reject unconsumed provenance; the actor serializes only provider commands
+- Sealed native terminal payload/error/inference policy cannot be edited after
+  publication. An application may explicitly consume a valid receipt and issue
+  ordinary legacy result callbacks, forfeiting native terminal integrity downstream.
+  The native executor does not expose arbitrary per-result `run_llm` overrides;
+  immutable native results retain their publisher/default inference policy
 - Existing conversations cannot be replaced/reset in place. Detailed message
   append/update and message-transform controls are explicitly rejected before
   forwarding, since they have no provider-side history synchronization. Initial
@@ -140,3 +164,9 @@ processor/session to reconnect. End/cancel still perform cleanup while unusable.
 Tests use real local TCP/WebSocket peers and native pipelines with synthetic
 provider messages. Output-backend tests exercise synthetic Played/Discarded
 receipts; they do not claim a microphone, speaker, hosted account, or live model.
+
+Native executor declaration batches remain attached through the relay until the
+assistant consumes their ownership proof. Application adapters that opt into
+legacy result mutation must explicitly validate/consume both declaration batches
+and terminal receipts before forwarding ordinary frames; their downstream
+results then have no native ownership or late-terminal restoration guarantee.

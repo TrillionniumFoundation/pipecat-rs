@@ -34,9 +34,13 @@ struct AssistantState {
     bot_speaking: bool,
     aggregation: TextBuffer,
     transcript_markers: crate::completion::transcript::AssistantTranscriptMarkers,
-    pending: BTreeMap<String, Option<FunctionCallInProgressFrame>>,
-    completed: VecDeque<String>,
-    interrupted_declarations: VecDeque<String>,
+    pending: crate::tool_history::PendingTools,
+    completed: crate::tool_history::ToolTombstones,
+    interrupted_declarations: crate::tool_history::ToolTombstones,
+    native_tools: crate::tool_history::NativeTools,
+    declared_tools: crate::tool_history::DeclaredTools,
+    signed_declarations: crate::tool_history::DeclaredTools,
+    provisional_tools: crate::tool_history::ProvisionalTools,
     seen: RecentFrames,
     context_ids: Vec<String>,
     pending_playback: BTreeSet<String>,
@@ -54,6 +58,14 @@ struct AssistantState {
     callbacks_closed: bool,
 }
 impl AssistantState {
+    fn is_completed(&self, id: &str) -> bool {
+        self.completed.contains(id)
+            || self
+                .native_tools
+                .calls
+                .get(id)
+                .is_some_and(|call| call.terminal.is_some())
+    }
     fn clear_runs(&mut self) {
         self.run_owed = false;
         self.tool_run_owed = false;
@@ -92,9 +104,13 @@ impl LLMAssistantAggregator {
                 bot_speaking: false,
                 aggregation: TextBuffer::default(),
                 transcript_markers: Default::default(),
-                pending: BTreeMap::new(),
-                completed: VecDeque::new(),
-                interrupted_declarations: VecDeque::new(),
+                pending: Default::default(),
+                completed: Default::default(),
+                interrupted_declarations: Default::default(),
+                native_tools: Default::default(),
+                declared_tools: Default::default(),
+                signed_declarations: Default::default(),
+                provisional_tools: Default::default(),
                 seen: RecentFrames::default(),
                 context_ids: vec![],
                 pending_playback: BTreeSet::new(),
@@ -172,6 +188,21 @@ impl LLMAssistantAggregator {
     ) -> Result<AggregationOutput, ProcessorError> {
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
+        let native_batch = frame.take_native_tool_batch()?;
+        let native_outcome = frame.take_native_tool_outcome()?;
+        if let Some(outcome) = native_outcome {
+            if state.ended {
+                return Ok(output);
+            }
+            if direction != Direction::Downstream {
+                return Err(ProcessorError::new(
+                    "native tool settlement must arrive downstream",
+                ));
+            }
+            return self
+                .native_result(&mut state, &frame.data, outcome, &mut output)
+                .map(|()| output);
+        }
         if matches!(
             frame.data,
             FrameData::LlmText(_)
@@ -244,6 +275,21 @@ impl LLMAssistantAggregator {
                 ));
             }
             if history.is_complete() || history.is_checkpoint() {
+                let signed_calls: Vec<_> = if history.is_complete() {
+                    history
+                        .blocks()
+                        .iter()
+                        .filter_map(|block| {
+                            if let pipecat_core::LlmContinuationBlock::ToolCall(call) = block {
+                                Some(call.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
                 let checkpoint = history.is_checkpoint();
                 let pending = state.aggregation.text.trim().to_owned();
                 let mut context = self.context.lock()?;
@@ -256,7 +302,20 @@ impl LLMAssistantAggregator {
                 if checkpoint && updated {
                     tracking.reconcile(&mut context)?;
                 }
+                let lineage = context.lineage;
+                drop(context);
+                for call in signed_calls {
+                    state.signed_declarations.insert(&call, lineage)?;
+                }
             }
+        }
+        if let Some(batch) = native_batch {
+            if direction != Direction::Downstream {
+                return Err(ProcessorError::new(
+                    "native tool declarations must arrive downstream",
+                ));
+            }
+            self.admit_native_batch(&mut state, &batch)?;
         }
         match &frame.data {
             FrameData::Interruption
@@ -484,25 +543,25 @@ impl LLMAssistantAggregator {
                     .pending
                     .values()
                     .flatten()
-                    .filter(|call| call.cancel_on_interruption)
+                    .filter(|call| call.cancel_on_interruption && !state.native_tools.calls.contains_key(&call.tool_call_id))
                     .cloned()
                     .collect();
                 for call in cancel {
+                    state.provisional_tools.insert(call.clone(), self.context.lock()?.lineage, true)?;
                     self.cancel_call(&mut state, &call.tool_call_id)?;
                 }
                 let declarations: Vec<_> = state
                     .pending
                     .iter()
-                    .filter(|(_, call)| call.is_none())
+                    .filter(|(id, call)| call.is_none() && !state.native_tools.calls.contains_key(*id))
                     .map(|(id, _)| id.clone())
                     .collect();
                 for id in declarations {
-                    state.interrupted_declarations.push_back(id);
-                    if state.interrupted_declarations.len() > 512 {
-                        state.interrupted_declarations.pop_front();
-                    }
+                    state.pending.remove(&id);
+                    state.declared_tools.remove(&id);
+                    state.interrupted_declarations.insert(&id);
                 }
-                state.pending.retain(|_, call| call.is_some());
+
                 if frame
                     .metadata
                     .get("user_turn_start")
@@ -527,6 +586,14 @@ impl LLMAssistantAggregator {
                     &mut output,
                 )?;
                 state.ended = true;
+                state.native_tools.clear();
+                state.declared_tools.clear();
+                state.signed_declarations.clear();
+                state.provisional_tools.clear();
+                state.pending.clear();
+                state.completed.clear();
+                state.interrupted_declarations.clear();
+                state.clear_runs();
                 Self::close_signed_history(&mut state);
                 state.llm_active = false;
                 output.push(frame, direction);
@@ -576,28 +643,36 @@ impl LLMAssistantAggregator {
             }
             FrameData::FunctionCallsStarted(calls) => {
                 for call in calls {
-                    if !state.completed.contains(&call.tool_call_id)
+                    self.declare_call(&mut state, call)?;
+                    if !state.is_completed(&call.tool_call_id)
                         && !state.pending.contains_key(&call.tool_call_id)
                     {
                         // This system frame can overtake the normal response-start marker.
                         state.llm_active = true;
-                        state.pending.insert(call.tool_call_id.clone(), None);
+                        state.pending.insert(call.tool_call_id.clone(), None)?;
                     }
                 }
             }
             FrameData::FunctionCallsStartedDetailed(calls) => {
                 for call in calls {
-                    if !state.completed.contains(&call.tool_call_id) && !state.pending.contains_key(&call.tool_call_id) {
+                    self.declare_call(&mut state, &pipecat_core::FunctionCall { function_name: call.function_name.clone(), tool_call_id: call.tool_call_id.clone(), arguments: serde_json::to_value(&call.arguments).map_err(|error| ProcessorError::new(error.to_string()))? })?;
+                    if !state.is_completed(&call.tool_call_id) && !state.pending.contains_key(&call.tool_call_id) {
                         state.llm_active = true;
-                        state.pending.insert(call.tool_call_id.clone(), None);
+                        state.pending.insert(call.tool_call_id.clone(), None)?;
                     }
                 }
             }
             FrameData::FunctionCallInProgress(call) => self.start_call(&mut state, call)?,
             FrameData::FunctionCallResult(result) => {
+                if state.native_tools.calls.contains_key(&result.tool_call_id) {
+                    return Err(ProcessorError::new("native tool requires its terminal receipt"));
+                }
                 self.result(&mut state, result, &mut output)?
             }
             FrameData::FunctionCallResultDetailed(result) => {
+                if state.native_tools.calls.contains_key(&result.tool_call_id) {
+                    return Err(ProcessorError::new("native tool requires its terminal receipt"));
+                }
                 let accepted = state.pending.get(&result.tool_call_id).is_some_and(Option::is_some);
                 let properties = result.properties.as_ref();
                 self.result(&mut state, &FunctionCallResultFrame {
@@ -613,6 +688,8 @@ impl LLMAssistantAggregator {
                 }
             }
             FrameData::FunctionCallCancel(cancel) => {
+                if direction == Direction::Upstream { output.push(frame, direction); return Ok(output); }
+                if state.native_tools.calls.contains_key(&cancel.tool_call_id) { return Ok(output); }
                 let group = state.pending.get(&cancel.tool_call_id)
                     .and_then(Option::as_ref)
                     .and_then(|call| call.group_id.clone());
@@ -622,6 +699,7 @@ impl LLMAssistantAggregator {
                     .is_some_and(Option::is_none);
                 let existed = if declared {
                     state.pending.remove(&cancel.tool_call_id);
+                    state.declared_tools.remove(&cancel.tool_call_id);
                     Self::mark_completed(&mut state, &cancel.tool_call_id);
                     true
                 } else {
@@ -672,6 +750,342 @@ impl LLMAssistantAggregator {
             _ => output.push(frame, direction),
         }
         Ok(output)
+    }
+    fn admit_native_batch(
+        &self,
+        state: &mut AssistantState,
+        batch: &Arc<pipecat_core::NativeToolCallBatch>,
+    ) -> Result<(), ProcessorError> {
+        crate::tool_history::NativeTools::check_batch(batch)?;
+        let context = self.context.lock()?;
+        let calls: Vec<_> = batch
+            .members()
+            .iter()
+            .map(|(call, policy)| FunctionCallInProgressFrame {
+                function_name: call.function_name.clone(),
+                tool_call_id: call.tool_call_id.clone(),
+                arguments: call.arguments.clone(),
+                cancel_on_interruption: *policy,
+                group_id: Some(batch.group_id().into()),
+            })
+            .collect();
+        for call in &calls {
+            if let Some(Some(old)) = state.pending.get(&call.tool_call_id) {
+                if old != call {
+                    return Err(ProcessorError::new(
+                        "native batch differs from running policy",
+                    ));
+                }
+            }
+            if !state.native_tools.calls.contains_key(&call.tool_call_id)
+                && !state
+                    .pending
+                    .get(&call.tool_call_id)
+                    .is_some_and(Option::is_some)
+                && context
+                    .messages
+                    .iter()
+                    .flat_map(|message| &message.tool_calls)
+                    .any(|existing| existing.tool_call_id == call.tool_call_id)
+                && !state
+                    .signed_declarations
+                    .calls
+                    .get(&call.tool_call_id)
+                    .is_some_and(|(signed, lineage, _)| {
+                        signed.function_name == call.function_name
+                            && signed.arguments == call.arguments
+                            && *lineage == context.lineage
+                    })
+            {
+                return Err(ProcessorError::new(
+                    "native batch cannot adopt existing conversation calls",
+                ));
+            }
+        }
+        state.pending.check_calls(calls.iter().filter(|call| {
+            !state
+                .native_tools
+                .calls
+                .get(&call.tool_call_id)
+                .is_some_and(|entry| entry.terminal.is_some())
+        }))?;
+        state
+            .native_tools
+            .reserve(&calls, context.lineage, Some(batch))
+    }
+    fn native_result(
+        &self,
+        state: &mut AssistantState,
+        data: &FrameData,
+        outcome: Arc<pipecat_core::NativeToolCallOutcome>,
+        output: &mut AggregationOutput,
+    ) -> Result<(), ProcessorError> {
+        let id = &outcome.call().tool_call_id;
+        let cancelled = matches!(data, FrameData::FunctionCallCancel(_));
+        if let Some((old, was_cancelled)) = state
+            .native_tools
+            .calls
+            .get(id)
+            .and_then(|entry| entry.terminal.as_ref())
+        {
+            return if *old == outcome.id() && *was_cancelled == cancelled {
+                Ok(())
+            } else {
+                Err(ProcessorError::new(
+                    "conflicting committed native tool outcome",
+                ))
+            };
+        }
+        let calls: Vec<_> = if let Some(batch) = outcome.batch() {
+            crate::tool_history::NativeTools::check_batch(batch)?;
+            batch
+                .members()
+                .iter()
+                .map(
+                    |(call, cancel_on_interruption)| FunctionCallInProgressFrame {
+                        function_name: call.function_name.clone(),
+                        tool_call_id: call.tool_call_id.clone(),
+                        arguments: call.arguments.clone(),
+                        cancel_on_interruption: *cancel_on_interruption,
+                        group_id: Some(batch.group_id().into()),
+                    },
+                )
+                .collect()
+        } else {
+            let group_id = state
+                .pending
+                .get(id)
+                .and_then(Option::as_ref)
+                .and_then(|call| call.group_id.clone())
+                .or_else(|| {
+                    state
+                        .provisional_tools
+                        .calls
+                        .get(id)
+                        .and_then(|entry| entry.call.group_id.clone())
+                });
+            vec![FunctionCallInProgressFrame {
+                function_name: outcome.call().function_name.clone(),
+                tool_call_id: id.clone(),
+                arguments: outcome.call().arguments.clone(),
+                cancel_on_interruption: outcome.cancel_on_interruption(),
+                group_id,
+            }]
+        };
+        let context = self.context.lock()?;
+        let lineage = context.lineage;
+        for call in &calls {
+            if let Some((declared, declared_lineage, _)) =
+                state.declared_tools.calls.get(&call.tool_call_id)
+            {
+                if declared.function_name != call.function_name
+                    || declared.arguments != call.arguments
+                    || *declared_lineage != lineage
+                {
+                    return Err(ProcessorError::new(
+                        "native outcome differs from declared call",
+                    ));
+                }
+            }
+            if let Some(Some(old)) = state.pending.get(&call.tool_call_id) {
+                if old != call {
+                    return Err(ProcessorError::new(
+                        "native tool outcome differs from running policy",
+                    ));
+                }
+            }
+            let native_terminal = state
+                .native_tools
+                .calls
+                .get(&call.tool_call_id)
+                .is_some_and(|entry| entry.terminal.is_some());
+            let provisional = state.provisional_tools.calls.get(&call.tool_call_id);
+            if state.is_completed(&call.tool_call_id) && !native_terminal && provisional.is_none() {
+                return Err(ProcessorError::new(
+                    "native outcome cannot replace committed tool history",
+                ));
+            }
+            if let Some(provisional) = provisional {
+                if provisional.call != *call || provisional.lineage != lineage {
+                    return Err(ProcessorError::new(
+                        "native outcome differs from provisional tool identity",
+                    ));
+                }
+                if provisional.materialized
+                    && !context.messages.iter().any(|message| {
+                        message.role == ChatRole::Tool
+                            && message.tool_call_id.as_deref() == Some(call.tool_call_id.as_str())
+                            && message.content == MessageContent::Text("CANCELLED".into())
+                    })
+                {
+                    return Err(ProcessorError::new("provisional tool placeholder changed"));
+                }
+            }
+            if let Some(existing) = context
+                .messages
+                .iter()
+                .flat_map(|message| &message.tool_calls)
+                .find(|existing| existing.tool_call_id == call.tool_call_id)
+            {
+                if existing.function_name != call.function_name
+                    || existing.arguments != call.arguments
+                {
+                    return Err(ProcessorError::new(
+                        "native tool identity conflicts with conversation",
+                    ));
+                }
+                if !state
+                    .pending
+                    .get(&call.tool_call_id)
+                    .is_some_and(Option::is_some)
+                    && !native_terminal
+                    && !state
+                        .signed_history
+                        .as_ref()
+                        .is_some_and(|history| history.owns_call(existing))
+                    && !state
+                        .signed_declarations
+                        .calls
+                        .get(&call.tool_call_id)
+                        .is_some_and(|(signed, signed_lineage, _)| {
+                            signed == existing && *signed_lineage == lineage
+                        })
+                    && !provisional.is_some_and(|entry| entry.materialized)
+                {
+                    return Err(ProcessorError::new(
+                        "native tool cannot adopt an existing conversation call",
+                    ));
+                }
+            }
+        }
+        if let Some(history) = &state.signed_history {
+            let mut additions = Vec::new();
+            for call in &calls {
+                if state
+                    .native_tools
+                    .calls
+                    .get(&call.tool_call_id)
+                    .is_some_and(|entry| entry.terminal.is_some())
+                    || state
+                        .pending
+                        .get(&call.tool_call_id)
+                        .is_some_and(Option::is_some)
+                    || state
+                        .provisional_tools
+                        .calls
+                        .get(&call.tool_call_id)
+                        .is_some_and(|entry| entry.materialized)
+                {
+                    continue;
+                }
+                if !context
+                    .messages
+                    .iter()
+                    .flat_map(|message| &message.tool_calls)
+                    .any(|old| old.tool_call_id == call.tool_call_id)
+                {
+                    additions.push(pipecat_services::frame_context::to_core_message(
+                        &Message::assistant_tool_calls(vec![ToolCall {
+                            id: call.tool_call_id.clone(),
+                            name: call.function_name.clone(),
+                            arguments: call.arguments.clone(),
+                        }]),
+                    ));
+                }
+                additions.push(if call.cancel_on_interruption {
+                    tool_message(&call.tool_call_id, "IN_PROGRESS")
+                } else {
+                    async_message(&call.tool_call_id, "started", None)
+                });
+            }
+            let call = calls
+                .iter()
+                .find(|call| &call.tool_call_id == id)
+                .expect("native batch contains terminal call");
+            match data {
+                FrameData::FunctionCallResult(result) if is_deferred(&context.messages, call) => {
+                    let content = if let Some(error) = &result.error {
+                        json!({"error": error}).to_string()
+                    } else if result.result.is_null() {
+                        "COMPLETED".into()
+                    } else {
+                        result.result.to_string()
+                    };
+                    additions.push(async_message(id, "final", Some(&content)));
+                }
+                FrameData::FunctionCallCancel(_) if !call.cancel_on_interruption => {
+                    additions.push(async_message(
+                        id,
+                        "cancelled",
+                        Some("CANCELLED: this tool call was cancelled before it returned a result"),
+                    ));
+                }
+                _ => {}
+            }
+            history.check_messages(context.messages.len(), &additions)?;
+        }
+        drop(context);
+        state.pending.check_calls(calls.iter().filter(|call| {
+            !state
+                .native_tools
+                .calls
+                .get(&call.tool_call_id)
+                .is_some_and(|entry| entry.terminal.is_some())
+        }))?;
+        state
+            .native_tools
+            .reserve(&calls, lineage, outcome.batch())?;
+        for call in &calls {
+            if state
+                .native_tools
+                .calls
+                .get(&call.tool_call_id)
+                .is_some_and(|entry| entry.terminal.is_some())
+            {
+                continue;
+            }
+            if let Some(provisional) = state.provisional_tools.remove(&call.tool_call_id) {
+                state.completed.remove(&call.tool_call_id);
+                if provisional.materialized {
+                    update_tool_result(
+                        &mut self.context.lock()?.messages,
+                        &call.tool_call_id,
+                        "IN_PROGRESS",
+                    )?;
+                    state
+                        .pending
+                        .insert(call.tool_call_id.clone(), Some(call.clone()))?;
+                    continue;
+                }
+            }
+            state.interrupted_declarations.remove(&call.tool_call_id);
+            self.start_call(state, call)?;
+        }
+        match data {
+            FrameData::FunctionCallResult(result) => self.result(state, result, output)?,
+            FrameData::FunctionCallCancel(cancel) => {
+                let group = state
+                    .pending
+                    .get(id)
+                    .and_then(Option::as_ref)
+                    .and_then(|call| call.group_id.clone());
+                if self.cancel_call(state, id)? && cancel.run_llm {
+                    if let Some(group) = group.filter(|group| !group.is_empty()) {
+                        state.cancelled_run_groups.insert(group);
+                    } else {
+                        state.tool_run_owed = true;
+                    }
+                    self.maybe_run(state, output)?;
+                }
+            }
+            _ => {
+                return Err(ProcessorError::new(
+                    "native tool outcome requires a terminal frame",
+                ))
+            }
+        }
+        state.native_tools.finish(outcome, cancelled);
+        Ok(())
     }
     fn cancel_callbacks(&self) -> Result<(), ProcessorError> {
         self.lock()?.callbacks_closed = true;
@@ -882,13 +1296,16 @@ impl LLMAssistantAggregator {
         if let Some(history) = &state.signed_history {
             history.check_text(&text)?;
             history.check_context(&context)?;
+            if !text.is_empty() {
+                history.check_text_commit(&context, &text)?;
+            }
         }
         state.aggregation.take();
         if !text.is_empty() {
             context.append_native(Message::text(Role::Assistant, text.clone()));
             if let Some(history) = &mut state.signed_history {
                 let index = context.messages.len() - 1;
-                history.text(index, context.messages[index].clone(), text.clone());
+                history.text(index, &context.messages[index], text.clone())?;
                 history.reconcile(&mut context)?;
             }
         }
@@ -955,6 +1372,36 @@ impl LLMAssistantAggregator {
             }
         }
     }
+    fn declare_call(
+        &self,
+        state: &mut AssistantState,
+        call: &pipecat_core::FunctionCall,
+    ) -> Result<(), ProcessorError> {
+        if let Some(native) = state.native_tools.calls.get(&call.tool_call_id) {
+            if native.call.function_name != call.function_name
+                || native.call.arguments != call.arguments
+            {
+                return Err(ProcessorError::new(
+                    "tool declaration differs from native identity",
+                ));
+            }
+            return Ok(());
+        }
+        if state.is_completed(&call.tool_call_id) {
+            return Ok(());
+        }
+        if let Some(Some(policy)) = state.pending.get(&call.tool_call_id) {
+            if policy.function_name != call.function_name || policy.arguments != call.arguments {
+                return Err(ProcessorError::new(
+                    "tool declaration differs from running identity",
+                ));
+            }
+            return Ok(());
+        }
+        state
+            .declared_tools
+            .insert(call, self.context.lock()?.lineage)
+    }
     fn start_call(
         &self,
         state: &mut AssistantState,
@@ -968,19 +1415,31 @@ impl LLMAssistantAggregator {
                 "tool call requires id, name, and object arguments",
             ));
         }
-        if state.completed.contains(&call.tool_call_id) {
+        if let Some((declared, lineage, _)) = state.declared_tools.calls.get(&call.tool_call_id) {
+            if declared.function_name != call.function_name
+                || declared.arguments != call.arguments
+                || *lineage != self.context.lock()?.lineage
+            {
+                return Err(ProcessorError::new("tool policy differs from declaration"));
+            }
+        }
+        if let Some(native) = state.native_tools.calls.get(&call.tool_call_id) {
+            if native.call != *call {
+                return Err(ProcessorError::new(
+                    "tool declaration differs from native policy",
+                ));
+            }
+        }
+        if state.is_completed(&call.tool_call_id) {
             return Ok(());
         }
-        if let Some(index) = state
-            .interrupted_declarations
-            .iter()
-            .position(|id| id == &call.tool_call_id)
+        if state.interrupted_declarations.remove(&call.tool_call_id) && call.cancel_on_interruption
         {
-            state.interrupted_declarations.remove(index);
-            if call.cancel_on_interruption {
-                Self::mark_completed(state, &call.tool_call_id);
-                return Ok(());
-            }
+            state
+                .provisional_tools
+                .insert(call.clone(), self.context.lock()?.lineage, false)?;
+            Self::mark_completed(state, &call.tool_call_id);
+            return Ok(());
         }
         if let Some(Some(old)) = state.pending.get(&call.tool_call_id) {
             if old != call {
@@ -988,6 +1447,7 @@ impl LLMAssistantAggregator {
             }
             return Ok(());
         }
+        state.pending.check(&call.tool_call_id, Some(call))?;
         let mut context = self.context.lock()?;
         let canonical = pipecat_core::FunctionCall {
             function_name: call.function_name.clone(),
@@ -1000,38 +1460,56 @@ impl LLMAssistantAggregator {
             .flat_map(|message| &message.tool_calls)
             .find(|old| old.tool_call_id == call.tool_call_id);
         let retained = existing.is_some_and(|existing| existing == &canonical)
-            && state
+            && (state
                 .signed_history
                 .as_ref()
-                .is_some_and(|history| history.owns_call(&canonical));
+                .is_some_and(|history| history.owns_call(&canonical))
+                || state
+                    .signed_declarations
+                    .calls
+                    .get(&call.tool_call_id)
+                    .is_some_and(|(signed, lineage, _)| {
+                        signed == &canonical && *lineage == context.lineage
+                    }));
         if !retained && existing.is_some() {
             return Err(ProcessorError::new(
                 "tool call id already exists in conversation",
             ));
         }
-        if !retained {
-            context.append_native(Message::assistant_tool_calls(vec![ToolCall {
+        let declaration = (!retained).then(|| {
+            Message::assistant_tool_calls(vec![ToolCall {
                 id: call.tool_call_id.clone(),
                 name: call.function_name.clone(),
                 arguments: call.arguments.clone(),
-            }]));
-            if let Some(history) = &mut state.signed_history {
-                let index = context.messages.len() - 1;
-                history.message(index, context.messages[index].clone());
-            }
-        }
-        context.messages.push(if call.cancel_on_interruption {
+            }])
+        });
+        let started = if call.cancel_on_interruption {
             tool_message(&call.tool_call_id, "IN_PROGRESS")
         } else {
             async_message(&call.tool_call_id, "started", None)
-        });
-        if let Some(history) = &mut state.signed_history {
-            let index = context.messages.len() - 1;
-            history.message(index, context.messages[index].clone());
+        };
+        if let Some(history) = &state.signed_history {
+            let additions: Vec<_> = declaration
+                .iter()
+                .map(pipecat_services::frame_context::to_core_message)
+                .chain(std::iter::once(started.clone()))
+                .collect();
+            history.check_messages(context.messages.len(), &additions)?;
         }
+        let first_new = context.messages.len();
+        if let Some(declaration) = declaration {
+            context.append_native(declaration);
+        }
+        context.messages.push(started);
+        if let Some(history) = &mut state.signed_history {
+            for index in first_new..context.messages.len() {
+                history.message(index, &context.messages[index])?;
+            }
+        }
+        state.declared_tools.remove(&call.tool_call_id);
         state
             .pending
-            .insert(call.tool_call_id.clone(), Some(call.clone()));
+            .insert(call.tool_call_id.clone(), Some(call.clone()))?;
         Ok(())
     }
     fn result(
@@ -1060,26 +1538,37 @@ impl LLMAssistantAggregator {
         };
         let mut context = self.context.lock()?;
         let first_new = context.messages.len();
+        let addition = if !result.is_final {
+            Some(async_message(
+                &call.tool_call_id,
+                "intermediate",
+                Some(&content),
+            ))
+        } else if is_deferred(&context.messages, &call) {
+            Some(async_message(&call.tool_call_id, "final", Some(&content)))
+        } else {
+            None
+        };
+        if let (Some(history), Some(addition)) = (&state.signed_history, &addition) {
+            history.check_messages(first_new, std::slice::from_ref(addition))?;
+        }
         if result.is_final {
-            if is_deferred(&context.messages, &call) {
-                context
-                    .messages
-                    .push(async_message(&call.tool_call_id, "final", Some(&content)));
+            if let Some(addition) = addition {
+                context.messages.push(addition);
             } else {
                 update_tool_result(&mut context.messages, &call.tool_call_id, &content)?;
             }
             state.pending.remove(&call.tool_call_id);
+            state.signed_declarations.remove(&call.tool_call_id);
             Self::mark_completed(state, &call.tool_call_id);
         } else {
-            context.messages.push(async_message(
-                &call.tool_call_id,
-                "intermediate",
-                Some(&content),
-            ));
+            context
+                .messages
+                .push(addition.expect("intermediate message"));
         }
         if let Some(history) = &mut state.signed_history {
             for index in first_new..context.messages.len() {
-                history.message(index, context.messages[index].clone());
+                history.message(index, &context.messages[index])?;
             }
         }
         drop(context);
@@ -1105,18 +1594,23 @@ impl LLMAssistantAggregator {
         if call.cancel_on_interruption {
             update_tool_result(&mut context.messages, id, "CANCELLED")?;
         } else {
-            context.messages.push(async_message(
+            let addition = async_message(
                 id,
                 "cancelled",
                 Some("CANCELLED: this tool call was cancelled before it returned a result"),
-            ));
+            );
+            if let Some(history) = &state.signed_history {
+                history.check_messages(first_new, std::slice::from_ref(&addition))?;
+            }
+            context.messages.push(addition);
         }
         if let Some(history) = &mut state.signed_history {
             for index in first_new..context.messages.len() {
-                history.message(index, context.messages[index].clone());
+                history.message(index, &context.messages[index])?;
             }
         }
         state.pending.remove(id);
+        state.signed_declarations.remove(id);
         Self::mark_completed(state, id);
         Ok(true)
     }
@@ -1135,10 +1629,7 @@ impl LLMAssistantAggregator {
             })
     }
     fn mark_completed(state: &mut AssistantState, id: &str) {
-        state.completed.push_back(id.to_owned());
-        if state.completed.len() > 512 {
-            state.completed.pop_front();
-        }
+        state.completed.insert(id);
     }
     fn maybe_run(
         &self,
@@ -1158,11 +1649,16 @@ impl LLMAssistantAggregator {
             .pending
             .values()
             .any(|call| call.as_ref().is_none_or(|call| call.group_id.is_some()));
-        let cancelled_group_ready = state
-            .cancelled_run_groups
-            .iter()
-            .any(|group| !Self::group_running_except(state, Some(group), None));
-        if (state.tool_run_owed || cancelled_group_ready || (state.run_owed && !grouped_pending))
+        // Closed groups need only the coalesced inference bit, including while
+        // speech postpones emission. Retained labels are a subset of live calls.
+        for group in std::mem::take(&mut state.cancelled_run_groups) {
+            if Self::group_running_except(state, Some(&group), None) {
+                state.cancelled_run_groups.insert(group);
+            } else {
+                state.tool_run_owed = true;
+            }
+        }
+        if (state.tool_run_owed || (state.run_owed && !grouped_pending))
             && !state.awaiting_user_inference
             && !state.user_speaking
             && !state.bot_speaking
@@ -1273,7 +1769,20 @@ impl FrameProcessor for LLMAssistantAggregator {
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
         self.summarizer.close()?;
-        self.lock()?.transcript_markers.clear();
+        {
+            let mut state = self.lock()?;
+            state.transcript_markers.clear();
+            state.ended = true;
+            state.native_tools.clear();
+            state.declared_tools.clear();
+            state.signed_declarations.clear();
+            state.provisional_tools.clear();
+            state.pending.clear();
+            state.completed.clear();
+            state.interrupted_declarations.clear();
+            state.clear_runs();
+            state.signed_history = None;
+        }
         self.cancel_callbacks()
     }
 }
