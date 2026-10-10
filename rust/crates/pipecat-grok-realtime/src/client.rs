@@ -1,6 +1,6 @@
 use crate::types::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, StreamExt};
 use pipecat_core::{
     FunctionCallInProgressFrame, NativeToolCallOutcome, ToolCallEndReason, ToolCallTerminalState,
 };
@@ -10,6 +10,7 @@ use std::{
     fmt,
     future::Future,
     net::IpAddr,
+    pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
@@ -363,7 +364,14 @@ impl RealtimeClient {
             connection_model: Arc::from(c.model.as_str()),
             terminal: terminal_rx,
         };
-        let mut actor = Actor::new(c.clone(), generation.clone(), events_tx, ready, health_gate);
+        let mut actor = Actor::new(
+            c.clone(),
+            generation.clone(),
+            events_tx,
+            ready,
+            health_gate,
+            emission_gate,
+        );
         let task = tokio::spawn(async move {
             let result = actor.run(&mut socket, rx, control_rx).await;
             let result = if result.is_err() && !actor.tools.is_empty() {
@@ -392,6 +400,10 @@ struct Control {
 }
 enum QueuedAction {
     Public(Action),
+    Context {
+        actions: Vec<Action>,
+        fence: pipecat_core::InvocationFence,
+    },
     ToolPolicy(FunctionCallInProgressFrame),
     ToolOutcome {
         outcome: Arc<NativeToolCallOutcome>,
@@ -552,6 +564,51 @@ impl RealtimeSender {
             .clone()
     }
 
+    /// Admit durable context edits atomically to the local bounded queue. Only
+    /// inference uses the original invocation fence; this is not a provider ack.
+    pub(crate) fn try_send_context(
+        &self,
+        actions: Vec<Action>,
+        fence: pipecat_core::InvocationFence,
+    ) -> Result<(), RealtimeError> {
+        if !health_current(&self.health_gate) {
+            self.close();
+            return Err(RealtimeError::Closed);
+        }
+        for action in &actions {
+            if !matches!(
+                action,
+                Action::UpdateSession(_)
+                    | Action::CreateItem { .. }
+                    | Action::CreateResponse(_)
+                    | Action::RequestInference(_)
+            ) {
+                return Err(RealtimeError::Invalid(
+                    "non-context action in durable context command",
+                ));
+            }
+            check_queued_action(action, &self.limits)?;
+        }
+        bounded_serialized(&actions, self.limits.max_message_bytes)?;
+        let mut projected = self
+            .projected_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let updated = self.projected_update(&projected, &actions)?;
+        let permit = self.tx.try_reserve().map_err(|e| match e {
+            mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
+            mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
+        })?;
+        permit.send(Command {
+            action: QueuedAction::Context { actions, fence },
+            generation: self.generation(),
+            reply: None,
+        });
+        if let Some(updated) = updated {
+            *projected = updated;
+        }
+        Ok(())
+    }
     pub fn try_send_batch(&self, actions: Vec<Action>) -> Result<(), RealtimeError> {
         if !health_current(&self.health_gate) {
             self.close();
@@ -691,9 +748,13 @@ impl RealtimeSender {
         .await
     }
 }
+pub(crate) struct FencedEvent {
+    pub event: RealtimeEvent,
+    pub fence: Option<pipecat_core::InvocationFence>,
+}
 pub struct RealtimeSession {
     sender: RealtimeSender,
-    rx: mpsc::Receiver<RealtimeEvent>,
+    rx: mpsc::Receiver<FencedEvent>,
     task: Option<JoinHandle<Result<(), RealtimeError>>>,
     ended: bool,
 }
@@ -702,11 +763,22 @@ impl RealtimeSession {
         self.sender.clone()
     }
     pub async fn next_event(&mut self) -> Option<Result<RealtimeEvent, RealtimeError>> {
+        self.next_event_fenced()
+            .await
+            .map(|result| result.map(|event| event.event))
+    }
+    pub(crate) async fn next_event_fenced(&mut self) -> Option<Result<FencedEvent, RealtimeError>> {
         if self.ended {
             return None;
         }
         while let Some(event) = self.rx.recv().await {
-            if event.event.response_id().is_some() && event.generation != self.sender.generation() {
+            if (event.event.event.response_id().is_some()
+                && event.event.generation != self.sender.generation())
+                || event
+                    .fence
+                    .as_ref()
+                    .is_some_and(|fence| !fence.is_current())
+            {
                 continue;
             }
             return Some(Ok(event));
@@ -749,11 +821,13 @@ impl Drop for RealtimeSession {
 #[derive(Clone)]
 struct ResponseContext {
     generation: u64,
+    fence: Option<pipecat_core::InvocationFence>,
     context_id: Option<String>,
     allowed_tools: Arc<HashSet<String>>,
 }
 struct ToolState {
     name: String,
+    fence: Option<pipecat_core::InvocationFence>,
     item_id: String,
     generation: u64,
     arguments: String,
@@ -763,10 +837,56 @@ struct ToolState {
     context_id: Option<String>,
     response_id: String,
 }
+// Recheck every pending poll until poll_ready/start_send admits the bytes.
+// Once admitted, flush exactly those bytes even if cancellation arrives later.
+async fn send_inference<S>(
+    socket: &mut S,
+    message: Message,
+    generation: &AtomicU64,
+    expected: u64,
+    emission_gate: &Mutex<()>,
+    health_gate: &HealthGate,
+    fence: Option<&pipecat_core::InvocationFence>,
+) -> Result<bool, RealtimeError>
+where
+    S: Sink<Message, Error = tungstenite::Error> + Unpin,
+{
+    let mut message = Some(message);
+    let admitted = futures_util::future::poll_fn(|cx| {
+        let _emission = emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let mut admit = || {
+            if generation.load(Ordering::Acquire) != expected || !health_current(health_gate) {
+                return Poll::Ready(Ok(false));
+            }
+            match Pin::new(&mut *socket).poll_ready(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(error)) => Poll::Ready(Err(transport(error))),
+                Poll::Ready(Ok(())) => Poll::Ready(
+                    Pin::new(&mut *socket)
+                        .start_send(message.take().expect("one inference admission"))
+                        .map(|()| true)
+                        .map_err(transport),
+                ),
+            }
+        };
+        match fence {
+            Some(fence) => fence.with_current(admit).unwrap_or(Poll::Ready(Ok(false))),
+            None => admit(),
+        }
+    })
+    .await?;
+    if admitted {
+        futures_util::future::poll_fn(|cx| Pin::new(&mut *socket).poll_flush(cx))
+            .await
+            .map_err(transport)?;
+    }
+    Ok(admitted)
+}
 struct Actor {
+    emission_gate: Arc<Mutex<()>>,
     config: RealtimeConfig,
     generation: Arc<AtomicU64>,
-    tx: mpsc::Sender<RealtimeEvent>,
+    tx: mpsc::Sender<FencedEvent>,
     session_id: Option<String>,
     conversation_id: Option<String>,
     sequence: u64,
@@ -787,20 +907,28 @@ struct Actor {
     seen_calls: HashSet<String>,
     initial_update_sent: bool,
     results_awaiting_response: bool,
-    deferred_response: Option<(ResponseOptions, u64)>,
+    deferred_response: Option<(
+        ResponseOptions,
+        u64,
+        Option<pipecat_core::InvocationFence>,
+        bool,
+    )>,
     discarded_calls: HashSet<String>,
+    inference_fence: Option<pipecat_core::InvocationFence>,
 }
 impl Actor {
     fn new(
         config: RealtimeConfig,
         generation: Arc<AtomicU64>,
-        tx: mpsc::Sender<RealtimeEvent>,
+        tx: mpsc::Sender<FencedEvent>,
         shared_ready: Arc<AtomicBool>,
         health_gate: HealthGate,
+        emission_gate: Arc<Mutex<()>>,
     ) -> Self {
         let ready_deadline = Instant::now() + config.limits.connect_timeout;
         Self {
             config,
+            emission_gate,
             generation,
             tx,
             session_id: None,
@@ -825,6 +953,7 @@ impl Actor {
             results_awaiting_response: false,
             deferred_response: None,
             discarded_calls: HashSet::new(),
+            inference_fence: None,
         }
     }
     fn allowed_tools(&self) -> Arc<HashSet<String>> {
@@ -864,6 +993,32 @@ impl Actor {
         .await
         .map_err(|_| RealtimeError::Timeout("write"))?
         .map_err(transport)
+    }
+    async fn write_response(
+        &mut self,
+        socket: &mut Socket,
+        options: &ResponseOptions,
+        generation: u64,
+        fence: Option<&pipecat_core::InvocationFence>,
+    ) -> Result<bool, RealtimeError> {
+        self.sequence += 1;
+        let value = json!({"type":"response.create", "response":options, "event_id":format!("pc_evt_{}", self.sequence)});
+        bounded_serialized(&value, self.config.limits.max_message_bytes)?;
+        let message = Message::Text(value.to_string().into());
+        timeout(
+            self.config.limits.operation_timeout,
+            send_inference(
+                socket,
+                message,
+                &self.generation,
+                generation,
+                &self.emission_gate,
+                &self.health_gate,
+                fence,
+            ),
+        )
+        .await
+        .map_err(|_| RealtimeError::Timeout("write"))?
     }
     async fn write_action(
         &mut self,
@@ -992,15 +1147,18 @@ impl Actor {
                         .values()
                         .any(|tool| tool.pending_outcome.is_some())
                     {
-                        self.deferred_response = Some((options, generation));
+                        self.deferred_response =
+                            Some((options, generation, self.inference_fence.clone(), false));
                     }
                     return Ok(());
                 }
                 if self.active.is_some() || self.pending.is_some() {
-                    self.deferred_response = Some((options, generation));
+                    self.deferred_response =
+                        Some((options, generation, self.inference_fence.clone(), false));
                     return Ok(());
                 }
-                self.deferred_response = Some((options, generation));
+                self.deferred_response =
+                    Some((options, generation, self.inference_fence.clone(), false));
                 return self.maybe_continue(socket).await;
             }
             Action::CreateResponse(response) => {
@@ -1014,16 +1172,20 @@ impl Actor {
                     ));
                 }
                 if self.active.is_some() || self.pending.is_some() {
-                    self.deferred_response = Some((response, generation));
+                    self.deferred_response =
+                        Some((response, generation, self.inference_fence.clone(), true));
                     return Ok(());
                 }
-                self.write(
-                    socket,
-                    json!({"type":"response.create", "response":response}),
-                )
-                .await?;
+                let fence = self.inference_fence.clone();
+                if !self
+                    .write_response(socket, &response, generation, fence.as_ref())
+                    .await?
+                {
+                    return Ok(());
+                }
                 self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
                 self.pending = Some(ResponseContext {
+                    fence: self.inference_fence.clone(),
                     allowed_tools: self.allowed_tools(),
                     generation,
                     context_id: response
@@ -1128,6 +1290,29 @@ impl Actor {
     ) -> Result<(), RealtimeError> {
         match action {
             QueuedAction::Public(action) => self.write_action(socket, action, generation).await,
+            QueuedAction::Context { actions, fence } => {
+                for action in actions {
+                    let inference = matches!(
+                        action,
+                        Action::CreateResponse(_) | Action::RequestInference(_)
+                    );
+                    if inference && (generation != self.epoch() || !fence.is_current()) {
+                        continue;
+                    }
+                    if inference {
+                        self.inference_fence = Some(fence.clone());
+                    }
+                    let result = self.write_action(socket, action, generation).await;
+                    self.inference_fence = None;
+                    result?;
+                    if inference {
+                        if let Some((_, _, existing_fence, _)) = self.deferred_response.as_mut() {
+                            *existing_fence = Some(fence.clone());
+                        }
+                    }
+                }
+                Ok(())
+            }
             QueuedAction::ToolPolicy(call) => {
                 if self.completed_tools.contains(&call.tool_call_id)
                     || self.cancelled_tools.contains(&call.tool_call_id)
@@ -1222,25 +1407,29 @@ impl Actor {
         if self.deferred_response.is_some()
             && self.active.is_none()
             && self.pending.is_none()
-            && self.results_awaiting_response
+            && (self.results_awaiting_response
+                || self.deferred_response.as_ref().is_some_and(|value| value.3))
         {
-            let (options, generation) = self
+            let (options, generation, fence, unconditional) = self
                 .deferred_response
                 .take()
                 .expect("checked deferred response");
-            if !self.results_awaiting_response {
+            if !self.results_awaiting_response && !unconditional {
                 return Ok(());
             }
-            if generation != self.epoch() {
+            if generation != self.epoch() || fence.as_ref().is_some_and(|fence| !fence.is_current())
+            {
                 return Ok(());
             }
-            self.write(
-                socket,
-                json!({"type":"response.create", "response":options}),
-            )
-            .await?;
+            if !self
+                .write_response(socket, &options, generation, fence.as_ref())
+                .await?
+            {
+                return Ok(());
+            }
             self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
             self.pending = Some(ResponseContext {
+                fence: fence.clone(),
                 allowed_tools: self.allowed_tools(),
                 generation,
                 context_id: options
@@ -1390,6 +1579,7 @@ impl Actor {
                 self.results_awaiting_response = false;
                 self.pending_event_id = None;
                 let context = self.pending.take().unwrap_or_else(|| ResponseContext {
+                    fence: self.inference_fence.clone(),
                     allowed_tools: self.allowed_tools(),
                     generation: self.epoch(),
                     context_id: self.config.context_id.clone(),
@@ -1451,6 +1641,7 @@ impl Actor {
             Event::FunctionArgumentsDone { call_id, .. }
             | Event::FunctionArgumentsDelta { call_id, .. } => {
                 self.tools.get(call_id).map(|t| ResponseContext {
+                    fence: t.fence.clone(),
                     generation: t.generation,
                     context_id: t.context_id.clone(),
                     allowed_tools: Arc::new(HashSet::new()),
@@ -1481,7 +1672,12 @@ impl Actor {
             .as_ref()
             .map(|c| c.generation)
             .unwrap_or_else(|| self.epoch());
-        let stale = event.response_id().is_some() && generation != self.epoch();
+        let stale = event.response_id().is_some()
+            && (generation != self.epoch()
+                || context
+                    .as_ref()
+                    .and_then(|context| context.fence.as_ref())
+                    .is_some_and(|fence| !fence.is_current()));
         if !stale {
             match &mut event {
                 Event::OutputItemAdded {
@@ -1551,6 +1747,7 @@ impl Actor {
                         self.tools.insert(
                             call_id.clone(),
                             ToolState {
+                                fence: response_context.fence.clone(),
                                 name: name.clone(),
                                 item_id: id.clone(),
                                 generation: response_context.generation,
@@ -1622,19 +1819,23 @@ impl Actor {
         if stale || matches!(event, Event::Unknown) {
             return Ok(());
         }
+        let fence = context.as_ref().and_then(|context| context.fence.clone());
         let context_id = context
             .and_then(|c| c.context_id)
             .or_else(|| self.config.context_id.clone());
         redact_event(&mut event, &self.config.api_key);
         self.tx
-            .try_send(RealtimeEvent {
-                event_id: wire.event_id,
-                event_type: wire.event_type,
-                session_id: self.session_id.clone(),
-                conversation_id: self.conversation_id.clone(),
-                context_id,
-                generation,
-                event,
+            .try_send(FencedEvent {
+                fence,
+                event: RealtimeEvent {
+                    event_id: wire.event_id,
+                    event_type: wire.event_type,
+                    session_id: self.session_id.clone(),
+                    conversation_id: self.conversation_id.clone(),
+                    context_id,
+                    generation,
+                    event,
+                },
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
@@ -1720,4 +1921,241 @@ fn check_queued_action(action: &Action, limits: &RealtimeLimits) -> Result<(), R
         }
     }
     bounded_serialized(action, limits.max_message_bytes)
+}
+
+#[cfg(test)]
+mod inference_admission_tests {
+    use super::*;
+    use std::task::Context;
+    struct PendingSink {
+        before: bool,
+        ready: bool,
+        flush_ready: bool,
+        sent: usize,
+        polls: usize,
+    }
+    impl Sink<Message> for PendingSink {
+        type Error = tungstenite::Error;
+        fn poll_ready(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            self.polls += 1;
+            if self.before && !self.ready {
+                self.ready = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+        fn start_send(mut self: Pin<&mut Self>, _: Message) -> Result<(), Self::Error> {
+            self.sent += 1;
+            Ok(())
+        }
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if !self.flush_ready {
+                self.flush_ready = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+    #[tokio::test]
+    async fn pending_before_ready_rechecks_generation_without_start_send() {
+        let mut socket = PendingSink {
+            before: true,
+            ready: false,
+            flush_ready: false,
+            sent: 0,
+            polls: 0,
+        };
+        let generation = AtomicU64::new(0);
+        let gate = Mutex::new(());
+        let health = Arc::new(Mutex::new(None));
+        {
+            let operation = send_inference(
+                &mut socket,
+                Message::Text("inference".into()),
+                &generation,
+                0,
+                &gate,
+                &health,
+                None,
+            );
+            tokio::pin!(operation);
+            assert!(futures_util::poll!(&mut operation).is_pending());
+            generation.store(1, Ordering::SeqCst);
+            assert!(!operation.await.unwrap());
+        }
+        assert_eq!(socket.sent, 0);
+    }
+    #[tokio::test]
+    async fn pending_flush_after_admission_flushes_once_without_retry() {
+        let mut socket = PendingSink {
+            before: false,
+            ready: true,
+            flush_ready: false,
+            sent: 0,
+            polls: 0,
+        };
+        let generation = AtomicU64::new(0);
+        let gate = Mutex::new(());
+        let health = Arc::new(Mutex::new(None));
+        {
+            let operation = send_inference(
+                &mut socket,
+                Message::Text("inference".into()),
+                &generation,
+                0,
+                &gate,
+                &health,
+                None,
+            );
+            tokio::pin!(operation);
+            assert!(futures_util::poll!(&mut operation).is_pending());
+            generation.store(1, Ordering::SeqCst);
+            assert!(operation.await.unwrap());
+        }
+        assert_eq!(socket.sent, 1);
+        assert_eq!(socket.polls, 1);
+    }
+}
+
+#[cfg(test)]
+mod original_fence_admission_tests {
+    use super::*;
+    use pipecat_core::{
+        async_trait, Direction, Frame, FrameData, FrameProcessor, InvocationFence, Pipeline,
+        PipelineConfig, ProcessorContext, ProcessorError,
+    };
+    use std::task::Context;
+    struct Capture(Arc<Mutex<Option<InvocationFence>>>);
+    #[async_trait]
+    impl FrameProcessor for Capture {
+        fn name(&self) -> &str {
+            "InferenceFenceCapture"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::Text(_)) {
+                *self.0.lock().unwrap() = Some(ctx.invocation_fence()?);
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    struct PendingSink {
+        before: bool,
+        ready: bool,
+        flushed: bool,
+        sent: usize,
+    }
+    impl Sink<Message> for PendingSink {
+        type Error = tungstenite::Error;
+        fn poll_ready(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.before && !self.ready {
+                self.ready = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+        fn start_send(mut self: Pin<&mut Self>, _: Message) -> Result<(), Self::Error> {
+            self.sent += 1;
+            Ok(())
+        }
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if !self.flushed {
+                self.flushed = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+    #[tokio::test]
+    async fn original_fence_rechecks_ready_but_does_not_revoke_admitted_flush() {
+        for before in [true, false] {
+            let saved = Arc::new(Mutex::new(None));
+            let mut worker = Pipeline::new(vec![Arc::new(Capture(saved.clone()))])
+                .start(PipelineConfig::default())
+                .await
+                .unwrap();
+            worker
+                .sender()
+                .send(Frame::text("capture"), Direction::Downstream)
+                .await
+                .unwrap();
+            loop {
+                if matches!(worker.recv().await.unwrap().frame.data, FrameData::Text(_)) {
+                    break;
+                }
+            }
+            let fence = saved.lock().unwrap().take().unwrap();
+            let generation = AtomicU64::new(0);
+            let gate = Mutex::new(());
+            let health = Arc::new(Mutex::new(None));
+            let mut socket = PendingSink {
+                before,
+                ready: false,
+                flushed: false,
+                sent: 0,
+            };
+            {
+                let operation = send_inference(
+                    &mut socket,
+                    Message::Text("response.create".into()),
+                    &generation,
+                    0,
+                    &gate,
+                    &health,
+                    Some(&fence),
+                );
+                tokio::pin!(operation);
+                assert!(futures_util::poll!(&mut operation).is_pending());
+                worker
+                    .sender()
+                    .send(Frame::interruption(), Direction::Downstream)
+                    .await
+                    .unwrap();
+                loop {
+                    if matches!(
+                        worker.recv().await.unwrap().frame.data,
+                        FrameData::Interruption
+                    ) {
+                        break;
+                    }
+                }
+                assert!(!fence.is_current());
+                assert_eq!(operation.await.unwrap(), !before);
+            }
+            assert_eq!(socket.sent, usize::from(!before));
+            assert_eq!(generation.load(Ordering::SeqCst), 0);
+            worker.end().await.unwrap();
+            worker.collect().await.unwrap();
+        }
+    }
 }

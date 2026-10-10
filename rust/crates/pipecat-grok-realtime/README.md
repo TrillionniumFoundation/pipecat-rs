@@ -55,7 +55,7 @@ calls survive interruption; the tool executor owns their cancellation policy.
 
 For the existing native tool runtime, use this order:
 
-1. User aggregator, configured explicitly for external turns when using server VAD
+1. `pair.user()`, with Auto metadata activation or explicit realtime/turn policy
 2. `GrokRealtimeProcessor`
 3. `pipecat_processors::tools::ToolExecutor`
 4. `processor.tool_result_relay()`
@@ -68,15 +68,20 @@ local frame tag prevents a result from being delivered twice when it also passed
 through the main processor. Tool execution remains in `ToolExecutor`; advertising
 remote MCP/search tools does not execute local tools or transmit local credentials.
 
-The initial legacy/text-only detailed context is packed once into one user history
-item when necessary. A leading system instruction is extracted, with configured
-service instructions taking precedence, including successfully queued runtime
-updates. `projected_session()` exposes bounded locally admitted settings, not
-provider acceptance. Settings survive turn interruption; response tool admission
-uses a separate snapshot of wire-applied declarations. Later downstream snapshots do not run
-inference; upstream snapshots request inference. Message appends after setup send
-items without running inference. Context tools override configured functions while
-retaining currently projected hosted tools. Explicit tool-choice settings are rejected.
+An explicit initial legacy or text-only detailed context can seed once, packed
+into one user history item when necessary. A leading system instruction is
+extracted; configured service instructions and successfully queued runtime updates
+take precedence. Initial context tools can override configured functions while
+retaining hosted tools, unless an explicit tool update was already admitted.
+`projected_session()` exposes bounded locally admitted settings, not provider
+acceptance. Settings survive interruption; response tool admission uses a separate
+snapshot of wire-applied declarations. Explicit tool choice is unsupported.
+
+Marked trailing contexts are always state-only. Sealed paired append/run causes
+carry explicit intent independently of text equality; upstream assistant contexts
+request continuation for already delivered tool results. Direct provider append
+controls send items without inference only after a context/live session is bound.
+See Shared realtime conversation below for the paired edit and rejection contract.
 
 ## Output and turns
 
@@ -100,12 +105,10 @@ processor/session to reconnect. End/cancel still perform cleanup while unusable.
 
 ## Explicit boundaries
 
-- The baseline cascade aggregators are not source-equivalent for continuous
-  realtime user history, audio-only startup, or user-driven inference. A separately
-  reviewed common realtime aggregation extension is a prerequisite for those
-  semantics. The tool/output tests use explicitly seeded context; explicit external
-  turn configuration alone does not close this gap. `service_metadata()` exposes
-  the correct descriptor for capable integrations but is not broadcast automatically
+- The paired common realtime aggregators are included in this native topology.
+  The processor automatically broadcasts `service_metadata()` after Start. Auto
+  activates realtime semantics; explicit policies and Disabled remain authoritative.
+  Disabled cascade mode does not provide continuous realtime history semantics
 - Executor cancellation is acknowledged only by a validated process-local terminal
   receipt. A raw `FunctionCallCancel` is a request for `ToolExecutor`; the relay
   never treats that request, arbitrary metadata, silence, or a missing result as
@@ -133,18 +136,16 @@ processor/session to reconnect. End/cancel still perform cleanup while unusable.
   encoders reject unconsumed provenance; the actor serializes only provider commands
 - Sealed native terminal payload/error/inference policy cannot be edited after
   publication. An application may explicitly consume a valid receipt and issue
-  ordinary legacy result callbacks, forfeiting native terminal integrity downstream.
+  ordinary legacy result callbacks with the explicit `with_legacy_tool_results()`
+  opt-in, forfeiting native terminal integrity downstream.
   The native executor does not expose arbitrary per-result `run_llm` overrides;
   immutable native results retain their publisher/default inference policy
-- Existing conversations cannot be replaced/reset in place. Detailed message
-  append/update and message-transform controls are explicitly rejected before
-  forwarding, since they have no provider-side history synchronization. Initial
-  text-only detailed context support does not imply support for these edits.
-  Rejection applies when the raw control reaches this processor before an earlier
-  aggregator consumes it. It does not certify or reconcile a context already
-  mutated upstream and converted into `LlmContext`; arbitrary context reconciliation
-  remains unsupported. Route unsupported editing controls through rejection before
-  any history-owning aggregator
+- Existing conversations cannot be replaced/reset in place. Paired text-only
+  appends and explicit runs are supported through sealed context causes. Live
+  replacement/deletion/transforms are rejected after any upstream local edit but
+  before provider mutation, and fail the session; repair history and construct a
+  new pair/session. Raw detailed editing controls reaching the provider directly
+  are unsupported. Arbitrary unattributed changed snapshots are never guessed
 - There is no automatic reconnect or fallback envelope for a lost call ID;
   unknown results fail closed
 - Detailed context supports text parts and ordinary/direct function definitions;
@@ -170,3 +171,76 @@ assistant consumes their ownership proof. Application adapters that opt into
 legacy result mutation must explicitly validate/consume both declaration batches
 and terminal receipts before forwarding ordinary frames; their downstream
 results then have no native ownership or late-terminal restoration guarantee.
+
+## Shared realtime conversation
+
+Use `pair.user() → GrokRealtimeProcessor → ToolExecutor → tool_result_relay()
+→ delivered output → pair.assistant()`. After forwarding the first Start, Grok
+broadcasts its realtime metadata in both directions. Auto pairs activate and
+server VAD recommends external turn strategies; explicit policies and Disabled
+remain authoritative. Standalone/misordered active realtime halves are rejected
+by the shared aggregator. Provider-only legacy fixtures use an explicit Disabled
+pair.
+
+Audio/response activity binds a live session separately from explicit history
+seeding. Marked trailing contexts, including the very first audio-only snapshot,
+are state-only and enqueue neither history nor inference. Explicit initial
+context can seed once. Native context causes identify actual typed input,
+appends, and run requests, so repeated identical text and intervening trailing
+snapshots cannot hide or replay an explicit append. `run_llm=false` admits no
+response; native history may reach the wire earlier than Python's user-first
+local-only mutation. Upstream assistant tool continuations only request inference
+for already delivered results, and provider tool outputs never create their own
+response.
+
+Context cause admission is durable bounded local admission, not provider
+acknowledgement. Interruption cancels the original inference intent while admitted
+history survives. The actor rechecks the non-owning original invocation fence at
+every pending socket-ready poll, admits bytes once, and flushes admitted bytes
+without retry. Deferred requests and network output retain that same fence.
+Connection/health failures retire the session without replay; reset requires a
+new processor and pair.
+
+Live full replacement, deletion and arbitrary transforms require a new session.
+The common user may already have applied those edits locally before Grok rejects
+the operation; no provider history/settings/inference is partially admitted.
+At provider ingress, invalid explicit causes fail the session so local/provider
+divergence cannot silently continue. A malformed external carrier reinjected
+before the user emitter can instead be rejected there before any new local
+mutation or provider effect; this does not consume its valid original clone. Non-text or provider-specific history and direct detailed
+message controls remain unsupported at the provider boundary; typed text-part
+appends through the real pair are supported. Ordinary input text and model
+output are never deduplicated by text equality. Spoken history still requires
+actual application delivery receipts; response/audio/transcript generation alone
+cannot certify playback.
+
+Native pipeline settlement requires a validated ToolExecutor receipt by default.
+A matching raw success/error/result frame cannot settle a native call, and raw
+cancellation remains only a request. Applications deliberately managing legacy
+callbacks can opt in with `with_legacy_tool_results()` before constructing the
+relay; this relinquishes native terminal-integrity guarantees for raw results.
+Malformed present receipts never fall back to legacy handling. The standalone
+RealtimeSender API remains explicitly caller-controlled.
+
+Lock order for socket admission/output is emission gate → ordered runtime
+admission gates → health observation. Provider context/sender-state locks are not
+held across those operations; cleanup removes the sender under a short separate
+scope before closing it. An invocation-fence closure must not reenter core
+routing/spawn/admission APIs.
+
+Assistant tool continuations carry a distinct sealed scheduling intent from the
+actual assistant invocation, with a separate bounded admission cursor. They keep
+`RequestInference` gating, not unconditional response creation. An interruption
+that expires that invocation prevents delayed inference even when its provider
+cancel frame is intercepted. A newly eligible native terminal with `cancel_on_interruption=false` can
+schedule a new assistant request after interruption even when its durable result
+was delivered late. Admission binds its current assistant-local generation and
+retains inherited origin restrictions. Cancel-enabled late deliveries retain
+stale-inference suppression; already bound requests never renew. Intent/direction mismatch rejects before effects.
+
+Unmarked upstream contexts without `AssistantContinuation` are rejected by the
+native adapter. Direct integrations or explicitly Disabled aggregation can opt
+in to `with_legacy_context_requests()`, which treats unsealed upstream requests
+as caller-owned and cannot preserve their original assistant scope through
+delayed delivery. This opt-in does not weaken validation of a present native
+cause and is independent of legacy raw-tool-result settlement.

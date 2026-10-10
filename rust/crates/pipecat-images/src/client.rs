@@ -251,7 +251,7 @@ impl OpenAiImageClient {
         read_body(response, self.0.config.limits.max_encoded_image_bytes).await
     }
 }
-async fn read_body(response: Response, maximum: usize) -> Result<Vec<u8>> {
+pub(crate) async fn read_body(response: Response, maximum: usize) -> Result<Vec<u8>> {
     if !response.status().is_success() {
         return Err(ImageError::Http(response.status().as_u16()));
     }
@@ -280,7 +280,7 @@ async fn read_body(response: Response, maximum: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn completion_fence<T>(
+pub(crate) fn completion_fence<T>(
     result: Result<T>,
     cancellation: &CancellationToken,
     deadline: Instant,

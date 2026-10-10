@@ -2,7 +2,7 @@ use crate::{CancellationToken, ImageError, ImageGenerationLimits, Result};
 use pipecat_core::ImageRawFrame;
 use std::{
     io::{self, BufRead, Cursor, Read, Seek, SeekFrom},
-    sync::mpsc,
+    sync::{mpsc, Arc},
     thread,
     time::Instant,
 };
@@ -59,7 +59,8 @@ impl Seek for Input<'_> {
     }
 }
 struct Job {
-    _permit: tokio::sync::OwnedSemaphorePermit,
+    _permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+    max_output_bytes: usize,
     bytes: Vec<u8>,
     control: DecodeControl,
     result: tokio::sync::oneshot::Sender<Result<ImageRawFrame>>,
@@ -80,7 +81,9 @@ impl DecoderWorker {
                     if job.result.is_closed() {
                         continue;
                     }
-                    let result = decode(&job.bytes, &limits, &job.control);
+                    let mut job_limits = limits.clone();
+                    job_limits.max_pixels = job_limits.max_pixels.min(job.max_output_bytes / 3);
+                    let result = decode(&job.bytes, &job_limits, &job.control);
                     let _ = job.result.send(result);
                 }
             })
@@ -96,12 +99,24 @@ impl DecoderWorker {
         control: DecodeControl,
         permit: tokio::sync::OwnedSemaphorePermit,
     ) -> Result<ImageRawFrame> {
+        self.decode_shared(bytes, control, Arc::new(permit), usize::MAX)
+            .await
+    }
+    /// Shared sequence admission survives cancellation until owned decoder work exits.
+    pub(crate) async fn decode_shared(
+        &self,
+        bytes: Vec<u8>,
+        control: DecodeControl,
+        permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+        max_output_bytes: usize,
+    ) -> Result<ImageRawFrame> {
         let (result, receive) = tokio::sync::oneshot::channel();
         self.sender
             .as_ref()
             .ok_or(ImageError::Closed)?
             .try_send(Job {
                 _permit: permit,
+                max_output_bytes,
                 bytes,
                 control,
                 result,
@@ -449,5 +464,79 @@ mod independent_review {
             decode(b"not an image", &Default::default(), &control),
             Err(ImageError::Timeout)
         );
+    }
+}
+
+#[cfg(test)]
+mod shared_sequence_tests {
+    use super::*;
+    #[tokio::test]
+    async fn shared_sequence_admission_survives_decode_then_releases_on_last_owner() {
+        let worker = DecoderWorker::new(ImageGenerationLimits::default()).unwrap();
+        let permits = Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = Arc::new(permits.clone().try_acquire_owned().unwrap());
+        let control = DecodeControl {
+            cancel: CancellationToken::new(),
+            caller: CancellationToken::new(),
+            deadline: Instant::now() + std::time::Duration::from_secs(1),
+        };
+        let caller = control.caller.clone();
+        caller.cancel();
+        assert_eq!(
+            worker
+                .decode_shared(vec![0; 100], control, permit.clone(), 100)
+                .await,
+            Err(ImageError::Cancelled)
+        );
+        assert_eq!(permits.available_permits(), 0);
+        drop(worker);
+        assert_eq!(permits.available_permits(), 0);
+        drop(permit);
+        assert_eq!(permits.available_permits(), 1);
+    }
+    #[test]
+    fn cancelled_job_keeps_admission_after_request_owner_is_dropped() {
+        let permits = Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = Arc::new(permits.clone().try_acquire_owned().unwrap());
+        let (result, receive) = tokio::sync::oneshot::channel();
+        let cancel = CancellationToken::new();
+        let job = Job {
+            _permit: permit.clone(),
+            bytes: vec![0],
+            max_output_bytes: 3,
+            control: DecodeControl {
+                cancel: cancel.clone(),
+                caller: CancellationToken::new(),
+                deadline: Instant::now() + std::time::Duration::from_secs(1),
+            },
+            result,
+        };
+        cancel.cancel();
+        drop(receive);
+        drop(permit);
+        assert_eq!(permits.available_permits(), 0);
+        assert_eq!(
+            decode(&job.bytes, &ImageGenerationLimits::default(), &job.control),
+            Err(ImageError::Cancelled)
+        );
+        drop(job);
+        assert_eq!(permits.available_permits(), 1);
+    }
+    #[test]
+    fn decoder_input_observes_cancellation_between_native_reads() {
+        let control = DecodeControl {
+            cancel: CancellationToken::new(),
+            caller: CancellationToken::new(),
+            deadline: Instant::now() + std::time::Duration::from_secs(1),
+        };
+        let mut input = Input {
+            cursor: Cursor::new(&b"native bytes"[..]),
+            control: &control,
+        };
+        assert_eq!(input.read(&mut [0; 1]).unwrap(), 1);
+        control.caller.cancel();
+        assert!(input.read(&mut [0; 1]).is_err());
+        assert!(input.fill_buf().is_err());
+        assert!(input.seek(SeekFrom::Start(0)).is_err());
     }
 }

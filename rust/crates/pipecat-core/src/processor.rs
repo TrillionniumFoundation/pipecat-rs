@@ -109,6 +109,91 @@ pub(crate) struct ForwardingOrigin {
     generation: u64,
 }
 
+/// A non-owning snapshot of an invocation and every inherited causal origin.
+/// It is independent of uninterruptible-frame and background-task survival.
+#[derive(Clone)]
+pub struct InvocationFence {
+    origins: Vec<(std::sync::Weak<Runtime>, usize, Option<u64>)>,
+}
+impl std::fmt::Debug for InvocationFence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InvocationFence")
+            .field("origins", &self.origins.len())
+            .finish()
+    }
+}
+impl InvocationFence {
+    /// Require both original scopes, without resampling or retaining runtimes.
+    /// Exact duplicate origins count once; distinct generations remain separate
+    /// restrictions. The result is bounded to 64 weak origins and uses the same
+    /// single canonical admission-lock order as either input.
+    pub fn intersection(&self, other: &Self) -> Result<Self, ProcessorError> {
+        let mut origins = Vec::new();
+        for origin in self.origins.iter().chain(&other.origins) {
+            if origins.iter().any(
+                |existing: &(std::sync::Weak<Runtime>, usize, Option<u64>)| {
+                    std::sync::Weak::ptr_eq(&existing.0, &origin.0)
+                        && existing.1 == origin.1
+                        && existing.2 == origin.2
+                },
+            ) {
+                continue;
+            }
+            if origins.len() == 64 {
+                return Err(ProcessorError::new(
+                    "invocation fence intersection exceeds 64 origins",
+                ));
+            }
+            origins.push(origin.clone());
+        }
+        Ok(Self { origins })
+    }
+    pub(crate) fn same_scope(&self, other: &Self) -> bool {
+        self.origins.len() == other.origins.len()
+            && self
+                .origins
+                .iter()
+                .zip(&other.origins)
+                .all(|(left, right)| {
+                    std::sync::Weak::ptr_eq(&left.0, &right.0)
+                        && left.1 == right.1
+                        && left.2 == right.2
+                })
+    }
+    /// Observes freshness; use `with_current` for synchronous local admission.
+    pub fn is_current(&self) -> bool {
+        self.with_current(|| ()).is_some()
+    }
+    /// Locks all source runtime admission gates in their canonical order. This
+    /// fences local enqueue only; it cannot make a remote write atomic.
+    /// The closure must not call routing, spawning, or other runtime-admission
+    /// APIs, which would reenter the same non-reentrant locks.
+    pub fn with_current<T>(&self, operation: impl FnOnce() -> T) -> Option<T> {
+        let origins: Option<Vec<_>> = self
+            .origins
+            .iter()
+            .map(|(runtime, index, epoch)| {
+                runtime.upgrade().map(|runtime| (runtime, *index, *epoch))
+            })
+            .collect();
+        let origins = origins?;
+        let mut runtimes: Vec<_> = origins.iter().map(|(runtime, _, _)| runtime).collect();
+        runtimes.sort_unstable_by_key(|runtime| Arc::as_ptr(&runtime.admission) as usize);
+        runtimes.dedup_by_key(|runtime| Arc::as_ptr(&runtime.admission) as usize);
+        let _guards: Vec<_> = runtimes
+            .iter()
+            .map(|runtime| runtime.admission.lock().unwrap())
+            .collect();
+        if origins.iter().any(|(runtime, index, epoch)| {
+            runtime.is_finished()
+                || epoch.is_some_and(|epoch| runtime.queues[*index].generation() > epoch)
+        }) {
+            return None;
+        }
+        Some(operation())
+    }
+}
+
 impl ForwardingOrigin {
     pub(crate) fn is_stale(&self) -> bool {
         self.runtime.queues[self.index].generation() > self.generation
@@ -141,6 +226,26 @@ impl Clone for ProcessorContext {
     }
 }
 impl ProcessorContext {
+    /// Capture the raw invocation, including inherited origins even when its
+    /// own generation is absent. The fence retains no runtime or processor.
+    pub fn invocation_fence(&self) -> Result<InvocationFence, ProcessorError> {
+        if self.origins.len() >= 64 {
+            return Err(ProcessorError::new("invocation fence exceeds 64 origins"));
+        }
+        let mut origins = vec![(
+            Arc::downgrade(&self.runtime),
+            self.index,
+            self.current_generation(),
+        )];
+        origins.extend(self.origins.iter().map(|origin| {
+            (
+                Arc::downgrade(&origin.runtime),
+                origin.index,
+                Some(origin.generation),
+            )
+        }));
+        Ok(InvocationFence { origins })
+    }
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -258,6 +363,83 @@ impl ProcessorContext {
     /// awaiting capacity, which would deadlock cyclic bidirectional flows.
     pub async fn push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
         self.try_push(frame, direction)
+    }
+    /// Bind and enqueue one sealed realtime context under the same ordered
+    /// admission gates. Only a never-bound assistant request selected from a
+    /// validated interruption-surviving native terminal captures the current
+    /// local generation. Inherited origins remain exact; existing fences never
+    /// renew. This admits a new request, not a new tool result or remote ack.
+    pub fn try_push_realtime_context(
+        &self,
+        frame: Frame,
+        direction: Direction,
+    ) -> Result<(), ProcessorError> {
+        let cause = frame.native_realtime_context_cause()?.ok_or_else(|| {
+            ProcessorError::new("realtime context admission requires a sealed cause")
+        })?;
+        cause.validate_direction(direction)?;
+        let new_native_request = cause.schedules_surviving_native_terminal();
+        self.with_admission(&self.runtime, || {
+            if self.runtime.is_finished() {
+                return Err(ProcessorError::new("pipeline is closed"));
+            }
+            frame.bind_realtime_context_fence(|| {
+                let mut fence = self.invocation_fence()?;
+                if new_native_request {
+                    // This is the new assistant request's local admission
+                    // boundary, never a refresh when a provider retries it.
+                    fence.origins[0].2 = Some(self.runtime.queues[self.index].generation());
+                }
+                Ok(fence)
+            })?;
+            self.runtime
+                .route_unlocked(self.index, self.frame_generation(&frame), frame, direction)
+        })
+    }
+    /// Admit provider output under its original non-owning causal fence and
+    /// this receiver's own raw scope. Locks are ordered once, never reentered.
+    /// This is only a local queue-admission guarantee, not remote cancellation.
+    pub fn try_push_with_invocation_fence(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        fence: &InvocationFence,
+    ) -> Result<(), ProcessorError> {
+        let origins: Option<Vec<_>> = fence
+            .origins
+            .iter()
+            .map(|(runtime, index, epoch)| {
+                runtime.upgrade().map(|runtime| (runtime, *index, *epoch))
+            })
+            .collect();
+        let Some(mut origins) = origins else {
+            self.runtime.drop_frame();
+            return Ok(());
+        };
+        origins.push((self.runtime.clone(), self.index, self.current_generation()));
+        origins.extend(self.origins.iter().map(|origin| {
+            (
+                origin.runtime.clone(),
+                origin.index,
+                Some(origin.generation),
+            )
+        }));
+        let mut runtimes: Vec<_> = origins.iter().map(|(runtime, _, _)| runtime).collect();
+        runtimes.sort_unstable_by_key(|runtime| Arc::as_ptr(&runtime.admission) as usize);
+        runtimes.dedup_by_key(|runtime| Arc::as_ptr(&runtime.admission) as usize);
+        let _guards: Vec<_> = runtimes
+            .iter()
+            .map(|runtime| runtime.admission.lock().unwrap())
+            .collect();
+        if origins.iter().any(|(runtime, index, epoch)| {
+            runtime.is_finished()
+                || epoch.is_some_and(|epoch| runtime.queues[*index].generation() > epoch)
+        }) {
+            self.runtime.drop_frame();
+            return Ok(());
+        }
+        self.runtime
+            .route_unlocked(self.index, self.current_generation(), frame, direction)
     }
     /// Synchronous, nonblocking equivalent of `push`, with identical causal
     /// admission and backpressure behavior. Useful when a producer's state

@@ -1,12 +1,14 @@
 use crate::types::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, StreamExt};
+use pipecat_core::InvocationFence;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
     future::Future,
     net::IpAddr,
+    pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -28,6 +30,41 @@ use tokio_tungstenite::{
 };
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+type ResponseFences = Arc<Mutex<HashMap<String, InvocationFence>>>;
+
+/// Readiness is not admission. Check the original fence on every readiness
+/// poll and hold it through start_send. Once accepted, flush exactly once even
+/// if the source is then interrupted; there is no safe remote rollback/retry.
+async fn send_fenced<S, Item>(
+    sink: &mut S,
+    item: Item,
+    fence: Option<&InvocationFence>,
+) -> Result<bool, S::Error>
+where
+    S: Sink<Item> + Unpin,
+{
+    let mut item = Some(item);
+    let admitted = futures_util::future::poll_fn(|cx| {
+        let mut admit = || match Pin::new(&mut *sink).poll_ready(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+            Poll::Ready(Ok(())) => Poll::Ready(
+                Pin::new(&mut *sink)
+                    .start_send(item.take().expect("one sink admission"))
+                    .map(|()| true),
+            ),
+        };
+        match fence {
+            Some(fence) => fence.with_current(admit).unwrap_or(Poll::Ready(Ok(false))),
+            None => admit(),
+        }
+    })
+    .await?;
+    if admitted {
+        futures_util::future::poll_fn(|cx| Pin::new(&mut *sink).poll_flush(cx)).await?;
+    }
+    Ok(admitted)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RealtimeError {
@@ -233,6 +270,7 @@ fn transport(e: tungstenite::Error) -> RealtimeError {
 #[derive(Debug, Clone)]
 pub struct RealtimeClient {
     config: RealtimeConfig,
+    pub(crate) pipeline_turns: bool,
 }
 impl RealtimeClient {
     pub fn config(&self) -> &RealtimeConfig {
@@ -240,7 +278,10 @@ impl RealtimeClient {
     }
     pub fn new(config: RealtimeConfig) -> Result<Self, RealtimeError> {
         config.validate()?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            pipeline_turns: false,
+        })
     }
     /// Opens a single authenticated connection. Redirects and automatic retries
     /// are deliberately unsupported, so credentials and audio are never replayed.
@@ -271,17 +312,26 @@ impl RealtimeClient {
         let (control_tx, control_rx) = watch::channel(Control::default());
         let generation = Arc::new(AtomicU64::new(0));
         let emission_gate = Arc::new(Mutex::new(()));
+        let response_fences = Arc::new(Mutex::new(HashMap::new()));
         let sender = RealtimeSender {
             tx,
             control: control_tx,
             generation: generation.clone(),
             emission_gate: emission_gate.clone(),
             limits: c.limits.clone(),
+            response_fences: response_fences.clone(),
         };
         let mut actor = Actor::new(c.clone(), generation.clone(), emission_gate, events_tx);
+        actor.response_fences = response_fences;
+        actor.pipeline_turns = self.pipeline_turns;
         // session.update precedes every user action, including appended audio.
         actor
-            .write_action(&mut socket, Action::UpdateSession(c.session.clone()), 0)
+            .write_action(
+                &mut socket,
+                Action::UpdateSession(c.session.clone()),
+                0,
+                None,
+            )
             .await?;
         let task = tokio::spawn(async move {
             let result = actor.run(&mut socket, rx, control_rx).await;
@@ -306,6 +356,7 @@ struct Command {
     action: Action,
     generation: u64,
     reply: Option<oneshot::Sender<Result<(), RealtimeError>>>,
+    inference_fence: Option<InvocationFence>,
 }
 #[derive(Clone)]
 pub struct RealtimeSender {
@@ -314,6 +365,7 @@ pub struct RealtimeSender {
     generation: Arc<AtomicU64>,
     emission_gate: Arc<Mutex<()>>,
     limits: RealtimeLimits,
+    response_fences: ResponseFences,
 }
 impl fmt::Debug for RealtimeSender {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -323,6 +375,56 @@ impl fmt::Debug for RealtimeSender {
     }
 }
 impl RealtimeSender {
+    /// Admit an adapter transaction without partially enqueueing its wire effects.
+    pub(crate) fn response_fence(&self, id: &str) -> Option<InvocationFence> {
+        self.response_fences
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
+    }
+    pub(crate) fn with_current_generation<T>(
+        &self,
+        generation: u64,
+        operation: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        (self.generation() == generation).then(operation)
+    }
+    pub(crate) fn try_send_batch_with_fence(
+        &self,
+        actions: Vec<Action>,
+        inference_fence: Option<InvocationFence>,
+    ) -> Result<(), RealtimeError> {
+        for action in &actions {
+            check_queued_action(action, &self.limits)?;
+        }
+        let permits = self
+            .tx
+            .try_reserve_many(actions.len())
+            .map_err(|e| match e {
+                mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
+                mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
+            })?;
+        let generation = self.generation();
+        for (permit, action) in permits.zip(actions) {
+            let fence = matches!(action, Action::CreateResponse(_))
+                .then(|| inference_fence.clone())
+                .flatten();
+            let command = Command {
+                action,
+                generation,
+                reply: None,
+                inference_fence: fence.clone(),
+            };
+            if let Some(fence) = fence {
+                fence.with_current(|| permit.send(command));
+            } else {
+                permit.send(command);
+            }
+        }
+        Ok(())
+    }
     /// Enqueues without waiting for socket I/O. Rejected actions are reported as
     /// terminal stream errors through `RealtimeSession::next_event`.
     pub fn try_send(&self, action: Action) -> Result<(), RealtimeError> {
@@ -341,6 +443,7 @@ impl RealtimeSender {
                 action,
                 generation: self.generation(),
                 reply: None,
+                inference_fence: None,
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
@@ -370,6 +473,7 @@ impl RealtimeSender {
                 action,
                 generation: self.generation(),
                 reply: Some(reply),
+                inference_fence: None,
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
@@ -398,6 +502,10 @@ impl RealtimeSender {
         let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
         self.generation.fetch_add(1, Ordering::AcqRel);
         self.control.send_modify(|c| c.close = true);
+        self.response_fences
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
     /// The gate spans each poll, never an await, so interruption and nonblocking
     /// pipeline admission cannot race between a generation check and emission.
@@ -476,6 +584,7 @@ impl Drop for RealtimeSession {
 struct ResponseContext {
     generation: u64,
     context_id: Option<String>,
+    inference_fence: Option<InvocationFence>,
 }
 struct ToolState {
     name: String,
@@ -486,6 +595,8 @@ struct ToolState {
     context_id: Option<String>,
 }
 struct Actor {
+    response_fences: ResponseFences,
+    pipeline_turns: bool,
     config: RealtimeConfig,
     generation: Arc<AtomicU64>,
     emission_gate: Arc<Mutex<()>>,
@@ -506,7 +617,8 @@ struct Actor {
     continue_response: bool,
     continuation_context: Option<String>,
     continuation_generation: u64,
-    deferred_response: Option<(ResponseOptions, u64)>,
+    deferred_response: Option<(ResponseOptions, u64, Option<InvocationFence>)>,
+    settlement_deadline: Option<Instant>,
     discarded_calls: VecDeque<String>,
 }
 impl Actor {
@@ -518,6 +630,8 @@ impl Actor {
     ) -> Self {
         let ready_deadline = Instant::now() + config.limits.connect_timeout;
         Self {
+            response_fences: Arc::new(Mutex::new(HashMap::new())),
+            pipeline_turns: false,
             config,
             generation,
             emission_gate,
@@ -539,6 +653,7 @@ impl Actor {
             continuation_context: None,
             continuation_generation: 0,
             deferred_response: None,
+            settlement_deadline: None,
             discarded_calls: VecDeque::new(),
         }
     }
@@ -561,11 +676,33 @@ impl Actor {
         .map_err(|_| RealtimeError::Timeout("write"))?
         .map_err(transport)
     }
+    async fn write_inference(
+        &mut self,
+        socket: &mut Socket,
+        mut value: Value,
+        fence: Option<&InvocationFence>,
+    ) -> Result<bool, RealtimeError> {
+        self.sequence += 1;
+        value["event_id"] = json!(format!("pc_evt_{}", self.sequence));
+        let wire = serde_json::to_string(&value)
+            .map_err(|_| RealtimeError::Invalid("event serialization"))?;
+        if wire.len() > self.config.limits.max_message_bytes {
+            return Err(RealtimeError::TooLarge);
+        }
+        timeout(
+            self.config.limits.operation_timeout,
+            send_fenced(socket, Message::Text(wire.into()), fence),
+        )
+        .await
+        .map_err(|_| RealtimeError::Timeout("write"))?
+        .map_err(transport)
+    }
     async fn write_action(
         &mut self,
         socket: &mut Socket,
         action: Action,
         generation: u64,
+        inference_fence: Option<InvocationFence>,
     ) -> Result<(), RealtimeError> {
         let value = match action {
             Action::Finish => {
@@ -632,6 +769,12 @@ impl Actor {
                 json!({"type":"conversation.item.truncate", "item_id":position.item_id, "content_index":position.content_index, "audio_end_ms":position.audio_end_ms})
             }
             Action::CreateResponse(response) => {
+                if inference_fence
+                    .as_ref()
+                    .is_some_and(|fence| !fence.is_current())
+                {
+                    return Ok(());
+                }
                 if response
                     .output_modalities
                     .as_ref()
@@ -641,21 +784,27 @@ impl Actor {
                         "exactly one response modality is required",
                     ));
                 }
-                if self.active.is_some() || self.pending.is_some() {
+                if self.active.is_some() || self.pending.is_some() || !self.tools.is_empty() {
                     if self.deferred_response.is_some() {
                         return Err(RealtimeError::ResponseActive);
                     }
-                    self.deferred_response = Some((response, generation));
+                    self.deferred_response = Some((response, generation, inference_fence));
                     return Ok(());
                 }
-                self.write(
-                    socket,
-                    json!({"type":"response.create", "response":response}),
-                )
-                .await?;
+                if !self
+                    .write_inference(
+                        socket,
+                        json!({"type":"response.create", "response":response}),
+                        inference_fence.as_ref(),
+                    )
+                    .await?
+                {
+                    return Ok(());
+                }
                 self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
                 self.pending = Some(ResponseContext {
                     generation,
+                    inference_fence,
                     context_id: response
                         .context_id
                         .or_else(|| self.config.context_id.clone()),
@@ -679,7 +828,7 @@ impl Actor {
                     .tools
                     .get(&call_id)
                     .ok_or(RealtimeError::UnknownToolCall)?;
-                if tool.generation != generation || !tool.announced {
+                if (!self.pipeline_turns && tool.generation != generation) || !tool.announced {
                     return Err(RealtimeError::UnknownToolCall);
                 }
                 let tool_context = tool.context_id.clone();
@@ -717,6 +866,9 @@ impl Actor {
                 )
                 .await?;
                 self.tools.remove(&call_id);
+                if self.tools.is_empty() {
+                    self.settlement_deadline = None;
+                }
                 self.completed_tools.push_back(call_id);
                 while self.completed_tools.len() > self.config.limits.max_outstanding_tools {
                     self.completed_tools.pop_front();
@@ -738,27 +890,35 @@ impl Actor {
             && self.pending.is_none()
         {
             let continuation_context = self.continuation_context.take();
-            let (options, generation) = self.deferred_response.take().unwrap_or_else(|| {
-                (
-                    ResponseOptions {
-                        context_id: continuation_context,
-                        ..Default::default()
-                    },
-                    self.continuation_generation,
-                )
-            });
+            let (options, generation, inference_fence) =
+                self.deferred_response.take().unwrap_or_else(|| {
+                    (
+                        ResponseOptions {
+                            context_id: continuation_context,
+                            ..Default::default()
+                        },
+                        self.continuation_generation,
+                        None,
+                    )
+                });
             self.continue_response = false;
             if generation != self.epoch() {
                 return Ok(());
             }
-            self.write(
-                socket,
-                json!({"type":"response.create", "response":options}),
-            )
-            .await?;
+            if !self
+                .write_inference(
+                    socket,
+                    json!({"type":"response.create", "response":options}),
+                    inference_fence.as_ref(),
+                )
+                .await?
+            {
+                return Ok(());
+            }
             self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
             self.pending = Some(ResponseContext {
                 generation,
+                inference_fence,
                 context_id: options
                     .context_id
                     .or_else(|| self.config.context_id.clone()),
@@ -777,14 +937,35 @@ impl Actor {
                 .await?;
         }
         if let Some(position) = control.playback {
-            self.write_action(socket, Action::TruncateItem(position), control.generation)
-                .await?;
+            self.write_action(
+                socket,
+                Action::TruncateItem(position),
+                control.generation,
+                None,
+            )
+            .await?;
         }
-        self.discarded_calls.extend(self.tools.keys().cloned());
+        // The paired executor owns terminal settlement. A successful receipt
+        // can already be admitted but delayed before its upstream relay.
+        // Do not invent CANCELLED or discard that identity on interruption.
+        self.discarded_calls.extend(
+            self.tools
+                .iter()
+                .filter(|(_, tool)| !self.pipeline_turns || !tool.announced)
+                .map(|(id, _)| id.clone()),
+        );
         while self.discarded_calls.len() > self.config.limits.max_outstanding_tools {
             self.discarded_calls.pop_front();
         }
-        self.tools.clear();
+        if self.pipeline_turns {
+            self.tools.retain(|_, tool| tool.announced);
+            if !self.tools.is_empty() && self.settlement_deadline.is_none() {
+                self.settlement_deadline =
+                    Some(Instant::now() + self.config.limits.response_timeout);
+            }
+        } else {
+            self.tools.clear();
+        }
         self.deferred_response = None;
         self.continue_response = false;
         self.continuation_context = None;
@@ -796,6 +977,7 @@ impl Actor {
         mut commands: mpsc::Receiver<Command>,
         mut control: watch::Receiver<Control>,
     ) -> Result<(), RealtimeError> {
+        let mut preserved = VecDeque::new();
         loop {
             if self.finishing && self.active.is_none() && self.pending.is_none() {
                 return Ok(());
@@ -803,15 +985,36 @@ impl Actor {
             let deadline = self
                 .deadline
                 .unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400));
+            let settlement_deadline = self
+                .settlement_deadline
+                .unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400));
             tokio::select! { biased;
                 changed = control.changed() => {
                     if changed.is_err() { return Ok(()); }
                     let value = control.borrow_and_update().clone();
                     if value.close { return Ok(()); }
+                    if self.pipeline_turns && self.ready {
+                        // Local history acceptance is durable. Settle queued final
+                        // outcomes before cancelling still-open calls, while stale
+                        // inference and audio retain interruption semantics.
+                        let admitted = commands.len();
+                        for _ in 0..admitted {
+                            let Ok(command) = commands.try_recv() else { break; };
+                            if matches!(command.action, Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)) {
+                                let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
+                                if let Some(reply) = command.reply { let _ = reply.send(result.clone()); }
+                                result?;
+                            } else {
+                                if preserved.len() >= self.config.limits.queue_capacity { return Err(RealtimeError::Backpressure); }
+                                preserved.push_back(command);
+                            }
+                        }
+                    }
                     self.interrupt(socket, value).await?;
                 }
                 _ = tokio::time::sleep_until(self.ready_deadline), if !self.ready => return Err(RealtimeError::Timeout("session readiness")),
                 _ = tokio::time::sleep_until(deadline), if self.deadline.is_some() => return Err(RealtimeError::Timeout("response")),
+                _ = tokio::time::sleep_until(settlement_deadline), if self.settlement_deadline.is_some() => return Err(RealtimeError::Timeout("tool settlement")),
                 item = socket.next() => {
                     match item {
                         Some(Ok(Message::Text(text))) => {
@@ -825,14 +1028,15 @@ impl Actor {
                         Some(Err(e)) => return Err(transport(e)),
                     }
                 }
-                command = commands.recv(), if self.ready => {
+                command = async { match preserved.pop_front() { Some(command) => Some(command), None => commands.recv().await } }, if self.ready => {
                     let Some(command) = command else { return Ok(()); };
                     let finishing = matches!(command.action, Action::Finish);
                     if !finishing && command.reply.as_ref().is_some_and(|r| r.is_closed()) { continue; }
-                    if !finishing && command.generation != self.epoch() {
+                    let durable = self.pipeline_turns && matches!(command.action, Action::CreateItem { .. } | Action::UpdateSession(_) | Action::ToolResult { .. });
+                    if !finishing && !durable && command.generation != self.epoch() {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); } continue;
                     }
-                    let result = self.write_action(socket, command.action, command.generation).await;
+                    let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
                     let fatal = matches!(result, Err(RealtimeError::Transport | RealtimeError::Closed | RealtimeError::Timeout(_)));
                     let failure = result.clone();
                     let unacknowledged = command.reply.is_none();
@@ -863,7 +1067,7 @@ impl Actor {
                 ) => *interrupt_response,
                 None => false,
             };
-            if interrupt_response {
+            if interrupt_response && !self.pipeline_turns {
                 let generation = {
                     let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
                     self.generation.fetch_add(1, Ordering::AcqRel) + 1
@@ -897,6 +1101,13 @@ impl Actor {
                 self.pending = None;
                 self.pending_event_id = None;
                 self.deadline = None;
+                if self.pipeline_turns
+                    && !self.tools.is_empty()
+                    && self.settlement_deadline.is_none()
+                {
+                    self.settlement_deadline =
+                        Some(Instant::now() + self.config.limits.response_timeout);
+                }
                 self.maybe_continue(socket).await?;
             }
             Event::ResponseCreated { response } => {
@@ -910,10 +1121,22 @@ impl Actor {
                 let context = self.pending.take().unwrap_or_else(|| ResponseContext {
                     generation: self.epoch(),
                     context_id: self.config.context_id.clone(),
+                    inference_fence: None,
                 });
+                if let Some(fence) = &context.inference_fence {
+                    self.response_fences
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(response.id.clone(), fence.clone());
+                }
                 self.responses.push_back((response.id.clone(), context));
                 while self.responses.len() > 64 {
-                    self.responses.pop_front();
+                    if let Some((id, _)) = self.responses.pop_front() {
+                        self.response_fences
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .remove(&id);
+                    }
                 }
                 self.active = Some(response.id.clone());
                 self.deadline = Some(Instant::now() + self.config.limits.response_timeout);
@@ -944,7 +1167,12 @@ impl Actor {
             .as_ref()
             .map(|c| c.generation)
             .unwrap_or_else(|| self.epoch());
-        let stale = event.response_id().is_some() && generation != self.epoch();
+        let stale = event.response_id().is_some()
+            && (generation != self.epoch()
+                || context
+                    .as_ref()
+                    .and_then(|context| context.inference_fence.as_ref())
+                    .is_some_and(|fence| !fence.is_current()));
         if !stale {
             match &mut event {
                 Event::OutputItemAdded {
@@ -1025,6 +1253,13 @@ impl Actor {
             if self.active.as_deref() == Some(&response.id) {
                 self.active = None;
                 self.deadline = None;
+                if self.pipeline_turns
+                    && !self.tools.is_empty()
+                    && self.settlement_deadline.is_none()
+                {
+                    self.settlement_deadline =
+                        Some(Instant::now() + self.config.limits.response_timeout);
+                }
             }
             if !self.finishing || self.deferred_response.is_some() {
                 self.maybe_continue(socket).await?;
@@ -1081,7 +1316,10 @@ fn redact_event(event: &mut Event, key: &str) {
 }
 
 /// Checks queue payload size without constructing a second unbounded buffer.
-fn bounded_serialized(value: &impl serde::Serialize, limit: usize) -> Result<(), RealtimeError> {
+pub(crate) fn bounded_serialized(
+    value: &impl serde::Serialize,
+    limit: usize,
+) -> Result<(), RealtimeError> {
     struct Budget(usize);
     impl std::io::Write for Budget {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
@@ -1113,3 +1351,6 @@ fn check_queued_action(action: &Action, limits: &RealtimeLimits) -> Result<(), R
     }
     bounded_serialized(action, limits.max_message_bytes)
 }
+
+#[cfg(test)]
+mod review_fenced_sink;

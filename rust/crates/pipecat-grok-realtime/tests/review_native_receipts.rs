@@ -72,8 +72,11 @@ async fn fixture() -> (TcpListener, Arc<GrokRealtimeProcessor>) {
     .into()]);
     config.limits.connect_timeout = WAIT;
     config.limits.operation_timeout = WAIT;
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_context_requests(),
+    );
     (listener, processor)
 }
 fn pipeline_config() -> PipelineConfig {
@@ -247,10 +250,7 @@ async fn independent_delayed_native_policy_preserves_the_one_upstream_inference_
             inference,
             terminal_count: terminals.clone(),
         }),
-        Arc::new(LLMAssistantAggregator::new(
-            context.clone(),
-            Default::default(),
-        )),
+        compat_assistant(context.clone(), Default::default()),
     ])
     .start(pipeline_config())
     .await
@@ -572,10 +572,7 @@ async fn admitted_success_race() -> SharedContext {
         processor.clone(),
         Arc::new(executor),
         Arc::new(RelayThenInterrupt { relay, processor }),
-        Arc::new(LLMAssistantAggregator::new(
-            context.clone(),
-            Default::default(),
-        )),
+        compat_assistant(context.clone(), Default::default()),
         Arc::new(UserSpeakingProbe(speaking.clone())),
     ])
     .start(pipeline_config())
@@ -781,10 +778,7 @@ async fn delayed_registration(terminal: DelayedTerminal) {
             terminal: terminal_seen,
         }),
         Arc::new(relay),
-        Arc::new(LLMAssistantAggregator::new(
-            context.clone(),
-            Default::default(),
-        )),
+        compat_assistant(context.clone(), Default::default()),
     ])
     .start(pipeline_config())
     .await
@@ -846,4 +840,20 @@ async fn independent_success_before_both_declarations_settles_assistant_once() {
 #[tokio::test]
 async fn independent_timeout_before_both_declarations_settles_assistant_once() {
     delayed_registration(DelayedTerminal::Timeout).await;
+}
+
+// Provider-only fixtures deliberately keep cascade aggregation. Real paired
+// realtime activation is covered by paired_realtime.rs.
+fn compat_assistant(
+    context: SharedContext,
+    config: pipecat_turns::AssistantAggregatorConfig,
+) -> Arc<LLMAssistantAggregator> {
+    pipecat_turns::LLMContextAggregatorPair::with_shared_context_and_realtime_mode(
+        context,
+        Default::default(),
+        config,
+        pipecat_turns::RealtimeServiceMode::Disabled,
+    )
+    .unwrap()
+    .assistant()
 }

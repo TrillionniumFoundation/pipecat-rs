@@ -1,14 +1,19 @@
 // Copyright (c) 2024-2026, Daily
 // SPDX-License-Identifier: BSD-2-Clause
-//! Bounded native OpenAI Images API, RGB decoding, and pipeline delivery.
+//! Bounded native OpenAI/Gemini image generation, RGB decoding, and pipeline delivery.
 mod budget;
 mod client;
 mod decode;
+mod gemini;
 mod processor;
 mod security;
 mod settings;
 
 pub use client::{GeneratedImage, OpenAiImageClient};
+pub use gemini::{
+    GeminiImageClient, GeminiImageConfig, GeminiImageGenProcessor, GeminiImageGeneration,
+    GeminiImageLimits, GeminiImageSettings, GeminiImageSettingsDelta, GEMINI_SOURCE_DEFAULT_MODEL,
+};
 pub use pipecat_services::CancellationToken;
 pub use processor::ImageGenProcessor;
 pub use security::HostedImagePolicy;

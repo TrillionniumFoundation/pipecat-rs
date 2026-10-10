@@ -56,6 +56,18 @@ impl ContextState {
             speculation: false,
         }))
     }
+    /// Check the positional edit lineage and project under the same lock.
+    pub(crate) fn frame_data_at_lineage(
+        &self,
+        expected: Option<u64>,
+    ) -> Result<FrameData, ProcessorError> {
+        if expected.is_some_and(|lineage| lineage != self.lineage) {
+            return Err(ProcessorError::new(
+                "local context lineage changed before realtime intent snapshot",
+            ));
+        }
+        self.frame_data()
+    }
     fn new(context: Context) -> Self {
         let mut state = Self {
             data: LlmContextData {
@@ -358,6 +370,12 @@ impl SharedContext {
     /// Select a lossless frame representation, preserving rich tool sets and extras.
     pub fn frame_data(&self) -> Result<FrameData, ProcessorError> {
         self.lock()?.frame_data()
+    }
+    pub(crate) fn frame_data_at_lineage(
+        &self,
+        expected: Option<u64>,
+    ) -> Result<FrameData, ProcessorError> {
+        self.lock()?.frame_data_at_lineage(expected)
     }
     pub(crate) fn lock(&self) -> Result<MutexGuard<'_, ContextState>, ProcessorError> {
         self.0

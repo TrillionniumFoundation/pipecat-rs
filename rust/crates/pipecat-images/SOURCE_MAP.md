@@ -2,7 +2,7 @@
 
 Baseline: `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
 All source/test files below are byte-identical to this baseline. This map covers
-only OpenAI Images and its shared output path; it does not certify other image providers.
+OpenAI Images, Gemini generate-content images, and their shared output path.
 
 | Pinned source | SHA-256 | Native implementation / tests |
 | --- | --- | --- |
@@ -52,9 +52,58 @@ because URL images use the existing cancellable `write_image` operation path.
 * PNG high-bit-depth samples are reduced to 8-bit; color profiles are ignored.
   RGB conversion is not a color-management or image-quality equivalence claim
 
-Gemini, Azure polling, Fal, live hosted-provider acceptance, physical rendering,
+Azure polling, Fal, live hosted-provider acceptance, physical rendering,
 and encoding/camera/video adapters are separate work.
 
 JPEG ownership additionally depends on the exact vendored synchronous-dispatch
 patch documented in `rust/vendor/jpeg-decoder-0.3.2/PATCHES.md`. Upstream's
 Rayon-disabled implementation alone does not satisfy the owned-work contract.
+
+## Gemini native protocol slice
+
+Pinned Python files are inspected as static references only:
+
+| Pinned source | SHA-256 | Native implementation |
+| --- | --- | --- |
+| `src/pipecat/services/google/image.py` | `fb44eb4683700caa39e2b4a53fe257e5a5080f7b3442e1d69ed0e695adceb3a8` | `gemini/settings.rs`: defaults/ignored negative prompt; `gemini/client.rs`: sequential generate-content; `gemini/wire.rs`: first inline part; shared `decode.rs`: native RGB |
+| `tests/test_google_image_gen.py` | `b4419ea6459267ce64c076651b969cd90360740d13b6ad10419da79c67c63db3` | `tests/gemini.rs`: RGB/alpha, count/config, no image, API error, negative-prompt omission |
+| `src/pipecat/services/image_service.py` | `267504b4bef1f32fdf8b9d389c0c7b50a0a35940c70d6ad1bf5a37f049b379ab` | `gemini/processor.rs`: ordered source text, incremental images, processing metric and lifecycle |
+
+Primary REST references inspected 2026-10-10:
+
+- [GenerateContent API](https://ai.google.dev/api/generate-content?hl=en):
+  nonstreaming endpoint, `contents`, `generationConfig`, `responseModalities`,
+  `imageConfig.aspectRatio`, candidate content and inline Blob MIME/base64
+- [Google image-generation guide](https://ai.google.dev/gemini-api/docs/generate-content/image-generation?hl=en):
+  REST credential header and IMAGE-only response configuration
+
+The wire is frozen to those documented fields and the pinned source behavior.
+SDK automatic function calling is local orchestration, not a REST property;
+no tool declaration or automatic execution is implemented. Current documentation
+may advertise different models or additional request formats; no such capability
+or model migration is inferred from it.
+
+Native loopback cases in `tests/gemini.rs` cover exact route/header/JSON, ordered
+candidate/part selection, real PNG/JPEG RGB, sequential lazy pulls, immutable
+multi-image snapshots, partial delivery, safety/no-image, strict MIME/base64,
+HTTP errors, candidate/part/body/codec/aggregate limits, dropped-future ambiguity,
+no retries/redirects, cancellation and deadlines, processor backpressure,
+settings frames, health fencing, End/Stop/Cancel/drop, text inheritance, and
+actual shared OutputBackend RGB delivery.
+
+Intentional safety tightening: count 1–8; bounded model segment and enumerated
+aspect ratios; MIME/signature agreement; response-wide safety/recitation veto
+even when another candidate has valid bytes (both candidate orders are tested),
+which differs from source first-inline selection; no arbitrary Pillow codecs; whole-prompt and
+per-image deadlines; explicit aggregate byte caps. `negative_prompt` is ignored
+without replicating Python's deprecation-warning machinery. Processing metrics
+are emitted; source SDK TTFB instrumentation is not separately modeled. A lazy
+pull API replaces the Python async generator; a cancelled pull cannot restart a
+billable request. No live provider call, original Python execution, hosted model
+availability/quality/billing, physical rendering or portable packaging is
+qualified by these local tests. Offline gate evidence belongs to the source-hashed
+qualification report for the exact candidate, not to this behavior map.
+
+Independent cases in `tests/gemini_review/mod.rs` additionally exercise exact
+aggregate-budget exhaustion before another billable HTTP request and admission
+release after a fused HTTP failure while the failed sequence remains alive.

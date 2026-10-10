@@ -18,3 +18,8 @@ url = "2"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+pipecat-turns = { path = "../pipecat-turns" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-processors = { path = "../pipecat-processors" }

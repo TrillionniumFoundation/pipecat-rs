@@ -156,3 +156,86 @@ pipeline cases in `tests/realtime_aggregation_runtime.rs`, and raw causal-origin
 regressions in the core processor's `causal_scope_tests` module. These are manually
 mapped source contracts and adversarial lifecycle tests, not execution of Python
 or live-provider qualification.
+
+## Explicit native context intent
+
+Active realtime pairs attach a process-local `NativeRealtimeContextCause` to
+explicit typed input, run requests, appends, replacements and transforms. The
+cause identifies one producer and checked monotonic sequence, records the exact
+append range (rather than inferring changes from equal text), and seals the
+bounded snapshot with streaming SHA-256. Direct function tools retain their
+local callback identity without serializing or retaining callbacks in the seal.
+The cause and provider admission cursor retain constant-size intent state, not
+an operation log or another conversation-history copy. Cascade/Disabled behavior
+is unchanged.
+
+An explicit `run_llm=false` mutation emits its own uninterruptible context cause
+without requesting inference. A provider may admit its history immediately, so
+this is an intentional native synchronization timing difference from Python's
+user-first local-only update. A later state-only trailing snapshot cannot swallow
+or duplicate that explicit edit. Repeated identical typed text remains distinct
+intent. An unconsumed cause cannot cross any native frame wire encoder.
+
+Original emission binds a non-owning invocation fence after the explicit turn's
+own interruption. It captures the raw generation and every inherited origin;
+background-task survival cannot erase those origins. Providers keep durable
+history admission separate from inference, preserve the original fence through
+queued/deferred inference and output, and recheck it at actual socket admission.
+Local enqueue or socket admission is not provider confirmation. Completed or
+expired runtimes invalidate the fence, and retained cause clones own no runtime.
+
+Provider admission validates the entire operation before changing remote state.
+Unsupported replacement/deletion/transform may be rejected after the application
+has already edited local history, which is the source-compatible local mutation
+boundary. An error does not roll back unrelated assistant/tool edits. If snapshot
+projection or sealing fails, the pair preserves its local edit, poisons further
+explicit admission before another mutation, and raises a fatal session error.
+Repair retained history and construct a new pair and provider session to resume;
+retrying the old edit must not silently duplicate or discard it.
+
+Explicit positional edits also capture the shared context's lineage while holding
+its mutation lock. Snapshot projection checks that lineage under the same context
+lock; a replacement, transform or summary between mutation and projection fails
+fatally before sealing, sequence advancement or assistant inference acknowledgment.
+Current local history is retained as-is, including a concurrent replacement; it is
+not rolled back or described as still containing an edit that another writer removed.
+Ordinary concurrent appends preserve earlier indices and remain supported. The
+assistant→context lock order is unchanged, and results arriving after the actual
+inference snapshot still owe continuation. Signed cascade contexts remain unsupported
+in active realtime aggregation; their suffix reconciliation is not a realtime edit API.
+
+### Assistant inference scheduling
+
+Realtime assistant continuations use a separate bounded producer and the sealed
+`AssistantContinuation` intent. The assistant creates it only after existing
+user-speech, grouped-tool and delivered-playback gates allow scheduling. It is
+bound at original assistant emission, never refreshed when a provider becomes
+ready or an active response ends. Providers validate direction before effects:
+assistant continuations are upstream and request inference only; user edits and
+runs are downstream. Separate constant-size admission cursors preserve each
+producer's replay/sequence contract. Retained tool history and settlement remain
+durable even when the original inference fence expires. Failure to seal or emit
+an assistant request is fatal, preserves local history, and requires a fresh
+pair/provider session; sealing failure does not clear owed inference. Explicit
+Disabled cascade contexts retain their previous unsealed behavior.
+
+The assistant also seals a tiny optional native-terminal scheduling reason: the
+immutable outcome ID and its native interruption policy, without retaining the
+receipt or result. It selects this reason only within the existing eligible
+result/cancellation branch after native validation and deduplication. One pending
+reason follows the coalesced owed/group lifetime and is consumed by `clear_runs`.
+A provider's gate-reevaluation `LlmRun` creates no new native reason. Native false
+cancellation creates neither a new owed flag nor a reason, but reevaluates an
+already-owed request after clearing its group membership. Exact terminal replay
+cannot schedule a second cause. Raw callback cancellation behavior is unchanged.
+
+A newly eligible terminal whose immutable native policy is
+`cancel_on_interruption=false` may arrive through an old durable delivery
+invocation. At actual assistant admission, `try_push_realtime_context` binds this
+never-bound new request to the current local generation (always `Some`) and
+queues it within the same ordered admission lock. Inherited origin restrictions
+remain exact. Cancel-enabled terminal requests retain their old raw invocation
+scope. A previously bound cause never refreshes, and later interruption still
+invalidates the admitted request before provider inference/output. Finished
+runtimes reject admission. This is deliberately limited to new shared-assistant
+scheduling after validated native reconciliation, not a revival of old requests.

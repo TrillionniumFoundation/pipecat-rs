@@ -163,6 +163,15 @@ Python's shared mutable objects. Each frame has a source-class name and class-lo
 instance counter. Local callbacks, transforms, processor references and flush
 events remain executable within Rust and explicitly reject serialization.
 
+Sealed realtime contexts retain a separate tiny identity token for each direct
+tool entry, at most `MAX_REALTIME_CONTEXT_TOOL_IDENTITIES` (4,096), in addition to
+the 1 MiB serialized context bound. `retained_tool_identity_count()` includes
+repeated entries that share a handler. Handler clones share a token; replacing a
+handler creates a distinct token. Retained causes keep those identities live
+without retaining callbacks, their captures, or another context-history copy.
+The tokens and direct callbacks cannot be serialized or reconstructed from wire
+data. An over-bound attachment fails without changing the frame or producer sequence.
+
 The source fixture covers all 134 Frame-derived classes at the pinned Python
 revision. Tests instantiate all 161 native variants and compare priority and
 interruptibility to the static Python AST export. This includes base frame

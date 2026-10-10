@@ -41,6 +41,8 @@ impl Default for UserAggregatorConfig {
 }
 struct UserState {
     controller: UserTurnController,
+    context_causes: pipecat_core::NativeRealtimeContextProducer,
+    context_cause_failed: bool,
     eager: Option<crate::eager::EagerState>,
     idle: Arc<crate::idle::UserIdleTracker>,
     now: Duration,
@@ -140,6 +142,8 @@ impl LLMUserAggregator {
             context,
             state: Arc::new(Mutex::new(UserState {
                 controller,
+                context_causes: Default::default(),
+                context_cause_failed: false,
                 eager: config.eager.map(crate::eager::EagerState::new),
                 idle: idle.clone(),
                 now: Duration::ZERO,
@@ -316,6 +320,20 @@ impl LLMUserAggregator {
     ) -> Result<AggregationOutput, ProcessorError> {
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
+        if state.context_cause_failed
+            && matches!(
+                frame.data,
+                FrameData::InputText(_)
+                    | FrameData::LlmRun
+                    | FrameData::LlmMessagesAppend(_)
+                    | FrameData::LlmMessagesUpdate(_)
+                    | FrameData::LlmMessagesAppendDetailed(_)
+                    | FrameData::LlmMessagesUpdateDetailed(_)
+                    | FrameData::LlmMessagesTransform(_)
+            )
+        {
+            return Err(ProcessorError::fatal("a realtime context edit was retained locally but not delivered; create a new pair and provider session from repaired context"));
+        }
         if matches!(
             frame.data,
             FrameData::Transcription(_)
@@ -659,47 +677,104 @@ impl LLMUserAggregator {
                         }
                         output.actions.push(AggregationAction::Interrupt);
                     }
-                    self.context
-                        .append(Message::text(Role::User, text.text.trim()))?;
-                    Self::user_context(&state, &self.context, &mut output)?;
+                    let mut context = self.context.lock()?;
+                    let start = context.messages.len();
+                    context.append_native(Message::text(Role::User, text.text.trim()));
+                    let end = context.messages.len();
+                    let lineage = context.lineage;
+                    drop(context);
+                    Self::explicit_user_context(
+                        &mut state,
+                        &self.context,
+                        &mut output,
+                        pipecat_core::RealtimeContextIntent::Append { start, end },
+                        Some(lineage),
+                        true,
+                    )?;
                 }
                 return Ok(output);
             }
             FrameData::LlmRun => {
-                Self::user_context(&state, &self.context, &mut output)?;
+                Self::explicit_user_context(
+                    &mut state,
+                    &self.context,
+                    &mut output,
+                    pipecat_core::RealtimeContextIntent::Run,
+                    None,
+                    true,
+                )?;
                 return Ok(output);
             }
             FrameData::LlmMessagesAppend(messages) | FrameData::LlmMessagesUpdate(messages) => {
                 let mut context = self.context.lock()?;
+                let start = context.messages.len();
                 context.append_legacy(
                     &messages.messages,
                     matches!(frame.data, FrameData::LlmMessagesUpdate(_)),
                 );
+                let intent = if matches!(frame.data, FrameData::LlmMessagesUpdate(_)) {
+                    pipecat_core::RealtimeContextIntent::Replace
+                } else {
+                    pipecat_core::RealtimeContextIntent::Append {
+                        start,
+                        end: context.messages.len(),
+                    }
+                };
+                let lineage = context.lineage;
                 drop(context);
-                if messages.run_llm {
-                    Self::user_context(&state, &self.context, &mut output)?;
-                }
+                Self::explicit_user_context(
+                    &mut state,
+                    &self.context,
+                    &mut output,
+                    intent,
+                    Some(lineage),
+                    messages.run_llm,
+                )?;
                 return Ok(output);
             }
             FrameData::LlmMessagesAppendDetailed(messages)
             | FrameData::LlmMessagesUpdateDetailed(messages) => {
                 let mut context = self.context.lock()?;
+                let start = context.messages.len();
                 if matches!(frame.data, FrameData::LlmMessagesUpdateDetailed(_)) {
                     context.set_rich(messages.messages.clone());
                 } else {
                     context.append_rich(messages.messages.clone());
                 }
+                let intent = if matches!(frame.data, FrameData::LlmMessagesUpdateDetailed(_)) {
+                    pipecat_core::RealtimeContextIntent::Replace
+                } else {
+                    pipecat_core::RealtimeContextIntent::Append {
+                        start,
+                        end: context.messages.len(),
+                    }
+                };
+                let lineage = context.lineage;
                 drop(context);
-                if messages.run_llm == Some(true) {
-                    Self::user_context(&state, &self.context, &mut output)?;
-                }
+                Self::explicit_user_context(
+                    &mut state,
+                    &self.context,
+                    &mut output,
+                    intent,
+                    Some(lineage),
+                    messages.run_llm == Some(true),
+                )?;
                 return Ok(output);
             }
             FrameData::LlmMessagesTransform(transform) => {
-                self.context.lock()?.transform(&transform.transform)?;
-                if transform.run_llm == Some(true) {
-                    Self::user_context(&state, &self.context, &mut output)?;
-                }
+                let lineage = {
+                    let mut context = self.context.lock()?;
+                    context.transform(&transform.transform)?;
+                    context.lineage
+                };
+                Self::explicit_user_context(
+                    &mut state,
+                    &self.context,
+                    &mut output,
+                    pipecat_core::RealtimeContextIntent::Replace,
+                    Some(lineage),
+                    transform.run_llm == Some(true),
+                )?;
                 return Ok(output);
             }
             FrameData::LlmSetTools(tools) => {
@@ -1007,6 +1082,49 @@ impl LLMUserAggregator {
         Self::user_context(state, context, output)?;
         Ok(true)
     }
+    fn explicit_user_context(
+        state: &mut UserState,
+        context: &SharedContext,
+        output: &mut AggregationOutput,
+        intent: pipecat_core::RealtimeContextIntent,
+        expected_lineage: Option<u64>,
+        run_llm: bool,
+    ) -> Result<(), ProcessorError> {
+        if !state.aggregation.enabled()? {
+            if run_llm {
+                Self::user_context(state, context, output)?;
+            }
+            return Ok(());
+        }
+        let result = (|| {
+            let snapshot = if run_llm {
+                match state
+                    .paired_assistant
+                    .as_ref()
+                    .and_then(std::sync::Weak::upgrade)
+                {
+                    Some(assistant) => {
+                        assistant.prepare_user_context_at_lineage(expected_lineage)?
+                    }
+                    None => context.frame_data_at_lineage(expected_lineage)?,
+                }
+            } else {
+                context.frame_data_at_lineage(expected_lineage)?
+            };
+            output.context_frame(snapshot, Direction::Downstream);
+            let Some(AggregationAction::Push(context)) = output.actions.last_mut() else {
+                return Err(ProcessorError::fatal("explicit user context is missing"));
+            };
+            state
+                .context_causes
+                .attach(&mut context.frame, intent, run_llm)
+        })();
+        if let Err(error) = result {
+            state.context_cause_failed = true;
+            return Err(ProcessorError::fatal(format!("realtime local history retained as-is but edit not delivered: {}; create a new pair and provider session from repaired context", error.message)));
+        }
+        Ok(())
+    }
     fn user_context(
         state: &UserState,
         context: &SharedContext,
@@ -1124,7 +1242,12 @@ impl FrameProcessor for LLMUserAggregator {
         } else {
             Ok(())
         };
-        emitted?;
+        if let Err(error) = emitted {
+            if error.fatal {
+                self.lock()?.context_cause_failed = true;
+            }
+            return Err(error);
+        }
         released?;
         self.schedule_timer(ctx)
     }
@@ -1191,4 +1314,146 @@ pub(crate) fn validate_control(data: &FrameData) -> Result<(), ProcessorError> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod realtime_lineage_tests {
+    use super::*;
+    use crate::{LLMContextAggregatorPair, RealtimeServiceMode};
+    use pipecat_core::{ChatMessage, ChatRole, LocalMessageTransform, RealtimeContextIntent};
+    use pipecat_services::Context;
+
+    #[test]
+    fn realtime_snapshot_lineage_no_run_and_transform_fail_before_seal_or_sequence() {
+        for transform in [false, true] {
+            for run_llm in [false, true] {
+                let pair = LLMContextAggregatorPair::with_realtime_mode(
+                    Context::default(),
+                    Default::default(),
+                    Default::default(),
+                    RealtimeServiceMode::Enabled,
+                )
+                .unwrap();
+                let user = pair.user();
+                let shared = pair.context();
+                let mut state = user.lock().unwrap();
+                // Exercise the exact mutation/snapshot phase boundary without a
+                // scheduling hook or holding context while acquiring assistant.
+                let lineage = {
+                    let mut context = shared.lock().unwrap();
+                    if transform {
+                        context
+                            .transform(&LocalMessageTransform::new(|_| {
+                                Ok(vec![ChatMessage::new(
+                                    ChatRole::User,
+                                    "original transformed",
+                                )
+                                .into()])
+                            }))
+                            .unwrap();
+                    } else {
+                        context.append_native(Message::text(Role::User, "original append"));
+                    }
+                    context.lineage
+                };
+                let producer = state.context_causes.clone();
+                shared
+                    .replace(Context::new(vec![Message::text(
+                        Role::User,
+                        "concurrent replacement",
+                    )]))
+                    .unwrap();
+                let retained = shared.snapshot().unwrap();
+                let mut output = AggregationOutput::default();
+                let error = LLMUserAggregator::explicit_user_context(
+                    &mut state,
+                    &shared,
+                    &mut output,
+                    if transform {
+                        RealtimeContextIntent::Replace
+                    } else {
+                        RealtimeContextIntent::Append { start: 0, end: 1 }
+                    },
+                    Some(lineage),
+                    run_llm,
+                )
+                .unwrap_err();
+                assert!(error.fatal);
+                assert!(error.message.contains("lineage changed"));
+                assert!(state.context_cause_failed);
+                assert!(output.actions.is_empty());
+                assert_eq!(shared.snapshot().unwrap(), retained);
+                let mut probe = Frame::new(shared.frame_data().unwrap());
+                producer
+                    .attach(&mut probe, RealtimeContextIntent::Run, true)
+                    .unwrap();
+                assert_eq!(
+                    probe
+                        .native_realtime_context_cause()
+                        .unwrap()
+                        .unwrap()
+                        .sequence(),
+                    1
+                );
+                drop(state);
+                assert!(
+                    user.process_at(
+                        Frame::new(FrameData::LlmRun),
+                        Direction::Downstream,
+                        Duration::ZERO
+                    )
+                    .unwrap_err()
+                    .fatal
+                );
+                assert_eq!(shared.snapshot().unwrap(), retained);
+            }
+        }
+    }
+
+    #[test]
+    fn realtime_snapshot_lineage_no_run_preserves_range_during_ordinary_append() {
+        let pair = LLMContextAggregatorPair::with_realtime_mode(
+            Context::default(),
+            Default::default(),
+            Default::default(),
+            RealtimeServiceMode::Enabled,
+        )
+        .unwrap();
+        let user = pair.user();
+        let shared = pair.context();
+        let mut state = user.lock().unwrap();
+        let lineage = {
+            let mut context = shared.lock().unwrap();
+            context.append_native(Message::text(Role::User, "explicit"));
+            context.lineage
+        };
+        shared
+            .append(Message::text(Role::Assistant, "ordinary concurrent append"))
+            .unwrap();
+        let mut output = AggregationOutput::default();
+        LLMUserAggregator::explicit_user_context(
+            &mut state,
+            &shared,
+            &mut output,
+            RealtimeContextIntent::Append { start: 0, end: 1 },
+            Some(lineage),
+            false,
+        )
+        .unwrap();
+        let AggregationAction::Push(frame) = &output.actions[0] else {
+            panic!("context expected")
+        };
+        let cause = frame
+            .frame
+            .native_realtime_context_cause()
+            .unwrap()
+            .unwrap();
+        assert_eq!(cause.sequence(), 1);
+        assert_eq!(
+            cause.intent(),
+            RealtimeContextIntent::Append { start: 0, end: 1 }
+        );
+        assert!(!cause.run_llm());
+        assert_eq!(shared.snapshot().unwrap().messages.len(), 2);
+    }
 }

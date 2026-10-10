@@ -798,15 +798,32 @@ impl Default for VadUserStoppedSpeakingFrame {
 }
 
 #[derive(Clone)]
-pub struct LocalToolFunction(Arc<dyn Fn(Value) -> ToolFuture + Send + Sync>);
+pub struct LocalToolFunction(
+    Arc<dyn Fn(Value) -> ToolFuture + Send + Sync>,
+    LocalToolFunctionIdentity,
+);
+/// Retaining this token pins identity without retaining the callback or its captures.
+#[derive(Clone)]
+pub(crate) struct LocalToolFunctionIdentity(Arc<()>);
+impl LocalToolFunctionIdentity {
+    pub(crate) fn address(&self) -> usize {
+        Arc::as_ptr(&self.0) as usize
+    }
+}
 type ToolFuture = Pin<Box<dyn Future<Output = Result<Value, ProcessorError>> + Send>>;
 impl LocalToolFunction {
+    pub(crate) fn local_identity(&self) -> &LocalToolFunctionIdentity {
+        &self.1
+    }
     pub fn new<F, Fut>(handler: F) -> Self
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<Value, ProcessorError>> + Send + 'static,
     {
-        Self(Arc::new(move |arguments| Box::pin(handler(arguments))))
+        Self(
+            Arc::new(move |arguments| Box::pin(handler(arguments))),
+            LocalToolFunctionIdentity(Arc::new(())),
+        )
     }
     pub async fn call(&self, arguments: Value) -> Result<Value, ProcessorError> {
         (self.0)(arguments).await
@@ -945,3 +962,6 @@ pub struct TtsAlignmentDiagnosticFrame {
     pub display_position: Option<usize>,
     pub synthesis_outcome: TtsSynthesisOutcome,
 }
+
+#[cfg(test)]
+mod review_handler_identity;

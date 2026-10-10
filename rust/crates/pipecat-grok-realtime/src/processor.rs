@@ -59,6 +59,22 @@ impl PlaybackState {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum ContextBinding {
+    #[default]
+    Unbound,
+    Seeded,
+    Live,
+}
+#[derive(Default)]
+struct ConversationState {
+    binding: ContextBinding,
+    admission: pipecat_core::RealtimeContextAdmission,
+    assistant_admission: pipecat_core::RealtimeContextAdmission,
+    explicit_snapshot: Option<pipecat_core::LlmContextFrame>,
+    explicit_tools: bool,
+}
+
 /// Pipeline adapter for mono PCM16 at independently configured Grok sample rates. The standalone client also
 /// supports G.711. Turn detection follows the configured session: locally driven
 /// turns commit on UserStoppedSpeaking, while server VAD commits remotely.
@@ -69,7 +85,10 @@ pub struct GrokRealtimeProcessor {
     result_tag: LocalFrameTag,
     tool_delivery: Arc<Mutex<ToolDelivery>>,
     playback: Arc<Mutex<PlaybackState>>,
-    context_initialized: Mutex<bool>,
+    conversation: Arc<Mutex<ConversationState>>,
+    metadata_sent: std::sync::atomic::AtomicBool,
+    legacy_tool_results: bool,
+    legacy_context_requests: bool,
     input_rate: u32,
     output_rate: u32,
     user_id: String,
@@ -108,7 +127,10 @@ impl GrokRealtimeProcessor {
             result_tag: LocalFrameTag::new(),
             tool_delivery: Arc::new(Mutex::new(ToolDelivery::default())),
             playback: Arc::new(Mutex::new(PlaybackState::default())),
-            context_initialized: Mutex::new(false),
+            conversation: Arc::new(Mutex::new(ConversationState::default())),
+            metadata_sent: std::sync::atomic::AtomicBool::new(false),
+            legacy_tool_results: false,
+            legacy_context_requests: false,
             input_rate,
             output_rate,
             user_id: String::new(),
@@ -128,7 +150,23 @@ impl GrokRealtimeProcessor {
             limits: self.client.config().limits.clone(),
             health: self.health.clone(),
             health_admission: self.health_admission.clone(),
+            legacy_tool_results: self.legacy_tool_results,
         }
+    }
+    /// Opt in to caller-controlled legacy tool results. Native ToolExecutor
+    /// pipelines should retain the default receipt-required settlement policy.
+    /// Configure this before constructing `tool_result_relay()`.
+    pub fn with_legacy_tool_results(mut self) -> Self {
+        self.legacy_tool_results = true;
+        self
+    }
+    /// Allow caller-owned unsealed upstream context requests, for direct or
+    /// explicitly Disabled aggregation compatibility. These requests cannot
+    /// preserve an original assistant invocation fence across delayed delivery.
+    /// Present native causes are always validated and never fall back.
+    pub fn with_legacy_context_requests(mut self) -> Self {
+        self.legacy_context_requests = true;
+        self
     }
     pub fn service_metadata(&self) -> pipecat_core::LlmServiceMetadataFrame {
         pipecat_core::LlmServiceMetadataFrame {
@@ -264,6 +302,8 @@ impl GrokRealtimeProcessor {
         &self,
         context: &pipecat_core::LlmContextFrame,
         direction: Direction,
+        cause: Option<Arc<pipecat_core::NativeRealtimeContextCause>>,
+        fence: Option<pipecat_core::InvocationFence>,
     ) -> Result<(), ProcessorError> {
         crate::client::bounded_serialized(context, self.client.config().limits.max_message_bytes)
             .map_err(processor_error)?;
@@ -273,15 +313,35 @@ impl GrokRealtimeProcessor {
         if context.messages.len() > 1024 {
             return Err(processor_error(RealtimeError::TooLarge));
         }
-        let mut initialized = self
-            .context_initialized
+        let mut state = self
+            .conversation
             .lock()
             .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+        if let Some(cause) = &cause {
+            cause.validate_direction(direction)?;
+            let admission =
+                if cause.intent() == pipecat_core::RealtimeContextIntent::AssistantContinuation {
+                    &state.assistant_admission
+                } else {
+                    &state.admission
+                };
+            if !admission.check(cause)? {
+                return Ok(());
+            }
+            if cause.intent() == pipecat_core::RealtimeContextIntent::Replace
+                && state.binding != ContextBinding::Unbound
+            {
+                return Err(ProcessorError::new(
+                    "Grok cannot replace, delete, or transform live history; start a new session",
+                ));
+            }
+        }
+        let seed = state.binding == ContextBinding::Unbound && direction == Direction::Downstream;
         let mut actions = Vec::new();
-        if !*initialized {
+        if seed {
             let projected = self.sender()?.projected_session();
             let mut update = SessionProperties::new();
-            if !context.tools.is_empty() {
+            if !context.tools.is_empty() && !state.explicit_tools {
                 update.tools = Some(
                     context
                         .tools
@@ -327,14 +387,76 @@ impl GrokRealtimeProcessor {
                     previous_item_id: None,
                 });
             }
-            actions.push(Action::CreateResponse(ResponseOptions::default()));
+            if cause.as_ref().is_none_or(|cause| cause.run_llm()) {
+                actions.push(Action::CreateResponse(ResponseOptions::default()));
+            }
         } else if direction == Direction::Upstream {
             actions.push(Action::RequestInference(ResponseOptions::default()));
+        } else if let Some(cause) = &cause {
+            if let pipecat_core::RealtimeContextIntent::Append { start, end } = cause.intent() {
+                let messages = context
+                    .messages
+                    .get(start..end)
+                    .ok_or_else(|| ProcessorError::new("Grok append range exceeds context"))?;
+                // Validate the complete operation before admitting any settings or history.
+                for message in messages {
+                    if message.role == ChatRole::Tool
+                        || message.tool_call_id.is_some()
+                        || !message.tool_calls.is_empty()
+                    {
+                        return Err(ProcessorError::new(
+                            "explicit Grok appends cannot impersonate native tool outcomes",
+                        ));
+                    }
+                    if !message.content.is_empty() {
+                        actions.push(Action::CreateItem {
+                            item: text_item(
+                                message.content.clone(),
+                                if message.role == ChatRole::Assistant {
+                                    Role::Assistant
+                                } else {
+                                    Role::User
+                                },
+                            ),
+                            previous_item_id: None,
+                        });
+                    }
+                }
+            }
+            if cause.run_llm() {
+                actions.push(Action::CreateResponse(ResponseOptions::default()));
+            }
+        } else {
+            let previous = state.explicit_snapshot.as_ref().ok_or_else(|| {
+                ProcessorError::new("live Grok contexts require an explicit native context cause")
+            })?;
+            if previous != context {
+                return Err(ProcessorError::new("unattributed live Grok history mutation requires an explicit native context cause"));
+            }
+            actions.push(Action::CreateResponse(ResponseOptions::default()));
         }
-        self.sender()?
-            .try_send_batch(actions)
-            .map_err(processor_error)?;
-        *initialized = true;
+        match fence {
+            Some(fence) => self.sender()?.try_send_context(actions, fence),
+            None => self.sender()?.try_send_batch(actions),
+        }
+        .map_err(processor_error)?;
+        state.binding = if seed {
+            ContextBinding::Seeded
+        } else if state.binding == ContextBinding::Unbound {
+            ContextBinding::Live
+        } else {
+            state.binding
+        };
+        if direction == Direction::Downstream && cause.is_none() {
+            state.explicit_snapshot = Some(context.clone());
+        }
+        if let Some(cause) = cause {
+            if cause.intent() == pipecat_core::RealtimeContextIntent::AssistantContinuation {
+                state.assistant_admission.commit(cause);
+            } else {
+                state.admission.commit(cause);
+            }
+        }
         Ok(())
     }
     /// A forced line is server-driven: no response.create is sent.
@@ -348,6 +470,35 @@ impl GrokRealtimeProcessor {
             previous_item_id: None,
         })
     }
+}
+fn bounded_detailed_context(
+    context: &pipecat_core::DetailedLlmContextFrame,
+    limit: usize,
+) -> Result<(), ProcessorError> {
+    match &context.context.tools {
+        pipecat_core::ToolSet::Direct(tools) => {
+            if tools.len() > 128 {
+                return Err(processor_error(RealtimeError::TooLarge));
+            }
+            let schemas: Vec<_> = tools.iter().map(|tool| &tool.schema).collect();
+            crate::client::bounded_serialized(
+                &(
+                    &context.context.messages,
+                    schemas,
+                    &context.context.tool_choice,
+                    context.speculation,
+                ),
+                limit,
+            )
+            .map_err(processor_error)
+        }
+        _ => crate::client::bounded_serialized(context, limit).map_err(processor_error),
+    }
+}
+fn fatal_context_error(mut error: ProcessorError) -> ProcessorError {
+    error.fatal = true;
+    error.message = format!("{}; local context may be retained; rebuild the pair and provider session before continuing", error.message);
+    error
 }
 fn next_item() -> u64 {
     static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -394,6 +545,12 @@ impl FrameProcessor for GrokRealtimeProcessor {
         if !self.health.is_usable() {
             return Err(ProcessorError::new("Grok service is unusable"));
         }
+        if self
+            .metadata_sent
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(ProcessorError::new("Grok processors are single-session; construct a new processor to reconnect without replay"));
+        }
         let admission = self.health.generation();
         let mut session = self.client.connect().await.map_err(processor_error)?;
         loop {
@@ -433,6 +590,7 @@ impl FrameProcessor for GrokRealtimeProcessor {
         let output = ctx.clone();
         let user_id = self.user_id.clone();
         let playback = self.playback.clone();
+        let conversation = self.conversation.clone();
         let output_rate = self.output_rate;
         let manual_turns = self.manual_turns;
         let health = self.health.clone();
@@ -443,7 +601,7 @@ impl FrameProcessor for GrokRealtimeProcessor {
             loop {
                 let result = tokio::select! { biased;
                     _ = health_changes.changed() => { sender.close(); break; }
-                    result = session.next_event() => result,
+                    result = session.next_event_fenced() => result,
                 };
                 if health.generation() != admission {
                     sender.close();
@@ -452,8 +610,8 @@ impl FrameProcessor for GrokRealtimeProcessor {
                 let Some(result) = result else {
                     break;
                 };
-                let event = match result {
-                    Ok(event) => event,
+                let (event, original_fence) = match result {
+                    Ok(event) => (event.event, event.fence),
                     Err(e) => {
                         let fatal = e == RealtimeError::UnsettledTools;
                         let mut error = error_frame(e);
@@ -482,6 +640,19 @@ impl FrameProcessor for GrokRealtimeProcessor {
                         .lock()
                         .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?;
                     playback.observe(&event).map_err(processor_error)?;
+                }
+                if matches!(
+                    event.event,
+                    Event::ResponseCreated { .. }
+                        | Event::InputTranscriptionCompleted { .. }
+                        | Event::SpeechStarted { .. }
+                ) {
+                    let mut state = conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                    if state.binding == ContextBinding::Unbound {
+                        state.binding = ContextBinding::Live;
+                    }
                 }
                 let frames = mapper.frames(&event).map_err(processor_error)?;
                 for frame in frames {
@@ -519,7 +690,13 @@ impl FrameProcessor for GrokRealtimeProcessor {
                             sender.generation()
                         };
                         if let Some(result) = sender
-                            .while_current(generation, output.push(frame, direction))
+                            .while_current(generation, async {
+                                match &original_fence {
+                                    Some(fence) => output
+                                        .try_push_with_invocation_fence(frame, direction, fence),
+                                    None => output.push(frame, direction).await,
+                                }
+                            })
                             .await
                         {
                             result?;
@@ -537,6 +714,71 @@ impl FrameProcessor for GrokRealtimeProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        // Native carriers must be validated before interpreting any public payload.
+        frame.native_tool_batch().map_err(fatal_context_error)?;
+        frame.native_tool_outcome().map_err(fatal_context_error)?;
+        let cause = frame
+            .native_realtime_context_cause()
+            .map_err(fatal_context_error)?
+            .cloned();
+        if let Some(cause) = &cause {
+            cause
+                .validate_direction(direction)
+                .map_err(fatal_context_error)?;
+        }
+        if frame.data.is_start() {
+            ctx.push(frame, direction).await?;
+            if !self
+                .metadata_sent
+                .swap(true, std::sync::atomic::Ordering::AcqRel)
+            {
+                ctx.broadcast(Frame::new(FrameData::LlmServiceMetadata(
+                    self.service_metadata(),
+                )))
+                .await?;
+            }
+            return Ok(());
+        }
+        if frame.is_realtime_context_update() {
+            match &frame.data {
+                FrameData::LlmContext(context) => crate::client::bounded_serialized(
+                    context,
+                    self.client.config().limits.max_message_bytes,
+                )
+                .map_err(processor_error)?,
+                FrameData::LlmContextDetailed(context) => bounded_detailed_context(
+                    context,
+                    self.client.config().limits.max_message_bytes,
+                )?,
+                _ => unreachable!("state-only context marker"),
+            }
+            {
+                let mut state = self
+                    .conversation
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                if state.binding == ContextBinding::Unbound {
+                    state.binding = ContextBinding::Live;
+                }
+            }
+            return ctx.push(frame, direction).await;
+        }
+        if direction == Direction::Upstream
+            && cause.is_none()
+            && matches!(
+                frame.data,
+                FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+            )
+            && !self.legacy_context_requests
+        {
+            return Err(fatal_context_error(ProcessorError::new("native upstream context requires AssistantContinuation; caller-owned compatibility requires with_legacy_context_requests")));
+        }
+        let fence = match &cause {
+            Some(cause) => Some(cause.inference_fence().cloned().ok_or_else(|| {
+                ProcessorError::fatal("realtime context cause has no original invocation fence")
+            })?),
+            None => None,
+        };
         // These controls have no provider-side mapping. Forwarding would let an
         // aggregator mutate local history while the live conversation stayed
         // unchanged, so reject them in either direction before any side effect.
@@ -573,75 +815,93 @@ impl FrameProcessor for GrokRealtimeProcessor {
             _ => {}
         }
         if let FrameData::LlmContext(context) = &frame.data {
-            self.handle_context(context, direction)?;
+            self.handle_context(context, direction, cause.clone(), fence.clone())
+                .map_err(|error| {
+                    if cause.is_some() {
+                        fatal_context_error(error)
+                    } else {
+                        error
+                    }
+                })?;
         }
         if let FrameData::LlmContextDetailed(context) = &frame.data {
-            crate::client::bounded_serialized(
-                context,
-                self.client.config().limits.max_message_bytes,
-            )
-            .map_err(processor_error)?;
-            if context.speculation {
-                return Err(ProcessorError::new(
-                    "Grok speculative inference is unsupported",
-                ));
-            }
-            let mut messages = Vec::new();
-            for message in &context.context.messages {
-                if !message.extra.is_empty() {
+            let result: Result<(), ProcessorError> = (|| {
+                bounded_detailed_context(context, self.client.config().limits.max_message_bytes)?;
+                if context.speculation {
                     return Err(ProcessorError::new(
-                        "provider-specific history is unsupported",
+                        "Grok speculative inference is unsupported",
                     ));
                 }
-                let content = match &message.content {
-                    pipecat_core::MessageContent::Text(text) => text.clone(),
-                    pipecat_core::MessageContent::Parts(parts) => {
-                        if parts
-                            .iter()
-                            .any(|part| !matches!(part, pipecat_core::MessagePart::Text { .. }))
-                        {
-                            return Err(ProcessorError::new(
-                                "Grok history supports text parts only",
-                            ));
+                let mut messages = Vec::new();
+                for message in &context.context.messages {
+                    if !message.extra.is_empty() {
+                        return Err(ProcessorError::new(
+                            "provider-specific history is unsupported",
+                        ));
+                    }
+                    let content = match &message.content {
+                        pipecat_core::MessageContent::Text(text) => text.clone(),
+                        pipecat_core::MessageContent::Parts(parts) => {
+                            if parts
+                                .iter()
+                                .any(|part| !matches!(part, pipecat_core::MessagePart::Text { .. }))
+                            {
+                                return Err(ProcessorError::new(
+                                    "Grok history supports text parts only",
+                                ));
+                            }
+                            parts
+                                .iter()
+                                .map(|part| match part {
+                                    pipecat_core::MessagePart::Text { text } => text.as_str(),
+                                    _ => unreachable!(),
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" ")
                         }
-                        parts
-                            .iter()
-                            .map(|part| match part {
-                                pipecat_core::MessagePart::Text { text } => text.as_str(),
-                                _ => unreachable!(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" ")
+                    };
+                    messages.push(pipecat_core::ChatMessage {
+                        role: message.role,
+                        content,
+                        name: message.name.clone(),
+                        tool_call_id: message.tool_call_id.clone(),
+                        tool_calls: message.tool_calls.clone(),
+                    });
+                }
+                let tools = match &context.context.tools {
+                    pipecat_core::ToolSet::NotGiven => vec![],
+                    pipecat_core::ToolSet::Functions(tools) => tools.clone(),
+                    pipecat_core::ToolSet::Direct(tools) => {
+                        tools.iter().map(|t| t.schema.clone()).collect()
+                    }
+                    _ => {
+                        return Err(ProcessorError::new(
+                            "Grok detailed context requires typed function tools",
+                        ))
                     }
                 };
-                messages.push(pipecat_core::ChatMessage {
-                    role: message.role,
-                    content,
-                    name: message.name.clone(),
-                    tool_call_id: message.tool_call_id.clone(),
-                    tool_calls: message.tool_calls.clone(),
-                });
-            }
-            let tools = match &context.context.tools {
-                pipecat_core::ToolSet::NotGiven => vec![],
-                pipecat_core::ToolSet::Functions(tools) => tools.clone(),
-                pipecat_core::ToolSet::Direct(tools) => {
-                    tools.iter().map(|t| t.schema.clone()).collect()
+                self.handle_context(
+                    &pipecat_core::LlmContextFrame {
+                        messages,
+                        tools,
+                        tool_choice: context.context.tool_choice.clone(),
+                    },
+                    direction,
+                    cause.clone(),
+                    fence,
+                )?;
+                Ok(())
+            })();
+            result.map_err(|error| {
+                if cause.is_some() {
+                    fatal_context_error(error)
+                } else {
+                    error
                 }
-                _ => {
-                    return Err(ProcessorError::new(
-                        "Grok detailed context requires typed function tools",
-                    ))
-                }
-            };
-            self.handle_context(
-                &pipecat_core::LlmContextFrame {
-                    messages,
-                    tools,
-                    tool_choice: context.context.tool_choice.clone(),
-                },
-                direction,
-            )?;
+            })?;
+        }
+        if cause.is_some() {
+            frame.take_native_realtime_context_cause()?;
         }
         if direction == Direction::Downstream {
             self.tool_result_relay().relay(&mut frame)?;
@@ -665,10 +925,29 @@ impl FrameProcessor for GrokRealtimeProcessor {
                         ));
                     }
                     self.enqueue(Action::AppendAudio(audio.audio.clone()))?;
+                    let mut state = self
+                        .conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                    if state.binding == ContextBinding::Unbound {
+                        state.binding = ContextBinding::Live;
+                    }
                 }
                 FrameData::UserStoppedSpeaking if self.manual_turns => {
-                    self.enqueue(Action::CommitAudio)?;
-                    self.enqueue(Action::CreateResponse(ResponseOptions::default()))?;
+                    // Typed turns already carry their own explicit context request.
+                    if frame
+                        .metadata
+                        .get("user_context_follows")
+                        .and_then(serde_json::Value::as_bool)
+                        != Some(true)
+                    {
+                        self.sender()?
+                            .try_send_batch(vec![
+                                Action::CommitAudio,
+                                Action::CreateResponse(ResponseOptions::default()),
+                            ])
+                            .map_err(processor_error)?;
+                    }
                 }
                 FrameData::InputText(text) => {
                     crate::client::bounded_serialized(
@@ -690,9 +969,23 @@ impl FrameProcessor for GrokRealtimeProcessor {
                         context_id: Some(format!("pc_turn_{}", frame.id)),
                         ..Default::default()
                     }))?;
+                    let mut state = self
+                        .conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                    if state.binding == ContextBinding::Unbound {
+                        state.binding = ContextBinding::Live;
+                    }
                 }
                 FrameData::LlmRun => {
-                    self.enqueue(Action::CreateResponse(ResponseOptions::default()))?
+                    self.enqueue(Action::CreateResponse(ResponseOptions::default()))?;
+                    let mut state = self
+                        .conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                    if state.binding == ContextBinding::Unbound {
+                        state.binding = ContextBinding::Live;
+                    }
                 }
                 FrameData::LlmMessagesAppend(messages) => {
                     crate::client::bounded_serialized(
@@ -701,10 +994,12 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     )
                     .map_err(processor_error)?;
                     if !self.sender()?.is_ready()
-                        || !*self
-                            .context_initialized
+                        || self
+                            .conversation
                             .lock()
                             .map_err(|_| ProcessorError::fatal("context lock poisoned"))?
+                            .binding
+                            == ContextBinding::Unbound
                     {
                         return ctx.push(frame, direction).await;
                     }
@@ -737,11 +1032,6 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     return Err(ProcessorError::new("Grok does not support tool_choice"))
                 }
                 FrameData::LlmSetTools(tools) => {
-                    crate::client::bounded_serialized(
-                        tools,
-                        self.client.config().limits.max_message_bytes,
-                    )
-                    .map_err(processor_error)?;
                     let tools = match tools {
                         pipecat_core::ToolSet::Functions(v) => v.clone(),
                         pipecat_core::ToolSet::Direct(v) => {
@@ -774,6 +1064,10 @@ impl FrameProcessor for GrokRealtimeProcessor {
                             .collect(),
                     );
                     self.enqueue(Action::UpdateSession(update.into()))?;
+                    self.conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?
+                        .explicit_tools = true;
                 }
                 FrameData::LlmUpdateSettings(settings) => {
                     if !self.targets_self(&settings.service) {
@@ -861,14 +1155,22 @@ impl FrameProcessor for GrokRealtimeProcessor {
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
-        if let Some(sender) = self
-            .sender
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
-            .take()
-        {
+        let sender = {
+            self.sender
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
+                .take()
+        };
+        // close takes the emission gate; never retain the sender-state mutex.
+        if let Some(sender) = sender {
             sender.close();
         }
+        let mut state = self
+            .conversation
+            .lock()
+            .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+        state.explicit_snapshot = None;
+        state.admission = Default::default();
         Ok(())
     }
 }
@@ -889,6 +1191,7 @@ pub struct GrokToolResultRelay {
     limits: RealtimeLimits,
     health: pipecat_core::ProcessorHealth,
     health_admission: Arc<Mutex<Option<pipecat_core::ProcessorHealthGeneration>>>,
+    legacy_tool_results: bool,
 }
 impl GrokToolResultRelay {
     fn relay(&self, frame: &mut Frame) -> Result<(), ProcessorError> {
@@ -921,6 +1224,14 @@ impl GrokToolResultRelay {
             }
             self.tag.mark(frame)?;
             return Ok(());
+        }
+        if !self.legacy_tool_results
+            && matches!(
+                frame.data,
+                FrameData::FunctionCallResult(_) | FrameData::FunctionCallResultDetailed(_)
+            )
+        {
+            return Err(ProcessorError::fatal("Grok native tool settlement requires a validated terminal receipt; raw results require explicit legacy compatibility mode"));
         }
         let action = match &frame.data {
             FrameData::FunctionCallResult(result) => {
@@ -980,6 +1291,16 @@ impl FrameProcessor for GrokToolResultRelay {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        frame.native_tool_batch().map_err(fatal_context_error)?;
+        if let Some(cause) = frame
+            .native_realtime_context_cause()
+            .map_err(fatal_context_error)?
+        {
+            cause
+                .validate_direction(direction)
+                .map_err(fatal_context_error)?;
+        }
+        frame.native_tool_outcome().map_err(fatal_context_error)?;
         if direction != Direction::Downstream {
             return ctx.push(frame, direction).await;
         }

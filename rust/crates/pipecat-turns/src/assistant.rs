@@ -47,6 +47,7 @@ struct AssistantState {
     cancelled_contexts: VecDeque<String>,
     run_owed: bool,
     tool_run_owed: bool,
+    pending_native_scheduling: Option<pipecat_core::RealtimeNativeToolSchedulingReason>,
     cancelled_run_groups: BTreeSet<String>,
     skip_tts: Option<bool>,
     thought: TextBuffer,
@@ -56,6 +57,7 @@ struct AssistantState {
     completed_responses: VecDeque<u64>,
     ended: bool,
     callbacks_closed: bool,
+    context_cause_failed: bool,
 }
 impl AssistantState {
     fn is_completed(&self, id: &str) -> bool {
@@ -69,6 +71,7 @@ impl AssistantState {
     fn clear_runs(&mut self) {
         self.run_owed = false;
         self.tool_run_owed = false;
+        self.pending_native_scheduling = None;
         self.cancelled_run_groups.clear();
     }
 }
@@ -81,6 +84,7 @@ pub struct LLMAssistantAggregator {
     state: Mutex<AssistantState>,
     callback_tasks: Arc<Mutex<BTreeMap<u64, ProcessorContext>>>,
     realtime: Arc<crate::realtime::RealtimeState>,
+    context_causes: pipecat_core::NativeRealtimeContextProducer,
 }
 impl LLMAssistantAggregator {
     pub fn new(context: SharedContext, config: AssistantAggregatorConfig) -> Self {
@@ -95,6 +99,7 @@ impl LLMAssistantAggregator {
                 false,
             )),
             callback_tasks: Arc::new(Mutex::new(BTreeMap::new())),
+            context_causes: Default::default(),
             state: Mutex::new(AssistantState {
                 active: false,
                 llm_active: false,
@@ -117,6 +122,7 @@ impl LLMAssistantAggregator {
                 cancelled_contexts: VecDeque::new(),
                 run_owed: false,
                 tool_run_owed: false,
+                pending_native_scheduling: None,
                 cancelled_run_groups: BTreeSet::new(),
                 skip_tts: None,
                 thought: TextBuffer::default(),
@@ -126,6 +132,7 @@ impl LLMAssistantAggregator {
                 completed_responses: VecDeque::new(),
                 ended: false,
                 callbacks_closed: false,
+                context_cause_failed: false,
             }),
         }
     }
@@ -188,6 +195,18 @@ impl LLMAssistantAggregator {
     ) -> Result<AggregationOutput, ProcessorError> {
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
+        if state.context_cause_failed
+            && !matches!(
+                frame.data,
+                FrameData::End(_)
+                    | FrameData::EndDetailed(_)
+                    | FrameData::Stop
+                    | FrameData::Cancel(_)
+                    | FrameData::CancelDetailed(_)
+            )
+        {
+            return Err(ProcessorError::fatal("realtime assistant inference could not be delivered; rebuild the pair and provider session from retained history"));
+        }
         let native_batch = frame.take_native_tool_batch()?;
         let native_outcome = frame.take_native_tool_outcome()?;
         if let Some(outcome) = native_outcome {
@@ -667,7 +686,7 @@ impl LLMAssistantAggregator {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
                     return Err(ProcessorError::new("native tool requires its terminal receipt"));
                 }
-                self.result(&mut state, result, &mut output)?
+                self.result(&mut state, result, None, &mut output)?
             }
             FrameData::FunctionCallResultDetailed(result) => {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
@@ -680,7 +699,7 @@ impl LLMAssistantAggregator {
                     arguments: result.arguments.clone(), result: result.result.clone(),
                     run_llm: properties.and_then(|properties| properties.run_llm).or(result.run_llm),
                     is_final: properties.is_none_or(|properties| properties.is_final), error: result.error.clone(),
-                }, &mut output)?;
+                }, None, &mut output)?;
                 if accepted {
                     if let Some(callback) = properties.and_then(|properties| properties.on_context_updated.clone()) {
                         output.actions.push(crate::AggregationAction::ContextUpdated(callback));
@@ -1062,19 +1081,33 @@ impl LLMAssistantAggregator {
             self.start_call(state, call)?;
         }
         match data {
-            FrameData::FunctionCallResult(result) => self.result(state, result, output)?,
+            FrameData::FunctionCallResult(result) => self.result(
+                state,
+                result,
+                Some(pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(&outcome)),
+                output,
+            )?,
             FrameData::FunctionCallCancel(cancel) => {
                 let group = state
                     .pending
                     .get(id)
                     .and_then(Option::as_ref)
                     .and_then(|call| call.group_id.clone());
-                if self.cancel_call(state, id)? && cancel.run_llm {
-                    if let Some(group) = group.filter(|group| !group.is_empty()) {
-                        state.cancelled_run_groups.insert(group);
-                    } else {
-                        state.tool_run_owed = true;
+                if self.cancel_call(state, id)? {
+                    if cancel.run_llm {
+                        state.pending_native_scheduling = Some(
+                            pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(
+                                &outcome,
+                            ),
+                        );
+                        if let Some(group) = group.filter(|group| !group.is_empty()) {
+                            state.cancelled_run_groups.insert(group);
+                        } else {
+                            state.tool_run_owed = true;
+                        }
                     }
+                    // A false cancellation creates no new intent, but clearing
+                    // the last grouped call can release an already owed request.
                     self.maybe_run(state, output)?;
                 }
             }
@@ -1256,8 +1289,16 @@ impl LLMAssistantAggregator {
     /// Snapshot and acknowledge prior tool results under the same lock that
     /// admits new results. Completions after this snapshot still owe inference.
     pub(crate) fn prepare_user_context(&self) -> Result<FrameData, ProcessorError> {
+        self.prepare_user_context_at_lineage(None)
+    }
+    pub(crate) fn prepare_user_context_at_lineage(
+        &self,
+        expected: Option<u64>,
+    ) -> Result<FrameData, ProcessorError> {
+        // Preserve assistant → context lock order. A conflicting replacement must
+        // not acknowledge any tool result or authorize a substituted snapshot.
         let mut state = self.lock()?;
-        let context = self.context.frame_data()?;
+        let context = self.context.frame_data_at_lineage(expected)?;
         state.clear_runs();
         state.awaiting_user_inference = true;
         Ok(context)
@@ -1516,6 +1557,7 @@ impl LLMAssistantAggregator {
         &self,
         state: &mut AssistantState,
         result: &FunctionCallResultFrame,
+        native_reason: Option<pipecat_core::RealtimeNativeToolSchedulingReason>,
         output: &mut AggregationOutput,
     ) -> Result<(), ProcessorError> {
         let Some(Some(call)) = state.pending.get(&result.tool_call_id).cloned() else {
@@ -1583,6 +1625,9 @@ impl LLMAssistantAggregator {
                 )
         });
         state.tool_run_owed |= run;
+        if run && native_reason.is_some() {
+            state.pending_native_scheduling = native_reason;
+        }
         self.maybe_run(state, output)
     }
     fn cancel_call(&self, state: &mut AssistantState, id: &str) -> Result<bool, ProcessorError> {
@@ -1670,7 +1715,26 @@ impl LLMAssistantAggregator {
                 .as_ref()
                 .is_none_or(|history| !history.playback_pending())
         {
-            output.context(&self.context, Direction::Upstream)?;
+            if self.realtime.enabled()? {
+                // Seal at the assistant's scheduling point, not when a provider
+                // eventually consumes this durable request. Binding happens at
+                // emission in the same invocation, after all playback/group gates.
+                let result = (|| {
+                    let mut frame = Frame::new(self.context.frame_data()?);
+                    self.context_causes.attach_assistant_continuation(
+                        &mut frame,
+                        state.pending_native_scheduling,
+                    )?;
+                    output.push(frame, Direction::Upstream);
+                    Ok::<(), ProcessorError>(())
+                })();
+                if let Err(error) = result {
+                    state.context_cause_failed = true;
+                    return Err(ProcessorError::fatal(format!("realtime assistant history retained but inference not delivered: {}; rebuild the pair and provider session", error.message)));
+                }
+            } else {
+                output.context(&self.context, Direction::Upstream)?;
+            }
             state.clear_runs();
         }
         Ok(())
@@ -1760,7 +1824,12 @@ impl FrameProcessor for LLMAssistantAggregator {
         } else {
             Ok(())
         };
-        emitted?;
+        if let Err(error) = emitted {
+            if error.fatal {
+                self.lock()?.context_cause_failed = true;
+            }
+            return Err(error);
+        }
         released
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
@@ -1844,5 +1913,105 @@ fn async_message(id: &str, kind: &str, result: Option<&str>) -> ContextMessage {
         tool_message(id, payload.to_string())
     } else {
         text_message(ChatRole::Developer, payload.to_string())
+    }
+}
+
+#[cfg(test)]
+#[path = "review_snapshot_lineage.rs"]
+mod review_snapshot_lineage;
+
+#[cfg(test)]
+mod realtime_continuation_tests {
+    use super::*;
+    use crate::{LLMContextAggregatorPair, RealtimeServiceMode};
+    use pipecat_core::{RealtimeContextAdmission, RealtimeContextIntent};
+    use pipecat_services::Context;
+
+    fn pair(mode: RealtimeServiceMode) -> LLMContextAggregatorPair {
+        LLMContextAggregatorPair::with_realtime_mode(
+            Context::default(),
+            Default::default(),
+            Default::default(),
+            mode,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn assistant_continuation_has_independent_sequence_and_preserves_cascade() {
+        for mode in [RealtimeServiceMode::Enabled, RealtimeServiceMode::Disabled] {
+            let pair = pair(mode);
+            let assistant = pair.assistant();
+            let mut state = assistant.lock().unwrap();
+            let mut cursor = RealtimeContextAdmission::default();
+            for sequence in 1..=2 {
+                state.tool_run_owed = true;
+                let mut output = AggregationOutput::default();
+                assistant.maybe_run(&mut state, &mut output).unwrap();
+                assert!(!state.tool_run_owed);
+                let crate::AggregationAction::Push(context) = &output.actions[0] else {
+                    panic!("missing context")
+                };
+                assert_eq!(context.direction, Direction::Upstream);
+                assert!(!context.frame.is_realtime_context_update());
+                let cause = context.frame.native_realtime_context_cause().unwrap();
+                if mode == RealtimeServiceMode::Enabled {
+                    let cause = cause.unwrap();
+                    assert_eq!(cause.intent(), RealtimeContextIntent::AssistantContinuation);
+                    assert!(cause.run_llm());
+                    assert_eq!(cause.sequence(), sequence);
+                    assert!(cause.inference_fence().is_none());
+                    cause.validate_direction(Direction::Upstream).unwrap();
+                    assert!(cause.validate_direction(Direction::Downstream).is_err());
+                    assert!(cursor.check(cause).unwrap());
+                    cursor.commit(cause.clone());
+                    assert!(!cursor.check(cause).unwrap());
+                } else {
+                    assert!(cause.is_none());
+                }
+            }
+        }
+    }
+    #[test]
+    fn assistant_continuation_seal_failure_retains_history_and_owed_inference() {
+        let pair = pair(RealtimeServiceMode::Enabled);
+        pair.context()
+            .append(Message::text(Role::User, "x".repeat(1024 * 1024)))
+            .unwrap();
+        let assistant = pair.assistant();
+        let mut state = assistant.lock().unwrap();
+        state.tool_run_owed = true;
+        let mut output = AggregationOutput::default();
+        let error = assistant.maybe_run(&mut state, &mut output).unwrap_err();
+        assert!(error.fatal);
+        assert!(output.actions.is_empty());
+        assert!(state.tool_run_owed);
+        assert!(state.context_cause_failed);
+        drop(state);
+        let error = assistant
+            .process_at(
+                Frame::new(FrameData::LlmResponseEnd),
+                Direction::Downstream,
+                std::time::Duration::ZERO,
+            )
+            .unwrap_err();
+        assert!(error.fatal);
+        assert_eq!(pair.context().snapshot().unwrap().messages.len(), 1);
+        let mut probe = Frame::new(FrameData::LlmContext(Default::default()));
+        assistant
+            .context_causes
+            .attach(
+                &mut probe,
+                RealtimeContextIntent::AssistantContinuation,
+                true,
+            )
+            .unwrap();
+        assert_eq!(
+            probe
+                .native_realtime_context_cause()
+                .unwrap()
+                .unwrap()
+                .sequence(),
+            1
+        );
     }
 }

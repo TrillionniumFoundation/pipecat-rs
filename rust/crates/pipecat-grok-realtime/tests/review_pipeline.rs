@@ -114,8 +114,12 @@ async fn tool_cycle(run: bool) {
     .into()]);
     config.limits.connect_timeout = WAIT;
     config.limits.operation_timeout = WAIT;
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_tool_results()
+            .with_legacy_context_requests(),
+    );
     let relay = processor.tool_result_relay();
     let (settled, settled_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
@@ -211,10 +215,7 @@ async fn tool_cycle(run: bool) {
         Arc::new(ResultPolicy { run }),
         Arc::new(relay),
         Arc::new(AnswerProbe(answers.clone())),
-        Arc::new(LLMAssistantAggregator::new(
-            context.clone(),
-            Default::default(),
-        )),
+        compat_assistant(context.clone(), Default::default()),
     ])
     .start(pipeline_config)
     .await
@@ -273,8 +274,11 @@ async fn review_processor_start_waits_for_readiness_before_context_and_appends()
     let mut config = RealtimeConfig::new("review-only-key");
     config.endpoint = format!("ws://{}/v1/realtime", listener.local_addr().unwrap());
     config.limits.connect_timeout = WAIT;
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_context_requests(),
+    );
     let (release, release_rx) = tokio::sync::oneshot::channel();
     let (configured, configured_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
@@ -332,10 +336,7 @@ async fn review_processor_start_waits_for_readiness_before_context_and_appends()
     let mut start = tokio::spawn(async move {
         Pipeline::new(vec![
             processor,
-            Arc::new(LLMAssistantAggregator::new(
-                context_for_start,
-                Default::default(),
-            )),
+            compat_assistant(context_for_start, Default::default()),
         ])
         .start(pipeline_config)
         .await
@@ -379,8 +380,11 @@ async fn review_health_restore_retires_session_and_suppresses_late_output_withou
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut config = RealtimeConfig::new("review-only-key");
     config.endpoint = format!("ws://{}/v1/realtime", listener.local_addr().unwrap());
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_context_requests(),
+    );
     let health = processor.health_handle();
     let (armed, armed_rx) = tokio::sync::oneshot::channel();
     let (release, release_rx) = tokio::sync::oneshot::channel();
@@ -452,8 +456,11 @@ async fn review_runtime_instructions_and_hosted_tools_survive_first_context_and_
     let mut config = RealtimeConfig::new("review-only-key");
     config.endpoint = format!("ws://{}/v1/realtime", listener.local_addr().unwrap());
     config.session.tools = Some(vec![pipecat_grok_realtime::GrokTool::WebSearch]);
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_context_requests(),
+    );
     let (updated, updated_rx) = tokio::sync::oneshot::channel();
     let (tools_changed, tools_changed_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
@@ -606,8 +613,11 @@ async fn unsupported_edit(kind: UnsupportedEdit, direction: Direction) {
     let mut config = RealtimeConfig::new("review-only-key");
     config.endpoint = format!("ws://{}/v1/realtime", listener.local_addr().unwrap());
     config.limits.connect_timeout = WAIT;
-    let processor =
-        Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+    let processor = Arc::new(
+        GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+            .unwrap()
+            .with_legacy_context_requests(),
+    );
     let (seeded, seeded_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
@@ -646,10 +656,7 @@ async fn unsupported_edit(kind: UnsupportedEdit, direction: Direction) {
     let original = context.snapshot().unwrap().messages;
     let forwarded = Arc::new(AtomicUsize::new(0));
     let probe: Arc<dyn FrameProcessor> = Arc::new(EditProbe(forwarded.clone()));
-    let aggregator: Arc<dyn FrameProcessor> = Arc::new(LLMAssistantAggregator::new(
-        context.clone(),
-        Default::default(),
-    ));
+    let aggregator: Arc<dyn FrameProcessor> = compat_assistant(context.clone(), Default::default());
     let stages: Vec<Arc<dyn FrameProcessor>> = match direction {
         Direction::Downstream => vec![processor, probe, aggregator],
         Direction::Upstream => vec![aggregator, probe, processor],
@@ -726,4 +733,20 @@ async fn review_transform_is_rejected_without_executing_local_callback() {
     for direction in [Direction::Downstream, Direction::Upstream] {
         unsupported_edit(UnsupportedEdit::Transform, direction).await;
     }
+}
+
+// Provider-only fixtures deliberately keep cascade aggregation. Real paired
+// realtime activation is covered by paired_realtime.rs.
+fn compat_assistant(
+    context: SharedContext,
+    config: pipecat_turns::AssistantAggregatorConfig,
+) -> Arc<LLMAssistantAggregator> {
+    pipecat_turns::LLMContextAggregatorPair::with_shared_context_and_realtime_mode(
+        context,
+        Default::default(),
+        config,
+        pipecat_turns::RealtimeServiceMode::Disabled,
+    )
+    .unwrap()
+    .assistant()
 }

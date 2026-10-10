@@ -1,7 +1,7 @@
 # Native image generation
 
-`pipecat-images` implements the pinned OpenAI image-generation service using Rust
-HTTP, PNG/JPEG decoders, and the native pipeline. It does not use Python, Pillow,
+`pipecat-images` implements the pinned OpenAI and Gemini image-generation services
+using Rust HTTP, PNG/JPEG decoders, and the native pipeline. It does not use Python, Pillow,
 provider SDKs, a browser, subprocesses, or fabricated image pixels.
 
 ```rust,no_run
@@ -116,6 +116,76 @@ and interruptible-frame interruption abort them. Health changes fence old result
 and prevent replay. Provider permanence disables health; malformed individual
 images remain recoverable. Optional Processing metrics measure the actual work.
 
+## Gemini generate-content images
+
+```rust,no_run
+use pipecat_images::{GeminiImageConfig, GeminiImageClient, CancellationToken};
+# async fn example(api_key: String) -> Result<(), Box<dyn std::error::Error>> {
+let mut config = GeminiImageConfig::new(api_key);
+config.settings.number_of_images = 3;
+let client = GeminiImageClient::new(config)?;
+let mut generation = client.generate("three variations of a red square", &CancellationToken::new())?;
+while let Some(image) = generation.next_image().await? {
+    assert_eq!(image.url, None);
+    // Deliver each image here before requesting the next one.
+}
+# Ok(()) }
+```
+
+`GeminiImageGenProcessor::new(client)` provides the corresponding native pipeline
+route, named `GoogleImageGenService`. It shares the owned PNG/JPEG decoder, RGB
+carrier, text inheritance and output-backend path with OpenAI. The OpenAI public
+client/settings/processor API is unchanged.
+
+The REST request is POST `{base_url}/models/{model}:generateContent` with an
+`x-goog-api-key` header and one user-text content. `generationConfig` contains
+`responseModalities: ["IMAGE"]` and `imageConfig.aspectRatio`; null aspect omits
+that property. No `tools`, `candidateCount`, SDK `automatic_function_calling`,
+negative prompt, streaming flag or retry is sent. The source default model is
+`gemini-3.1-flash-image`, count 1, aspect `1:1`. Model availability is unqualified.
+`negative_prompt` is retained as a bounded, ignored compatibility setting.
+
+Count is 1–8 sequential, independent nonstreaming requests. A sequence admits one
+client slot and makes no HTTP request until `next_image` is polled. No next
+request starts until the caller asks after the preceding image has returned.
+The first nonempty `inlineData.data` across ordered candidates/parts is selected.
+Only exact `image/png` and `image/jpeg` MIME types with matching signatures are
+accepted; native codec restrictions above apply. A recognized safety/recitation
+block on any candidate vetoes the entire response, even when an earlier or later
+candidate has valid pixels; prompt-level blocks also veto the response. This is a
+conservative difference from the source's unconditional first-inline selection.
+Safety-blocked responses, no image, malformed JSON/base64, unsupported MIME, HTTP failures and resource limits
+are explicit errors. Response text, function calls, file URLs, and executable
+code are never executed or fetched. No hosted-image URL exists in Gemini output.
+
+A sequence returns each successful RGB image immediately. The first error is
+returned once; all later calls return `None`, preserving already delivered images.
+Dropping a pending `next_image` future cancels its owned decode and poisons that
+sequence, since submission may already have incurred billing. Polling it again
+returns `Cancelled` once, never a replay. Cancelling, dropping, or timing out
+cannot undo a remote generation or prove that the provider stopped or did not bill.
+
+`GeminiImageLimits.image` supplies the same per-image limits documented above.
+Additional defaults bound a prompt to 8 images, 16 candidates and 128 total parts
+per response, 64 MiB cumulative JSON, 32 MiB cumulative encoded image bytes,
+128 MiB cumulative RGB output, and 600 seconds total lifetime. Configurable hard
+ceilings are 8/16/128, 512 MiB per aggregate byte budget, and 3600 seconds. Each
+HTTP/decode also has its per-image deadline. Time between pulls counts against the
+whole prompt deadline; an idle sequence owns no task, but retains its bounded
+prompt/settings and admission slot until next polled or dropped. JSON parsing is
+byte/depth bounded and retains only the chosen inline image. Remaining output
+budget becomes a pixel cap before decoder allocation. These budgets bound work
+for one prompt, not process-wide RSS or application retention of returned images.
+
+Gemini settings deltas validate atomically and apply to future processor
+admissions, including all requests of one immutable multi-image snapshot. Null
+model/count are rejected; null aspect and negative prompt are accepted. Model
+identifiers must be a single bounded ASCII resource segment; supported aspect
+ratios are enumerated in `gemini/settings.rs`. Unknown keys and invalid values
+are rejected. End/Stop drain; interruption/Cancel/drop cancel tracked work. Health
+changes fence both in-flight requests and blocked image delivery. Successful
+images already sent downstream are not retracted when a later image fails.
+
 ## Scope and acceptance
 
 See `SOURCE_MAP.md` for pinned source/test hashes and native acceptance coverage.
@@ -124,8 +194,8 @@ bounded errors, and real pipeline-to-output-backend delivery. They do not certif
 live model availability, image quality, camera/video encoding, a physical display,
 provider billing, or public production-network access.
 
-Gemini image generation, Azure's operation-location polling API, and Fal are
-explicitly unimplemented sibling adapters. They are not generic OpenAI aliases.
+Azure's operation-location polling API and Fal are explicitly unimplemented
+sibling adapters. They are not generic OpenAI aliases.
 
 Source-tree distribution retains the patched JPEG path dependency. Crates.io
 publishing of `pipecat-images` is disabled until a packaging route can preserve

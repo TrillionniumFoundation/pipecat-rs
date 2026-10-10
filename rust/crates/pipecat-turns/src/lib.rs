@@ -167,7 +167,22 @@ impl AggregationOutput {
     pub async fn emit(self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         for action in self.actions {
             match action {
-                AggregationAction::Push(frame) => ctx.push(frame.frame, frame.direction).await?,
+                AggregationAction::Push(frame) => {
+                    let native_context = frame.frame.native_realtime_context_cause()?.is_some();
+                    let emitted = if native_context {
+                        ctx.try_push_realtime_context(frame.frame, frame.direction)
+                    } else {
+                        // Keep ordinary cascade routing byte/behavior compatible.
+                        ctx.push(frame.frame, frame.direction).await
+                    };
+                    emitted.map_err(|mut error| {
+                        if native_context {
+                            error.fatal = true;
+                            error.message = format!("realtime context could not be emitted; retained history requires a rebuilt pair and provider session: {}", error.message);
+                        }
+                        error
+                    })?;
+                }
                 AggregationAction::Broadcast(frame) => ctx.broadcast(frame).await?,
                 AggregationAction::Interrupt => ctx.broadcast_interruption().await?,
                 AggregationAction::ContextUpdated(callback) => {

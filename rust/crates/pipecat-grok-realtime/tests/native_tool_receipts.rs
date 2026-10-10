@@ -127,8 +127,11 @@ impl Harness {
                 .map(|name| FunctionTool::new(name, "fixture", json!({"type":"object"})).into())
                 .collect(),
         );
-        let processor =
-            Arc::new(GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+        let processor = Arc::new(
+            GrokRealtimeProcessor::new(RealtimeClient::new(config).unwrap())
+                .unwrap()
+                .with_legacy_context_requests(),
+        );
         let journal = executor.outcomes();
         let context = SharedContext::new(Context::new(vec![ContextMessage::text(
             Role::User,
@@ -150,10 +153,7 @@ impl Harness {
         stages.extend([
             Arc::new(processor.tool_result_relay()) as Arc<dyn FrameProcessor>,
             Arc::new(AfterBoundary(probe.clone())),
-            Arc::new(LLMAssistantAggregator::new(
-                context.clone(),
-                Default::default(),
-            )),
+            compat_assistant(context.clone(), Default::default()),
         ]);
         let start = tokio::spawn(async move {
             let mut config = PipelineConfig::default();
@@ -730,4 +730,20 @@ async fn full_native_receipt_route_fails_session_closed_without_provider_acknowl
     assert!(h.probe.mapped.lock().unwrap().is_empty());
     assert_eq!(count.load(Ordering::SeqCst), 1);
     assert!(h.processor.sender().is_err());
+}
+
+// Provider-only fixtures deliberately keep cascade aggregation. Real paired
+// realtime activation is covered by paired_realtime.rs.
+fn compat_assistant(
+    context: SharedContext,
+    config: pipecat_turns::AssistantAggregatorConfig,
+) -> Arc<LLMAssistantAggregator> {
+    pipecat_turns::LLMContextAggregatorPair::with_shared_context_and_realtime_mode(
+        context,
+        Default::default(),
+        config,
+        pipecat_turns::RealtimeServiceMode::Disabled,
+    )
+    .unwrap()
+    .assistant()
 }

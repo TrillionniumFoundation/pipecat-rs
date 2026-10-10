@@ -54,6 +54,10 @@ final results and results for interrupted calls are discarded.
 
 ## Frame processing
 
+See [paired realtime aggregation](AGGREGATION.md) for the required bidirectional
+topology, explicit seed ownership, state-only snapshots, final-tool relay,
+playback semantics and intentionally unsupported context mutations.
+
 `OpenAiRealtimeProcessor` integrates with `pipecat-core::FrameProcessor`. Configure
 pipeline input and output sample rates to 24 kHz and supply mono PCM16. It maps
 input audio, input text, local end-of-turn, context/message updates, session/tool
@@ -77,11 +81,12 @@ Deferred responses and tool continuations retain their originating generation ev
 when an interruption happens during a blocked socket write.
 
 The standalone client supports PCM, PCMU and PCMA; the frame adapter intentionally
-requires PCM. Basic context imports synchronize only items imported by that
-adapter; server-owned conversation history is not silently erased. Rich contexts,
-provider-specific tools, direct tool execution, resampling, and application
-playback acknowledgements belong to the application or adjacent processors.
-Use typed item actions for image/audio history and function-call history.
+requires PCM. Plain and lossless text detailed contexts reconcile append-only
+history without recreating server-owned items. Rich multimodal/provider-specific
+contexts, arbitrary replacement and intermediate asynchronous tool continuations
+are explicitly unsupported in the paired frame adapter. Use the standalone
+typed client for custom item ownership rather than mixing untracked item actions
+through a processor's sender with its shared-context reconciliation.
 
 ## Bounds, security, and recovery
 

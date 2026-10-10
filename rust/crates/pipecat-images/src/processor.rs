@@ -308,7 +308,7 @@ impl FrameProcessor for ImageGenProcessor {
         Ok(())
     }
 }
-fn prompt(data: &FrameData) -> Option<&str> {
+pub(crate) fn prompt(data: &FrameData) -> Option<&str> {
     match data {
         FrameData::Text(t)
         | FrameData::LlmText(t)

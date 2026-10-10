@@ -94,6 +94,7 @@ pub struct Frame {
     pipeline_pts: bool,
     native_llm_continuation: Option<Arc<crate::NativeLlmContinuation>>,
     native_speculation: Option<crate::NativeSpeculation>,
+    pub(crate) native_realtime_context: Option<Arc<crate::NativeRealtimeContextCause>>,
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
     native_tool_timeout_projected: bool,
     native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
@@ -150,6 +151,11 @@ pub enum FrameTimingError {
 impl Serialize for Frame {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.require_wire_pts().map_err(serde::ser::Error::custom)?;
+        if self.native_realtime_context.is_some() {
+            return Err(serde::ser::Error::custom(
+                "unconsumed native realtime context cause on wire",
+            ));
+        }
         if self.native_speculation.is_some() {
             return Err(serde::ser::Error::custom(
                 "unconsumed native speculation on wire",
@@ -228,6 +234,7 @@ impl<'de> Deserialize<'de> for Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_realtime_context: None,
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
@@ -247,6 +254,7 @@ impl PartialEq for Frame {
             && self.pipeline_pts == other.pipeline_pts
             && self.native_llm_continuation == other.native_llm_continuation
             && self.native_speculation == other.native_speculation
+            && self.native_realtime_context == other.native_realtime_context
             && self.native_tool_outcome == other.native_tool_outcome
             && self.native_tool_timeout_projected == other.native_tool_timeout_projected
             && self.native_tool_batch == other.native_tool_batch
@@ -403,6 +411,7 @@ impl Frame {
             return Err(crate::NativeLlmContinuationError::UnconsumedSpeculation);
         }
         if self.native_llm_continuation.is_some()
+            || self.native_realtime_context.is_some()
             || matches!(self.data, FrameData::LlmContinuationCheckpoint)
         {
             Err(crate::NativeLlmContinuationError::UnconsumedOnWire)
@@ -473,6 +482,7 @@ impl Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_realtime_context: None,
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,

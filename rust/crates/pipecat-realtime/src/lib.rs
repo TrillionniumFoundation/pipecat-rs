@@ -3,6 +3,7 @@
 //! The protocol follows the repository's OpenAI service: nested audio settings,
 //! `response.output_audio.*` events, and bearer authentication without a beta header.
 mod client;
+mod context;
 mod processor;
 mod types;
 
