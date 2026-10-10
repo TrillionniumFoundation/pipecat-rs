@@ -8,7 +8,10 @@ use futures_util::StreamExt;
 use pipecat_services::CancellationToken;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    fmt,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -136,6 +139,42 @@ impl Default for ElevenLabsTranscriptionRequest {
         }
     }
 }
+impl ElevenLabsTranscriptionRequest {
+    fn validate_result_request_limits(&self) -> Result<(), SpeechError> {
+        if self.model.len() > 256
+            || self.language_code.as_ref().is_some_and(|v| v.len() > 64)
+            || self.keyterms.len() > 100
+            || self.keyterms.iter().any(|v| v.len() > 256)
+        {
+            return Err(SpeechError::Invalid(
+                "ElevenLabs transcription settings limits",
+            ));
+        }
+        let keyterm_bytes = self
+            .keyterms
+            .iter()
+            .try_fold(0usize, |total, value| total.checked_add(value.len()))
+            .ok_or(SpeechError::Invalid(
+                "ElevenLabs transcription settings limits",
+            ))?;
+        let total_bytes = [
+            self.model.len(),
+            self.language_code.as_ref().map_or(0, String::len),
+            keyterm_bytes,
+        ]
+        .into_iter()
+        .try_fold(0usize, usize::checked_add)
+        .ok_or(SpeechError::Invalid(
+            "ElevenLabs transcription settings limits",
+        ))?;
+        if keyterm_bytes > 8192 || total_bytes > 16 * 1024 {
+            return Err(SpeechError::Invalid(
+                "ElevenLabs transcription settings limits",
+            ));
+        }
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ElevenLabsWord {
     pub text: String,
@@ -152,6 +191,43 @@ pub struct ElevenLabsTranscript {
     pub language_probability: Option<f64>,
     #[serde(default)]
     pub words: Vec<ElevenLabsWord>,
+}
+impl ElevenLabsTranscript {
+    fn validate(&self) -> Result<(), SpeechError> {
+        if self
+            .language_probability
+            .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
+            || self.words.iter().any(|word| {
+                word.start.is_some_and(|v| !v.is_finite() || v < 0.0)
+                    || word.end.is_some_and(|v| !v.is_finite() || v < 0.0)
+                    || word
+                        .start
+                        .zip(word.end)
+                        .is_some_and(|(start, end)| end < start)
+            })
+        {
+            return Err(SpeechError::Protocol(
+                "invalid transcript timing or probability",
+            ));
+        }
+        Ok(())
+    }
+}
+/// Validated transcript projection and complete parsed provider JSON.
+///
+/// Unknown fields and explicit nulls survive in `result`, including the
+/// difference between an absent and null language. The response body is bounded
+/// by `SpeechConfig::max_json_bytes`; formatting and duplicate keys are not
+/// retained. Debug omits provider text and metadata.
+pub struct ElevenLabsTranscriptionResult {
+    pub transcript: ElevenLabsTranscript,
+    pub result: serde_json::Value,
+}
+impl fmt::Debug for ElevenLabsTranscriptionResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ElevenLabsTranscriptionResult")
+            .finish_non_exhaustive()
+    }
 }
 /// Character timing relative to this synthesis request, not actual playout.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -207,6 +283,9 @@ impl ElevenLabsHttpClient {
             http: HttpClient::new(config)?,
         })
     }
+    pub(crate) fn config(&self) -> &SpeechConfig {
+        &self.http.config
+    }
     pub async fn transcribe_pcm(
         &self,
         pcm: &[u8],
@@ -215,6 +294,38 @@ impl ElevenLabsHttpClient {
         request: ElevenLabsTranscriptionRequest,
         cancel: CancellationToken,
     ) -> Result<ElevenLabsTranscript, SpeechError> {
+        let http = self.transcription_http(pcm, sample_rate, channels, request)?;
+        let transcript: ElevenLabsTranscript = self.http.json(http, cancel).await?;
+        transcript.validate()?;
+        Ok(transcript)
+    }
+    /// Preserves bounded provider metadata without weakening typed validation.
+    ///
+    /// UTF-8 request limits are 256 model bytes, 64 language bytes and 100
+    /// keyterms of at most 256 bytes each / 8192 bytes combined. The complete
+    /// text settings budget is 16 KiB. Unknown response metadata stays opaque.
+    pub async fn transcribe_pcm_with_result(
+        &self,
+        pcm: &[u8],
+        sample_rate: u32,
+        channels: u16,
+        request: ElevenLabsTranscriptionRequest,
+        cancel: CancellationToken,
+    ) -> Result<ElevenLabsTranscriptionResult, SpeechError> {
+        request.validate_result_request_limits()?;
+        let http = self.transcription_http(pcm, sample_rate, channels, request)?;
+        let result: serde_json::Value = self.http.json(http, cancel).await?;
+        let transcript = ElevenLabsTranscript::deserialize(&result)?;
+        transcript.validate()?;
+        Ok(ElevenLabsTranscriptionResult { transcript, result })
+    }
+    fn transcription_http(
+        &self,
+        pcm: &[u8],
+        sample_rate: u32,
+        channels: u16,
+        request: ElevenLabsTranscriptionRequest,
+    ) -> Result<reqwest::RequestBuilder, SpeechError> {
         if request.model.is_empty()
             || !common::optional_text(&request.language_code)
             || request.keyterms.iter().any(String::is_empty)
@@ -240,29 +351,11 @@ impl ElevenLabsHttpClient {
         if let Some(no_verbatim) = request.no_verbatim {
             form = form.text("no_verbatim", no_verbatim.to_string());
         }
-        let http = self
+        Ok(self
             .http
             .post(&["v1", "speech-to-text"])?
             .header("xi-api-key", common::secret(&self.http.config.api_key)?)
-            .multipart(form);
-        let transcript: ElevenLabsTranscript = self.http.json(http, cancel).await?;
-        if transcript
-            .language_probability
-            .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
-            || transcript.words.iter().any(|word| {
-                word.start.is_some_and(|v| !v.is_finite() || v < 0.0)
-                    || word.end.is_some_and(|v| !v.is_finite() || v < 0.0)
-                    || word
-                        .start
-                        .zip(word.end)
-                        .is_some_and(|(start, end)| end < start)
-            })
-        {
-            return Err(SpeechError::Protocol(
-                "invalid transcript timing or probability",
-            ));
-        }
-        Ok(transcript)
+            .multipart(form))
     }
     pub fn synthesize(
         &self,

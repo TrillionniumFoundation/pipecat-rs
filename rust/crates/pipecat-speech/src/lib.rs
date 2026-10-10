@@ -9,7 +9,11 @@ pub mod deepgram;
 pub mod elevenlabs;
 mod openai;
 pub mod processor;
-pub use openai::{SpeechClient, SynthesisRequest, Transcript, TranscriptionRequest};
+pub mod stt_processor;
+pub use openai::{
+    OpenAiTranscriptionOptions, OpenAiTranscriptionResult, SpeechClient, SynthesisRequest,
+    Transcript, TranscriptionRequest,
+};
 use pipecat_services::CancellationToken;
 pub use processor::{HttpTtsBackend, HttpTtsProcessor};
 use std::{
@@ -20,6 +24,7 @@ use std::{
     },
     time::Duration,
 };
+pub use stt_processor::{HttpSttBackend, HttpSttOptions, HttpSttProcessor};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 /// Shared transport policy. `base_url` is the provider root (OpenAI includes `/v1`).

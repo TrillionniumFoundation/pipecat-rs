@@ -444,7 +444,10 @@ impl ProcessorContext {
     /// Synchronous, nonblocking equivalent of `push`, with identical causal
     /// admission and backpressure behavior. Useful when a producer's state
     /// transition and enqueue must be serialized without holding a lock across
-    /// an await. Observer delivery remains on its owned dispatch tasks.
+    /// an await. Observer delivery remains on its owned dispatch tasks, but the
+    /// observer clock runs synchronously under runtime admission gates. Neither
+    /// the clock nor synchronously invoked wakers may reenter those gates or
+    /// wait for a lock held by this call's caller.
     pub fn try_push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
         self.with_admission(&self.runtime, || {
             let generation = self.frame_generation(&frame);
@@ -596,11 +599,26 @@ impl ProcessorContext {
                 health.snapshot()
             };
         self.push_error_verdict(error, health, reported_health)
-            .await
     }
     /// Report an admitted provider outcome only while its health generation is
     /// current. Explicit recovery also fences outcomes when usability stayed true.
     pub async fn push_error_if_health_generation(
+        &self,
+        error: ErrorFrame,
+        force_treat_as_permanent: bool,
+        generation: crate::ProcessorHealthGeneration,
+    ) -> Result<bool, ProcessorError> {
+        self.try_push_error_if_health_generation(error, force_treat_as_permanent, generation)
+    }
+    /// Synchronous equivalent of `push_error_if_health_generation`, with the
+    /// same causal checks, reporting verdict, fatal handling and backpressure.
+    /// Health validation and frame enqueue are separate admission points;
+    /// subsequent recovery does not retract an already accepted verdict.
+    ///
+    /// Health-watch wakers and the observer clock can run synchronously. Do not
+    /// hold a lock they may acquire or invoke this inside a runtime-admission
+    /// closure. The clock must also obey `try_push`'s non-reentrancy contract.
+    pub fn try_push_error_if_health_generation(
         &self,
         mut error: ErrorFrame,
         force_treat_as_permanent: bool,
@@ -622,11 +640,10 @@ impl ProcessorContext {
         ) else {
             return Ok(false);
         };
-        self.push_error_verdict(error, health, reported_health)
-            .await?;
+        self.push_error_verdict(error, health, reported_health)?;
         Ok(true)
     }
-    async fn push_error_verdict(
+    fn push_error_verdict(
         &self,
         error: ErrorFrame,
         health: ProcessorHealth,
@@ -639,7 +656,7 @@ impl ProcessorContext {
             reported_health,
         }));
         self.runtime.record_frame_error(&mut frame);
-        let result = self.push(frame, Direction::Upstream).await;
+        let result = self.try_push(frame, Direction::Upstream);
         if error.fatal {
             self.runtime
                 .fail(crate::PipelineError::Execution(error.error));

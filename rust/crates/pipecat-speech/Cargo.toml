@@ -16,8 +16,11 @@ thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
 futures-util = "0.3"
 base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
+pipecat-vad = { path = "../pipecat-vad" }
+pipecat-turns = { path = "../pipecat-turns" }
 pipecat-media-transport = { path = "../pipecat-media-transport" }
 pipecat-pipeline = { path = "../pipecat-pipeline" }
 

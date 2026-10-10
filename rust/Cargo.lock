@@ -4204,6 +4204,7 @@ name = "pipecat-speech"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "futures-util",
  "pipecat-audio",
  "pipecat-core",
@@ -4211,6 +4212,8 @@ dependencies = [
  "pipecat-pipeline",
  "pipecat-services",
  "pipecat-text",
+ "pipecat-turns",
+ "pipecat-vad",
  "reqwest",
  "serde",
  "serde_json",
