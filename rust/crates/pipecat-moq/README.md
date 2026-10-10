@@ -42,11 +42,12 @@ and output sample rates other than 48 kHz. Only the `moq-lite-06` subprotocol
 is offered and accepted. IETF MoQ draft interoperability is not claimed.
 The crate contains no browser client, signaling UI, SFU, or relay server.
 
-The source transport's arbitrary-rate resampling, client reconnect/replay,
-serve-mode certificate discovery, browser buffer reset, and full pipeline
-input/output processor integration remain outside this slice. Incoming PCM
-is returned at 48 kHz; source Python defaults to 16 kHz input. Callers must
-explicitly resample if their pipeline requires another rate. Local pacing
+The owned `MoqTransport` pipeline adapter explicitly resamples incoming PCM
+from 48 kHz and outgoing PCM to 48 kHz, with bounded input/output lifecycle.
+See [native pipeline integration](PIPELINE.md) for rates, frame mapping,
+queue pressure, generation fences, and limitations. The standalone connection
+still returns 48 kHz PCM. Client reconnect/replay, serve-mode certificate
+discovery, and browser buffer reset remain outside this slice. Local pacing
 and interruption cannot retract audio already transmitted to a peer.
 
 Sequenced transcript records accept string, null, or omitted epochs. Other
@@ -55,8 +56,8 @@ magnitude up to the configured record-byte cap; bool and floating-point tokens
 remain legacy unsequenced messages. Omitted and null epochs compare equally.
 
 No live hosted relay, browser, or SFU qualification is implied by local
-peer tests. The API uses one connection owner rather than the Python
-transport's separate input/output holder count.
+peer tests. The low-level API uses one connection owner; the pipeline adapter coordinates
+separate input/output holders around that owner.
 
 The default local bind is IPv4 (`0.0.0.0:0`); local tests qualify IPv4 loopback.
 Callers targeting IPv6 must supply a compatible bind. The pinned upstream

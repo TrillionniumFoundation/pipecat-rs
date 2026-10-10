@@ -5,12 +5,16 @@
 mod config;
 mod connection;
 mod media;
+mod pipeline;
 mod transcript;
 mod wire;
 
 pub use config::{MoqConfig, MoqLimits, MoqMode, TlsTrust};
 pub use connection::{MoqConnection, MoqEvent, MoqMonitor, MoqSender};
 pub use pipecat_core::AudioRawFrame;
+pub use pipeline::{
+    MoqInputTransport, MoqOutputTransport, MoqTransport, MoqTransportConfig, MoqTransportState,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

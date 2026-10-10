@@ -157,6 +157,27 @@ impl ProcessorContext {
     pub fn is_current(&self) -> bool {
         !self.source_is_stale(self.emission_generation())
     }
+    /// Compare captured causal scopes without applying a background task's
+    /// interruption-survival override. This compares destination runtime/index,
+    /// stored invocation generation, and the complete ordered inherited-origin
+    /// list (runtime/index/generation). It does not check freshness or grant an
+    /// admission lease; publication still needs its normal generation checks.
+    /// Buffering processors can use this to avoid combining unrelated scopes.
+    pub fn same_causal_scope(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.runtime, &other.runtime)
+            && self.index == other.index
+            && self.current_generation() == other.current_generation()
+            && self.origins.len() == other.origins.len()
+            && self
+                .origins
+                .iter()
+                .zip(&other.origins)
+                .all(|(left, right)| {
+                    Arc::ptr_eq(&left.runtime, &right.runtime)
+                        && left.index == right.index
+                        && left.generation == right.generation
+                })
+    }
     pub fn configuration(&self) -> &StartFrame {
         &self.runtime.config.start
     }
@@ -475,3 +496,6 @@ impl FrameProcessor for IdentityProcessor {
         ctx.push(frame, direction).await
     }
 }
+
+#[cfg(test)]
+mod causal_scope_tests;

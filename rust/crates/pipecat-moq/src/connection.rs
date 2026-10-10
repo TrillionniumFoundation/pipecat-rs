@@ -40,6 +40,19 @@ struct Shared {
     idle: Notify,
 }
 impl Shared {
+    /// Linearize the last local publication step with interruption and Cancel.
+    /// End closes admission but permits already admitted writes to drain.
+    fn commit(&self, generation: Option<u64>, publish: impl FnOnce() -> Result<()>) -> Result<()> {
+        let _accepting = self.accepting.lock().unwrap_or_else(|e| e.into_inner());
+        if *self.shutdown.borrow() == Shutdown::Cancel {
+            return Err(Error::Closed);
+        }
+        if generation.is_some_and(|expected| expected != *self.interrupt.borrow()) {
+            return Err(Error::Interrupted);
+        }
+        publish()
+    }
+
     fn stop(&self, how: Shutdown) {
         let mut accepting = self.accepting.lock().unwrap_or_else(|e| e.into_inner());
         *accepting = false;
@@ -111,6 +124,7 @@ struct Command {
     content: Content,
     generation: u64,
     reply: oneshot::Sender<Result<()>>,
+    fenced: bool,
 }
 
 /// Cloning a sender does not prolong the connection owner's lifetime.
@@ -122,7 +136,26 @@ pub struct MoqSender {
     audio_enabled: bool,
 }
 impl MoqSender {
-    async fn publish(&self, content: Content) -> Result<()> {
+    pub(crate) fn ensure_audio_output(&self) -> Result<()> {
+        if !self.audio_enabled {
+            return Err(Error::Unsupported("audio output is disabled"));
+        }
+        Ok(())
+    }
+    pub(crate) fn validate_json(&self, message: &Value) -> Result<()> {
+        if !message.is_object() {
+            return Err(Error::InvalidConfig("transcript message must be an object"));
+        }
+        if message.get("label").and_then(Value::as_str) == Some("moq-transport") {
+            return Err(Error::InvalidConfig("transport control label is reserved"));
+        }
+        transcript::json_bytes(
+            message,
+            self.limits.expanded_record_bytes.saturating_sub(256),
+        )?;
+        Ok(())
+    }
+    async fn publish(&self, content: Content, generation: Option<u64>) -> Result<()> {
         let (reply, receiver) = oneshot::channel();
         {
             let accepting = self
@@ -133,11 +166,16 @@ impl MoqSender {
             if !*accepting {
                 return Err(Error::Closed);
             }
+            let current = *self.shared.interrupt.borrow();
+            if generation.is_some_and(|expected| expected != current) {
+                return Err(Error::Interrupted);
+            }
             self.tx
                 .try_send(Command {
                     content,
-                    generation: *self.shared.interrupt.borrow(),
+                    generation: current,
                     reply,
+                    fenced: generation.is_some(),
                 })
                 .map_err(|e| match e {
                     mpsc::error::TrySendError::Full(_) => Error::Backpressure,
@@ -148,28 +186,47 @@ impl MoqSender {
     }
     /// Publish exactly one 20 ms PCM frame. Success is local publication, not playback.
     pub async fn publish_audio(&self, audio: AudioRawFrame) -> Result<()> {
-        if !self.audio_enabled {
-            return Err(Error::Unsupported("audio output is disabled"));
-        }
+        self.ensure_audio_output()?;
         media::validate(&audio)?;
-        self.publish(Content::Audio(audio)).await
+        self.publish(Content::Audio(audio), None).await
     }
     /// Publish a JSON object, assigning transport-owned sequence and epoch fields.
     pub async fn publish_json(&self, message: Value) -> Result<()> {
-        if !message.is_object() {
-            return Err(Error::InvalidConfig("transcript message must be an object"));
-        }
-        if message.get("label").and_then(Value::as_str) == Some("moq-transport") {
-            return Err(Error::InvalidConfig("transport control label is reserved"));
-        }
-        transcript::json_bytes(
-            &message,
-            self.limits.expanded_record_bytes.saturating_sub(256),
-        )?;
-        self.publish(Content::Message(message)).await
+        self.validate_json(&message)?;
+        self.publish(Content::Message(message), None).await
+    }
+    /// Current local interruption generation. This is not a playback acknowledgement.
+    pub fn generation(&self) -> u64 {
+        *self.shared.interrupt.borrow()
+    }
+    /// Publish only while the caller's generation still owns admission and the write.
+    pub async fn publish_audio_for_generation(
+        &self,
+        audio: AudioRawFrame,
+        generation: u64,
+    ) -> Result<()> {
+        self.ensure_audio_output()?;
+        media::validate(&audio)?;
+        self.publish(Content::Audio(audio), Some(generation)).await
+    }
+    /// Generation-fenced JSON for interruptible pipeline messages. The ordinary
+    /// `publish_json` method remains an interruption-independent append log.
+    pub async fn publish_json_for_generation(&self, message: Value, generation: u64) -> Result<()> {
+        self.validate_json(&message)?;
+        self.publish(Content::Message(message), Some(generation))
+            .await
     }
     /// Re-anchor local pacing. Already transmitted audio cannot be recalled.
     pub async fn interrupt(&self) -> Result<()> {
+        self.interrupt_now()
+    }
+    pub(crate) fn interrupt_now(&self) -> Result<()> {
+        self.interrupt_generation(None)
+    }
+    pub(crate) fn interrupt_if_generation(&self, generation: u64) -> Result<()> {
+        self.interrupt_generation(Some(generation))
+    }
+    fn interrupt_generation(&self, expected: Option<u64>) -> Result<()> {
         let accepting = self
             .shared
             .accepting
@@ -178,10 +235,11 @@ impl MoqSender {
         if !*accepting {
             return Err(Error::Closed);
         }
-        let next = self
-            .shared
-            .interrupt
-            .borrow()
+        let current = *self.shared.interrupt.borrow();
+        if expected.is_some_and(|expected| expected != current) {
+            return Ok(());
+        }
+        let next = current
             .checked_add(1)
             .ok_or(Error::Limit("interruption generation"))?;
         self.shared.interrupt.send_replace(next);
@@ -192,7 +250,7 @@ impl MoqSender {
 /// Owns the endpoint, protocol drivers and media pumps. Drop requests immediate cancellation.
 pub struct MoqConnection {
     sender: MoqSender,
-    events: mpsc::Receiver<MoqEvent>,
+    events: Option<mpsc::Receiver<MoqEvent>>,
     monitor: MoqMonitor,
     endpoint: moq_noq::Endpoint,
     task: Option<JoinHandle<()>>,
@@ -314,7 +372,7 @@ impl MoqConnection {
         });
         let mut connection = Self {
             sender,
-            events: event_rx,
+            events: Some(event_rx),
             monitor,
             endpoint,
             task: Some(task),
@@ -343,7 +401,12 @@ impl MoqConnection {
         self.monitor.clone()
     }
     pub async fn recv(&mut self) -> Option<MoqEvent> {
-        self.events.recv().await
+        self.events.as_mut()?.recv().await
+    }
+    /// Transfer event consumption once without transferring connection ownership.
+    /// After transfer `recv` returns `None`; End and Cancel remain owned here.
+    pub fn take_events(&mut self) -> Option<mpsc::Receiver<MoqEvent>> {
+        self.events.take()
     }
     /// Drain already admitted publications, finish tracks, and close within the configured deadline.
     /// No remote playback or delivery acknowledgement is inferred from this operation.
@@ -584,11 +647,15 @@ impl Publication {
         &mut self,
         content: Content,
         generation: u64,
+        fenced: bool,
+        shared: &Shared,
         shutdown: &mut watch::Receiver<Shutdown>,
         interrupt: &mut watch::Receiver<u64>,
     ) -> Result<()> {
         match content {
-            Content::Message(message) => self.transcript.append(message, false),
+            Content::Message(message) => shared.commit(fenced.then_some(generation), || {
+                self.transcript.append(message, false)
+            }),
             Content::Audio(audio) => {
                 if generation != *interrupt.borrow_and_update() {
                     return Err(Error::Interrupted);
@@ -614,18 +681,21 @@ impl Publication {
                         _ = tokio::time::sleep_until(target) => break,
                     }
                 }
-                let frame = hang::container::Frame {
-                    timestamp: moq_net::Timestamp::from_micros(self.timestamp_us)
-                        .map_err(Error::protocol)?,
-                    payload: encoder.encode(&audio)?,
-                };
-                let mut group = track.append_group().map_err(Error::protocol)?;
-                frame.write_to(&mut group).map_err(Error::media)?;
-                group.finish().map_err(Error::protocol)?;
-                self.timestamp_us = self
+                let next_timestamp = self
                     .timestamp_us
                     .checked_add(20_000)
                     .ok_or(Error::Limit("audio timestamp"))?;
+                shared.commit(Some(generation), || {
+                    let frame = hang::container::Frame {
+                        timestamp: moq_net::Timestamp::from_micros(self.timestamp_us)
+                            .map_err(Error::protocol)?,
+                        payload: encoder.encode(&audio)?,
+                    };
+                    let mut group = track.append_group().map_err(Error::protocol)?;
+                    frame.write_to(&mut group).map_err(Error::media)?;
+                    group.finish().map_err(Error::protocol)
+                })?;
+                self.timestamp_us = next_timestamp;
                 self.clock = Some(target + Duration::from_millis(20));
                 Ok(())
             }
@@ -666,14 +736,20 @@ async fn writer(
         };
         let Some(command) = command else {
             if ending {
-                publication.finish()?;
+                shared.commit(None, || publication.finish())?;
             }
             return Ok(publication);
         };
+        if command.fenced && command.generation != *shared.interrupt.borrow() {
+            let _ = command.reply.send(Err(Error::Interrupted));
+            continue;
+        }
         let result = publication
             .write(
                 command.content,
                 command.generation,
+                command.fenced,
+                &shared,
                 &mut shutdown,
                 &mut interrupt,
             )
