@@ -635,6 +635,7 @@ async fn process_completion(
     let started = Instant::now();
     let mut ttfb_reported = false;
     let mut thinking = false;
+    let mut explicit_thinking = false;
     let mut failed = false;
     let mut calls = vec![];
     let mut continuation = None;
@@ -676,7 +677,8 @@ async fn process_completion(
         if !ttfb_reported
             && matches!(
                 &event,
-                Ok(StreamEvent::TextDelta(_)
+                Ok(StreamEvent::ResponseProgress
+                    | StreamEvent::TextDelta(_)
                     | StreamEvent::ThoughtDelta(_)
                     | StreamEvent::ToolCall(_))
             )
@@ -694,7 +696,20 @@ async fn process_completion(
             }
         }
         match event {
-            Ok(StreamEvent::Started | StreamEvent::ToolCallDelta { .. }) => {}
+            Ok(
+                StreamEvent::Started
+                | StreamEvent::ResponseProgress
+                | StreamEvent::ToolCallDelta { .. },
+            ) => {}
+            Ok(StreamEvent::ThoughtStart | StreamEvent::ThoughtEnd) => {
+                explicit_thinking = true;
+                let data = if matches!(event, Ok(StreamEvent::ThoughtStart)) {
+                    FrameData::LlmThoughtStart
+                } else {
+                    FrameData::LlmThoughtEnd
+                };
+                ctx.push(Frame::new(data), Direction::Downstream).await?;
+            }
             Ok(StreamEvent::GeminiCheckpoint(messages)) => {
                 match native_gemini_history(response_id, messages, true) {
                     Ok(history) => {
@@ -782,7 +797,7 @@ async fn process_completion(
                 }
             }
             Ok(StreamEvent::TextDelta(text)) => {
-                if thinking && !anthropic {
+                if thinking && !anthropic && !explicit_thinking {
                     ctx.push(Frame::new(FrameData::LlmThoughtEnd), Direction::Downstream)
                         .await?;
                     thinking = false;
@@ -793,7 +808,7 @@ async fn process_completion(
                     .await?;
             }
             Ok(StreamEvent::ThoughtDelta(text)) => {
-                if !thinking {
+                if !thinking && !explicit_thinking {
                     ctx.push(
                         Frame::new(FrameData::LlmThoughtStart),
                         Direction::Downstream,
@@ -841,7 +856,7 @@ async fn process_completion(
                 ctx.push_error(error_frame(error)).await?;
             }
             Ok(StreamEvent::Finished { reason }) => {
-                if thinking {
+                if thinking && !explicit_thinking {
                     ctx.push(Frame::new(FrameData::LlmThoughtEnd), Direction::Downstream)
                         .await?;
                 }

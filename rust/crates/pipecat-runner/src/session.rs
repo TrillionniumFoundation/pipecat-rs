@@ -1,4 +1,5 @@
 use crate::{processors::*, transport::BrowserSession, RunnerConfig, RunnerError, SttProvider};
+#[cfg(feature = "webrtc")]
 use pipecat_cli::config::ProviderConfig;
 use pipecat_core::*;
 use pipecat_rtvi::{RtviConfig, RtviEvent, RtviObserver, RtviObserverParams, RtviProcessor};
@@ -43,7 +44,7 @@ pub async fn accept_session(
     listener: TcpListener,
     token: &str,
     config: &RunnerConfig,
-    providers: &ProviderConfig,
+    providers: &crate::cascade::SessionProviders,
     cancel: &mut watch::Receiver<bool>,
     resources: &SessionResources,
 ) -> Result<(Context, u64), RunnerError> {
@@ -86,7 +87,7 @@ pub async fn accept_session(
     };
     drop(listener);
     let mut session = BrowserSession::WebSocket(session);
-    let result = run(
+    let result = run_cascade(
         &mut session,
         config,
         providers,
@@ -99,15 +100,35 @@ pub async fn accept_session(
     result
 }
 
+#[cfg(feature = "webrtc")]
 pub(crate) async fn run(
     session: &mut BrowserSession,
     config: &RunnerConfig,
     providers: &ProviderConfig,
     cancel: &mut watch::Receiver<bool>,
     session_deadline: Instant,
+    resources: &SessionResources,
+) -> Result<(Context, u64), RunnerError> {
+    run_cascade(
+        session,
+        config,
+        &crate::cascade::SessionProviders::Default(Box::new(providers.clone())),
+        cancel,
+        session_deadline,
+        resources,
+    )
+    .await
+}
+
+async fn run_cascade(
+    session: &mut BrowserSession,
+    config: &RunnerConfig,
+    providers: &crate::cascade::SessionProviders,
+    cancel: &mut watch::Receiver<bool>,
+    session_deadline: Instant,
     _resources: &SessionResources,
 ) -> Result<(Context, u64), RunnerError> {
-    let rtvi=Arc::new(RtviProcessor::new(RtviConfig{max_message_bytes:session.message_limit(),capabilities:Some(json!({"context_mode":"generated-text","playback_acknowledgements":false,"input_sample_rate":providers.input_rate,"output_sample_rate":session.output_sample_rate(providers.output_rate),"synthesis_sample_rate":providers.output_rate}).as_object().unwrap().clone()),..Default::default()}).map_err(|_|RunnerError::Rtvi)?);
+    let rtvi=Arc::new(RtviProcessor::new(RtviConfig{max_message_bytes:session.message_limit(),capabilities:Some(json!({"context_mode":"generated-text","playback_acknowledgements":false,"input_sample_rate":providers.input_rate(),"output_sample_rate":session.output_sample_rate(providers.output_rate()),"synthesis_sample_rate":providers.output_rate()}).as_object().unwrap().clone()),..Default::default()}).map_err(|_|RunnerError::Rtvi)?);
     let handle = rtvi.handle();
     let mut events = handle.subscribe();
     let observer = Arc::new(
@@ -130,9 +151,9 @@ pub(crate) async fn run(
         }) as Arc<dyn FrameProcessor>
     };
     let mut processors: Vec<Arc<dyn FrameProcessor>> =
-        vec![rtvi, Arc::new(NormalizeAudio::new(providers.input_rate))];
+        vec![rtvi, Arc::new(NormalizeAudio::new(providers.input_rate()))];
     if let Some(paths) = config.options.vad.clone() {
-        let rate = providers.input_rate;
+        let rate = providers.input_rate();
         let processor = tokio::task::spawn_blocking(move || {
             let model = pipecat_vad::SileroModel::load(
                 &pipecat_vad::RuntimeOptions {
@@ -150,47 +171,76 @@ pub(crate) async fn run(
         .map_err(|_| RunnerError::Provider)?;
         processors.push(Arc::new(processor));
     }
-    let stt: Arc<dyn FrameProcessor> = match &config.stt {
-        SttProvider::Deepgram => {
-            let mut stt = DeepgramConfig::new(providers.deepgram_key.clone());
-            stt.endpoint = providers.deepgram_endpoint.clone();
-            stt.sample_rate = providers.input_rate;
-            stt.channels = 1;
-            Arc::new(DeepgramSttProcessor::new(
-                DeepgramClient::new(stt).map_err(|_| RunnerError::Provider)?,
-            ))
-        }
-        #[cfg(feature = "whisper")]
-        SttProvider::Whisper(local) => {
-            let processor = tokio::select! {
-                biased;
-                _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
-                result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
+    let crate::cascade::SessionParts {
+        stt,
+        tts,
+        llm,
+        user_config,
+        initial_context,
+        tools,
+        model,
+        system_prompt,
+    } = match providers {
+        crate::cascade::SessionProviders::Default(providers) => {
+            let stt: Arc<dyn FrameProcessor> = match &config.stt {
+                SttProvider::Deepgram => {
+                    let mut stt = DeepgramConfig::new(providers.deepgram_key.clone());
+                    stt.endpoint = providers.deepgram_endpoint.clone();
+                    stt.sample_rate = providers.input_rate;
+                    stt.channels = 1;
+                    Arc::new(DeepgramSttProcessor::new(
+                        DeepgramClient::new(stt).map_err(|_| RunnerError::Provider)?,
+                    ))
+                }
+                #[cfg(feature = "whisper")]
+                SttProvider::Whisper(local) => {
+                    let processor = tokio::select! {
+                        biased;
+                        _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
+                        result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
+                    };
+                    Arc::new(processor)
+                }
             };
-            Arc::new(processor)
+            let mut tts =
+                CartesiaConfig::new(providers.cartesia_key.clone(), providers.voice_id.clone());
+            tts.endpoint = providers.cartesia_endpoint.clone();
+            tts.sample_rate = providers.output_rate;
+            let mut llm = ClientConfig::new(Provider::OpenAi, providers.openai_key.clone());
+            llm.endpoint = providers.openai_endpoint.clone();
+            let tts: Arc<dyn FrameProcessor> = Arc::new(CartesiaTtsProcessor::new(
+                CartesiaClient::new(tts).map_err(|_| RunnerError::Provider)?,
+            ));
+            crate::cascade::SessionParts {
+                stt,
+                tts,
+                llm,
+                user_config: UserAggregatorConfig {
+                    turn: UserTurnConfig {
+                        speech_timeout: config.options.turn_timeout,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                initial_context: Context::default(),
+                tools: vec![],
+                model: providers.model.clone(),
+                system_prompt: providers.system_prompt.clone(),
+            }
         }
+        #[cfg(feature = "soniox")]
+        crate::cascade::SessionProviders::Soniox(providers) => providers.build_session()?,
     };
-    let mut tts = CartesiaConfig::new(providers.cartesia_key.clone(), providers.voice_id.clone());
-    tts.endpoint = providers.cartesia_endpoint.clone();
-    tts.sample_rate = providers.output_rate;
-    let mut llm = ClientConfig::new(Provider::OpenAi, providers.openai_key.clone());
-    llm.endpoint = providers.openai_endpoint.clone();
     let pair = LLMContextAggregatorPair::new(
-        Context::default(),
-        UserAggregatorConfig {
-            turn: UserTurnConfig {
-                speech_timeout: config.options.turn_timeout,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
+        initial_context,
+        user_config,
         AssistantAggregatorConfig {
             text_mode: AssistantTextMode::Text,
         },
     );
     let context = pair.context();
-    let mut request = CompletionRequest::new(providers.model.clone(), Context::default());
-    request.system_instruction = Some(providers.system_prompt.clone());
+    let mut request = CompletionRequest::new(model, Context::default());
+    request.system_instruction = Some(system_prompt);
     let retention_budget = Arc::new(RetentionBudget::default());
     processors.extend([
         stt,
@@ -202,23 +252,24 @@ pub(crate) async fn run(
             LlmClient::new(llm).map_err(|_| RunnerError::Provider)?,
             request,
         )),
-        retention_budget,
+    ]);
+    processors.extend(tools);
+    processors.extend([
+        retention_budget as Arc<dyn FrameProcessor>,
         tap("BrowserLlmEvents"),
         Arc::new(GeneratedText::new(output.clone())),
         Arc::new(GeneratedContext {
             assistant: pair.assistant(),
         }),
-        Arc::new(CartesiaTtsProcessor::new(
-            CartesiaClient::new(tts).map_err(|_| RunnerError::Provider)?,
-        )),
+        tts,
         tap("BrowserSynthesisEvents"),
         Arc::new(BrowserOutput {
             sender: output.clone(),
         }),
     ]);
     let mut pipeline_config = PipelineConfig::default();
-    pipeline_config.start.audio_in_sample_rate = providers.input_rate;
-    pipeline_config.start.audio_out_sample_rate = providers.output_rate;
+    pipeline_config.start.audio_in_sample_rate = providers.input_rate();
+    pipeline_config.start.audio_out_sample_rate = providers.output_rate();
     pipeline_config.shutdown_timeout = Duration::from_secs(5);
     let pipeline = Pipeline::new(processors);
     let mut worker = tokio::select! {

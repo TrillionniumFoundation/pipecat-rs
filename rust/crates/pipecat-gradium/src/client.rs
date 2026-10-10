@@ -29,7 +29,7 @@ use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig, Message},
     MaybeTlsStream, WebSocketStream,
 };
-type Socket = WebSocketStream<MaybeTlsStream<HandshakeBoundedStream>>;
+pub(crate) type Socket = WebSocketStream<MaybeTlsStream<HandshakeBoundedStream>>;
 static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
 #[derive(Debug, Clone)]
 pub struct GradiumSttClient {
@@ -108,9 +108,14 @@ impl GradiumSttClient {
         })
     }
 }
-async fn connect(c: &GradiumSttConfig) -> Result<Socket, GradiumError> {
-    let url = security::endpoint(c)?;
-    let addresses = security::addresses(&url, c.allow_loopback).await?;
+pub(crate) async fn connect_socket(
+    endpoint: &str,
+    api_key: &str,
+    allow_loopback: bool,
+    limits: &crate::GradiumLimits,
+) -> Result<Socket, GradiumError> {
+    let url = security::endpoint_url(endpoint, allow_loopback)?;
+    let addresses = security::addresses(&url, allow_loopback).await?;
     let stream = TcpStream::connect(addresses.as_slice())
         .await
         .map_err(|_| GradiumError::Transport)?;
@@ -127,7 +132,7 @@ async fn connect(c: &GradiumSttConfig) -> Result<Socket, GradiumError> {
         .as_str()
         .into_client_request()
         .map_err(|_| GradiumError::Endpoint)?;
-    let mut key = tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&c.api_key)
+    let mut key = tokio_tungstenite::tungstenite::http::HeaderValue::from_str(api_key)
         .map_err(|_| GradiumError::Invalid("API key"))?;
     key.set_sensitive(true);
     request.headers_mut().insert("x-api-key", key);
@@ -136,15 +141,19 @@ async fn connect(c: &GradiumSttConfig) -> Result<Socket, GradiumError> {
         tokio_tungstenite::tungstenite::http::HeaderValue::from_static("pipecat"),
     );
     let ws = WebSocketConfig::default()
-        .max_message_size(Some(c.limits.max_message_bytes))
-        .max_frame_size(Some(c.limits.max_message_bytes))
+        .max_message_size(Some(limits.max_message_bytes))
+        .max_frame_size(Some(limits.max_message_bytes))
         .write_buffer_size(0)
-        .max_write_buffer_size(c.limits.max_message_bytes + 1024);
-    let (mut socket, _) =
+        .max_write_buffer_size(limits.max_message_bytes + 1024);
+    let (socket, _) =
         tokio_tungstenite::client_async_tls_with_config(request, stream, Some(ws), None)
             .await
             .map_err(transport)?;
     handshaking.store(false, Ordering::Release);
+    Ok(socket)
+}
+async fn connect(c: &GradiumSttConfig) -> Result<Socket, GradiumError> {
+    let mut socket = connect_socket(&c.endpoint, &c.api_key, c.allow_loopback, &c.limits).await?;
     write(
         &mut socket,
         Message::Text(c.setup_message().to_string().into()),
@@ -643,7 +652,7 @@ async fn write(
         .map_err(|_| GradiumError::Timeout(bound.1))?
         .map_err(transport)
 }
-fn transport(error: tokio_tungstenite::tungstenite::Error) -> GradiumError {
+pub(crate) fn transport(error: tokio_tungstenite::tungstenite::Error) -> GradiumError {
     use tokio_tungstenite::tungstenite::Error;
     match error {
         Error::Http(r) => GradiumError::Http(r.status().as_u16()),
@@ -653,7 +662,7 @@ fn transport(error: tokio_tungstenite::tungstenite::Error) -> GradiumError {
     }
 }
 /// Caps TLS plus HTTP upgrade bytes before tungstenite's message limit applies.
-struct HandshakeBoundedStream {
+pub(crate) struct HandshakeBoundedStream {
     inner: TcpStream,
     handshaking: Arc<AtomicBool>,
     read: usize,

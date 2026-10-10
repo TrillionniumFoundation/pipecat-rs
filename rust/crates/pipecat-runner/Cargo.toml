@@ -13,8 +13,11 @@ path = "src/main.rs"
 default = []
 webrtc = ["dep:pipecat-webrtc"]
 whisper = ["dep:pipecat-whisper"]
+soniox = ["dep:pipecat-soniox", "dep:pipecat-processors"]
 
 [dependencies]
+pipecat-soniox = { path = "../pipecat-soniox", optional = true }
+pipecat-processors = { path = "../pipecat-processors", optional = true }
 pipecat-whisper = { path = "../pipecat-whisper", optional = true }
 pipecat-webrtc = { path = "../pipecat-webrtc", optional = true }
 async-trait.workspace = true
@@ -43,3 +46,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 
 [lints]
 workspace = true
+
+[[example]]
+name = "soniox_voice"
+required-features = ["soniox"]

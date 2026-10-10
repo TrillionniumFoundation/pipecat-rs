@@ -32,6 +32,9 @@ pub struct ClientConfig {
     pub openai_preset: Option<crate::presets::OpenAiPresetConfig>,
     /// Dedicated Azure routing and credentials; configure with `ClientConfig::azure`.
     pub azure: Option<crate::azure::AzureConfig>,
+    /// Additional Sarvam headers. Required authentication/identification wins
+    /// case-insensitively; transport framing headers cannot be overridden.
+    pub sarvam_default_headers: std::collections::BTreeMap<String, String>,
 }
 impl fmt::Debug for ClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -63,6 +66,7 @@ impl ClientConfig {
             retry: RetryPolicy::Never,
             openai_preset: None,
             azure: None,
+            sarvam_default_headers: Default::default(),
         }
     }
     /// Explicit Azure Chat configuration. Generic endpoint/key/preset fields must
@@ -89,6 +93,9 @@ impl ClientConfig {
     ) -> Result<Self, ServiceError> {
         let mut config = Self::new(Provider::OpenAi, api_key);
         config.endpoint = preset.endpoint()?.into();
+        if preset.preset == crate::presets::OpenAiPreset::Sarvam {
+            config.endpoint = crate::sarvam::DEFAULT_ENDPOINT.into();
+        }
         config.openai_preset = Some(preset);
         Ok(config)
     }
@@ -130,6 +137,13 @@ impl LlmClient {
         Self::validated(config, http)
     }
     fn validated(config: ClientConfig, http: reqwest::Client) -> Result<Self, ServiceError> {
+        if is_sarvam(&config) {
+            crate::sarvam::headers(config.api_key.as_deref(), &config.sarvam_default_headers)?;
+        } else if !config.sarvam_default_headers.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "Sarvam headers require the Sarvam preset".into(),
+            ));
+        }
         if let Some(azure) = &config.azure {
             if config.provider != Provider::OpenAi
                 || config.api_key.is_some()
@@ -208,7 +222,12 @@ impl LlmClient {
             .post(endpoint)
             .header(ACCEPT, "text/event-stream")
             .json(&body);
-        if let Some(key) = &self.config.api_key {
+        if let Some(key) = self
+            .config
+            .api_key
+            .as_ref()
+            .filter(|_| !is_sarvam(&self.config))
+        {
             let (header, key) = match self.config.provider {
                 Provider::OpenAi => (AUTHORIZATION, format!("Bearer {key}")),
                 Provider::Anthropic => (
@@ -228,6 +247,12 @@ impl LlmClient {
         if self.config.provider == Provider::Anthropic {
             builder = builder.header("anthropic-version", "2023-06-01");
         }
+        if is_sarvam(&self.config) {
+            builder = builder.headers(crate::sarvam::headers(
+                self.config.api_key.as_deref(),
+                &self.config.sarvam_default_headers,
+            )?);
+        }
         let (tx, rx) = mpsc::channel(self.config.channel_capacity);
         let worker_cancel = cancel.clone();
         let config = self.config.clone();
@@ -235,13 +260,18 @@ impl LlmClient {
             if tx.send(Ok(StreamEvent::Started)).await.is_err() {
                 return;
             }
-            let mut decoder = ProtocolDecoder::new(config.provider);
+            let mut decoder = ProtocolDecoder::with_preset(config.provider, config.openai_preset.as_ref().map(|preset| preset.preset));
             let result = tokio::select! {
                 biased;
                 _ = worker_cancel.cancelled() => Err(ServiceError::Cancelled),
                 result = tokio::time::timeout(config.request_timeout, run(builder,&config,&mut decoder,&tx,&worker_cancel)) => match result { Ok(result) => result, Err(_) => Err(ServiceError::Timeout) },
                 _ = tx.closed() => Err(ServiceError::ConsumerClosed),
             };
+            for event in decoder.finalize_response(result.is_ok()) {
+                if tx.send(Ok(event)).await.is_err() {
+                    return;
+                }
+            }
             if let Some(mut usage) = decoder.usage().cloned() {
                 if let Some(preset) = &config.openai_preset { preset.normalize_usage(&mut usage); }
                 if tx
@@ -272,7 +302,12 @@ impl LlmClient {
         if let Some(azure) = &self.config.azure {
             return azure.completion_endpoint(model);
         }
-        let endpoint = if self.config.endpoint.contains("{model}") {
+        let configured = if is_sarvam(&self.config) {
+            crate::sarvam::resolve_endpoint(&self.config.endpoint, model)?
+        } else {
+            self.config.endpoint.clone()
+        };
+        let endpoint = if configured.contains("{model}") {
             let model = model.strip_prefix("models/").unwrap_or(model);
             if model.is_empty()
                 || !model
@@ -283,9 +318,9 @@ impl LlmClient {
                     "invalid model id in endpoint".into(),
                 ));
             }
-            self.config.endpoint.replace("{model}", model)
+            configured.replace("{model}", model)
         } else {
-            self.config.endpoint.clone()
+            configured
         };
         let url = reqwest::Url::parse(&endpoint)
             .map_err(|_| ServiceError::InvalidRequest("invalid endpoint URL".into()))?;
@@ -308,6 +343,13 @@ impl LlmClient {
         }
         Ok(url)
     }
+}
+
+fn is_sarvam(config: &ClientConfig) -> bool {
+    config
+        .openai_preset
+        .as_ref()
+        .is_some_and(|preset| preset.preset == crate::presets::OpenAiPreset::Sarvam)
 }
 
 pub struct LlmStream {
@@ -416,9 +458,7 @@ async fn run(
             Some(Ok(bytes)) => {
                 for record in sse.feed(&bytes)? {
                     for event in decoder.decode(record)? {
-                        tx.send(Ok(event))
-                            .await
-                            .map_err(|_| ServiceError::ConsumerClosed)?;
+                        send_event(event, decoder, tx).await?;
                     }
                     if decoder.is_done() {
                         return Ok(());
@@ -433,15 +473,33 @@ async fn run(
                     ));
                 }
                 for event in decoder.end_of_stream()? {
-                    tx.send(Ok(event))
-                        .await
-                        .map_err(|_| ServiceError::ConsumerClosed)?;
+                    send_event(event, decoder, tx).await?;
                 }
                 return Ok(());
             }
         }
     }
 }
+async fn send_event(
+    event: StreamEvent,
+    decoder: &mut ProtocolDecoder,
+    tx: &mpsc::Sender<Result<StreamEvent, ServiceError>>,
+) -> Result<(), ServiceError> {
+    let boundary = match &event {
+        StreamEvent::ThoughtStart => Some(true),
+        StreamEvent::ThoughtEnd => Some(false),
+        _ => None,
+    };
+    tx.send(Ok(event))
+        .await
+        .map_err(|_| ServiceError::ConsumerClosed)?;
+    // No suspension between successful delivery and recording its boundary.
+    if let Some(start) = boundary {
+        decoder.thought_boundary_delivered(start);
+    }
+    Ok(())
+}
+
 async fn authorize(
     builder: reqwest::RequestBuilder,
     config: &ClientConfig,

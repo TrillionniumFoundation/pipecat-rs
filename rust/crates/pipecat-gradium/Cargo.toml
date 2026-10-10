@@ -12,6 +12,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
+pipecat-text = { path = "../pipecat-text" }
 pipecat-audio = { path = "../pipecat-audio" }
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3", features = ["sink"] }

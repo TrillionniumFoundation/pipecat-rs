@@ -10,6 +10,8 @@ mod output;
 mod queue;
 pub mod recording;
 mod spoken;
+#[cfg(feature = "assistant-history")]
+pub use spoken::AssistantSpokenHistorySink;
 pub mod video;
 
 use async_trait::async_trait;
@@ -21,8 +23,8 @@ pub use output::{
 use pipecat_audio::PcmFormat;
 use pipecat_core::{FrameData, ProcessorError};
 pub use spoken::{
-    SpokenContext, SpokenHistory, SpokenHistoryConfig, SpokenHistorySink, SpokenHistoryStatus,
-    SpokenSourceBoundary,
+    SpokenContext, SpokenHistory, SpokenHistoryConfig, SpokenHistoryEffect, SpokenHistoryReadiness,
+    SpokenHistorySink, SpokenHistoryStatus, SpokenSourceBoundary,
 };
 
 /// Stateful PCM transformation. Calls within a destination are serialized.

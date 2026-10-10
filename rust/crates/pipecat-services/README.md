@@ -3,6 +3,8 @@
 Native Rust HTTP streaming clients for these specific protocols:
 
 - OpenAI Chat Completions (`POST /v1/chat/completions`)
+- NVIDIA NIM Chat Completions with leading-tag and structured reasoning ([scope](NVIDIA.md))
+- Sarvam Chat Completions with model capabilities, dual authentication and v1/v2 routing ([scope](SARVAM.md))
 - Azure OpenAI Chat Completions (v1 or dated deployment routes; [details](AZURE.md))
 - Anthropic Messages (`POST /v1/messages`)
 - Gemini `streamGenerateContent` with `alt=sse`
@@ -128,9 +130,9 @@ The preset's `request(context)` supplies the model default pinned in the Python 
 Defaults are source snapshots, not recommendations about currently available
 models. `LlmClient::request_body` validates/serializes without making a request.
 
-There are 18 executable presets including OpenAI itself: Baseten, Cerebras,
-Crusoe, DeepSeek, Fireworks, Groq, Inception, Mistral, Nebius, Novita, Ollama,
-OpenRouter, Perplexity, Qwen, SambaNova, Together, and xAI. The deprecated `grok`
+There are 20 executable presets including OpenAI itself: Baseten, Cerebras,
+Crusoe, DeepSeek, Fireworks, Groq, Inception, Mistral, Nebius, Novita, NVIDIA, Ollama,
+OpenRouter, Perplexity, Qwen, SambaNova, Sarvam, Together, and xAI. The deprecated `grok`
 source module is the xAI re-export. Presets include developer-role handling,
 provider token-field and stream-usage differences, typed reasoning/routing
 options, DeepSeek reasoning stamps, Mistral/Perplexity message transformations,
@@ -138,9 +140,10 @@ OpenRouter Gemini system-message handling, and xAI reasoning usage normalization
 SDK `extra_body` fields are flattened with provider-option precedence while
 reserved streaming/context fields remain protected.
 
-Sarvam and NVIDIA have source metadata but return `Unsupported`: their
-authentication/routing or streaming differences are not implemented. These are
-request presets over one native wire client, not 18 complete provider SDK ports.
+Sarvam uses model-dependent routing and resolved request capability validation.
+NVIDIA uses the same native wire client
+with an incremental reasoning adapter. These are request presets and bounded
+response adapters, not 20 complete provider SDK ports.
 Citation/search metadata, tool execution, provider sessions, authentication
 variants, and the individual `unsupported_features()` lists remain boundaries.
 Goldens and loopback requests verify source contracts without live-provider calls.
@@ -200,10 +203,13 @@ Unsupported features are not labeled as implemented integrations:
 - Opaque provider-specific tools/message extensions, remote file fetching,
   tool execution/registration/timeouts, and context repair after rejected files.
   Direct executable tool handlers require a separate executor and are rejected
-  instead of silently converted to schemas. Speculative contexts, runtime prompt
-  caching, and incomplete-user-turn filtering require gates/policies not supplied
-  by this processor and return explicit errors
-- Authentication mechanisms beyond explicitly supplied API keys
+  instead of silently converted to schemas. Speculative contexts require the native
+  turn-owner capability and integrated bounded `LlmProcessor` gate described in
+  [EAGER.md](../pipecat-turns/EAGER.md); missing capabilities return an explicit
+  error. Runtime prompt-caching controls and incomplete-user-turn filtering remain
+  unsupported
+- Authentication beyond explicitly supplied API keys and the application-supplied
+  Azure token-provider mode documented in [AZURE.md](AZURE.md)
 - Other Pipecat service families; compatible request presets do not imply those
   providers' STT, TTS, realtime, or SDK-specific features are implemented
 

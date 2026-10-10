@@ -1,5 +1,7 @@
 //! Native conversational workers with executable model/tool rounds and owned history.
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
+mod assistant_job;
+pub use assistant_job::AssistantJobReply;
 mod engine;
 mod tools;
 pub use engine::*;

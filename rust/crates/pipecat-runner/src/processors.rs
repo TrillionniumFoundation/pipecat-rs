@@ -192,6 +192,14 @@ impl FrameProcessor for EventTap {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        // Native flush barriers carry local completion state and have no RTVI
+        // projection. Forward them intact; never serialize their event handle.
+        if matches!(
+            frame.data,
+            FrameData::Flush(_) | FrameData::FlushDetailed(_)
+        ) {
+            return ctx.push(frame, direction).await;
+        }
         for event in self
             .observer
             .observe(&frame, Observation::new(self.name, direction))?
@@ -334,6 +342,165 @@ impl FrameProcessor for GeneratedContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn native_flush_event_crosses_event_tap_without_becoming_client_data() {
+        use pipecat_transports::{SessionConfig, WebSocketSession};
+        use std::time::Duration;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}", listener.local_addr().unwrap());
+        let (client, accepted) = tokio::join!(
+            WebSocketSession::connect(&endpoint, SessionConfig::default()),
+            async {
+                WebSocketSession::accept(
+                    listener.accept().await.unwrap().0,
+                    SessionConfig::default(),
+                )
+                .await
+            }
+        );
+        let mut client = client.unwrap();
+        let server = accepted.unwrap();
+        let observer = Arc::new(RtviObserver::new(Default::default(), None).unwrap());
+        let worker = Pipeline::new(vec![Arc::new(EventTap {
+            observer,
+            sender: BrowserSender::WebSocket(server.sender()),
+            name: "NativeBarrierTap",
+        })])
+        .start(Default::default())
+        .await
+        .unwrap();
+        let event = LocalFlushEvent::default();
+        let marker = Frame::new(FrameData::FlushDetailed(PipelineFlushFrame {
+            event: Some(event.clone()),
+            origin: Some("pipecat.soniox.turn-start".into()),
+            returning: false,
+        }));
+        assert!(
+            serde_json::to_value(&marker.data).is_err(),
+            "local authority must remain nonserializable"
+        );
+        let id = marker.id;
+        worker
+            .sender()
+            .send(marker, Direction::Downstream)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), event.wait())
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), client.recv())
+                .await
+                .is_err(),
+            "native marker became a browser message"
+        );
+        worker.end().await.unwrap();
+        let (frames, report) = worker.collect().await.unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(frames.iter().any(|frame| frame.frame.id == id && matches!(&frame.frame.data, FrameData::FlushDetailed(flush) if flush.returning && flush.event.as_ref().is_some_and(LocalFlushEvent::is_set))));
+        let _ = client.finish().await;
+        let _ = server.finish().await;
+    }
+
+    #[tokio::test]
+    async fn event_tap_still_projects_mapped_frames_and_rejects_oversized_payloads() {
+        use pipecat_protocol::protobuf::{self as pb, frame::Kind};
+        use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
+        use std::time::Duration;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}", listener.local_addr().unwrap());
+        let (client, accepted) = tokio::join!(
+            WebSocketSession::connect(&endpoint, SessionConfig::default()),
+            async {
+                WebSocketSession::accept(
+                    listener.accept().await.unwrap().0,
+                    SessionConfig::default(),
+                )
+                .await
+            }
+        );
+        let mut client = client.unwrap();
+        let server = accepted.unwrap();
+        let observer = Arc::new(
+            RtviObserver::new(
+                pipecat_rtvi::RtviObserverParams {
+                    max_message_bytes: 1024,
+                    ..Default::default()
+                },
+                None,
+            )
+            .unwrap(),
+        );
+        let mut worker = Pipeline::new(vec![Arc::new(EventTap {
+            observer,
+            sender: BrowserSender::WebSocket(server.sender()),
+            name: "BoundedEventTap",
+        })])
+        .start(Default::default())
+        .await
+        .unwrap();
+        worker
+            .sender()
+            .send(
+                Frame::new(FrameData::UserStartedSpeaking),
+                Direction::Downstream,
+            )
+            .await
+            .unwrap();
+        let Packet::Binary(bytes) = tokio::time::timeout(Duration::from_secs(1), client.recv())
+            .await
+            .unwrap()
+            .unwrap()
+        else {
+            panic!("expected protobuf message")
+        };
+        let Some(Kind::Message(message)) = pb::Frame::parse(&bytes).unwrap().frame else {
+            panic!("expected RTVI message")
+        };
+        let value: serde_json::Value = serde_json::from_str(&message.data).unwrap();
+        assert_eq!(value["type"], "user-started-speaking");
+        worker
+            .sender()
+            .send(
+                Frame::new(FrameData::Transcription(TranscriptionFrame {
+                    text: "x".repeat(2048),
+                    user_id: "fixture".into(),
+                    timestamp: String::new(),
+                    language: None,
+                    result: None,
+                    finalized: true,
+                })),
+                Direction::Downstream,
+            )
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if let Some(error) = worker.recv().await.unwrap().frame.data.as_error_frame() {
+                    assert!(
+                        error.error.contains("RTVI payload too large"),
+                        "{}",
+                        error.error
+                    );
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), client.recv())
+                .await
+                .is_err(),
+            "oversized mapped frame reached the client"
+        );
+        worker.cancel("boundary verified").await.unwrap();
+        let (_, report) = worker.collect().await.unwrap();
+        assert_eq!(report.total_errors, 1);
+        let _ = client.finish().await;
+        let _ = server.finish().await;
+    }
+
     #[test]
     fn repeated_non_running_text_cannot_accumulate_unbounded_context() {
         let budget = RetentionBudget::default();

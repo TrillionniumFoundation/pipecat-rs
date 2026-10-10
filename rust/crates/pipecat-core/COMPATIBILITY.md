@@ -197,9 +197,19 @@ automatic conversion or execution of every control command.
 
 ## Remaining runtime gaps
 
-- Nested, parallel and synchronized parallel pipeline composition
+Nested, parallel and synchronized parallel composition are implemented in
+[`pipecat-pipeline`](../pipecat-pipeline/README.md), with bounded branch ownership
+and documented synchronization limits. Its
+[service/LLM switching](../pipecat-pipeline/README.md#service-and-llm-switching)
+supports explicit manual/failover selection without automatic request replay.
+Core [processor health and worker policy](README.md#processor-usability-and-worker-policy)
+provide usability tracking, permanent-error handling and revisioned watches;
+[compound support](README.md#compound-processor-support) supplies derived health
+and causal routing contracts. Service-specific gating still requires each adapter's
+implementation; these contracts do not establish full runtime parity.
+
 - Python event-handler aliases and before/after callbacks; external tracing adapters and automatic rich metrics instrumentation of every service. Native global observation and explicit measured metric streams are provided by `pipecat-observers`.
-- Processor usability tracking, permanent-error policy handling, dynamic service switching, worker heartbeat/idle monitoring and user-defined readiness watchers
+- Core worker heartbeat/idle monitoring and Python-style readiness callback/decorator parity. Native registry watches and readiness waits are provided separately by [`pipecat-workers`](../pipecat-workers/README.md)
 - Applying summarization, tools, prompt-caching, service-setting, mixer/filter and other domain-specific frames is not done by the generic core runtime
 - Stop preserves processor-owned resources but does not provide a resume/re-attach API; owners must eventually clean up retained resources
 - Flush does not establish quiescence of arbitrary detached provider work or coordinate distributed workers. Tracked work is drained by End/Stop

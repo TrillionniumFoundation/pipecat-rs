@@ -240,3 +240,9 @@ pub mod tools;
 
 pub mod dtmf;
 pub use dtmf::{DtmfAggregator, DtmfAggregatorConfig};
+
+pub mod full_response;
+pub use full_response::{
+    FullResponseAggregatorConfig, FullResponseCallback, FullResponseCompletion, FullResponseStats,
+    LlmFullResponseAggregator,
+};

@@ -73,6 +73,11 @@ pub enum FinishReason {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StreamEvent {
     Started,
+    /// First provider choice, including content buffered by a response adapter.
+    ResponseProgress,
+    /// Explicit provider thought boundaries; independent channels may overlap.
+    ThoughtStart,
+    ThoughtEnd,
     TextDelta(String),
     ThoughtDelta(String),
     AnthropicThoughtStart,

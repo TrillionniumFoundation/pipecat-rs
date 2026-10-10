@@ -103,3 +103,19 @@ event-before-handler ordering/capacity failure, and malformed classifier output.
 Independent contract tests also cover coalesced cancellation, buffered tool
 progress and completed results, peer-panic cleanup, malformed typed arguments,
 duplicate model call IDs, and attachment timeouts without an acknowledgement.
+
+## Assistant-aggregator job replies
+
+`AssistantJobReply` adapts an existing native `JobContext` to the authoritative
+`LLMAssistantAggregator` completion receiver. Capture it before launching inference
+and give every job its own assistant session; a session cannot be rebound.
+`try_response` ignores empty tool-only and interrupted completions, checks the
+captured session/generation and native job identity, and returns at most one
+response. The native handler owns delivery and cancellation. This does not replace
+the existing LlmWorker, BackendLlmWorker or UiWorker engines.
+
+`examples/assistant_job.rs` runs an HTTP LLM through a context aggregator pair and
+returns the committed answer over existing native job RPC. `tests/assistant_job.rs`
+uses localhost HTTP plus a real ToolExecutor continuation to exercise the sensor
+empty-round guard. See [completion ownership](../../docs/assistant-stopped.md)
+for bounds, cooperative handler deadlines, receipt adapters and lifecycle limits.

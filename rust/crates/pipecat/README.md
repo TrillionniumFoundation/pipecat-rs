@@ -11,10 +11,11 @@ features below is enabled by default.
 | `classifiers` | `pipecat::classifiers` | Typed question batches through native LLM inference or Jev HTTP |
 | `deepgram-flux` | `pipecat::deepgram_flux` | Flux Listen v2 WebSocket STT and pipeline processor |
 | `grok-realtime` | `pipecat::grok_realtime` | Bounded xAI voice WebSocket client, frame processor, and explicit tool-result relay |
-| `images` | `pipecat::images` | OpenAI image generation, bounded native PNG/JPEG decoding, and image frame delivery |
+| `images` | `pipecat::images` | OpenAI and Gemini image generation, bounded native PNG/JPEG decoding, and image frame delivery |
 | `moq` | `pipecat::moq` | Native MoQ Lite 06 client, Opus audio, and ordered JSON |
 | `piper` | `pipecat::piper` | Local synthesis configuration, service, and pipeline processor |
 | `rnnoise` | `pipecat::rnnoise` | Local noise-filter configuration and media-transport `AudioFilter` |
+| `speechmatics` | `pipecat::speechmatics`, `pipecat::speechmatics_tts` | Agent STT and HTTP PCM synthesis via shared `HttpTtsProcessor` |
 | `soniox` | `pipecat::soniox` | Streaming STT, multiplexed TTS, and native pipeline processors |
 
 For example, enable `aws-bedrock` and import
@@ -23,8 +24,9 @@ selecting a feature never connects to a provider or reads credentials.
 
 The `classifiers` feature exposes standalone typed classification. LLM schemas
 provide prompt guidance plus local parsing, not provider-enforced structured
-output or calibrated probabilities. Pipeline/UI workers, voicemail timers, and
-evaluation runners are outside this crate.
+output or calibrated probabilities. Pipeline/UI-worker and voicemail integrations
+remain separate; `pipecat-evals` uses these classifiers for
+[bounded scripted text/function judging](../pipecat-evals/README.md#native-scripted-classifier-judging).
 
 The `deepgram-flux` feature exposes Listen v2 separately from the Listen v1 client
 in `pipecat::streaming_speech`. Applications must explicitly apply the processor's
@@ -34,8 +36,8 @@ selecting the Cargo feature does not enable it.
 The `images` feature retains the source-tree-only `pipecat-images` package
 (`publish = false`) and its patched direct-path JPEG decoder. Hosted image
 downloads require an explicit exact-origin policy. Output backend support and
-queue budgets remain application responsibilities. Gemini, Azure, and Fal image
-adapters are not included.
+queue budgets remain application responsibilities. OpenAI and Gemini image
+adapters are included; Azure and Fal remain unsupported.
 
 The `soniox` feature exposes bounded streaming speech and per-stream TTS
 cancellation. Provider-endpoint STT turns require explicit user-aggregator
@@ -43,10 +45,11 @@ configuration. Generated PCM and timestamps do not establish playback; spoken
 history uses real output receipts. There is no automatic paid-work replay.
 
 The `grok-realtime` feature exposes the native provider adapter and tool-result
-relay. Its protocol, tool, and output fixtures use synthetic provider messages
-and explicitly seeded context. Generic realtime aggregation, reliable executor
-cancellation outcomes, and arbitrary upstream context reconciliation remain
-separate prerequisites; selecting this feature does not supply them.
+relay. Its [paired topology](../pipecat-grok-realtime/README.md#shared-realtime-conversation)
+includes bounded shared realtime aggregation and native executor terminal
+receipts. Protocol, tool, and output fixtures use synthetic provider messages.
+Arbitrary context replacement/transforms, unsupported rich history and
+live-provider qualification remain open.
 
 The `piper` facade feature does not enable its `onnx` or `espeak-gpl` backends,
 and `rnnoise` does not enable its `native` backend. Add the corresponding direct

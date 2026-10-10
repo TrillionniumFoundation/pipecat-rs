@@ -654,13 +654,73 @@ fn rich_append_deferred_during_response_emits_one_full_context_after_end() {
         .actions
         .iter()
         .filter_map(|action| match action {
-            AggregationAction::Push(frame) if frame.direction == Direction::Upstream => {
+            AggregationAction::Push(frame)
+                if frame.direction == Direction::Upstream
+                    && matches!(
+                        frame.frame.data,
+                        FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+                    ) =>
+            {
                 Some(&frame.frame.data)
             }
             _ => None,
         })
         .collect();
     assert_eq!(upstream.len(), 1);
+    let turns: Vec<_> = out
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            AggregationAction::Push(frame) if frame.direction == Direction::Upstream => {
+                match &frame.frame.data {
+                    FrameData::LlmContextAssistantTurn(turn) => Some(turn),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].text, "in progress");
+    let order: Vec<_> = out
+        .actions
+        .iter()
+        .filter_map(|action| {
+            let AggregationAction::Push(frame) = action else {
+                return None;
+            };
+            match (&frame.frame.data, frame.direction) {
+                (
+                    FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_),
+                    Direction::Downstream,
+                ) => Some("committed-context"),
+                (FrameData::LlmContextAssistantTimestamp { .. }, Direction::Downstream) => {
+                    Some("commit-timestamp")
+                }
+                (FrameData::LlmContextAssistantTurn(_), Direction::Downstream) => {
+                    Some("turn-downstream")
+                }
+                (FrameData::LlmContextAssistantTurn(_), Direction::Upstream) => {
+                    Some("turn-upstream")
+                }
+                (
+                    FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_),
+                    Direction::Upstream,
+                ) => Some("deferred-inference"),
+                _ => None,
+            }
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [
+            "committed-context",
+            "commit-timestamp",
+            "turn-downstream",
+            "turn-upstream",
+            "deferred-inference"
+        ]
+    );
     let FrameData::LlmContextDetailed(context) = upstream[0] else {
         panic!()
     };

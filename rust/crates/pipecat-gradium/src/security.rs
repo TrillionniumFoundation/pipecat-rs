@@ -40,8 +40,11 @@ fn scheme(url: &Url, secure: &str, plain: &str, allow: bool) -> Result<(), Gradi
     }
 }
 pub(crate) fn endpoint(config: &GradiumSttConfig) -> Result<Url, GradiumError> {
-    let url = parse(&config.endpoint)?;
-    scheme(&url, "wss", "ws", config.allow_loopback)?;
+    endpoint_url(&config.endpoint, config.allow_loopback)
+}
+pub(crate) fn endpoint_url(value: &str, allow_loopback: bool) -> Result<Url, GradiumError> {
+    let url = parse(value)?;
+    scheme(&url, "wss", "ws", allow_loopback)?;
     if url.query().is_some() {
         return Err(GradiumError::Endpoint);
     }

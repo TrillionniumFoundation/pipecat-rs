@@ -1,0 +1,191 @@
+{
+  "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
+  "full_gate": "NOT_RUN",
+  "source_commit": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
+  "source_tree": "ea9b0414b22a431cf87413da7a83b680214b6f45",
+  "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "public_main_baseline": {
+    "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
+    "tree": "3d90193f5193a6305b29e4addea020f963a16b73",
+    "canonical_source": "58f3218e87a0aa72ec783f7591f7c1fa6d0911ce"
+  },
+  "integration_commits": [
+    {
+      "commit": "f031071c30df8dc3d446f1450acca5b5297832b6",
+      "tree": "5bf88a72b648368cc2177ec26364698fbd054fc4",
+      "subject": "Emit committed assistant turn and timestamp feedback with receipt scopes"
+    },
+    {
+      "commit": "16ef9d4761a0b4ed4367657d1bbde267654b92aa",
+      "tree": "9413f5468c98bedd487a364731994d9a8bdbf6bc",
+      "subject": "Add bounded owned full-response aggregation callbacks"
+    },
+    {
+      "commit": "cb533492f03b32bb1c78b5ea0d5bbd8f1c07e075",
+      "tree": "8398f2fbf0b32ee9ad25f7404df88b5145379599",
+      "subject": "Cover full response callback API through the default facade"
+    },
+    {
+      "commit": "87b3f98b3b7c022c14551e7cc584e68d50027e0d",
+      "tree": "840fb0dfc0478ad265285ed8cd7d2c2f76646ee2",
+      "subject": "Add bounded native text evaluation bot host"
+    },
+    {
+      "commit": "c375045647e1b8ccb37bf76323d34c78b6460366",
+      "tree": "17a13671a98d1a654dd4312cbc8c91fa3c87761b",
+      "subject": "Keep reserved eval controls out of browser runner ingress"
+    },
+    {
+      "commit": "4c3a1c3c1a32106de0e76c8e0ab41521ab68cd4c",
+      "tree": "4684b54b733428229c625a03fc0f0baa9b2d3bb9",
+      "subject": "Gate trusted playback on exact assistant boundary readiness"
+    },
+    {
+      "commit": "167994707ab2b84a7ea3e9de423488752b5dbbbe",
+      "tree": "36539dfe1eca6570d25ba0f61fb26f5a31048c68",
+      "subject": "Exercise assistant history adapter through optional facade feature"
+    },
+    {
+      "commit": "25e0815d1527922590532faf34891ad43b6e87f3",
+      "tree": "1aad3816bda326a15af43c51cf63358dab5afe81",
+      "subject": "Deliver bounded committed assistant records to native jobs"
+    },
+    {
+      "commit": "6b79d002aa6f5a8326c02070587e917682593152",
+      "tree": "2c3b9bcf417c4e456abaf33cc224169efa82efa2",
+      "subject": "Add bounded native Speechmatics HTTP text to speech"
+    },
+    {
+      "commit": "e61ab7d4feb589c2f437af2485db6ae53c4aad81",
+      "tree": "fe0fd5da4bced91aa6a355bf6c0caa0b4b5fe7bd",
+      "subject": "Add lazy bounded native Gradium text to speech"
+    },
+    {
+      "commit": "d33d47a589ac6d8d2bd46710f93bdf9642315263",
+      "tree": "ed90aadd1ac90a510bf66ce7526cccdb534edb1c",
+      "subject": "fix(soniox): settle provider turn starts before final input admission"
+    },
+    {
+      "commit": "e74d4b021a6e165a23b454cf31e402ca82783878",
+      "tree": "01f0dac59a5f62868895b55910e3b9c1ca34892f",
+      "subject": "fix(runner): preserve local flush barriers through event taps"
+    },
+    {
+      "commit": "6f2dbad3ad3b2995397b814332df261f4547b78c",
+      "tree": "beb8b9c7ca5132f684f087db03b36cc1e222439b",
+      "subject": "feat(runner): compose optional Soniox voice sessions with native tools"
+    },
+    {
+      "commit": "f1a74943752990e623b4d99ab1760f56433d50d4",
+      "tree": "2813f1793a7d6b499ea8ae92eb891c910711d711",
+      "subject": "feat(services): preserve NVIDIA reasoning streams and cancellation boundaries"
+    },
+    {
+      "commit": "f965c7bb7f8385a8e7496d2891231262472f63fa",
+      "tree": "dec23061767fa9c21aea633f01a4237e136d0456",
+      "subject": "feat(services): implement bounded Sarvam request and authentication contracts"
+    },
+    {
+      "commit": "8f72fbc579025ed803bb2ae33360289be068c94a",
+      "tree": "f9d0c02cb162d7de2e9df2ab7f79e83c2e5049da",
+      "subject": "docs(rust): reconcile current integration scope with implemented contracts"
+    },
+    {
+      "commit": "fcf1752a83ad5802ccb98a1e74f161311beaf3dd",
+      "tree": "ea9b0414b22a431cf87413da7a83b680214b6f45",
+      "subject": "feat(streaming-speech): add owned Cartesia Live STT sessions"
+    }
+  ],
+  "scope_evidence": [
+    {
+      "scope": "assistant_feedback",
+      "report_sha256": "dcdb917538c7fb661dad6f9b68983ccde38e845c28ddff6213679abf0b641c37",
+      "qualified_source_manifest_sha256": "f0e84ae0ba8394d5fb618f2b4dd17c8af6606e8b9fb646ede8dbe25ea3f4afd8"
+    },
+    {
+      "scope": "full_response",
+      "report_sha256": "a8db5cf7d485ab359dd32d31f63b785a48d1614f547a995c4e487374d5a669ad",
+      "qualified_source_manifest_sha256": "74860fec594f999dd3b7ed9fac9066ae81d545859a56903aa4a81fc55f544a1b"
+    },
+    {
+      "scope": "aggregation_aggregate",
+      "report_sha256": "712587d3bfeb0172b98fbd1a276cdb9d244714a42316a5a41cc6e73b04571976"
+    },
+    {
+      "scope": "eval_host",
+      "report_sha256": "2d098492f250b16cc27aa3ea4ae5c14b15a41895c746f30b88cf291c964f519b",
+      "qualified_source_manifest_sha256": "59c4d8bdef2e262e2f276aa200d1badf4e45b69e3537382ef594ed60327c62be"
+    },
+    {
+      "scope": "eval_ingress",
+      "report_sha256": "71526e61ea422fc74667369e9cbd3b63183bab84246c2dc05a28fd68343bd39e",
+      "qualified_source_manifest_sha256": "8aaf81cce07290c55a60fa9375dbb66a9e177fd19451001223572bba2c42e5dd"
+    },
+    {
+      "scope": "receipt_readiness",
+      "report_sha256": "476845cf86bc883d8efc9b0c26887374b6d8b0e2ddb2a47d4faea5859d42c16d",
+      "qualified_source_manifest_sha256": "a60bc1aef5daeaf6cee5f9891afc1520df03dad73171346ea00aa2bd9d91b14f"
+    },
+    {
+      "scope": "historical_failed_aggregate",
+      "report_sha256": "c58344509aaa895dd5d4229d67b5a4f46e78b1d3a22bfadde6951e91425a4f71"
+    },
+    {
+      "scope": "assistant_jobs",
+      "report_sha256": "8ab595c1059550e64d19cde1ce2dcbed31ad4d46f154d87b10aa5bd9a6b6a508",
+      "qualified_source_manifest_sha256": "ac1f0b1346dc16be7e6d1a9d90905e34554558c8b26a5cf21f570f2dac41296f"
+    },
+    {
+      "scope": "speechmatics_tts",
+      "report_sha256": "109cbd7aecf2398eafd21d9f80eff40e4e1e03fe618abe89c4b1a9a8a854db99",
+      "qualified_source_manifest_sha256": "7f8f4e302c42dc203d73cf92dda303c301a28111301965889d2d6105734ded31"
+    },
+    {
+      "scope": "gradium_tts",
+      "report_sha256": "520e17ae47ccaafe0bf94fbc9151cbc2fa797464ee5d5e86c345ad9218cd60ea",
+      "qualified_source_manifest_sha256": "84a7041e286747d69759011322b8d8977e166c83bec6a13607ba0008bfedbecc"
+    },
+    {
+      "scope": "soniox_cascade",
+      "report_sha256": "15568f7b89ba2841d7d66970050cba6e728ee3cbbec2ee95ee0b113889555d5f",
+      "qualified_source_manifest_sha256": "125461cb9a3d469051c050e8d1b86918b2b2f83eb8bd255c78d0928fa8ef89fd"
+    },
+    {
+      "scope": "nvidia_reasoning",
+      "report_sha256": "5b8df52fe073572b00e411c5477bae4fd7d6de54e994d619a612b841548aef64",
+      "qualified_source_manifest_sha256": "9dae72000d70b02a1c6bbf43ac11b0be67d8f81096ec5af6c2a6a2312bc35493"
+    },
+    {
+      "scope": "sarvam_llm",
+      "report_sha256": "007649003d82c53cb1899344784712abcdc47517154500a6c40ede19465ecefe",
+      "qualified_source_manifest_sha256": "7f0e8c79e0fe0ed002823a3189839e7caf76017a750abb4066480f6e08f848d5"
+    },
+    {
+      "scope": "current_docs",
+      "report_sha256": "049d32135fd353d49fc0c2117398de9db169872f4098f01627397703e05df2b0"
+    },
+    {
+      "scope": "cartesia_stt",
+      "report_sha256": "9bdd3ffb3e4e49b1b68580c2d6a0217b97f0b6f32ca69a90cf517ed7021833fa",
+      "qualified_source_manifest_sha256": "51c7495a21362023b6b6e6f4eb094cd60aabfada5ac479eb1214f495e0a887ab"
+    }
+  ],
+  "omitted_native_administrative_paths": [
+    "rust/crates/pipecat-whisper/vendor/whisper-rs/.github/PULL_REQUEST_TEMPLATE.md",
+    "rust/vendor/jpeg-decoder-0.3.2/.github/workflows/rust.yml",
+    "rust/vendor/jpeg-decoder-0.3.2/appveyor.yml"
+  ],
+  "retained_non_native_inputs": [
+    "LICENSE",
+    "src/pipecat/services/grok/llm.py",
+    "src/pipecat/services/azure/llm.py",
+    "src/pipecat/services/azure/common.py",
+    "src/pipecat/audio/vad/data/silero_vad.onnx",
+    "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
+  ],
+  "raw_source_entries": 1445,
+  "readme_bytes": 0,
+  "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
+  "new_execution": "NONE",
+  "release_ready": false
+}

@@ -299,36 +299,30 @@ The source boundary records and stamps those identities so a delayed response
 end cannot certify a different synthesis context. Replacing those frames,
 removing their metadata, or omitting the source boundary withholds history.
 
-A `SpokenHistorySink` performs the actual history mutation synchronously. For
-`pipecat-turns`, an application can use this binding without making turns a
-production dependency of the media crate:
+A `SpokenHistorySink` performs the actual history mutation synchronously. Enable
+`assistant-history` to preserve assistant completion records as well as frames:
 
 ```rust
 use std::sync::Arc;
-use pipecat_core::{DirectedFrame, ProcessorError};
-use pipecat_media_transport::{SpokenContext, SpokenHistorySink};
-use pipecat_turns::{AggregationAction, LLMAssistantAggregator};
+use pipecat_media_transport::{AssistantSpokenHistorySink, SpokenHistory, SpokenHistoryConfig};
+use pipecat_turns::LLMAssistantAggregator;
 
-struct AssistantHistory(Arc<LLMAssistantAggregator>);
-impl SpokenHistorySink for AssistantHistory {
-    fn commit(&self, context: SpokenContext)
-        -> Result<Vec<DirectedFrame>, ProcessorError>
-    {
-        self.0
-            .confirm_playback(&context.context_id, &context.texts)?
-            .actions
-            .into_iter()
-            .map(|action| match action {
-                AggregationAction::Push(frame) => Ok(frame),
-                _ => Err(ProcessorError::new("unexpected confirmation effect")),
-            })
-            .collect()
-    }
+fn history(assistant: Arc<LLMAssistantAggregator>) -> SpokenHistory {
+    SpokenHistory::new(
+        SpokenHistoryConfig::default(),
+        Arc::new(AssistantSpokenHistorySink::new(assistant)),
+    ).expect("valid history bounds")
 }
 ```
 
+The facade exposes the same opt-in `assistant-history` feature. Without it,
+standalone media retains its frame-only normal dependency boundary. Existing
+custom sinks keep working, but returning only Push frames does not deliver an
+assistant's registered completion stream. `commit_ordered` preserves the exact
+frame/record order and runs notifications after releasing the ledger lock.
+
 Construct that assistant in `AssistantTextMode::Spoken`. The callback commits
-under the ledger's lock; returned frames are only follow-on notifications. Do
+under the ledger's lock; returned effects are only follow-on notifications. Do
 not defer mutation to a returned normal-lane frame, reenter the ledger from the
 callback, or also submit the context's text as `spoken=true`. Opted-in output
 removes upstream `spoken` metadata from TTS text.

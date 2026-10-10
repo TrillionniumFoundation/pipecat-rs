@@ -1,8 +1,14 @@
 //! Browser-compatible RTVI runner with bounded WebSocket and optional WebRTC sessions.
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
+mod cascade;
 mod command;
 mod config;
+pub use cascade::VoiceCascade;
+#[cfg(feature = "soniox")]
+mod soniox;
 pub use config::SttProvider;
+#[cfg(feature = "soniox")]
+pub use soniox::{SonioxSessionTools, SonioxToolsFactory, SonioxVoiceConfig};
 #[cfg(feature = "whisper")]
 mod whisper;
 pub use command::run_from_env;
@@ -36,6 +42,8 @@ use tokio::{
 pub enum RunnerError {
     #[error("invalid runner configuration")]
     Configuration,
+    #[error("invalid voice cascade configuration: {0}")]
+    CascadeConfiguration(&'static str),
     #[error("invalid STT configuration: {0}")]
     SttConfiguration(&'static str),
     #[cfg(feature = "whisper")]
@@ -104,7 +112,7 @@ struct State {
 }
 struct Inner {
     config: RunnerConfig,
-    providers: ProviderConfig,
+    providers: cascade::SessionProviders,
     resources: session::SessionResources,
     state: Mutex<State>,
     reports: broadcast::Sender<SessionSummary>,
@@ -120,6 +128,31 @@ pub struct NativeRunner {
 }
 impl NativeRunner {
     pub fn new(config: RunnerConfig, providers: ProviderConfig) -> Result<Self, RunnerError> {
+        Self::new_cascade(
+            config,
+            cascade::SessionProviders::Default(Box::new(providers)),
+        )
+    }
+    /// Soniox recognition and synthesis with native OpenAI/tool continuation.
+    /// This composition supports WebSocket sessions and generated-text history.
+    #[cfg(feature = "soniox")]
+    pub fn new_soniox(
+        config: RunnerConfig,
+        providers: SonioxVoiceConfig,
+    ) -> Result<Self, RunnerError> {
+        providers.validate()?;
+        if !matches!(config.stt, SttProvider::Deepgram) || config.options.vad.is_some() {
+            return Err(RunnerError::CascadeConfiguration("Soniox cascade uses provider endpoint detection; local STT and VAD are unsupported"));
+        }
+        Self::new_cascade(
+            config,
+            cascade::SessionProviders::Soniox(Box::new(providers)),
+        )
+    }
+    fn new_cascade(
+        config: RunnerConfig,
+        providers: cascade::SessionProviders,
+    ) -> Result<Self, RunnerError> {
         if !config.bind_ip.is_loopback()
             || config.max_sessions == 0
             || config.max_sessions > 1024
@@ -130,15 +163,15 @@ impl NativeRunner {
                 .allowed_origins
                 .iter()
                 .any(|origin| !valid_origin(origin))
-            || !(8000..=48000).contains(&providers.input_rate)
-            || !(8000..=48000).contains(&providers.output_rate)
+            || !(8000..=48000).contains(&providers.input_rate())
+            || !(8000..=48000).contains(&providers.output_rate())
         {
             return Err(RunnerError::Configuration);
         }
         #[cfg(feature = "whisper")]
         if let SttProvider::Whisper(local) = &config.stt {
             local.validate()?;
-            if providers.input_rate != 16000 {
+            if providers.input_rate() != 16000 {
                 return Err(RunnerError::SttConfiguration(
                     "Whisper input rate must be 16000",
                 ));
@@ -204,7 +237,12 @@ impl NativeRunner {
         let (cancel, cancelled) = watch::channel(false);
         let (signaling, commands) = tokio::sync::mpsc::channel(4);
         let config = self.inner.config.clone();
-        let providers = self.inner.providers.clone();
+        let providers = self
+            .inner
+            .providers
+            .legacy()
+            .ok_or(ProxyError::InvalidRequest)?
+            .clone();
         let resources = self.inner.resources.for_session();
         let reports = self.inner.reports.clone();
         let weak = Arc::downgrade(&self.inner);

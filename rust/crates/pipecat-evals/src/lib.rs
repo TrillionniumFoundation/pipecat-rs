@@ -1,5 +1,6 @@
 //! Native, bounded RTVI scripted behavioral evaluations. No Python runtime or fallback.
 #![forbid(unsafe_code)]
+pub mod bot_host;
 mod bounded_yaml;
 pub mod events;
 pub mod judge;

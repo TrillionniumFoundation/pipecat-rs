@@ -1,9 +1,9 @@
 //! Loopback-only browser host. Provider credentials stay in the native process.
-use crate::{NativeRunner, Options, RunnerConfig, SttProvider};
+use crate::{NativeRunner, Options, RunnerConfig, SttProvider, VoiceCascade};
 use pipecat_client_server::server::{serve_with_api, AssetBundle, ServerConfig};
 use std::{path::PathBuf, sync::Arc};
 
-const HELP:&str="pipecat-browser-agent [--bind 127.0.0.1:7860] [--assets DIRECTORY] [--no-intro] [--webrtc] [--vad-model PATH --onnx-runtime PATH]\n\nNative HTTP /api/start + isolated RTVI 2.2/protobuf WebSocket voice sessions.\nDefault environment: DEEPGRAM_API_KEY, OPENAI_API_KEY, CARTESIA_API_KEY.\nLocal STT: --features whisper; PIPECAT_STT_PROVIDER=whisper, PIPECAT_WHISPER_MODEL=/existing/ggml.bin.\nLocal STT needs Silero paths or explicit PIPECAT_WHISPER_SEGMENT_MS=1000..30000; no Deepgram key.\nOPENAI_API_KEY and CARTESIA_API_KEY remain required; no models auto-download.\nOptional PIPECAT_WHISPER_THREADS=1..256, PIPECAT_WHISPER_LANGUAGE=en|auto|language-tag, PIPECAT_WHISPER_PRE_ROLL_MS=0..5000 (VAD, default 3000).\nOptional provider/model/voice/rate environment matches pipecat-voice-agent.\nWebSocket is the default; --webrtc also enables native SmallWebRTC (requires the webrtc Cargo feature).\nContext and bot-output represent generated text, never confirmed audio playback.\nBrowser automation and physical microphone/speaker validation are separate tests.\n";
+const HELP:&str="pipecat-browser-agent [--bind 127.0.0.1:7860] [--assets DIRECTORY] [--no-intro] [--webrtc] [--vad-model PATH --onnx-runtime PATH]\n\nNative HTTP /api/start + isolated RTVI 2.2/protobuf WebSocket voice sessions.\nDefault environment: DEEPGRAM_API_KEY, OPENAI_API_KEY, CARTESIA_API_KEY.\nAlternative: --features soniox and PIPECAT_VOICE_CASCADE=soniox, SONIOX_API_KEY, OPENAI_API_KEY.\nSoniox supports WebSocket with provider endpoint detection; local STT/VAD and --webrtc are rejected.\nOptional SONIOX_STT_MODEL, SONIOX_TTS_MODEL, SONIOX_VOICE; history remains generated text.\nLocal STT: --features whisper; PIPECAT_STT_PROVIDER=whisper, PIPECAT_WHISPER_MODEL=/existing/ggml.bin.\nLocal STT needs Silero paths or explicit PIPECAT_WHISPER_SEGMENT_MS=1000..30000; no Deepgram key.\nOPENAI_API_KEY and CARTESIA_API_KEY remain required; no models auto-download.\nOptional PIPECAT_WHISPER_THREADS=1..256, PIPECAT_WHISPER_LANGUAGE=en|auto|language-tag, PIPECAT_WHISPER_PRE_ROLL_MS=0..5000 (VAD, default 3000).\nOptional provider/model/voice/rate environment matches pipecat-voice-agent.\nWebSocket is the default; --webrtc also enables native SmallWebRTC (requires the webrtc Cargo feature).\nContext and bot-output represent generated text, never confirmed audio playback.\nBrowser automation and physical microphone/speaker validation are separate tests.\n";
 /// Start the native browser runner from command-line flags and provider environment.
 /// `--help` does not read credentials. This owns the HTTP host and all sessions
 /// until SIGINT, then joins their cleanup.
@@ -53,8 +53,27 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
     if webrtc {
         return Err("--webrtc requires building pipecat-runner with --features webrtc".into());
     }
-    let stt = SttProvider::from_env()?;
-    let providers = stt.providers_from_env()?;
+    let cascade = VoiceCascade::from_env()?;
+    if cascade == VoiceCascade::Soniox && (webrtc || options.vad.is_some()) {
+        return Err(crate::RunnerError::CascadeConfiguration("Soniox cascade supports WebSocket provider endpoint detection only; --webrtc and local VAD are unsupported").into());
+    }
+    let stt = match cascade {
+        VoiceCascade::Default => SttProvider::from_env()?,
+        VoiceCascade::Soniox => SttProvider::default(),
+    };
+    let providers = match cascade {
+        VoiceCascade::Default => {
+            crate::cascade::SessionProviders::Default(Box::new(stt.providers_from_env()?))
+        }
+        #[cfg(feature = "soniox")]
+        VoiceCascade::Soniox => crate::cascade::SessionProviders::Soniox(Box::new(
+            crate::SonioxVoiceConfig::from_env()?,
+        )),
+        #[cfg(not(feature = "soniox"))]
+        VoiceCascade::Soniox => {
+            return Err("Soniox cascade requires the soniox Cargo feature".into())
+        }
+    };
     let listener = tokio::net::TcpListener::bind(options.bind).await?;
     let address = listener.local_addr()?;
     let origin = format!("http://{address}");
@@ -65,18 +84,30 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
         stt,
         ..Default::default()
     };
-    #[cfg(feature = "webrtc")]
-    let runner = Arc::new(if webrtc {
-        NativeRunner::new_with_webrtc(
-            runner_config,
-            providers,
-            crate::WebRtcRunnerConfig::default(),
-        )?
-    } else {
-        NativeRunner::new(runner_config, providers)?
+    let runner = Arc::new(match providers {
+        crate::cascade::SessionProviders::Default(providers) => {
+            #[cfg(feature = "webrtc")]
+            {
+                if webrtc {
+                    NativeRunner::new_with_webrtc(
+                        runner_config,
+                        *providers,
+                        crate::WebRtcRunnerConfig::default(),
+                    )?
+                } else {
+                    NativeRunner::new(runner_config, *providers)?
+                }
+            }
+            #[cfg(not(feature = "webrtc"))]
+            {
+                NativeRunner::new(runner_config, *providers)?
+            }
+        }
+        #[cfg(feature = "soniox")]
+        crate::cascade::SessionProviders::Soniox(providers) => {
+            NativeRunner::new_soniox(runner_config, *providers)?
+        }
     });
-    #[cfg(not(feature = "webrtc"))]
-    let runner = Arc::new(NativeRunner::new(runner_config, providers)?);
     let transports = if webrtc {
         vec!["websocket", "smallwebrtc"]
     } else {

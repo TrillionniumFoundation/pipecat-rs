@@ -24,12 +24,20 @@ use std::sync::{
     Arc, Mutex,
 };
 
+#[cfg(feature = "speechmatics")]
+use crate::speechmatics::{SpeechmaticsHttpClient, SpeechmaticsSynthesisRequest};
+
 static NEXT_TTS_CONTEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Immutable provider settings copied for every accepted complete utterance.
 /// The request's text field is overwritten with the incoming frame's text.
 #[derive(Clone)]
 pub enum HttpTtsBackend {
+    #[cfg(feature = "speechmatics")]
+    Speechmatics {
+        client: SpeechmaticsHttpClient,
+        request: SpeechmaticsSynthesisRequest,
+    },
     OpenAi {
         client: SpeechClient,
         request: SynthesisRequest,
@@ -50,6 +58,8 @@ pub enum HttpTtsBackend {
 impl HttpTtsBackend {
     pub fn sample_rate(&self) -> u32 {
         match self {
+            #[cfg(feature = "speechmatics")]
+            Self::Speechmatics { request, .. } => request.sample_rate,
             Self::OpenAi { .. } => 24000,
             Self::ElevenLabs { request, .. } => request.sample_rate,
             Self::Deepgram { request, .. } => request.sample_rate,
@@ -58,6 +68,12 @@ impl HttpTtsBackend {
     }
     fn validate(&self) -> Result<(), SpeechError> {
         match self {
+            #[cfg(feature = "speechmatics")]
+            Self::Speechmatics { request, .. } => {
+                let mut request = request.clone();
+                request.text = "validation".into();
+                request.validate()
+            }
             Self::OpenAi { request, .. } => {
                 let mut request = request.clone();
                 request.input = "validation".into();
@@ -82,11 +98,38 @@ impl HttpTtsBackend {
     }
     fn updated(&self, delta: &TtsSettings) -> Result<Option<Self>, SpeechError> {
         if !delta.base.extra.is_empty() {
-            return Err(SpeechError::Invalid("unsupported HTTP TTS setting"));
+            #[cfg(feature = "speechmatics")]
+            let supported = matches!(self, Self::Speechmatics { .. })
+                && delta.base.extra.keys().all(|key| key == "max_retries");
+            #[cfg(not(feature = "speechmatics"))]
+            let supported = false;
+            if !supported {
+                return Err(SpeechError::Invalid("unsupported HTTP TTS setting"));
+            }
         }
         let mut candidate = self.clone();
         let mut changed = false;
         match &mut candidate {
+            #[cfg(feature = "speechmatics")]
+            Self::Speechmatics { request, .. } => {
+                if !matches!(delta.base.model, Setting::NotGiven)
+                    || !matches!(delta.language, Setting::NotGiven)
+                {
+                    return Err(SpeechError::Invalid(
+                        "Speechmatics voice determines model and language",
+                    ));
+                }
+                changed |= required(&mut request.voice, &delta.voice)?;
+                if let Some(value) = delta.base.extra.get("max_retries") {
+                    let retries = value
+                        .as_u64()
+                        .and_then(|value| u8::try_from(value).ok())
+                        .filter(|value| *value <= 32)
+                        .ok_or(SpeechError::Invalid("Speechmatics max_retries"))?;
+                    changed |= request.max_retries != retries;
+                    request.max_retries = retries;
+                }
+            }
             Self::OpenAi { request, .. } => {
                 if !matches!(delta.language, Setting::NotGiven) {
                     return Err(SpeechError::Invalid(
@@ -125,6 +168,12 @@ impl HttpTtsBackend {
     }
     fn synthesize(&self, text: String) -> Result<AudioStream, SpeechError> {
         match self {
+            #[cfg(feature = "speechmatics")]
+            Self::Speechmatics { client, request } => {
+                let mut request = request.clone();
+                request.text = text;
+                client.synthesize(request).map(AudioStream::Raw)
+            }
             Self::OpenAi { client, request } => {
                 let mut request = request.clone();
                 request.input = text;
@@ -811,6 +860,11 @@ fn settings_mapping(
 ) -> Result<TtsSettings, SpeechError> {
     let mut result = TtsSettings::default();
     for (key, value) in values {
+        #[cfg(feature = "speechmatics")]
+        if key == "max_retries" {
+            result.base.extra.insert(key.clone(), value.clone());
+            continue;
+        }
         let value = match value {
             serde_json::Value::Null => Setting::Null,
             serde_json::Value::String(value) => Setting::Value(value.clone()),

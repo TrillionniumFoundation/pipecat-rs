@@ -1,3 +1,4 @@
+use crate::assistant_stopped::{StoppedHub, StoppedOwner, StoppedTurn};
 use crate::{
     context::{text_message, tool_message},
     AggregationEvent, AggregationOutput, RecentFrames, SharedContext, TextBuffer,
@@ -10,7 +11,11 @@ use pipecat_core::{
 use pipecat_services::{Message, Role, ToolCall};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Mutex, MutexGuard,
+};
+static NEXT_ASSISTANT_SESSION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AssistantTextMode {
@@ -27,6 +32,11 @@ pub struct AssistantAggregatorConfig {
 }
 struct AssistantState {
     active: bool,
+    turn_started_at: Option<String>,
+    turn_id: u64,
+    bound_job_generation: Option<u64>,
+    turn_job_generation: Option<u64>,
+    turn_cause: Option<pipecat_core::InvocationFence>,
     llm_active: bool,
     generated_speech: bool,
     user_speaking: bool,
@@ -80,9 +90,12 @@ impl AssistantState {
 pub struct LLMAssistantAggregator {
     context: SharedContext,
     config: AssistantAggregatorConfig,
+    session_id: u64,
+    stopped: StoppedOwner,
     summarizer: crate::LLMContextSummarizer,
     state: Mutex<AssistantState>,
     callback_tasks: Arc<Mutex<BTreeMap<u64, ProcessorContext>>>,
+    playback_readiness: crate::playback_ready::PlaybackReadiness,
     realtime: Arc<crate::realtime::RealtimeState>,
     context_causes: pipecat_core::NativeRealtimeContextProducer,
 }
@@ -93,15 +106,25 @@ impl LLMAssistantAggregator {
                 .expect("valid default summary configuration"),
             context,
             config,
+            session_id: NEXT_ASSISTANT_SESSION
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .expect("assistant session identity exhausted"),
+            stopped: StoppedOwner::default(),
             realtime: Arc::new(crate::realtime::RealtimeState::new(
                 crate::RealtimeServiceMode::Auto,
                 false,
                 false,
             )),
             callback_tasks: Arc::new(Mutex::new(BTreeMap::new())),
+            playback_readiness: Default::default(),
             context_causes: Default::default(),
             state: Mutex::new(AssistantState {
                 active: false,
+                turn_started_at: None,
+                turn_id: 0,
+                bound_job_generation: None,
+                turn_job_generation: None,
+                turn_cause: None,
                 llm_active: false,
                 generated_speech: false,
                 user_speaking: false,
@@ -136,6 +159,85 @@ impl LLMAssistantAggregator {
             }),
         }
     }
+    /// Register one bounded caller-owned receiver before the first turn. The
+    /// stream has no dispatcher task; callers may await it in an existing owner.
+    pub fn subscribe_stopped(
+        &self,
+        config: crate::AssistantStoppedConfig,
+    ) -> Result<crate::AssistantStoppedReceiver, ProcessorError> {
+        let state = self.lock()?;
+        let mut slot = self
+            .stopped
+            .0
+            .lock()
+            .map_err(|_| ProcessorError::fatal("assistant-stopped registration poisoned"))?;
+        if state.turn_id != 0 || state.ended || slot.is_some() {
+            return Err(ProcessorError::new(
+                "assistant-stopped receiver must be registered once before the first turn",
+            ));
+        }
+        let (hub, receiver) = StoppedHub::new(config)?;
+        *slot = Some(hub);
+        Ok(receiver)
+    }
+    /// Bind this assistant session to exactly one job before launching inference.
+    /// Every turn, including tool continuations, retains that immutable binding.
+    /// A replacement job requires a fresh aggregator pair and owned pipeline;
+    /// rebinding an old session could misattribute an already launched request
+    /// whose first response frame has not arrived yet.
+    pub fn bind_job_generation(
+        &self,
+        generation: u64,
+    ) -> Result<crate::AssistantJobCorrelation, ProcessorError> {
+        let mut state = self.lock()?;
+        if state.active || state.turn_id != 0 || state.ended || state.bound_job_generation.is_some()
+        {
+            return Err(ProcessorError::new(
+                "assistant session already started or bound to a job",
+            ));
+        }
+        state.bound_job_generation = Some(generation);
+        Ok(crate::AssistantJobCorrelation {
+            session_id: self.session_id,
+            generation,
+        })
+    }
+    pub fn stopped_stats(&self) -> Option<crate::AssistantStoppedStats> {
+        self.stopped_hub().map(|hub| hub.stats())
+    }
+    fn stopped_hub(&self) -> Option<Arc<StoppedHub>> {
+        self.stopped
+            .0
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+    fn stopped_action(
+        &self,
+        state: &mut AssistantState,
+        text: &str,
+        started_at: &str,
+        interrupted: bool,
+        output: &mut AggregationOutput,
+    ) {
+        let cause = state.turn_cause.take();
+        if let Some(hub) = self.stopped_hub() {
+            match hub.reserve(StoppedTurn {
+                text,
+                started_at,
+                interrupted,
+                session_id: self.session_id,
+                turn_id: state.turn_id,
+                job_generation: state.turn_job_generation,
+                cause,
+            }) {
+                Ok(action) => output
+                    .actions
+                    .push(crate::AggregationAction::AssistantStopped(action)),
+                Err(error) => output.push(crate::summary::error_frame(error), Direction::Upstream),
+            }
+        }
+    }
     /// Configure automatic thresholds and the default manual summary settings.
     pub fn with_summarization(
         mut self,
@@ -151,6 +253,21 @@ impl LLMAssistantAggregator {
     }
     pub fn summarizer(&self) -> &crate::LLMContextSummarizer {
         &self.summarizer
+    }
+    /// Register one exact native boundary before forwarding it downstream.
+    /// This does not start a turn or mutate history. A successful wait requires
+    /// the actual processor invocation, not a direct reducer call.
+    pub fn playback_readiness(
+        &self,
+        frame: &Frame,
+        cause: pipecat_core::InvocationFence,
+    ) -> Result<Option<crate::AssistantPlaybackReady>, ProcessorError> {
+        if self.config.text_mode != AssistantTextMode::Spoken {
+            return Err(ProcessorError::new(
+                "playback readiness requires Spoken mode",
+            ));
+        }
+        self.playback_readiness.register(frame, cause)
     }
     pub fn context(&self) -> SharedContext {
         self.context.clone()
@@ -184,7 +301,7 @@ impl LLMAssistantAggregator {
         direction: Direction,
         now: std::time::Duration,
     ) -> Result<AggregationOutput, ProcessorError> {
-        self.process_at_inner(frame, direction, now, None)
+        self.process_at_inner(frame, direction, now, None, None)
     }
     fn process_at_inner(
         &self,
@@ -192,6 +309,7 @@ impl LLMAssistantAggregator {
         direction: Direction,
         now: std::time::Duration,
         cause: Option<&ProcessorContext>,
+        readiness: Option<&crate::playback_ready::Processing>,
     ) -> Result<AggregationOutput, ProcessorError> {
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
@@ -391,7 +509,8 @@ impl LLMAssistantAggregator {
                     state.clear_runs();
                 }
                 state.llm_active = true;
-                Self::start(&mut state, &mut output);
+                self.start(&mut state, &mut output, cause)?;
+                if let Some(readiness) = readiness { readiness.accepted(&frame, cause)?; }
             }
             FrameData::LlmResponseEnd | FrameData::LlmFullResponseEnd(_)
             | FrameData::VisionFullResponseEnd(_) => {
@@ -428,9 +547,10 @@ impl LLMAssistantAggregator {
                     if let Some(history) = &mut state.signed_history { history.playback_started(id)?; }
                 }
                 if started.append_to_context {
-                    Self::start(&mut state, &mut output);
+                    self.start(&mut state, &mut output, cause)?;
                     state.generated_speech = true;
                 }
+                if let Some(readiness) = readiness { readiness.accepted(&frame, cause)?; }
                 output.push(frame, direction);
             }
             FrameData::TtsText(text) => {
@@ -605,6 +725,14 @@ impl LLMAssistantAggregator {
                     &mut output,
                 )?;
                 state.ended = true;
+                if let Some(hub) = self.stopped_hub() {
+                    let reason = match frame.data {
+                        FrameData::Stop => crate::AssistantStoppedClose::Stop,
+                        FrameData::Cancel(_) | FrameData::CancelDetailed(_) => crate::AssistantStoppedClose::Cancel,
+                        _ => crate::AssistantStoppedClose::End,
+                    };
+                    output.actions.push(crate::AggregationAction::AssistantStopped(hub.terminal(reason)));
+                }
                 state.native_tools.clear();
                 state.declared_tools.clear();
                 state.signed_declarations.clear();
@@ -1228,9 +1356,13 @@ impl LLMAssistantAggregator {
                 state.aggregation.clone(),
                 state.active,
                 state.generated_speech,
+                state.turn_started_at.clone(),
+                state.turn_id,
+                state.turn_job_generation,
+                state.turn_cause.clone(),
             )
         });
-        Self::start(&mut state, &mut output);
+        self.start(&mut state, &mut output, None)?;
         if !signed && !state.context_ids.iter().any(|id| id == context_id) {
             state.context_ids.push(context_id.into());
         }
@@ -1247,10 +1379,23 @@ impl LLMAssistantAggregator {
             }
         }
         if let Err(error) = self.finish(&mut state, false, &mut output) {
-            if let Some((aggregation, active, generated_speech)) = prior {
+            if let Some((
+                aggregation,
+                active,
+                generated_speech,
+                turn_started_at,
+                turn_id,
+                turn_job_generation,
+                turn_cause,
+            )) = prior
+            {
                 state.aggregation = aggregation;
                 state.active = active;
                 state.generated_speech = generated_speech;
+                state.turn_started_at = turn_started_at;
+                state.turn_id = turn_id;
+                state.turn_job_generation = turn_job_generation;
+                state.turn_cause = turn_cause;
             }
             return Err(error);
         }
@@ -1309,14 +1454,33 @@ impl LLMAssistantAggregator {
         state.awaiting_user_inference = false;
         Ok(())
     }
-    fn start(state: &mut AssistantState, output: &mut AggregationOutput) {
+    fn start(
+        &self,
+        state: &mut AssistantState,
+        output: &mut AggregationOutput,
+        cause: Option<&ProcessorContext>,
+    ) -> Result<(), ProcessorError> {
         if state.active {
-            return;
+            return Ok(());
         }
+        let turn_id = state
+            .turn_id
+            .checked_add(1)
+            .ok_or_else(|| ProcessorError::fatal("assistant turn identity exhausted"))?;
+        let turn_cause = if self.stopped_hub().is_some() {
+            cause.map(ProcessorContext::invocation_fence).transpose()?
+        } else {
+            None
+        };
+        state.turn_id = turn_id;
+        state.turn_job_generation = state.bound_job_generation;
+        state.turn_cause = turn_cause;
         state.transcript_markers.clear();
         state.active = true;
+        state.turn_started_at = Some(chrono::Utc::now().to_rfc3339());
         state.generated_speech = false;
         output.events.push(AggregationEvent::AssistantTurnStarted);
+        Ok(())
     }
     fn finish(
         &self,
@@ -1353,10 +1517,34 @@ impl LLMAssistantAggregator {
         drop(context);
         if !text.is_empty() {
             output.context(&self.context, Direction::Downstream)?;
+            output.push(
+                Frame::new(FrameData::LlmContextAssistantTimestamp {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                }),
+                Direction::Downstream,
+            );
         }
+        let started_at = state
+            .turn_started_at
+            .take()
+            .expect("active assistant turn has a start timestamp");
         state.active = false;
         if interrupted || state.signed_history.is_none() {
             Self::invalidate_audio(state);
+        }
+        self.stopped_action(state, &transcript, &started_at, interrupted, output);
+        if !transcript.is_empty() {
+            // Project a real broadcast into frame-only effects for synchronous
+            // playback receipt sinks, preserving the linked sibling identities.
+            let (downstream, upstream) = Frame::new(FrameData::LlmContextAssistantTurn(
+                pipecat_core::LlmContextAssistantTurnFrame {
+                    text: transcript.clone(),
+                    timestamp: started_at,
+                },
+            ))
+            .broadcast_pair();
+            output.push(downstream, Direction::Downstream);
+            output.push(upstream, Direction::Upstream);
         }
         output.events.push(AggregationEvent::AssistantTurnStopped {
             text: transcript,
@@ -1385,8 +1573,12 @@ impl LLMAssistantAggregator {
                 state.aggregation = TextBuffer::default();
                 state.transcript_markers.clear();
                 state.active = false;
+                let started_at = state.turn_started_at.take();
                 state.generated_speech = false;
                 Self::invalidate_audio(state);
+                if let Some(started_at) = started_at {
+                    self.stopped_action(state, "", &started_at, true, output);
+                }
                 output.push(
                     Frame::new(FrameData::Error(pipecat_core::ErrorFrame {
                         error: error.message,
@@ -1759,9 +1951,20 @@ impl FrameProcessor for LLMAssistantAggregator {
                 | FrameData::Cancel(_)
                 | FrameData::CancelDetailed(_)
         );
+        let readiness = self.playback_readiness.processing(&frame, direction);
+        if terminal {
+            self.playback_readiness.invalidate(true);
+        } else if matches!(frame.data, FrameData::Interruption) {
+            self.playback_readiness.invalidate(false);
+        }
         self.realtime.validate_assistant(ctx, &frame.data)?;
-        let output =
-            self.process_at_inner(frame, direction, self.realtime.origin.elapsed(), Some(ctx))?;
+        let output = self.process_at_inner(
+            frame,
+            direction,
+            self.realtime.origin.elapsed(),
+            Some(ctx),
+            Some(&readiness),
+        )?;
         let emitted: Result<(), ProcessorError> = async {
             if terminal {
                 self.cancel_callbacks()?;
@@ -1824,6 +2027,7 @@ impl FrameProcessor for LLMAssistantAggregator {
         } else {
             Ok(())
         };
+        readiness.finish(emitted.is_ok() && released.is_ok());
         if let Err(error) = emitted {
             if error.fatal {
                 self.lock()?.context_cause_failed = true;
@@ -1837,10 +2041,16 @@ impl FrameProcessor for LLMAssistantAggregator {
         self.cancel_callbacks()
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        if let Some(hub) = self.stopped_hub() {
+            hub.close(crate::AssistantStoppedClose::Cleanup);
+        }
+        self.playback_readiness.invalidate(true);
         self.summarizer.close()?;
         {
             let mut state = self.lock()?;
             state.transcript_markers.clear();
+            state.turn_started_at = None;
+            state.turn_cause = None;
             state.ended = true;
             state.native_tools.clear();
             state.declared_tools.clear();

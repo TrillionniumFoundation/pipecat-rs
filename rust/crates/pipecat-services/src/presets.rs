@@ -3,7 +3,8 @@
 //! A preset selects Python service defaults and request transformations; it is
 //! not a complete provider integration. Realtime APIs, provider SDKs, automatic
 //! tool execution, and provider-specific response metadata are outside this API.
-//! Sarvam and NVIDIA remain explicit unsupported boundaries. Azure has a
+//! Sarvam adds model capabilities, routing and headers. NVIDIA selects its native
+//! reasoning stream adapter. Azure has a
 //! dedicated `AzureConfig` transport rather than a generic endpoint alias.
 
 use crate::{adapters, CompletionRequest, Context, Provider, ServiceError, Usage};
@@ -90,7 +91,7 @@ impl OpenAiPreset {
     }
 
     /// Exact Chat Completions URL, not an API base URL. Sarvam's recorded URL
-    /// applies only to its default model; its preset is not executable.
+    /// applies to its default model; its client resolves a version template.
     pub const fn default_endpoint(self) -> Option<&'static str> {
         Some(match self {
             Self::OpenAi => "https://api.openai.com/v1/chat/completions",
@@ -152,8 +153,6 @@ impl OpenAiPreset {
     pub const fn unsupported_reason(self) -> Option<&'static str> {
         match self {
             Self::Azure => Some("Azure requires the dedicated AzureConfig transport for endpoint routing and authentication"),
-            Self::Sarvam => Some("Sarvam requires api-subscription-key authentication, SDK identification, model-dependent v1/v2 routing, and capability validation; no Sarvam transport is implemented"),
-            Self::Nvidia => Some("NVIDIA requires incremental leading <think> filtering and reasoning lifecycle handling; the generic OpenAI stream is not a NVIDIA integration"),
             _ => None,
         }
     }
@@ -166,13 +165,10 @@ impl OpenAiPreset {
                 "Azure realtime, speech and Voice Live protocols",
             ],
             Self::Sarvam => &[
-                "Sarvam authentication and endpoint routing",
-                "model capability validation",
+                "Python constructor-only routing and validation bypasses",
+                "nonstreaming inference transport",
             ],
-            Self::Nvidia => &[
-                "NVIDIA leading think-tag stream filtering",
-                "reasoning lifecycle events",
-            ],
+            Self::Nvidia => &["server-reported model updates", "audio transcript deltas"],
             Self::Perplexity => &[
                 "tool declarations",
                 "citation and search-result response metadata",
@@ -289,6 +285,8 @@ pub struct OpenAiPresetSettings {
     pub provider: Setting<OpenRouterProviderPreferences>,
     #[serde(default)]
     pub reasoning: Setting<Map<String, Value>>,
+    #[serde(default)]
+    pub wiki_grounding: Setting<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -325,6 +323,8 @@ impl OpenAiPresetConfig {
         self.ensure_supported()?;
         self.validate_settings()?;
         let mut prepared = request.clone();
+        let sarvam_options = (self.preset == OpenAiPreset::Sarvam)
+            .then(|| crate::sarvam::options(&mut prepared, &self.settings));
         prepared.extra.extend(prepared.settings.base.extra.clone());
         prepared.settings.base.extra.clear();
         let extra_body = match prepared.extra.remove("extra_body") {
@@ -342,6 +342,12 @@ impl OpenAiPresetConfig {
                     "extra_body field {key} would override the streaming contract"
                 )));
             }
+        }
+        if self.preset == OpenAiPreset::Sarvam {
+            // These top-level options are removed by the source builder. The
+            // native streaming/context reserved-field checks still apply.
+            prepared.extra.remove("max_completion_tokens");
+            prepared.extra.remove("service_tier");
         }
         if self.preset.uses_legacy_token_limit()
             && (prepared.extra.contains_key("max_completion_tokens")
@@ -421,6 +427,19 @@ impl OpenAiPresetConfig {
             _ => {}
         }
         self.apply_provider_settings(root)?;
+        if let Some(options) = sarvam_options {
+            for (key, value) in options {
+                match value {
+                    Some(Value::Null) => {
+                        root.remove(key);
+                    }
+                    Some(value) => {
+                        root.insert(key.into(), value);
+                    }
+                    None => {}
+                }
+            }
+        }
         if self.preset == OpenAiPreset::Perplexity {
             root.remove("tools");
             root.remove("tool_choice");
@@ -487,6 +506,9 @@ impl OpenAiPresetConfig {
         }
         for (key, value) in extra_body {
             root.insert(key, value);
+        }
+        if self.preset == OpenAiPreset::Sarvam {
+            crate::sarvam::finish_body(root)?;
         }
         // Flattening SDK extras must not bypass the explicit feature boundary.
         match self.preset {
@@ -573,6 +595,11 @@ impl OpenAiPresetConfig {
                 matches!(self.settings.reasoning, Setting::Value(_)),
                 self.preset == OpenAiPreset::Together,
             ),
+            (
+                "wiki_grounding",
+                matches!(self.settings.wiki_grounding, Setting::Value(_)),
+                self.preset == OpenAiPreset::Sarvam,
+            ),
         ] {
             if supplied && !valid {
                 return Err(ServiceError::Unsupported(format!(
@@ -583,6 +610,8 @@ impl OpenAiPresetConfig {
         }
         if let Setting::Value(effort) = self.settings.reasoning_effort {
             let supported = match self.preset {
+                // Validate the resolved value after runtime and nested extras.
+                OpenAiPreset::Sarvam => true,
                 OpenAiPreset::Groq => matches!(
                     effort,
                     ReasoningEffort::None
@@ -623,7 +652,9 @@ impl OpenAiPresetConfig {
 
     fn apply_provider_settings(&self, root: &mut Map<String, Value>) -> Result<(), ServiceError> {
         if let Setting::Value(effort) = &self.settings.reasoning_effort {
-            if self.preset == OpenAiPreset::Xai {
+            if self.preset == OpenAiPreset::Sarvam {
+                // Sarvam resolves client defaults and runtime options together.
+            } else if self.preset == OpenAiPreset::Xai {
                 root.entry("reasoning_effort").or_insert(json!(effort));
             } else {
                 root.insert("reasoning_effort".into(), json!(effort));

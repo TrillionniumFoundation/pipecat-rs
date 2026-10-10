@@ -1,9 +1,13 @@
-# Native Gradium STT
+# Native Gradium STT and TTS
 
 Bounded, single-connection, mono PCM16LE recognition over real WebSocket I/O.
-This crate is STT only. It has no Gradium TTS, Python runtime or Gradium SDK.
+STT and TTS use separate source-pinned protocols and one shared bounded socket
+transport. Neither path loads a Python runtime or Gradium SDK.
 
-## Contract
+For multiplexed synthesis, use `GradiumTtsConfig`, `GradiumTtsClient`, and
+`GradiumTtsProcessor`. See [TTS contract](TTS.md) for lifecycle, bounds and residuals.
+
+## STT contract
 
 - Sends `x-api-key` and `x-api-source: pipecat`, source-pinned setup, and waits for
   `ready` before accepting audio. Input rates 1–192 kHz map to the next 8/16/24 kHz

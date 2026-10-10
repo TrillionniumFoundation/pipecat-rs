@@ -119,11 +119,11 @@ lifecycle; these aggregators do not execute tools or certify provider delivery.
   this is not a signed realtime-history adapter
 - `AssistantTextMode::Spoken` continues to require actual delivery receipts.
   Response completion, PCM generation and transcript generation prove no playback
-- The existing `OpenAiRealtimeProcessor` does not yet consume this state-only
-  contract: its downstream LlmContext branch imports history and creates a response
-  without checking the state-only marker. It emits no auto-enabling metadata. Do
-  not enable this common mode
-  around that adapter without a separately qualified adapter correction
+- `OpenAiRealtimeProcessor` supports the paired topology, auto-enabling metadata
+  and state-only contexts documented in
+  [AGGREGATION.md](../pipecat-realtime/AGGREGATION.md). Its bounded text/history and
+  native tool-receipt contracts have synthetic local protocol qualification;
+  unsupported rich history and arbitrary replacement/transforms remain excluded
 - This common layer does not qualify Grok, Gemini Live, OpenAI or any live provider.
   Provider topology, context seeding, proposal routing, tool-result transport and
   audio-only startup require separate combined acceptance tests

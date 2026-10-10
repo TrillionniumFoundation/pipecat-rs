@@ -433,3 +433,235 @@ async fn direct_sender_settings_survive_processor_cleanup_and_next_setup() {
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     bounded(server).await.unwrap();
 }
+
+/// One provider message contains start evidence, final text, and its endpoint.
+/// Native queue priority must not lose the normal transcript/stop when the
+/// proposed start causes the paired aggregator's interruption.
+#[tokio::test]
+async fn coalesced_provider_start_final_and_stop_survive_their_own_start_interruption() {
+    let mut peer = peer(false).await;
+    let stt = Arc::new(SonioxSttProcessor::new(peer.client));
+    let mut user = stt.recommended_user_config();
+    user.empty_user_turn = None;
+    let pair = LLMContextAggregatorPair::new(Context::default(), user, Default::default());
+    let raw = Arc::new(Recorder::default());
+    let downstream = Arc::new(Recorder::default());
+    let worker = Pipeline::new(vec![
+        stt,
+        raw.clone(),
+        pair.user(),
+        downstream.clone(),
+        pair.assistant(),
+    ])
+    .start(PipelineConfig::default())
+    .await
+    .unwrap();
+    bounded(peer.wire.recv()).await.unwrap();
+    for (index, text) in ["First complete utterance.", "Second complete utterance."]
+        .iter()
+        .enumerate()
+    {
+        peer.send
+            .send(
+                json!({"tokens":[{"text":text,"is_final":true},{"text":"<end>","is_final":true}]}),
+            )
+            .await
+            .unwrap();
+        // A genuine context frame is the boundary outcome. Do not send an
+        // artificial interim, inject another turn, or refresh an old scope.
+        let completed = tokio::time::timeout(Duration::from_secs(2), async {
+            while downstream.count(|frame| {
+                matches!(
+                    frame,
+                    FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+                )
+            }) <= index
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        if completed.is_err() {
+            let raw_names: Vec<_> = raw
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|frame| frame.data.source_class_name())
+                .collect();
+            let snapshot = pair.context().snapshot().unwrap();
+            worker
+                .cancel("coalesced regression diagnostic")
+                .await
+                .unwrap();
+            let (_, report) = worker.collect().await.unwrap();
+            panic!(
+                "coalesced turn {index} lost: raw={raw_names:?}, context={snapshot:?}, dropped={}",
+                report.dropped_frames
+            );
+        }
+        assert_eq!(pair.context().snapshot().unwrap().messages.len(), index + 1);
+        assert_eq!(
+            raw.count(|frame| matches!(frame, FrameData::TranscriptionDetailed(_))),
+            index + 1
+        );
+        assert_eq!(
+            downstream.count(|frame| matches!(frame, FrameData::UserStartedSpeaking)),
+            index + 1
+        );
+        assert!(raw
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|frame| matches!(frame.data, FrameData::TranscriptionDetailed(_)))
+            .all(|frame| frame.interruptible));
+    }
+    worker.end().await.unwrap();
+    let (_, report) = bounded(worker.collect()).await.unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(
+        bounded(peer.wire.recv()).await.unwrap(),
+        Message::Text("".into())
+    );
+    bounded(peer.task).await.unwrap();
+}
+
+struct HoldTurnStartMarker {
+    entered: tokio::sync::Semaphore,
+    events: Mutex<Vec<LocalFlushEvent>>,
+}
+impl Default for HoldTurnStartMarker {
+    fn default() -> Self {
+        Self {
+            entered: tokio::sync::Semaphore::new(0),
+            events: Mutex::new(vec![]),
+        }
+    }
+}
+#[async_trait]
+impl FrameProcessor for HoldTurnStartMarker {
+    fn name(&self) -> &str {
+        "HoldSonioxTurnStartMarker"
+    }
+    async fn process(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if let FrameData::FlushDetailed(marker) = &frame.data {
+            if marker.origin.as_deref() == Some("pipecat.soniox.turn-start") {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push(marker.event.clone().unwrap());
+                self.entered.add_permits(1);
+                return Ok(());
+            }
+        }
+        ctx.push(frame, direction).await
+    }
+}
+
+#[tokio::test]
+async fn blocked_turn_start_barrier_end_cancel_drop_and_health_settle_without_transcript_revival() {
+    for mode in ["end", "cancel", "drop", "health"] {
+        let mut peer = peer(false).await;
+        let stt = Arc::new(SonioxSttProcessor::new(peer.client));
+        let pair = LLMContextAggregatorPair::new(
+            Context::default(),
+            stt.recommended_user_config(),
+            Default::default(),
+        );
+        let hold = Arc::new(HoldTurnStartMarker::default());
+        let after = Arc::new(Recorder::default());
+        let worker = Pipeline::new(vec![
+            stt,
+            hold.clone(),
+            pair.user(),
+            after.clone(),
+            pair.assistant(),
+        ])
+        .start(Default::default())
+        .await
+        .unwrap();
+        bounded(peer.wire.recv()).await.unwrap();
+        peer.send.send(json!({"tokens":[{"text":"must not revive","is_final":true},{"text":"<end>","is_final":true}]})).await.unwrap();
+        bounded(hold.entered.acquire()).await.unwrap().forget();
+        match mode {
+            "end" => {
+                worker.end().await.unwrap();
+                let (_, report) = bounded(worker.collect()).await.unwrap();
+                assert!(report.errors.is_empty(), "{:?}", report.errors);
+            }
+            "cancel" => {
+                worker.cancel("barrier blocked").await.unwrap();
+                let _ = bounded(worker.collect()).await.unwrap();
+            }
+            "health" => {
+                let health = worker.processor_health(0).unwrap();
+                health.set_usable(false);
+                health.set_usable(true);
+                bounded(peer.task).await.unwrap();
+                worker.cancel("health retired").await.unwrap();
+                let _ = bounded(worker.collect()).await.unwrap();
+                for event in hold.events.lock().unwrap().iter() {
+                    event.set();
+                }
+                assert!(pair.context().snapshot().unwrap().messages.is_empty());
+                continue;
+            }
+            _ => drop(worker),
+        }
+        bounded(peer.task).await.unwrap();
+        for event in hold.events.lock().unwrap().iter() {
+            event.set();
+        }
+        assert!(pair.context().snapshot().unwrap().messages.is_empty());
+        assert_eq!(
+            after.count(|frame| matches!(
+                frame,
+                FrameData::TranscriptionDetailed(_)
+                    | FrameData::LlmContext(_)
+                    | FrameData::LlmContextDetailed(_)
+            )),
+            0
+        );
+    }
+}
+
+#[tokio::test]
+async fn uncompleted_turn_start_barrier_times_out_visibly_without_admitting_normal_transcript() {
+    let mut peer = peer(false).await;
+    let mut config = peer.client.config().clone();
+    config.limits.response_timeout = Duration::from_millis(50);
+    let stt = Arc::new(SonioxSttProcessor::new(
+        SonioxSttClient::new(config).unwrap(),
+    ));
+    let hold = Arc::new(HoldTurnStartMarker::default());
+    let mut worker = Pipeline::new(vec![stt, hold])
+        .start(Default::default())
+        .await
+        .unwrap();
+    bounded(peer.wire.recv()).await.unwrap();
+    peer.send.send(json!({"tokens":[{"text":"must time out","is_final":true},{"text":"<end>","is_final":true}]})).await.unwrap();
+    bounded(async {
+        loop {
+            let frame = worker.recv().await.unwrap();
+            assert!(!matches!(
+                frame.frame.data,
+                FrameData::TranscriptionDetailed(_)
+            ));
+            if let Some(error) = frame.frame.data.as_error_frame() {
+                assert!(error.error.contains("STT turn-start barrier"));
+                break;
+            }
+        }
+    })
+    .await;
+    worker.cancel("timeout observed").await.unwrap();
+    let (_, report) = bounded(worker.collect()).await.unwrap();
+    assert!(report.total_errors > 0);
+    bounded(peer.task).await.unwrap();
+}

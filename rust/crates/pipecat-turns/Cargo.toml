@@ -10,9 +10,11 @@ pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-vad = { path = "../pipecat-vad" }
 serde_json.workspace = true
+futures-util = "0.3"
 regex = "1"
 unicode-normalization = "0.1"
 caseless = "0.2.2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tokio.workspace = true
 thiserror.workspace = true
 

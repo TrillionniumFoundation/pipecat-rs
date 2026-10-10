@@ -21,6 +21,13 @@ pub(crate) struct HttpClient {
 }
 impl HttpClient {
     pub fn new(config: SpeechConfig) -> Result<Self, SpeechError> {
+        Self::with_direct_policy(config, false)
+    }
+    #[cfg(feature = "speechmatics")]
+    pub fn direct(config: SpeechConfig) -> Result<Self, SpeechError> {
+        Self::with_direct_policy(config, true)
+    }
+    fn with_direct_policy(config: SpeechConfig, direct: bool) -> Result<Self, SpeechError> {
         let base = Url::parse(&config.base_url).map_err(|_| SpeechError::Invalid("base URL"))?;
         let loopback = base.host_str().is_some_and(|host| {
             host == "localhost"
@@ -43,10 +50,14 @@ impl HttpClient {
             return Err(SpeechError::Invalid("configuration"));
         }
         secret(&config.api_key)?;
-        let http = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|_| SpeechError::Transport)?;
+        let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
+        if direct {
+            builder = builder
+                .no_proxy()
+                .http1_only()
+                .retry(reqwest::retry::never());
+        }
+        let http = builder.build().map_err(|_| SpeechError::Transport)?;
         Ok(Self { config, http, base })
     }
     pub fn post(&self, path: &[&str]) -> Result<RequestBuilder, SpeechError> {

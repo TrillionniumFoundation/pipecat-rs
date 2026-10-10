@@ -439,3 +439,108 @@ no implicit Ollama default, only reply/function-call judging, explicit native
 provider schema, bounded session-local cache, and infrastructure failures kept
 separate from classifier `no`. Existing non-judge scenarios keep their matching
 semantics. All tests use native localhost HTTP/RTVI peers and synthetic credentials.
+
+## Real native text bot host
+
+`bot_host::EvalBotHost` is an explicitly selected eval-only transport. It runs
+an application-supplied `EvalBotFactory`, using the existing RTVI processor,
+observer, native pipeline and `EvalControl` codec. It does not alter the browser
+runner endpoint or add eval privileges to a production session.
+
+The factory returns a fresh `EvalBotPipeline` containing its shared context,
+application processors and final assistant aggregator. The host observes the
+assistant **after** each frame is processed. Thus a response completion follows
+its context commit, and locally executed tool calls/results use the ordinary
+native tool/aggregator continuation path. Providers remain application-owned;
+the loopback host does not constrain a custom factory's outbound provider URLs.
+
+The compiled example uses `LlmProcessor`, an `LLMContextAggregatorPair` in
+`AssistantTextMode::Text`, and a registered Rust `add` tool. Its model endpoint
+must be explicit literal-loopback HTTP. Its HTTP client disables proxy discovery,
+redirects and retries. It never launches Python or loads a provider SDK.
+
+```sh
+cargo run -p pipecat-evals --features native-bot-example --example native_text_bot -- \
+  --port 7860 --llm-url http://127.0.0.1:11434/v1/chat/completions --model local-model
+# Build a standalone executable for the existing native release manifest:
+cargo build -p pipecat-evals --features native-bot-example --bin native-text-bot
+```
+
+Use the actual installed model name. The example has no greeting unless
+`--introduce` is explicitly selected. A native-version-1 release manifest can
+point `bot` at the compiled `native-text-bot` and supply:
+
+```yaml
+args: [--port, "{port}", --llm-url, http://127.0.0.1:11434/v1/chat/completions, --model, local-model]
+```
+
+### Capabilities and session boundaries
+
+- The bind API accepts a `SocketAddr` with a literal loopback IP only. The host
+  checks the exact local Host header, rejects all browser Origin headers,
+  absolute-form request targets and paths other than `/`
+- `skip_tts=true` is accepted; omitting it still selects mandatory text-only
+  behavior. `false`, unknown/duplicate query keys, audio/image capture and binary
+  WebSocket frames are rejected. `trigger_disconnect=true|false` is supported
+- Only `client-ready`, `send-text`, `disconnect-bot`, `eval-context`,
+  `eval-configure` and `eval-cancel` are admitted. IDs are required and bounded
+- The host passes `skip_tts=true` to the factory before construction, then waits
+  for `LlmConfigureOutput(true)` followed by a native normal-lane flush round trip
+  before readiness. The flush is necessary because LlmProcessor consumes configuration. Optional
+  introductions start only after the correlated `bot-ready` is forwarded
+- Seed context replaces only messages, preserving application tool definitions.
+  This first slice accepts only role/text-content messages, excluding tool
+  history and multimodal content. Seeding never runs inference
+- Context and observer configuration must precede the first admitted text input
+  or introduction. This restriction prevents queued RTVI commands from racing
+  direct control updates. Observer controls update the actual observer's
+  function report level, VAD and LLM marker options
+- Output is generated text. No speech, synthesis, playback receipt or physical
+  audibility is invented. Factories must honor text-only settings and may not
+  start inference in setup/Start; use `introduction` for a greeting
+- An ordinary disconnect cancels and cleans up its pipeline, then permits a
+  fresh factory call. There is no implicit context/tool reuse. A second client
+  arriving while busy is closed, not admitted as another pipeline
+- `trigger_disconnect=true` stops the host when that connection disconnects.
+  `eval-cancel` stops both the session and host, including during startup.
+  `disconnect-bot` sends native End and keeps the host available after cleanup.
+  Applications request whole-pipeline termination with native EndWorker/StopWorker;
+  a raw mid-pipeline End does not notify earlier processors
+
+### Ownership and finite limits
+
+Defaults bound socket, RTVI, observer and pipeline queues; application processor
+count; tasks; frame size; cumulative processed bytes/frames and wire input;
+context messages/bytes; connections; startup, session, host and shutdown times.
+The host checks context growth before processor work and after assistant commits.
+It fails visibly on overflow rather than truncating conversation or tool history.
+The bounded frame meter supports the native ToolExecutor text path, preserving
+local RTVI flush handles and result callbacks through nonexecuting size
+projections. Other nonserializable application payloads, including local message
+transforms or direct-function context schemas, are not part of this first slice
+and fail admission rather than being silently stripped.
+The core per-hook shutdown timeout is capped by the host shutdown budget divided
+by the actual installed processor count plus two, accounting for serial cleanup.
+
+The serve future owns the listener, one socket and one pipeline; it creates no
+host background task. Cooperative cancellation drains/joins native owners and
+waits for host-created processor wrappers to be released. Cancelling an incomplete
+Pipeline::start triggers core asynchronous cleanup; the host tracks wrapper
+release before admitting another session. Timeouts are reported, never claimed
+as successful graceful cleanup. Ordinary peer I/O resets during cancellation
+are treated as disconnects; protocol, deadline and task errors remain visible. Dropping the serve future closes listener/socket
+and invokes native pipeline cancellation guards; core asynchronous cleanup settles
+afterward. Blocking, non-cooperative application code cannot be forcibly stopped
+by an async deadline and is outside this host's contract.
+
+End/Stop waits for a bounded acknowledgment that admitted observer events have
+entered the bounded transport before invalidating their original invocation
+authority, then finishes the WebSocket writer and reports drain failures. Cancel
+bypasses both drains. Queued events retain their original invocation fence,
+so stale interrupted work cannot acquire a new session's output authority.
+
+`tests/bot_host.rs` exercises actual localhost WebSocket/HTTP, context seeding,
+real Rust tool continuation, two EvalSession turns, negative assertions,
+configuration and cancellation. Hosted-release coverage starts and reaps the
+compiled real bot. Test code is synthetic provider evidence, not live-provider,
+audio, browser-device, simulated-persona or source-release-suite parity.

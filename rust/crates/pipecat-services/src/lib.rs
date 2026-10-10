@@ -12,8 +12,10 @@ pub use azure::{
 pub mod client;
 pub mod context;
 pub mod frame_context;
+mod nvidia;
 pub mod presets;
 pub mod protocol;
+pub mod sarvam;
 pub mod settings;
 pub mod sse;
 pub mod tts_health;

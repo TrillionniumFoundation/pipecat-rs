@@ -3,7 +3,7 @@
 use crate::{
     settings,
     tts_processor::{error_frame, processor_error},
-    SonioxSttClient, SonioxSttEvent, SonioxSttSender, StreamingError,
+    CancellationToken, SonioxSttClient, SonioxSttEvent, SonioxSttSender, StreamingError,
 };
 use pipecat_core::{
     async_trait, DetailedTranscriptionFrame, Direction, Frame, FrameData, FrameProcessor, Metric,
@@ -28,6 +28,7 @@ struct State {
     ending: bool,
     generation: u64,
     config: crate::SonioxSttConfig,
+    barrier_cancel: CancellationToken,
 }
 /// Nonblocking audio admission with provider token and turn callbacks. Transport
 /// failures are reported without replay; settings replace the socket in order.
@@ -52,6 +53,7 @@ impl SonioxSttProcessor {
                 ending: false,
                 generation: 0,
                 config,
+                barrier_cancel: CancellationToken::new(),
             })),
             health: ProcessorHealth::default(),
             muted: Arc::new(AtomicBool::new(false)),
@@ -191,7 +193,21 @@ impl FrameProcessor for SonioxSttProcessor {
             }
             state.user_id = self.user_id.clone();
             state.sender = Some(session.sender());
+            state.barrier_cancel.cancel();
+            state.barrier_cancel = CancellationToken::new();
         }
+        let barrier_cancel = self
+            .state
+            .lock()
+            .map_err(|_| processor_error(StreamingError::Closed))?
+            .barrier_cancel
+            .clone();
+        let barrier_timeout = self
+            .client
+            .config()
+            .limits
+            .response_timeout
+            .min(Duration::from_secs(5));
         let output = ctx.clone();
         let state = self.state.clone();
         let muted = self.muted.clone();
@@ -208,7 +224,36 @@ impl FrameProcessor for SonioxSttProcessor {
                         let frame=if data.finalized{FrameData::TranscriptionDetailed(data)}else{FrameData::InterimTranscriptionDetailed(data)};
                         output.push(Frame::new(frame),Direction::Downstream).await?;
                     }
-                    Some(Ok(SonioxSttEvent::TurnStarted)) if !muted.load(Ordering::Acquire)&&!ending=>output.broadcast(Frame::new(FrameData::ProposedUserStartedSpeaking)).await?,
+                    Some(Ok(SonioxSttEvent::TurnStarted)) if !muted.load(Ordering::Acquire)&&!ending=>{
+                        output.broadcast(Frame::new(FrameData::ProposedUserStartedSpeaking)).await?;
+                        // The start resolver can interrupt queued normal input. Complete
+                        // its existing pipeline roundtrip before admitting this turn's
+                        // transcript and stop, without changing their interruptibility.
+                        let settled = pipecat_core::LocalFlushEvent::default();
+                        output.push(Frame::new(FrameData::FlushDetailed(pipecat_core::PipelineFlushFrame {
+                            event: Some(settled.clone()),
+                            returning: false,
+                            origin: Some("pipecat.soniox.turn-start".into()),
+                        })), Direction::Downstream).await?;
+                        drop(_guard);
+                        tokio::select! { biased;
+                            _ = barrier_cancel.cancelled() => continue,
+                            _ = health.changed() => { session.cancel(); return Ok(()); },
+                            result = tokio::time::timeout(barrier_timeout, settled.wait()) => {
+                                if result.is_err() {
+                                    output.push_error_if_health_generation(error_frame(StreamingError::Timeout("STT turn-start barrier")),false,generation).await?;
+                                    session.cancel();
+                                    return Ok(());
+                                }
+                            }
+                        }
+                        let (current, ending) = { let state = state.lock().map_err(|_| processor_error(StreamingError::Closed))?; (state.generation == serial, state.ending) };
+                        if !current || !output.is_usable() || output.health().generation() != generation {
+                            session.cancel();
+                            return Ok(());
+                        }
+                        if ending { continue; }
+                    },
                     Some(Ok(SonioxSttEvent::TurnStopped)) if !muted.load(Ordering::Acquire)&&!ending=>output.broadcast(Frame::new(FrameData::ProposedUserStoppedSpeaking)).await?,
                     Some(Ok(SonioxSttEvent::AudioSent{seconds})) if output.configuration().enable_usage_metrics=>output.push(Frame::new(FrameData::Metrics(vec![Metric::SttUsage{processor:"SonioxSTTService".into(),audio_seconds:seconds}])),Direction::Downstream).await?,
                     Some(Ok(_))=>(),
@@ -228,10 +273,14 @@ impl FrameProcessor for SonioxSttProcessor {
         match &frame.data {
             FrameData::Cancel(_) | FrameData::CancelDetailed(_) => {
                 let _guard = self.emission.lock().await;
-                self.state
-                    .lock()
-                    .map_err(|_| processor_error(StreamingError::Closed))?
-                    .ending = true;
+                {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| processor_error(StreamingError::Closed))?;
+                    state.ending = true;
+                    state.barrier_cancel.cancel();
+                }
                 if let Ok(sender) = self.sender() {
                     sender.cancel();
                 }
@@ -328,10 +377,12 @@ impl FrameProcessor for SonioxSttProcessor {
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         {
             let _guard = self.emission.lock().await;
-            self.state
+            let mut state = self
+                .state
                 .lock()
-                .map_err(|_| processor_error(StreamingError::Closed))?
-                .ending = true;
+                .map_err(|_| processor_error(StreamingError::Closed))?;
+            state.ending = true;
+            state.barrier_cancel.cancel();
         }
         if let Ok(sender) = self.sender() {
             match sender.finish().await {
@@ -348,6 +399,7 @@ impl FrameProcessor for SonioxSttProcessor {
             .lock()
             .map_err(|_| processor_error(StreamingError::Closed))?;
         state.ending = true;
+        state.barrier_cancel.cancel();
         if let Some(sender) = state.sender.take() {
             state.config = sender.config_snapshot().map_err(processor_error)?;
             sender.cancel();

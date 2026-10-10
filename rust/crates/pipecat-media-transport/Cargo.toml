@@ -5,17 +5,20 @@ edition.workspace = true
 license.workspace = true
 
 [features]
+assistant-history = ["dep:pipecat-turns"]
 turn-recording = ["dep:pipecat-observers"]
 
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 pipecat-audio = { path = "../pipecat-audio" }
+pipecat-turns = { path = "../pipecat-turns", optional = true }
 pipecat-observers = { path = "../pipecat-observers", optional = true }
 tokio.workspace = true
 async-trait.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tokio = { workspace = true, features = ["test-util"] }
 pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
 futures-util = { version = "0.3", features = ["sink"] }

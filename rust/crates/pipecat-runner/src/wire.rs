@@ -32,6 +32,23 @@ pub fn decode(packet: Packet) -> Result<Frame, RunnerError> {
         Kind::Message(message) => {
             let envelope = Envelope::parse_with_limit(message.data.as_bytes(), 128 * 1024)
                 .map_err(|_| RunnerError::Protocol("invalid RTVI envelope"))?;
+            // These controls belong to the explicitly selected eval host. Other
+            // application client-message names retain ordinary RTVI behavior.
+            if envelope.message_type == "client-message"
+                && envelope
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("t"))
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|kind| {
+                        matches!(
+                            kind,
+                            "eval-context" | "eval-configure" | "eval-cancel" | "eval-image"
+                        )
+                    })
+            {
+                return Err(RunnerError::Protocol("eval controls require an eval host"));
+            }
             Frame::new(FrameData::InputTransportMessage(
                 serde_json::to_value(envelope)
                     .map_err(|_| RunnerError::Protocol("invalid RTVI message"))?,

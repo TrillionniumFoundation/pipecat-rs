@@ -9,6 +9,8 @@ pub mod deepgram;
 pub mod elevenlabs;
 mod openai;
 pub mod processor;
+#[cfg(feature = "speechmatics")]
+pub mod speechmatics;
 pub mod stt_processor;
 pub use openai::{
     OpenAiTranscriptionOptions, OpenAiTranscriptionResult, SpeechClient, SynthesisRequest,
@@ -59,6 +61,10 @@ impl SpeechConfig {
     }
     pub fn cartesia(api_key: impl Into<String>) -> Self {
         Self::provider("https://api.cartesia.ai", api_key)
+    }
+    #[cfg(feature = "speechmatics")]
+    pub fn speechmatics(api_key: impl Into<String>) -> Self {
+        Self::provider("https://preview.tts.speechmatics.com", api_key)
     }
     fn provider(base_url: &str, api_key: impl Into<String>) -> Self {
         Self {

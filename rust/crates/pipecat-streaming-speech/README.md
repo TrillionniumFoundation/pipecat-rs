@@ -1,7 +1,7 @@
 # Streaming speech
 
-Native Rust WebSocket implementations of Deepgram Listen v1 STT and Cartesia
-streaming TTS. No Python process, provider SDK, credentials, or paid service is
+Native Rust WebSocket implementations of Deepgram Listen v1 STT, Cartesia Live
+STT and Cartesia streaming TTS. No Python process, provider SDK, credentials, or paid service is
 needed for the loopback integration suite.
 
 ## Interfaces
@@ -262,3 +262,11 @@ its text remains diagnostic only. This is a conservative integration boundary,
 not full source parity. A separate future receipt-bound reconstruction policy
 could combine known synthesis input with complete context playback; this slice
 does not weaken SpokenHistory to infer that policy.
+
+## Dedicated Cartesia Live recognition
+
+`CartesiaSttClient` and `CartesiaSttProcessor` implement the separately bounded
+Cartesia Live STT protocol. See [CARTESIA_STT.md](CARTESIA_STT.md) for exact wire
+mapping, keyterm diagnostics, immutable settings, explicit owner-bound restart,
+keepalive/local-duration differences, qualification and remaining parity gaps.
+Cartesia Turns is not included. Existing `CartesiaClient` remains the TTS API.

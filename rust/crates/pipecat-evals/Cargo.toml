@@ -8,13 +8,30 @@ rust-version.workspace = true
 [features]
 # Native child executable used only by the process ownership integration tests.
 process-fixtures = []
+native-bot-example = ["dep:pipecat-processors", "dep:pipecat-services", "dep:reqwest"]
 
 [[bin]]
 name = "eval-process-fixture"
 path = "tests/support/process_fixture.rs"
 required-features = ["process-fixtures"]
 
+[[bin]]
+name = "native-text-bot"
+path = "src/bin/native-text-bot.rs"
+required-features = ["native-bot-example"]
+
+[[example]]
+name = "native_text_bot"
+path = "examples/native_text_bot.rs"
+required-features = ["native-bot-example"]
+
 [dependencies]
+pipecat-processors = { path = "../pipecat-processors", optional = true }
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
+pipecat-core = { path = "../pipecat-core" }
+pipecat-rtvi = { path = "../pipecat-rtvi" }
+pipecat-services = { path = "../pipecat-services", optional = true }
+pipecat-turns = { path = "../pipecat-turns" }
 pipecat-classifiers = { path = "../pipecat-classifiers" }
 pipecat-protocol = { path = "../pipecat-protocol" }
 pipecat-transports = { path = "../pipecat-transports" }

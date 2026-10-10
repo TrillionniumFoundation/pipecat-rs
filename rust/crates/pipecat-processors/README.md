@@ -161,3 +161,81 @@ sequence duration. A stale scope outside this bound cannot seed a transcript.
 Output always uses the original invocation fence, including timer callbacks and
 inherited owner closure. Queue saturation fails explicitly rather than silently
 truncating input or retrying a possibly committed transcript.
+
+## Full generated responses
+
+`LlmFullResponseAggregator` is a standalone port of
+`processors/aggregators/llm_response.py` at the pinned source baseline. Construct it
+with a `FullResponseAggregatorConfig` and one `FullResponseCallback`. The facade
+also exports it through `pipecat::processors`; no optional feature is required.
+It does not read or modify context, spoken history, tools, jobs, or playback state.
+
+LLM and Vision response-start markers enable collection without clearing existing
+text. Only `LlmText` and `VisionText` append. Exact UTF-8 whitespace and markers are
+preserved regardless of `append_to_context`, `skip_tts`, and inter-frame spacing
+flags. Compact, detailed LLM, and Vision response-end markers each admit a
+completion with `completed: true`; interruption admits `completed: false`. An
+empty or inactive boundary still produces a completion. Text outside a start is
+ignored. The completed flag means only that a response-end marker was observed.
+
+Every input frame is forwarded without rebuilding its envelope, direction,
+metadata, or local tags. Callback admission precedes forwarding the triggering
+frame; callbacks run asynchronously and may finish in a different order. Payloads
+include the triggering frame ID/direction, per-instance session ID, and boundary
+sequence. Repeated identical end frames are separate boundaries. Correlation does
+not grant authority to emit new pipeline work or complete a different job.
+
+### Bounds and callback ownership
+
+One callback is fixed at construction; there is no callback registry or pending
+completion queue. Defaults are 1 MiB current-response text, 16 admitted callbacks,
+8 MiB retained callback text capacity, and a ten-second callback deadline. Config
+caps are 16 MiB, 1024 callbacks, 64 MiB, and sixty seconds respectively; deadline
+minimum is one millisecond. Text growth is geometrically reserved but capped by
+the response limit. Callback admission charges String allocation capacity rather
+than just its length, so spare capacity cannot bypass the aggregate byte bound.
+Empty callbacks consume count capacity. Application-retained copies and memory
+allocated by application callbacks are outside these utility-owned limits.
+
+Text overflow discards the entire affected response and reports an error once.
+Until its next end/interruption, further tokens and repeated starts cannot turn
+that discarded response into a successful prefix. That boundary reports the
+discard and resets the buffer. Callback budget exhaustion rejects only that
+boundary, clears its buffer, and reports an error. There is no implicit retry.
+Both error paths still attempt to forward the original frame. Runtime task limits
+and queue backpressure remain applicable: task admission errors are reported after
+forwarding; a failed output enqueue fails the normal native pipeline contract.
+This is not an end-to-end frame-delivery guarantee.
+
+Callbacks use the core task owner and survive ordinary interruption, including an
+interrupted partial completion delivered before a new response. End/Stop close
+admission, discard unfinished text, and drain already admitted callbacks before
+forwarding their lifecycle terminal. They never synthesize another completion.
+A shorter core shutdown deadline can cancel the drain and fail the pipeline;
+configure that deadline consistently with the callback timeout.
+Cancel, cleanup, or owner drop cancel callbacks and release their reservations,
+including callbacks never polled. Cancel never attempts to spawn after the runtime
+closes admission. Direct cleanup is idempotent and awaits callback cancellation;
+separate instances are required for concurrent pipelines. Join the previous
+worker before sequential reuse, including after Stop. Session IDs are distinct.
+The already-in-use setup diagnostic is not a concurrency-isolation guarantee: the
+core cleanup hook has no invocation identity.
+
+Callback errors, panics while creating or polling the callback future, and
+timeouts become payload-free errors when application destructors do not panic. `stats()` retains only bounded scalar counts and current
+capacity usage, including failed admission and cancelled work. The process-global
+Rust panic hook may still log application panic payloads. Panicking callback-future
+or panic-payload destructors are unsupported; they can reach the core task-panic
+path, fail the pipeline, and expose their application panic text. Deadlines and cleanup
+are cooperative: a callback that blocks its polling thread can defeat timers and
+stall the runtime. Callback implementations must yield and must not detach work.
+Cancellation does not roll back already performed external effects. The utility
+does not retain or provide a `ProcessorContext` to application callbacks.
+
+These are deliberate bounded-runtime differences from the source's unbounded
+string and per-handler task fan-out. Native urgent interruption may invalidate a
+racing old token/start invocation; such stale input cannot seed the next response.
+Callback admission closes once graceful shutdown starts. Source cleanup's
+unbounded wait is replaced by owned cancellation and cooperative deadlines. No
+assistant-stopped callback bridge, latest-context notifier gate, generic event
+system, provider integration, or audible playback parity is implied.

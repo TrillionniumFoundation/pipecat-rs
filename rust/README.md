@@ -82,13 +82,17 @@ the corresponding native crates. See the [facade feature guide](crates/pipecat/R
 for public module paths and explicit native-backend opt-ins. The image feature
 retains the unpublished source-tree package and patched JPEG path dependency.
 Soniox provides streaming STT and multiplexed TTS. Grok Realtime provides the
-provider adapter and tool-result relay; generic realtime aggregation, reliable
-executor cancellation, and arbitrary upstream context reconciliation remain
-separate prerequisites. These facade exports do not establish live-provider,
-physical-output, or full workspace parity.
+provider adapter and tool-result relay. Its documented
+[paired topology](crates/pipecat-grok-realtime/README.md#shared-realtime-conversation)
+includes bounded shared realtime aggregation and native executor terminal
+receipts. Arbitrary context replacement/transforms, unsupported rich history and
+live-provider qualification remain open. These facade exports do not establish
+physical-output acceptance or full workspace parity.
 The optional `classifiers` feature exposes standalone typed batches through native
-LLM inference or Jev HTTP; it does not add pipeline/UI-worker or evaluation-runner
-integration. The optional `deepgram-flux` feature exposes Listen v2 WebSocket STT
+LLM inference or Jev HTTP. `pipecat-evals` integrates them for
+[bounded scripted text/function judging](crates/pipecat-evals/README.md#native-scripted-classifier-judging);
+pipeline/UI-worker and voicemail integrations remain separate. The optional
+`deepgram-flux` feature exposes Listen v2 WebSocket STT
 and its native pipeline processor, separately from Listen v1. User-aggregator
 configuration remains explicit and eager turn prediction is opt-in. See
 [Classifiers](crates/pipecat-classifiers/README.md) and
@@ -164,8 +168,10 @@ target, bounded JSON/YAML scripted scenarios, RTVI event assertions and concurre
 endpoint suites, plus direct compiled-bot process hosting and native release
 manifest execution. Source includes and alias-expanded values are budgeted during
 construction. Result limits include every serialized field and pending failure
-summary. Unsupported judges, simulations, audio evaluation and Python process
-orchestration fail explicitly. Child environment, output and result retention are
+summary. [Native scripted classifier judging](crates/pipecat-evals/README.md#native-scripted-classifier-judging)
+supports bounded text/function expectations. Unsupported judge configurations,
+simulations, audio evaluation and Python process orchestration fail explicitly.
+Child environment, output and result retention are
 bounded; normal shutdown cancels and reaps the direct child. Process descendants,
 OS-stuck children and Windows descendant-held pipe limitations are explicit. See
 its README for commands and exact scope.

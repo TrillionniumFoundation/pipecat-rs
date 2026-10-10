@@ -297,7 +297,7 @@ impl FrameProcessor for OutputTransport {
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
         if let Some(history) = &self.spoken_history {
-            history.admit(&mut frame, direction);
+            history.admit(&mut frame, direction, ctx)?;
             // Only the atomic sink can attest this output's speech. Upstream
             // metadata must not independently commit unverified text.
             if matches!(frame.data, FrameData::TtsText(_)) {
@@ -555,6 +555,7 @@ struct Sender {
     started_at: Instant,
     clock_origin_ns: u64,
     incomplete_media: bool,
+    readiness_failed: bool,
     spoken_history: Option<SpokenHistory>,
 }
 impl Drop for Sender {
@@ -600,6 +601,7 @@ impl Sender {
             started_at,
             clock_origin_ns,
             incomplete_media: false,
+            readiness_failed: false,
             spoken_history,
         }
     }
@@ -969,14 +971,78 @@ impl Sender {
                     if signal.cancelled || signal.epoch > epoch {
                         history.invalidate();
                     } else {
-                        for effect in history.complete(&frame)? {
-                            self.ctx.push(effect.frame, effect.direction).await?;
+                        if let Some(effects) = history.complete(&frame)? {
+                            // The sink has already committed while holding the
+                            // ledger lock. Admit ordered frames and completion
+                            // records outside it with the original receipt scopes.
+                            for effect in effects.ordered {
+                                match effect {
+                                    crate::SpokenHistoryEffect::Frame(effect) => {
+                                        effects.context.try_push_with_invocation_fence(
+                                            effect.frame,
+                                            effect.direction,
+                                            &effects.cause,
+                                        )?
+                                    }
+                                    #[cfg(feature = "assistant-history")]
+                                    crate::SpokenHistoryEffect::AssistantStopped(action) => {
+                                        action.admit_with_fence(&effects.cause)?
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                self.forward(frame, epoch).await
+                self.forward_ready(frame, epoch).await
             }
         }
+    }
+    async fn forward_ready(&mut self, frame: Frame, epoch: u64) -> Result<(), ProcessorError> {
+        let source_start = matches!(
+            frame.data,
+            FrameData::LlmResponseStart
+                | FrameData::LlmFullResponseStart(_)
+                | FrameData::VisionFullResponseStart(_)
+        );
+        if !source_start && !matches!(frame.data, FrameData::TtsStarted(_)) {
+            return self.forward(frame, epoch).await;
+        }
+        let readiness = match &self.spoken_history {
+            Some(history) => history.readiness(&frame),
+            None => Ok(None),
+        };
+        if matches!(&readiness, Ok(None)) {
+            return self.forward(frame, epoch).await;
+        }
+        let interruptible = frame.interruptible;
+        // Legacy PTS scheduling and preceding PCM drain have already completed.
+        // The downstream normal lane runs independently of this owned Sender.
+        let forwarded = self.forward(frame, epoch).await;
+        let result = match (readiness, forwarded) {
+            (_, Err(error)) | (Err(error), _) => Err(error),
+            (Ok(Some(ready)), Ok(())) => match operation(
+                &self.destination.queue,
+                epoch,
+                interruptible,
+                self.config.write_timeout,
+                ready,
+            )
+            .await
+            {
+                Some(result) => result,
+                None => {
+                    self.readiness_failed = true;
+                    return Ok(());
+                }
+            },
+            (Ok(None), Ok(())) => Ok(()),
+        };
+        if result.is_err() {
+            self.readiness_failed = true;
+        } else if source_start {
+            self.readiness_failed = false;
+        }
+        result
     }
     async fn forward(&self, frame: Frame, epoch: u64) -> Result<(), ProcessorError> {
         let signal = self.destination.queue.signal();
@@ -1096,6 +1162,12 @@ impl Sender {
         generated: bool,
     ) -> Result<(), ProcessorError> {
         let queue = self.destination.queue.clone();
+        if !generated && self.readiness_failed {
+            if let Some(history) = &self.spoken_history {
+                history.rejected_frame(&frame, "assistant playback boundary was not ready");
+            }
+            return Ok(());
+        }
         if !self.destination.usable.load(Ordering::SeqCst) {
             if let Some(history) = &self.spoken_history {
                 history.rejected_frame(&frame, "unusable playback backend");

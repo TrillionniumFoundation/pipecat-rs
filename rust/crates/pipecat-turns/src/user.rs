@@ -668,14 +668,10 @@ impl LLMUserAggregator {
                             .and_then(std::sync::Weak::upgrade)
                         {
                             let effects = assistant.prepare_user_interrupt(false)?;
-                            output.events.extend(effects.events);
-                            output
-                                .actions
-                                .extend(effects.actions.into_iter().filter(|action| {
-                                    matches!(action, AggregationAction::RealtimeUserContext(_))
-                                }));
+                            Self::assistant_interrupt_effects(effects, &mut output);
+                        } else {
+                            output.actions.push(AggregationAction::Interrupt);
                         }
-                        output.actions.push(AggregationAction::Interrupt);
                     }
                     let mut context = self.context.lock()?;
                     let start = context.messages.len();
@@ -893,6 +889,28 @@ impl LLMUserAggregator {
         }
         Ok(output)
     }
+    fn assistant_interrupt_effects(effects: AggregationOutput, output: &mut AggregationOutput) {
+        output.events.extend(effects.events);
+        let mut feedback = Vec::new();
+        for action in effects.actions {
+            match action {
+                AggregationAction::RealtimeUserContext(_) => output.actions.push(action),
+                AggregationAction::AssistantStopped(_) => feedback.push(action),
+                AggregationAction::Push(ref directed)
+                    if matches!(
+                        directed.frame.data,
+                        FrameData::LlmContextAssistantTimestamp { .. }
+                            | FrameData::LlmContextAssistantTurn(_)
+                    ) =>
+                {
+                    feedback.push(action)
+                }
+                _ => {}
+            }
+        }
+        output.actions.push(AggregationAction::Interrupt);
+        output.actions.extend(feedback);
+    }
     fn apply_events(
         state: &mut UserState,
         context: &SharedContext,
@@ -957,14 +975,10 @@ impl LLMUserAggregator {
                             .and_then(std::sync::Weak::upgrade)
                         {
                             let effects = assistant.prepare_user_interrupt(emit_speaking)?;
-                            output.events.extend(effects.events);
-                            output
-                                .actions
-                                .extend(effects.actions.into_iter().filter(|action| {
-                                    matches!(action, AggregationAction::RealtimeUserContext(_))
-                                }));
+                            Self::assistant_interrupt_effects(effects, output);
+                        } else {
+                            output.actions.push(AggregationAction::Interrupt);
                         }
-                        output.actions.push(AggregationAction::Interrupt);
                     }
                     output.events.push(AggregationEvent::UserTurnStarted);
                 }

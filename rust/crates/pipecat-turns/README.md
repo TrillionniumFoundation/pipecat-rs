@@ -416,8 +416,8 @@ instances closed by End, Stop, or Cancel are not restartable.
   Empty-turn recovery applies only to cascade mode; paired realtime activation
   disables it
 - Raw image/file-to-context encoding needs an explicit encoder; encoded rich
-  messages are supported. Full Python callback/event parity, source timestamp
-  events and provider-specific realtime speech-to-speech qualification
+  messages are supported. Full Python callback/event parity and
+  provider-specific realtime speech-to-speech qualification
   remain outside this implementation
 - Grouped tool results and active-response deferrals are coalesced. Arbitrary
   adjacent ungrouped append/result frames are not coalesced by queue inspection
@@ -648,12 +648,14 @@ documented in [REALTIME.md](REALTIME.md); it is not provider qualification.
 ### Remaining strategy scope
 
 The bounded unsigned LLM-completion marker parser and short/long automatic
-re-prompts are documented in [COMPLETION.md](COMPLETION.md). Signed-provider
-filtering, eager STT speculation, provisional-context output/tool gates, and
-eager match policies remain unimplemented. The existing services inference interface does
-not by itself provide those safety contracts. No synthetic classifier stands in
-for a real verdict. Proprietary Krisp start/analyzer implementations and opaque service-recommended
-strategy descriptors remain unsupported.
+re-prompts are documented in [COMPLETION.md](COMPLETION.md). Eager STT speculation,
+exact/normalized matching, provisional-context output gates and native tool-effect
+admission are implemented for the supported `pipecat-services::LlmProcessor`
+topology in [EAGER.md](EAGER.md). Signed completion-marker filtering and eager
+integration with Responses, realtime or separate provider-specific inference
+processors remain unsupported. No synthetic classifier stands in for a real
+verdict. Proprietary Krisp start/analyzer implementations and opaque
+service-recommended strategy descriptors remain unsupported.
 
 
 ### Native signed history
@@ -743,3 +745,19 @@ bounded to 4,096 entries/32 MiB, measured before history mutation, with no evict
 of signed authority. Whole native batches preflight both pending ownership and
 combined signed reconstruction/result additions. See [the complete state ownership
 and budget table](TOOL_HISTORY.md); there is no global 8 MiB or RSS-bound claim.
+
+## Bounded assistant completion receiver
+
+Register `assistant.subscribe_stopped(AssistantStoppedConfig::default())` before
+the first turn. `receiver.recv()` returns a non-cloneable record lease containing
+immutable committed text, original start timestamp, interruption status, session
+and turn identity, and an optional immutable job binding. Admission is ordered
+after context/timestamp and before turn feedback, including paired interruption
+and explicitly adapted playback receipts. No callback dispatcher task is created.
+
+`handle_next` runs one cooperative, deadline-bounded handler in the caller's owned
+future. Inspect `stopped_stats()` for payload-free resource and outcome counters.
+End/Stop/Cancel admit their final record then close the stream; queued records
+remain caller-drainable. Cancel never spawns a new async callback. A replacement
+job requires a fresh assistant session. Full ordering, budgets and limits are in
+[assistant completion ownership](../../docs/assistant-stopped.md).

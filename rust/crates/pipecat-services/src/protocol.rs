@@ -38,6 +38,8 @@ pub struct ProtocolDecoder {
     gemini_signed: bool,
     history_bytes: usize,
     checkpoint_blocks: usize,
+    nvidia: Option<crate::nvidia::NvidiaReasoning>,
+    delivered_thought_depth: usize,
 }
 impl ProtocolDecoder {
     pub fn new(provider: Provider) -> Self {
@@ -55,6 +57,40 @@ impl ProtocolDecoder {
             gemini_signed: false,
             history_bytes: 0,
             checkpoint_blocks: 0,
+            nvidia: None,
+            delivered_thought_depth: 0,
+        }
+    }
+    pub(crate) fn with_preset(
+        provider: Provider,
+        preset: Option<crate::presets::OpenAiPreset>,
+    ) -> Self {
+        let mut decoder = Self::new(provider);
+        if preset == Some(crate::presets::OpenAiPreset::Nvidia) {
+            decoder.nvidia = Some(crate::nvidia::NvidiaReasoning::default());
+        }
+        decoder
+    }
+    pub(crate) fn thought_boundary_delivered(&mut self, start: bool) {
+        if start {
+            self.delivered_thought_depth += 1;
+        } else {
+            self.delivered_thought_depth = self.delivered_thought_depth.saturating_sub(1);
+        }
+    }
+    pub(crate) fn finalize_response(&mut self, completed: bool) -> Vec<StreamEvent> {
+        let Some(reasoning) = self.nvidia.as_mut() else {
+            return Vec::new();
+        };
+        let events = reasoning.finish(completed);
+        if completed {
+            events
+        } else {
+            // Cancellation can interrupt delivery halfway through one decoded
+            // record. Close only starts that reached the bounded event channel.
+            (0..std::mem::take(&mut self.delivered_thought_depth))
+                .map(|_| StreamEvent::ThoughtEnd)
+                .collect()
         }
     }
     pub fn is_done(&self) -> bool {
@@ -73,8 +109,10 @@ impl ProtocolDecoder {
                 "decoder is poisoned by a prior stream failure".into(),
             ));
         }
+        let reasoning = self.nvidia.clone();
         let result = self.decode_event(event);
         if result.is_err() {
+            self.nvidia = reasoning;
             self.failed = true;
         }
         result
@@ -255,6 +293,11 @@ impl ProtocolDecoder {
             .and_then(Value::as_array)
             .ok_or_else(|| ServiceError::Protocol("OpenAI event missing choices".into()))?;
         let mut events = vec![];
+        if !choices.is_empty() {
+            if let Some(reasoning) = &mut self.nvidia {
+                reasoning.progress(&mut events);
+            }
+        }
         for choice in choices {
             if choice.get("index").and_then(Value::as_u64).unwrap_or(0) != 0 {
                 return Err(ServiceError::Unsupported(
@@ -277,16 +320,21 @@ impl ProtocolDecoder {
                     message: refusal.into(),
                 });
             }
-            if let Some(text) = optional_string(delta, "content")?.filter(|s| !s.is_empty()) {
-                events.push(StreamEvent::TextDelta(text.into()));
-            }
-            if let Some(thought) = delta
-                .get("reasoning_content")
-                .or_else(|| delta.get("reasoning"))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-            {
-                events.push(StreamEvent::ThoughtDelta(thought.into()));
+            let content = optional_string(delta, "content")?.filter(|s| !s.is_empty());
+            if let Some(reasoning) = &mut self.nvidia {
+                reasoning.delta(delta, content, &mut events)?;
+            } else {
+                if let Some(text) = content {
+                    events.push(StreamEvent::TextDelta(text.into()));
+                }
+                if let Some(thought) = delta
+                    .get("reasoning_content")
+                    .or_else(|| delta.get("reasoning"))
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                {
+                    events.push(StreamEvent::ThoughtDelta(thought.into()));
+                }
             }
             if delta.get("function_call").is_some() {
                 return Err(ServiceError::Unsupported(

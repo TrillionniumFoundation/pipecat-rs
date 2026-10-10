@@ -321,3 +321,90 @@ All recognition is native and real. Only LLM/TTS are synthetic, listen on loopba
 and use dummy credentials. Tests verify browser-codec speech reaches recognition,
 recognized text reaches LLM requests, generated text reaches TTS, output PCM reaches
 the browser codec, and cancellation/expiry releases joined native owners.
+
+## Soniox hosted voice cascade (optional)
+
+The `soniox` feature adds one explicit alternative composition:
+
+RTVI/protobuf WebSocket → stateful capture resampler → Soniox STT → recommended
+provider-endpoint user-turn strategies → native OpenAI `LlmProcessor` → optional
+session-local Rust `ToolExecutor` → generated-text context → Soniox TTS →
+protobuf audio. Native function results feed the same assistant aggregator and
+HTTP model continuation; tool-only responses and arguments are not spoken text.
+
+Set `SONIOX_API_KEY` and `OPENAI_API_KEY` in the native process environment, then:
+
+```sh
+PIPECAT_VOICE_CASCADE=soniox cargo run -p pipecat-runner --features soniox \
+  --bin pipecat-browser-agent -- --no-intro --assets client-templates/dist
+```
+
+Without the optional browser assets, the same command hosts the loopback HTTP
+lifecycle and WebSocket protocol for native clients. `--help` never reads keys.
+No Deepgram or Cartesia credential is read in Soniox mode. Omitting
+`PIPECAT_VOICE_CASCADE` preserves the existing default cascade and public
+`NativeRunner::new(RunnerConfig, ProviderConfig)` constructor. Optional Soniox
+configuration is `SONIOX_STT_MODEL`, `SONIOX_TTS_MODEL`, `SONIOX_VOICE`,
+`OPENAI_MODEL`, `PIPECAT_SYSTEM_PROMPT`, `PIPECAT_INPUT_SAMPLE_RATE`, and
+`PIPECAT_OUTPUT_SAMPLE_RATE`. Defaults come from the existing typed provider
+adapters: 16 kHz STT and 24 kHz TTS. Soniox TTS supports 8, 16, 24, 44.1 and
+48 kHz; declaring another output rate fails before accepting a session.
+
+The pinned Python `voice-soniox.py` sample selects local Silero endpointing,
+voice Nora, and spoken assistant aggregation after output. This native runner
+intentionally selects provider endpointing, the existing native Soniox voice
+default (overridable with `SONIOX_VOICE`), and generated-text history before
+synthesis. It does not claim identical turn or spoken-history behavior.
+
+This bounded composition uses Soniox's provider endpoint detection and its
+recommended external start/stop strategies. Local VAD, Whisper settings,
+`PIPECAT_STT_PROVIDER`, Cartesia voice options, and `--webrtc` fail explicitly
+instead of being ignored. Other adapters and the original default cascade keep
+their own turn policy. Soniox selection does not enable additional transports.
+Provider endpoints can be overridden by a trusted Rust application through
+`SonioxVoiceConfig`; browser requests cannot supply provider configuration.
+
+A runnable native arithmetic-tool host uses the same runner and protocol:
+
+```sh
+cargo run -p pipecat-runner --features soniox --example soniox_voice
+```
+
+This example listens at `127.0.0.1:7860`, accepts a native client's
+`POST /api/start` body `{"transport":"websocket"}`, and waits for speech after
+RTVI `client-ready`. It intentionally permits missing Origin for loopback native
+clients. It has no embedded microphone, browser assets, or playback device.
+Only its pure local `add` callback executes; there are no external tool effects.
+
+Rust callers create `SonioxVoiceConfig::new(soniox_key, openai_key)` or
+`SonioxVoiceConfig::from_env()`, optionally attach a `SonioxToolsFactory`, then
+call `NativeRunner::new_soniox`. The factory returns `SonioxSessionTools` with
+existing `ToolDefinition` values and a newly constructed, bounded `ToolExecutor`.
+It must be nonblocking and create new mutable callback state for every session.
+A factory error or unwinding panic closes that session and releases its admission
+slot. Rust's ordinary panic hook still runs; its output is controlled by the
+application. This does not contain process aborts, blocking code or arbitrary
+side effects. Tool definitions are limited to 32 and 64 KiB. The example uses two in-flight
+calls, a 64-entry duplicate window, a 4 KiB argument bound, and the executor's
+30-second default callback deadline. Cancellation cannot undo external effects
+in custom callbacks; use cancellation-safe callbacks and explicit application
+permissions for any such effects.
+
+History remains explicitly `generated-text`, with `spoken:false` and no
+playback acknowledgements. Transport admission and synthesis completion do not
+establish audible playback. The existing Soniox receipt-ledger tests exercise a
+separate trusted synthetic-playback contract; this runner does not implement
+that mode or turn TTS timestamps into playback receipts.
+
+The `soniox_config` and `soniox_cascade` suites use only synthetic local provider
+payloads over real native HTTP/WebSockets. They exercise provider selection,
+key isolation, tool continuation, two-turn history, fresh session state, capture
+resampling, synthesis PCM, graceful termination, and blocked-startup ownership.
+Live provider compatibility, browser automation, physical audibility, and the
+full rewrite's release qualification remain separate.
+
+Under an unread client socket and a provider audio flood, the existing bounded
+Soniox per-stream event lane can fail closed before explicit shutdown. The native
+fixture checks incomplete bounded provider progress, a failed session report,
+freed admission, terminal socket closure and joined provider owners. It is not
+a claim that an overflowing session remains usable or that queued audio played.

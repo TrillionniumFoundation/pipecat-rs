@@ -48,3 +48,14 @@ cargo fmt -p pipecat-soniox --check
 ```
 
 `SOURCE_MAP.md` identifies the pinned source and the behavior-to-fixture mapping.
+
+Provider-endpoint recognition inserts one native `PipelineFlushFrame` roundtrip
+at each proposed user start before it admits that turn's normal transcript and
+stop. This lets the user aggregator's interruption settle without discarding a
+coalesced final-text/endpoint packet. Transcript interruptibility and downstream
+assistant/tool authority are unchanged. The owned wait holds no state or
+emission lock, uses at most the smaller of five seconds and the configured
+response timeout, and stops on lifecycle or health changes. It rechecks the
+same session and health generation before continuing. This adds one pipeline
+roundtrip per provider start; it is an ordering tradeoff, not a throughput claim.
+The marker uses its own origin and is not a synthesis/playback-completion fence.

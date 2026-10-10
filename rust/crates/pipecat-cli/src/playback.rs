@@ -1,11 +1,11 @@
 //! Playback-confirmed output. Network delivery never counts as spoken audio.
 use crate::{wire, AgentError};
 use pipecat_core::{
-    async_trait, Direction, Frame, FrameData, FrameProcessor, ProcessorContext, ProcessorError,
-    StartFrame,
+    async_trait, Direction, Frame, FrameData, FrameProcessor, InvocationFence, ProcessorContext,
+    ProcessorError, StartFrame,
 };
 use pipecat_transports::{Packet, SessionSender};
-use pipecat_turns::LLMAssistantAggregator;
+use pipecat_turns::{AggregationAction, AggregationOutput, LLMAssistantAggregator};
 use serde_json::json;
 use std::{
     collections::VecDeque,
@@ -24,12 +24,15 @@ struct Pending {
     texts: Vec<Frame>,
     ready: bool,
     created: Instant,
+    context: ProcessorContext,
+    cause: InvocationFence,
 }
 #[derive(Default)]
 struct State {
     pending: VecDeque<Pending>,
     context: Option<ProcessorContext>,
     text_bytes: usize,
+    source_failed: bool,
 }
 pub struct Outbound {
     packet: Packet,
@@ -71,7 +74,7 @@ impl PlaybackOutput {
     /// The state lock orders acknowledgement against interruption, while the
     /// aggregator commits synchronously instead of through overtaken queues.
     pub async fn acknowledge(&self, id: String) -> Result<(), AgentError> {
-        let (ctx, effects) = {
+        let (ctx, cause, effects) = {
             let mut state = self
                 .state
                 .lock()
@@ -92,13 +95,33 @@ impl PlaybackOutput {
             for text in &texts {
                 state.text_bytes = state.text_bytes.saturating_sub(text.text.text.len());
             }
-            let ctx = state
-                .context
-                .clone()
-                .ok_or(AgentError::Protocol("output not initialized"))?;
-            (ctx, effects)
+            // Retain the acknowledged synthesis invocation, including nested
+            // origins. The setup context cannot authorize delayed turn feedback.
+            let ctx = pending.context;
+            (ctx, pending.cause, effects)
         };
-        effects.emit(&ctx).await?;
+        for action in effects.actions {
+            match action {
+                AggregationAction::AssistantStopped(action) => action.admit_with_fence(&cause)?,
+                AggregationAction::Push(frame)
+                    if matches!(
+                        frame.frame.data,
+                        FrameData::LlmContextAssistantTimestamp { .. }
+                            | FrameData::LlmContextAssistantTurn(_)
+                    ) =>
+                {
+                    ctx.try_push_with_invocation_fence(frame.frame, frame.direction, &cause)?
+                }
+                action => {
+                    AggregationOutput {
+                        actions: vec![action],
+                        events: vec![],
+                    }
+                    .emit(&ctx)
+                    .await?
+                }
+            }
+        }
         ctx.push(
             Frame::new(FrameData::BotStoppedSpeaking),
             Direction::Downstream,
@@ -169,6 +192,38 @@ impl FrameProcessor for PlaybackOutput {
         if direction == Direction::Upstream {
             return ctx.push(frame, direction).await;
         }
+        if matches!(
+            frame.data,
+            FrameData::LlmResponseStart
+                | FrameData::LlmFullResponseStart(_)
+                | FrameData::VisionFullResponseStart(_)
+        ) {
+            self.state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("output state poisoned"))?
+                .source_failed = true;
+            let ready = self
+                .assistant
+                .playback_readiness(&frame, ctx.invocation_fence()?)?
+                .ok_or_else(|| ProcessorError::fatal("assistant source readiness unavailable"))?;
+            ctx.push(frame, direction).await?;
+            if let Err(error) = tokio::time::timeout(Duration::from_secs(10), ready.wait())
+                .await
+                .map_err(|_| ProcessorError::fatal("assistant source readiness timed out"))
+                .and_then(|result| result)
+            {
+                self.invalidate()?;
+                if !ctx.invocation_fence()?.is_current() {
+                    return Ok(());
+                }
+                return Err(ProcessorError::fatal(error.message));
+            }
+            self.state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("output state poisoned"))?
+                .source_failed = false;
+            return Ok(());
+        }
         match &frame.data {
             FrameData::TtsStarted(start) => {
                 let id = start.context_id.as_ref().ok_or_else(|| {
@@ -181,6 +236,11 @@ impl FrameProcessor for PlaybackOutput {
                         .state
                         .lock()
                         .map_err(|_| ProcessorError::fatal("output state poisoned"))?;
+                    if state.source_failed {
+                        return Err(ProcessorError::fatal(
+                            "assistant source boundary was not ready",
+                        ));
+                    }
                     if state.pending.len() >= MAX_PENDING_CONTEXTS
                         || state.pending.iter().any(|p| &p.id == id)
                     {
@@ -194,6 +254,8 @@ impl FrameProcessor for PlaybackOutput {
                         texts: vec![],
                         ready: false,
                         created: Instant::now(),
+                        context: ctx.clone(),
+                        cause: ctx.invocation_fence()?,
                     });
                     self.generation.load(Ordering::SeqCst)
                 };
@@ -221,22 +283,24 @@ impl FrameProcessor for PlaybackOutput {
                     state.text_bytes = state.text_bytes.saturating_sub(text.text.text.len());
                     return Ok(());
                 };
+                pending.cause = pending.cause.intersection(&ctx.invocation_fence()?)?;
                 pending.texts.push(frame);
                 return Ok(());
             }
             FrameData::TtsAudio(audio) | FrameData::OutputAudio(audio) => {
                 let generation = {
-                    let state = self
+                    let mut state = self
                         .state
                         .lock()
                         .map_err(|_| ProcessorError::fatal("output state poisoned"))?;
-                    if !state
+                    let Some(pending) = state
                         .pending
-                        .iter()
-                        .any(|p| Some(p.id.as_str()) == audio.context_id.as_deref())
-                    {
+                        .iter_mut()
+                        .find(|p| Some(p.id.as_str()) == audio.context_id.as_deref())
+                    else {
                         return Ok(());
-                    }
+                    };
+                    pending.cause = pending.cause.intersection(&ctx.invocation_fence()?)?;
                     self.generation.load(Ordering::SeqCst)
                 };
                 self.enqueue_at(
@@ -258,6 +322,7 @@ impl FrameProcessor for PlaybackOutput {
                     let Some(pending) = state.pending.iter_mut().find(|p| &p.id == id) else {
                         return Ok(());
                     };
+                    pending.cause = pending.cause.intersection(&ctx.invocation_fence()?)?;
                     pending.ready = true;
                     self.generation.load(Ordering::SeqCst)
                 };
@@ -544,6 +609,352 @@ mod tests {
         fence(&mut worker).await;
         assert!(shared.snapshot().unwrap().messages.is_empty());
         worker.cancel("test done").await.unwrap();
+        let (_, report) = worker.collect().await.unwrap();
+        assert!(report.errors.is_empty());
+    }
+    async fn receipt_effects_fence(
+        worker: &mut PipelineWorker,
+    ) -> Vec<pipecat_core::DirectedFrame> {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            let mut effects = vec![];
+            for direction in [Direction::Downstream, Direction::Upstream] {
+                let marker = Frame::new(FrameData::Flush(FlushFrame {
+                    origin: Some("feedback-fence".into()),
+                    returning: false,
+                }));
+                let id = marker.id;
+                worker.sender().send(marker, direction).await.unwrap();
+                loop {
+                    let frame = worker.recv().await.expect("pipeline feedback fence");
+                    if frame.frame.id == id {
+                        break;
+                    }
+                    if matches!(
+                        frame.frame.data,
+                        FrameData::LlmContext(_)
+                            | FrameData::LlmContextDetailed(_)
+                            | FrameData::LlmContextAssistantTurn(_)
+                            | FrameData::LlmContextAssistantTimestamp { .. }
+                    ) {
+                        effects.push(frame);
+                    }
+                }
+            }
+            effects
+        })
+        .await
+        .unwrap()
+    }
+    async fn feedback_fence(worker: &mut PipelineWorker) -> Vec<pipecat_core::DirectedFrame> {
+        receipt_effects_fence(worker)
+            .await
+            .into_iter()
+            .filter(|f| {
+                matches!(
+                    f.frame.data,
+                    FrameData::LlmContextAssistantTurn(_)
+                        | FrameData::LlmContextAssistantTimestamp { .. }
+                )
+            })
+            .collect()
+    }
+    #[tokio::test]
+    async fn playback_feedback_is_receipt_owned_linked_and_repeat_safe() {
+        let (output, _channels, mut worker, shared) = fixture().await;
+        for id in ["first", "second"] {
+            start_text(&worker, id).await;
+            send(
+                &worker,
+                FrameData::TtsStopped(TtsStoppedFrame {
+                    context_id: Some(id.into()),
+                }),
+            )
+            .await;
+            assert!(feedback_fence(&mut worker).await.is_empty());
+            output.acknowledge("wrong-context".into()).await.unwrap();
+            assert!(feedback_fence(&mut worker).await.is_empty());
+            output.acknowledge(id.into()).await.unwrap();
+            let frames = feedback_fence(&mut worker).await;
+            assert_eq!(frames.len(), 3);
+            let turns: Vec<_> = frames
+                .iter()
+                .filter(|f| matches!(f.frame.data, FrameData::LlmContextAssistantTurn(_)))
+                .collect();
+            assert_eq!(turns.len(), 2);
+            assert_ne!(turns[0].direction, turns[1].direction);
+            assert_eq!(turns[0].frame.broadcast_sibling_id, Some(turns[1].frame.id));
+            assert_eq!(turns[1].frame.broadcast_sibling_id, Some(turns[0].frame.id));
+            assert!(turns.iter().all(|f| matches!(&f.frame.data, FrameData::LlmContextAssistantTurn(t) if t.text == "Actually heard")));
+            output.acknowledge(id.into()).await.unwrap();
+            assert!(feedback_fence(&mut worker).await.is_empty());
+            // The next receipt must use its own generation, never setup's epoch.
+            send(&worker, FrameData::Interruption).await;
+            assert!(feedback_fence(&mut worker).await.is_empty());
+        }
+        assert_eq!(shared.snapshot().unwrap().messages.len(), 2);
+        worker.end().await.unwrap();
+        let (_, report) = worker.collect().await.unwrap();
+        assert!(report.errors.is_empty());
+    }
+
+    #[derive(Default)]
+    struct InvocationCapture(Mutex<Option<ProcessorContext>>);
+    #[async_trait]
+    impl FrameProcessor for InvocationCapture {
+        fn name(&self) -> &str {
+            "playback-feedback-origin"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::Text(_)) {
+                *self.0.lock().unwrap() = Some(ctx.clone());
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    #[tokio::test]
+    async fn late_receipt_material_keeps_its_nested_origin_fence() {
+        for late_text in [true, false] {
+            let capture = Arc::new(InvocationCapture::default());
+            let mut origin_worker = Pipeline::new(vec![capture.clone()])
+                .start(PipelineConfig::default())
+                .await
+                .unwrap();
+            send(&origin_worker, FrameData::Text(TextFrame::new("origin"))).await;
+            fence(&mut origin_worker).await;
+            let source = capture.0.lock().unwrap().clone().unwrap();
+            let (output, _channels, mut worker, shared) = fixture().await;
+            let mut stopped_records = output
+                .assistant
+                .subscribe_stopped(Default::default())
+                .unwrap();
+            start_text(&worker, "scoped").await;
+            assert!(feedback_fence(&mut worker).await.is_empty());
+            let destination = output
+                .state
+                .lock()
+                .unwrap()
+                .pending
+                .front()
+                .unwrap()
+                .context
+                .clone();
+            let nested = destination.forwarding_context(&source);
+            if late_text {
+                output
+                    .process(
+                        Frame::new(FrameData::TtsText(AggregatedTextFrame {
+                            text: TextFrame::new("late text"),
+                            aggregated_by: "test".into(),
+                            context_id: Some("scoped".into()),
+                            raw_text: None,
+                            will_be_spoken: true,
+                        })),
+                        Direction::Downstream,
+                        &nested,
+                    )
+                    .await
+                    .unwrap();
+                send(
+                    &worker,
+                    FrameData::TtsStopped(TtsStoppedFrame {
+                        context_id: Some("scoped".into()),
+                    }),
+                )
+                .await;
+            } else {
+                output
+                    .process(
+                        Frame::new(FrameData::TtsStopped(TtsStoppedFrame {
+                            context_id: Some("scoped".into()),
+                        })),
+                        Direction::Downstream,
+                        &nested,
+                    )
+                    .await
+                    .unwrap();
+            }
+            assert!(feedback_fence(&mut worker).await.is_empty());
+            send(&origin_worker, FrameData::Interruption).await;
+            fence(&mut origin_worker).await;
+            assert!(!source.invocation_fence().unwrap().is_current());
+            assert!(destination.invocation_fence().unwrap().is_current());
+            output.acknowledge("scoped".into()).await.unwrap();
+            // Notification staleness never rolls back the synchronous receipt commit.
+            assert_eq!(shared.snapshot().unwrap().messages.len(), 1);
+            assert!(stopped_records.try_recv().is_none());
+            assert_eq!(stopped_records.stats().stale, 1);
+            let effects = receipt_effects_fence(&mut worker).await;
+            assert_eq!(
+                effects
+                    .iter()
+                    .filter(|f| matches!(
+                        f.frame.data,
+                        FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+                    ))
+                    .count(),
+                1,
+                "existing CLI context effects retain the acknowledged start scope"
+            );
+            assert!(!effects.iter().any(|f| matches!(
+                f.frame.data,
+                FrameData::LlmContextAssistantTurn(_)
+                    | FrameData::LlmContextAssistantTimestamp { .. }
+            )));
+            worker.end().await.unwrap();
+            assert!(worker.collect().await.unwrap().1.errors.is_empty());
+            origin_worker.end().await.unwrap();
+            assert!(origin_worker.collect().await.unwrap().1.errors.is_empty());
+        }
+    }
+    #[tokio::test]
+    async fn stopped_record_survives_cli_receipt_adapter_exactly_once() {
+        let (output, _channels, mut worker, shared) = fixture().await;
+        let mut records = output
+            .assistant
+            .subscribe_stopped(Default::default())
+            .unwrap();
+        for id in ["record-one", "record-two"] {
+            start_text(&worker, id).await;
+            send(
+                &worker,
+                FrameData::TtsStopped(TtsStoppedFrame {
+                    context_id: Some(id.into()),
+                }),
+            )
+            .await;
+            fence(&mut worker).await;
+            assert!(records.try_recv().is_none());
+            output.acknowledge("wrong".into()).await.unwrap();
+            assert!(records.try_recv().is_none());
+            output.acknowledge(id.into()).await.unwrap();
+            let record = records.try_recv().expect("CLI admitted completion");
+            assert_eq!(record.completion().text(), "Actually heard");
+            assert!(!record.completion().interrupted());
+            assert!(shared
+                .snapshot()
+                .unwrap()
+                .messages
+                .iter()
+                .any(|message| message.content == Some(Content::Text("Actually heard".into()))));
+            output.acknowledge(id.into()).await.unwrap();
+            assert!(records.try_recv().is_none());
+            fence(&mut worker).await;
+        }
+        worker.end().await.unwrap();
+        assert!(worker.collect().await.unwrap().1.errors.is_empty());
+        assert!(records.recv().await.is_none());
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+    use pipecat_core::{
+        AggregatedTextFrame, Pipeline, PipelineConfig, TextFrame, TtsStartedFrame, TtsStoppedFrame,
+    };
+    use pipecat_turns::{AssistantAggregatorConfig, AssistantTextMode, SharedContext};
+    use tokio::sync::{Notify, Semaphore};
+    struct HoldStart {
+        entered: Notify,
+        release: Semaphore,
+    }
+    #[async_trait]
+    impl FrameProcessor for HoldStart {
+        fn name(&self) -> &str {
+            "cli-readiness-gate"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if direction == Direction::Downstream
+                && matches!(frame.data, FrameData::LlmResponseStart)
+            {
+                self.entered.notify_one();
+                self.release.acquire().await.unwrap().forget();
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    #[tokio::test]
+    async fn source_start_is_accepted_before_remote_playback_is_admitted() {
+        let shared = SharedContext::default();
+        let assistant = Arc::new(LLMAssistantAggregator::new(
+            shared.clone(),
+            AssistantAggregatorConfig {
+                text_mode: AssistantTextMode::Spoken,
+            },
+        ));
+        let (output, mut channels) = PlaybackOutput::new(assistant.clone());
+        let hold = Arc::new(HoldStart {
+            entered: Notify::new(),
+            release: Semaphore::new(0),
+        });
+        let worker = Pipeline::new(vec![output.clone(), hold.clone(), assistant])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        for data in [
+            FrameData::LlmResponseStart,
+            FrameData::TtsStarted(TtsStartedFrame {
+                context_id: Some("held".into()),
+                append_to_context: true,
+            }),
+            FrameData::TtsText(AggregatedTextFrame {
+                text: TextFrame::new("Heard"),
+                context_id: Some("held".into()),
+                raw_text: None,
+                aggregated_by: "test".into(),
+                will_be_spoken: true,
+            }),
+            FrameData::TtsStopped(TtsStoppedFrame {
+                context_id: Some("held".into()),
+            }),
+            FrameData::LlmResponseEnd,
+        ] {
+            worker
+                .sender()
+                .send(Frame::new(data), Direction::Downstream)
+                .await
+                .unwrap();
+        }
+        tokio::time::timeout(Duration::from_secs(2), hold.entered.notified())
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(30), channels.ordinary.recv())
+                .await
+                .is_err()
+        );
+        assert!(shared.snapshot().unwrap().messages.is_empty());
+        hold.release.add_permits(1);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if output
+                    .state
+                    .lock()
+                    .unwrap()
+                    .pending
+                    .front()
+                    .is_some_and(|pending| pending.ready)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        output.acknowledge("held".into()).await.unwrap();
+        assert_eq!(shared.snapshot().unwrap().messages.len(), 1);
+        worker.end().await.unwrap();
         let (_, report) = worker.collect().await.unwrap();
         assert!(report.errors.is_empty());
     }

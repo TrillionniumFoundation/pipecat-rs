@@ -50,6 +50,8 @@ pub use pipecat_services as services;
 #[cfg(feature = "soniox")]
 pub use pipecat_soniox as soniox;
 #[cfg(feature = "speechmatics")]
+pub use pipecat_speech::speechmatics as speechmatics_tts;
+#[cfg(feature = "speechmatics")]
 pub use pipecat_speechmatics as speechmatics;
 pub use pipecat_transports as transports;
 #[cfg(feature = "whisper")]

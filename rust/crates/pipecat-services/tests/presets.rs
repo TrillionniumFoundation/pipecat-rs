@@ -489,22 +489,16 @@ fn provider_option_golden_defaults_null_false_and_precedence() {
 
 #[test]
 fn source_specific_unsupported_features_fail_explicitly() {
-    for preset in [
-        OpenAiPreset::Azure,
-        OpenAiPreset::Sarvam,
-        OpenAiPreset::Nvidia,
-    ] {
-        let config = OpenAiPresetConfig::new(preset);
-        assert!(matches!(
-            config.endpoint(),
-            Err(ServiceError::Unsupported(_))
-        ));
-        assert!(matches!(
-            config.request_body(&config.request(user())),
-            Err(ServiceError::Unsupported(_))
-        ));
-        assert!(!preset.unsupported_features().is_empty());
-    }
+    let config = OpenAiPresetConfig::new(OpenAiPreset::Azure);
+    assert!(matches!(
+        config.endpoint(),
+        Err(ServiceError::Unsupported(_))
+    ));
+    assert!(matches!(
+        config.request_body(&config.request(user())),
+        Err(ServiceError::Unsupported(_))
+    ));
+    assert!(!OpenAiPreset::Azure.unsupported_features().is_empty());
     for preset in [
         OpenAiPreset::DeepSeek,
         OpenAiPreset::Fireworks,

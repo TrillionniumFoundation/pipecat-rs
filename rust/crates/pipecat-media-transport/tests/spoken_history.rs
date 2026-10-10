@@ -107,6 +107,8 @@ fn config() -> OutputTransportConfig {
     }
 }
 struct Fixture {
+    #[cfg(feature = "assistant-history")]
+    assistant: Arc<LLMAssistantAggregator>,
     worker: PipelineWorker,
     history: SpokenHistory,
     shared: SharedContext,
@@ -120,6 +122,14 @@ async fn fixture_with_output_config(
     bounds: SpokenHistoryConfig,
     output_config: OutputTransportConfig,
 ) -> Fixture {
+    fixture_with_adapter(backend, bounds, output_config, false).await
+}
+async fn fixture_with_adapter(
+    backend: Arc<Receipts>,
+    bounds: SpokenHistoryConfig,
+    output_config: OutputTransportConfig,
+    use_assistant_adapter: bool,
+) -> Fixture {
     let shared = SharedContext::new(Context::default());
     let assistant = Arc::new(LLMAssistantAggregator::new(
         shared.clone(),
@@ -127,7 +137,16 @@ async fn fixture_with_output_config(
             text_mode: AssistantTextMode::Spoken,
         },
     ));
-    let history = SpokenHistory::new(bounds, Arc::new(AssistantSink(assistant.clone()))).unwrap();
+    let sink: Arc<dyn SpokenHistorySink> = Arc::new(AssistantSink(assistant.clone()));
+    #[cfg(feature = "assistant-history")]
+    let sink: Arc<dyn SpokenHistorySink> = if use_assistant_adapter {
+        Arc::new(AssistantSpokenHistorySink::new(assistant.clone()))
+    } else {
+        sink
+    };
+    #[cfg(not(feature = "assistant-history"))]
+    let _ = use_assistant_adapter;
+    let history = SpokenHistory::new(bounds, sink).unwrap();
     let source = Arc::new(history.source_boundary("source").unwrap());
     let output = Arc::new(
         OutputTransport::new("output", output_config, backend, None, BTreeMap::new())
@@ -136,7 +155,7 @@ async fn fixture_with_output_config(
             .unwrap(),
     );
     let control = output.control();
-    let worker = Pipeline::new(vec![source, output, assistant])
+    let worker = Pipeline::new(vec![source, output, assistant.clone()])
         .start(PipelineConfig::default())
         .await
         .unwrap();
@@ -148,6 +167,8 @@ async fn fixture_with_output_config(
     .await
     .unwrap();
     Fixture {
+        #[cfg(feature = "assistant-history")]
+        assistant,
         worker,
         history,
         shared,
@@ -758,7 +779,7 @@ async fn concurrent_invalidation_cannot_split_validation_from_atomic_context_com
         .unwrap(),
     );
     let control = output.control();
-    let mut worker = Pipeline::new(vec![source, output, assistant])
+    let mut worker = Pipeline::new(vec![source, output, assistant.clone()])
         .start(PipelineConfig::default())
         .await
         .unwrap();
@@ -1082,3 +1103,125 @@ async fn interruption_between_source_stamping_and_output_admission_invalidates_t
     worker.end().await.unwrap();
     assert!(worker.collect().await.unwrap().1.errors.is_empty());
 }
+
+async fn feedback_fence(worker: &mut PipelineWorker) -> Vec<DirectedFrame> {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        let mut feedback = vec![];
+        for direction in [Direction::Downstream, Direction::Upstream] {
+            let marker = Frame::new(FrameData::Flush(FlushFrame {
+                origin: Some("feedback-fence".into()),
+                returning: false,
+            }));
+            let id = marker.id;
+            worker.sender().send(marker, direction).await.unwrap();
+            loop {
+                let frame = worker.recv().await.expect("pipeline feedback fence");
+                if frame.frame.id == id {
+                    break;
+                }
+                if matches!(
+                    frame.frame.data,
+                    FrameData::LlmContextAssistantTurn(_)
+                        | FrameData::LlmContextAssistantTimestamp { .. }
+                ) {
+                    feedback.push(frame);
+                }
+            }
+        }
+        feedback
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn receipt_sink_projects_linked_feedback_after_commit_in_each_generation() {
+    let backend = Arc::new(Receipts::new(false, None, None));
+    let mut f = fixture(backend, SpokenHistoryConfig::default()).await;
+    for id in ["first", "second"] {
+        begin(&f.worker, id).await;
+        assert!(feedback_fence(&mut f.worker).await.is_empty());
+        assert_eq!(
+            f.history.status().committed_contexts,
+            if id == "first" { 0 } else { 1 }
+        );
+        complete(&f.worker, id).await;
+        let frames = feedback_fence(&mut f.worker).await;
+        assert_eq!(frames.len(), 3);
+        assert_eq!(contents(&f.shared).last().unwrap(), "Heard");
+        let turns: Vec<_> = frames
+            .iter()
+            .filter(|f| matches!(f.frame.data, FrameData::LlmContextAssistantTurn(_)))
+            .collect();
+        assert_eq!(turns.len(), 2);
+        assert_ne!(turns[0].direction, turns[1].direction);
+        assert_eq!(turns[0].frame.broadcast_sibling_id, Some(turns[1].frame.id));
+        assert_eq!(turns[1].frame.broadcast_sibling_id, Some(turns[0].frame.id));
+        assert!(turns.iter().all(
+            |f| matches!(&f.frame.data, FrameData::LlmContextAssistantTurn(t) if t.text == "Heard")
+        ));
+        assert!(feedback_fence(&mut f.worker).await.is_empty());
+        send(&f.worker, Frame::interruption()).await;
+        assert!(feedback_fence(&mut f.worker).await.is_empty());
+    }
+    assert_eq!(f.history.status().committed_contexts, 2);
+    assert!(finish(f).await.errors.is_empty());
+}
+
+#[path = "support/review_spoken_feedback.rs"]
+mod review_spoken_feedback;
+
+#[cfg(feature = "assistant-history")]
+#[tokio::test]
+async fn stopped_record_uses_real_media_receipt_and_committed_context() {
+    let backend = Arc::new(Receipts::new(true, None, None));
+    let mut f = fixture_with_adapter(backend.clone(), Default::default(), config(), true).await;
+    let mut records = f.assistant.subscribe_stopped(Default::default()).unwrap();
+    for id in ["first", "second"] {
+        begin(&f.worker, id).await;
+        complete(&f.worker, id).await;
+        backend.wait_calls(if id == "first" { 1 } else { 2 }).await;
+        assert!(records.try_recv().is_none(), "submission is not playback");
+        backend.gate.as_ref().unwrap().add_permits(1);
+        fence(&mut f.worker).await;
+        let record = records.try_recv().expect("ordered media completion");
+        assert_eq!(record.completion().text(), "Heard");
+        assert!(!record.completion().interrupted());
+        assert_eq!(contents(&f.shared).last().unwrap(), "Heard");
+        assert!(records.try_recv().is_none());
+    }
+    f.worker.end().await.unwrap();
+    assert!(f.worker.collect().await.unwrap().1.errors.is_empty());
+    assert!(records.recv().await.is_none());
+    assert_eq!(
+        records.closed_reason(),
+        Some(pipecat_turns::AssistantStoppedClose::End)
+    );
+}
+
+#[cfg(feature = "assistant-history")]
+#[tokio::test]
+async fn discarded_media_receipt_never_delivers_successful_stopped_record() {
+    let mut f = fixture_with_adapter(
+        Arc::new(Receipts::new(false, Some(1), None)),
+        Default::default(),
+        config(),
+        true,
+    )
+    .await;
+    let mut records = f.assistant.subscribe_stopped(Default::default()).unwrap();
+    begin(&f.worker, "discarded").await;
+    complete(&f.worker, "discarded").await;
+    fence(&mut f.worker).await;
+    assert!(records.try_recv().is_none());
+    assert!(contents(&f.shared).is_empty());
+    f.worker.cancel("finish discarded receipt").await.unwrap();
+    let _ = f.worker.collect().await.unwrap();
+    while let Some(record) = records.recv().await {
+        assert!(record.completion().interrupted());
+    }
+}
+
+#[cfg(feature = "assistant-history")]
+#[path = "support/assistant_stopped_start_probe.rs"]
+mod assistant_stopped_start_probe;

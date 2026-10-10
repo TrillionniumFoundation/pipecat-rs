@@ -4,7 +4,10 @@
 
 This optional provider crate implements a direct native WebSocket client, bounded
 session actor, canonical settings, detailed transcription mapping and a native
-FrameProcessor. It is not Speechmatics TTS or complete provider parity. No Python,
+FrameProcessor. HTTP TTS lives separately in the optional
+`pipecat-speech/speechmatics` feature; see its
+[SPEECHMATICS.md](../pipecat-speech/SPEECHMATICS.md). Neither adapter implies
+complete provider parity. No Python,
 SDK process, interpreter, FFI provider SDK or live provider account is needed.
 
 The initial audio contract is mono 16 kHz signed PCM16 little-endian. Each supplied

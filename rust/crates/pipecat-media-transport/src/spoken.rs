@@ -5,7 +5,7 @@
 //! ledger never infers word alignment or playback from a traversing text frame.
 use pipecat_core::{
     async_trait, AggregatedTextFrame, DirectedFrame, Direction, Frame, FrameData, FrameProcessor,
-    ProcessorContext, ProcessorError,
+    InvocationFence, ProcessorContext, ProcessorError,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -23,6 +23,7 @@ pub struct SpokenHistoryConfig {
     pub max_context_id_bytes: usize,
     pub max_text_bytes: usize,
     pub max_frames_per_response: usize,
+    /// Ordered frame and completion-record effects from one synchronous commit.
     pub max_effect_frames: usize,
 }
 impl Default for SpokenHistoryConfig {
@@ -47,6 +48,10 @@ pub struct SpokenContext {
     pub texts: Vec<AggregatedTextFrame>,
 }
 
+/// Caller-owned readiness wait; the media sender supplies cancellation and a deadline.
+pub type SpokenHistoryReadiness =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ProcessorError>> + Send>>;
+
 /// Synchronous context mutation is serialized with `SpokenHistory::invalidate`.
 ///
 /// Implementations must commit before returning, must not reenter the ledger,
@@ -54,15 +59,103 @@ pub struct SpokenContext {
 /// upstream inference frames) after the mutation; these are emitted outside the
 /// lock. Never defer the actual history mutation to those frames.
 ///
-/// An application using `LLMAssistantAggregator` in Spoken mode can call its
-/// `confirm_playback(&context.context_id, &context.texts)` here and return the
-/// resulting Push actions. Do not also submit these texts with `spoken=true`.
-/// The assistant belongs downstream of this output in the same pipeline.
+/// With `assistant-history`, use `AssistantSpokenHistorySink` to preserve both
+/// downstream source/TTS readiness and ordered completion-record admission.
+/// Custom frame-only sinks retain their existing behavior and do not acquire
+/// either guarantee. Do not also submit these texts with `spoken=true`.
 pub trait SpokenHistorySink: Send + Sync {
+    /// Register before the exact source/TTS start is forwarded downstream. The
+    /// future is awaited outside all locks by the existing media sender before
+    /// any following PCM is submitted. Custom frame-only sinks need no barrier.
+    fn readiness(
+        &self,
+        _frame: &Frame,
+        _cause: Option<InvocationFence>,
+    ) -> Result<Option<SpokenHistoryReadiness>, ProcessorError> {
+        Ok(None)
+    }
     fn commit(&self, context: SpokenContext) -> Result<Vec<DirectedFrame>, ProcessorError>;
+    /// Ordered effects are emitted outside the ledger lock. The default keeps
+    /// existing frame-only sinks source compatible.
+    fn commit_ordered(
+        &self,
+        context: SpokenContext,
+    ) -> Result<Vec<SpokenHistoryEffect>, ProcessorError> {
+        self.commit(context).map(|frames| {
+            frames
+                .into_iter()
+                .map(|frame| SpokenHistoryEffect::Frame(Box::new(frame)))
+                .collect()
+        })
+    }
 }
 
-/// Inspectable fail-closed status. Rejected history never stops normal playback.
+/// The narrow ordered effects accepted from a synchronous history commit.
+#[derive(Debug)]
+pub enum SpokenHistoryEffect {
+    Frame(Box<DirectedFrame>),
+    #[cfg(feature = "assistant-history")]
+    AssistantStopped(pipecat_turns::AssistantStoppedAction),
+}
+
+/// Native adapter for playback-confirmed assistant history and completion data.
+/// It does not attest physical audibility or broaden the ledger's receipt fence.
+#[cfg(feature = "assistant-history")]
+pub struct AssistantSpokenHistorySink {
+    assistant: Arc<pipecat_turns::LLMAssistantAggregator>,
+}
+#[cfg(feature = "assistant-history")]
+impl AssistantSpokenHistorySink {
+    pub fn new(assistant: Arc<pipecat_turns::LLMAssistantAggregator>) -> Self {
+        Self { assistant }
+    }
+}
+#[cfg(feature = "assistant-history")]
+impl SpokenHistorySink for AssistantSpokenHistorySink {
+    fn readiness(
+        &self,
+        frame: &Frame,
+        cause: Option<InvocationFence>,
+    ) -> Result<Option<SpokenHistoryReadiness>, ProcessorError> {
+        let cause = cause.ok_or_else(|| {
+            ProcessorError::new("assistant playback lacks a valid source boundary")
+        })?;
+        Ok(self
+            .assistant
+            .playback_readiness(frame, cause)?
+            .map(|ready| Box::pin(ready.wait()) as SpokenHistoryReadiness))
+    }
+    fn commit(&self, _context: SpokenContext) -> Result<Vec<DirectedFrame>, ProcessorError> {
+        Err(ProcessorError::new(
+            "assistant history requires ordered effect admission",
+        ))
+    }
+    fn commit_ordered(
+        &self,
+        context: SpokenContext,
+    ) -> Result<Vec<SpokenHistoryEffect>, ProcessorError> {
+        self.assistant
+            .confirm_playback(&context.context_id, &context.texts)?
+            .actions
+            .into_iter()
+            .map(|action| match action {
+                pipecat_turns::AggregationAction::Push(frame) => {
+                    Ok(SpokenHistoryEffect::Frame(Box::new(frame)))
+                }
+                pipecat_turns::AggregationAction::AssistantStopped(action) => {
+                    Ok(SpokenHistoryEffect::AssistantStopped(action))
+                }
+                _ => Err(ProcessorError::new(
+                    "unsupported assistant playback history effect",
+                )),
+            })
+            .collect()
+    }
+}
+
+/// Inspectable fail-closed history status. Custom frame-only sinks preserve
+/// normal playback. The explicit assistant adapter additionally requires
+/// downstream boundary readiness before admitting audio.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SpokenHistoryStatus {
     pub pending_responses: usize,
@@ -77,6 +170,8 @@ pub struct SpokenHistoryStatus {
 }
 
 struct Pending {
+    cause: InvocationFence,
+    context: ProcessorContext,
     context_id: Option<String>,
     append_to_context: bool,
     texts: Vec<AggregatedTextFrame>,
@@ -91,8 +186,10 @@ struct Pending {
     invalid: bool,
 }
 impl Pending {
-    fn new() -> Self {
+    fn new(cause: InvocationFence, context: ProcessorContext) -> Self {
         Self {
+            cause,
+            context,
             context_id: None,
             append_to_context: true,
             texts: vec![],
@@ -109,6 +206,7 @@ impl Pending {
     }
 }
 struct SourceResponse {
+    cause: InvocationFence,
     start_id: u64,
     end_id: Option<u64>,
     invalid: bool,
@@ -126,6 +224,12 @@ struct State {
     seen: BTreeSet<String>,
     status: SpokenHistoryStatus,
 }
+pub(crate) struct SpokenEffects {
+    pub ordered: Vec<SpokenHistoryEffect>,
+    pub cause: InvocationFence,
+    pub context: ProcessorContext,
+}
+
 struct Inner {
     config: SpokenHistoryConfig,
     sink: Arc<dyn SpokenHistorySink>,
@@ -187,7 +291,12 @@ impl SpokenHistory {
             history: self.clone(),
         })
     }
-    fn source_frame(&self, frame: &mut Frame, direction: Direction) {
+    fn source_frame(
+        &self,
+        frame: &mut Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
         if matches!(
             frame.data,
             FrameData::Interruption
@@ -196,32 +305,32 @@ impl SpokenHistory {
                 | FrameData::Error(_)
         ) {
             self.invalidate();
-            return;
+            return Ok(());
         }
         if direction != Direction::Downstream {
-            return;
+            return Ok(());
         }
         frame.metadata.remove(SOURCE);
         if !response_start(&frame.data) && !response_end(&frame.data) {
-            return;
+            return Ok(());
         }
         let mut state = self.0.state.lock().unwrap();
         if state.status.exhausted {
-            return;
+            return Ok(());
         }
         if state.source_frames.contains(&frame.id) {
             for source in state.sources.values_mut() {
                 source.invalid = true;
             }
             reject_all(&mut state, "replayed source response frame identity");
-            return;
+            return Ok(());
         }
         if state.source_frames.len() >= self.0.config.max_source_frame_ids {
             exhaust(
                 &mut state,
                 "spoken-history source identity capacity exhausted",
             );
-            return;
+            return Ok(());
         }
         state.source_frames.insert(frame.id);
         if response_start(&frame.data) {
@@ -239,13 +348,14 @@ impl SpokenHistory {
                     &mut state,
                     "spoken-history source response capacity exhausted",
                 );
-                return;
+                return Ok(());
             }
             state.next_source += 1;
             let token = state.next_source;
             state.sources.insert(
                 token,
                 SourceResponse {
+                    cause: ctx.invocation_fence()?,
                     start_id: frame.id,
                     end_id: None,
                     invalid: overlapping,
@@ -255,10 +365,31 @@ impl SpokenHistory {
             frame.metadata.insert(SOURCE.into(), token.into());
         } else if let Some(token) = state.source_current.take() {
             if let Some(source) = state.sources.get_mut(&token) {
+                source.cause = source.cause.intersection(&ctx.invocation_fence()?)?;
                 source.end_id = Some(frame.id);
                 frame.metadata.insert(SOURCE.into(), token.into());
             }
         }
+        Ok(())
+    }
+    pub(crate) fn readiness(
+        &self,
+        frame: &Frame,
+    ) -> Result<Option<SpokenHistoryReadiness>, ProcessorError> {
+        if !response_start(&frame.data) && !matches!(frame.data, FrameData::TtsStarted(_)) {
+            return Ok(None);
+        }
+        let cause = {
+            let state = self.0.state.lock().unwrap();
+            frame
+                .metadata
+                .get(TOKEN)
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|token| state.pending.get(&token))
+                .filter(|pending| !pending.invalid)
+                .map(|pending| pending.cause.clone())
+        };
+        self.0.sink.readiness(frame, cause)
     }
     pub fn status(&self) -> SpokenHistoryStatus {
         let state = self.0.state.lock().unwrap();
@@ -303,7 +434,12 @@ impl SpokenHistory {
     }
     /// Assign an internal response token before media queue admission. Tokens
     /// supplied by callers are removed; transformed chunks inherit this token.
-    pub(crate) fn admit(&self, frame: &mut Frame, direction: Direction) {
+    pub(crate) fn admit(
+        &self,
+        frame: &mut Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
         frame.metadata.remove(TOKEN);
         if matches!(
             frame.data,
@@ -313,21 +449,21 @@ impl SpokenHistory {
                 | FrameData::Error(_)
         ) {
             self.invalidate();
-            return;
+            return Ok(());
         }
         if direction != Direction::Downstream {
-            return;
+            return Ok(());
         }
         if source_context(&frame.data).is_none()
             && !response_start(&frame.data)
             && !response_end(&frame.data)
             && !matches!(frame.data, FrameData::Volume(_) | FrameData::VolumeGain(_))
         {
-            return;
+            return Ok(());
         }
         let mut state = self.0.state.lock().unwrap();
         if state.status.exhausted {
-            return;
+            return Ok(());
         }
         if response_start(&frame.data) || response_end(&frame.data) {
             let source_token = frame
@@ -349,7 +485,7 @@ impl SpokenHistory {
                     &mut state,
                     "missing, stale, or mismatched source response boundary",
                 );
-                return;
+                return Ok(());
             }
         }
         // Late material for a response whose end is already queued still
@@ -374,18 +510,18 @@ impl SpokenHistory {
                 .filter(|id| !id.is_empty() && id.len() <= self.0.config.max_context_id_bytes)
             else {
                 reject_all(&mut state, "missing or oversized TTS context ID");
-                return;
+                return Ok(());
             };
             if state.seen.contains(id) {
                 reject_all(&mut state, "reused TTS context ID");
-                return;
+                return Ok(());
             }
             if state.seen.len() >= self.0.config.max_context_ids {
                 exhaust(
                     &mut state,
                     "spoken-history replay-protection capacity exhausted",
                 );
-                return;
+                return Ok(());
             }
             state.seen.insert(id.into());
         }
@@ -395,7 +531,7 @@ impl SpokenHistory {
             }
             if state.pending.len() >= self.0.config.max_pending_responses {
                 exhaust(&mut state, "spoken-history response capacity exhausted");
-                return;
+                return Ok(());
             }
             let token = frame
                 .metadata
@@ -404,9 +540,12 @@ impl SpokenHistory {
                 .unwrap();
             if state.pending.contains_key(&token) {
                 reject_all(&mut state, "duplicate source response start");
-                return;
+                return Ok(());
             }
-            let mut pending = Pending::new();
+            let cause = state.sources[&token]
+                .cause
+                .intersection(&ctx.invocation_fence()?)?;
+            let mut pending = Pending::new(cause, ctx.clone());
             // A new response cannot certify an unfinished preceding response.
             pending.invalid = state.current.is_some();
             state.pending.insert(token, pending);
@@ -429,8 +568,15 @@ impl SpokenHistory {
                 state.status.last_rejection =
                     Some("standalone or late TTS lacks a matching successful LLM response".into());
             }
-            return;
+            return Ok(());
         };
+        let mut cause = state.pending[&token]
+            .cause
+            .intersection(&ctx.invocation_fence()?)?;
+        if response_end(&frame.data) {
+            cause = cause.intersection(&state.sources[&token].cause)?;
+        }
+        state.pending.get_mut(&token).unwrap().cause = cause;
         frame.metadata.insert(TOKEN.into(), token.into());
         if frame
             .metadata
@@ -445,19 +591,19 @@ impl SpokenHistory {
                 state.pending.get_mut(&token).unwrap().end_id = Some(frame.id);
                 state.current = None;
             }
-            return;
+            return Ok(());
         }
         if let FrameData::TtsStarted(start) = &frame.data {
             if state.pending[&token].context_id.is_some() {
                 reject(&mut state, token, "interleaved TTS contexts");
-                return;
+                return Ok(());
             }
             let pending = state.pending.get_mut(&token).unwrap();
             pending.context_id = start.context_id.clone();
             pending.append_to_context = start.append_to_context;
         }
         let Some(pending) = state.pending.get_mut(&token) else {
-            return;
+            return Ok(());
         };
         if pending.frame_ids.len() >= config.max_frames_per_response
             || !pending.frame_ids.insert(frame.id)
@@ -471,7 +617,7 @@ impl SpokenHistory {
                 state.pending.get_mut(&token).unwrap().end_id = Some(frame.id);
                 state.current = None;
             }
-            return;
+            return Ok(());
         }
         match &frame.data {
             FrameData::TtsText(text) => {
@@ -552,6 +698,7 @@ impl SpokenHistory {
             }
             _ => {}
         }
+        Ok(())
     }
     pub(crate) fn rejected_frame(&self, frame: &Frame, reason: &str) {
         if let Some(token) = token(frame) {
@@ -585,16 +732,16 @@ impl SpokenHistory {
             pending.played = true;
         }
     }
-    pub(crate) fn complete(&self, frame: &Frame) -> Result<Vec<DirectedFrame>, ProcessorError> {
+    pub(crate) fn complete(&self, frame: &Frame) -> Result<Option<SpokenEffects>, ProcessorError> {
         if !response_end(&frame.data) {
-            return Ok(vec![]);
+            return Ok(None);
         }
         let Some(token) = token(frame) else {
-            return Ok(vec![]);
+            return Ok(None);
         };
         let mut state = self.0.state.lock().unwrap();
         let Some(pending) = state.pending.remove(&token) else {
-            return Ok(vec![]);
+            return Ok(None);
         };
         state.sources.remove(&token);
         state.status.buffered_text_bytes = state
@@ -610,7 +757,7 @@ impl SpokenHistory {
             && pending.accepted_audio == pending.processed_audio
             && !pending.texts.is_empty();
         let Some(context_id) = pending.context_id else {
-            return Ok(vec![]);
+            return Ok(None);
         };
         if !valid {
             state.status.withheld_contexts = state.status.withheld_contexts.saturating_add(1);
@@ -618,11 +765,11 @@ impl SpokenHistory {
                 .status
                 .last_rejection
                 .get_or_insert_with(|| "incomplete context or playback proof".into());
-            return Ok(vec![]);
+            return Ok(None);
         }
         // This lock is also held by immediate input invalidation. Checking the
         // generation and mutating history are one indivisible operation.
-        let effects = self.0.sink.commit(SpokenContext {
+        let effects = self.0.sink.commit_ordered(SpokenContext {
             context_id,
             texts: pending.texts,
         })?;
@@ -632,7 +779,11 @@ impl SpokenHistory {
                 "spoken-history sink returned too many effect frames",
             ));
         }
-        Ok(effects)
+        Ok(Some(SpokenEffects {
+            ordered: effects,
+            cause: pending.cause,
+            context: pending.context,
+        }))
     }
 }
 fn token(frame: &Frame) -> Option<u64> {
@@ -714,7 +865,7 @@ impl FrameProcessor for SpokenSourceBoundary {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        self.history.source_frame(&mut frame, direction);
+        self.history.source_frame(&mut frame, direction, ctx)?;
         ctx.push(frame, direction).await
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {

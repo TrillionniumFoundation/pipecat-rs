@@ -3,6 +3,13 @@
 //! VAD decisions and STT frames drive the controller; optional Smart Turn uses
 //! the native ONNX analyzer. Playback acknowledgements remain transport-owned.
 mod assistant;
+mod assistant_stopped;
+pub use assistant_stopped::{
+    AssistantJobCorrelation, AssistantStoppedAction, AssistantStoppedClose, AssistantStoppedConfig,
+    AssistantStoppedReceiver, AssistantStoppedRecord, AssistantStoppedStats, AssistantTurnStopped,
+};
+mod playback_ready;
+pub use playback_ready::AssistantPlaybackReady;
 mod completion;
 mod context;
 mod controller;
@@ -111,6 +118,8 @@ pub enum AggregationAction {
     /// Run a result callback in a tracked task, after its context update.
     ContextUpdated(pipecat_core::LocalAsyncCallback),
     RealtimeUserContext(RealtimeUserContext),
+    /// Once-only admission of committed assistant-turn data, never user code.
+    AssistantStopped(AssistantStoppedAction),
 }
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AggregationOutput {
@@ -148,7 +157,8 @@ impl AggregationOutput {
                     }
                     AggregationAction::InterruptBeforeContext
                     | AggregationAction::ContextUpdated(_)
-                    | AggregationAction::RealtimeUserContext(_) => None,
+                    | AggregationAction::RealtimeUserContext(_)
+                    | AggregationAction::AssistantStopped(_) => None,
                 };
                 if let Some(frame) = boundary {
                     if matches!(
@@ -191,6 +201,9 @@ impl AggregationOutput {
                     })?;
                 }
                 AggregationAction::RealtimeUserContext(context) => context.emit(ctx)?,
+                AggregationAction::AssistantStopped(action) => {
+                    action.admit_with_fence(&ctx.invocation_fence()?)?;
+                }
                 AggregationAction::InterruptBeforeContext => {
                     ctx.broadcast_interruption_with_metadata(
                         [("user_context_follows".into(), true.into())].into(),

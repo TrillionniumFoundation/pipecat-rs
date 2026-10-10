@@ -14,6 +14,7 @@ The source baseline is `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
 | `ElevenLabsHttpClient` | `services/elevenlabs/stt.py::ElevenLabsSTTService` | `xi-api-key`, WAV `audio/x-wav` multipart `/v1/speech-to-text`; `model_id`, service-native `language_code`, optional `tag_audio_events`, repeated `keyterms`, and `no_verbatim` |
 | `ElevenLabsHttpClient` | `services/elevenlabs/tts.py::ElevenLabsHttpTTSService`, `tts_base.py` | `xi-api-key`, `/v1/text-to-speech/{voice}/stream/with-timestamps`; NDJSON, base64 PCM, raw and normalized character alignments; model, language, voice controls, prior text, dictionary locators, normalization, logging and latency options |
 | `DeepgramHttpClient` | `services/deepgram/tts.py::DeepgramHttpTTSService` | `Authorization: Token`, `/v1/speak`, JSON text, voice/encoding/rate/container/speed/MIP query parameters; raw Linear16 or decoded G.711 |
+| `SpeechmaticsHttpClient` (feature `speechmatics`) | `services/speechmatics/tts.py` | Bearer POST `/generate/{voice}`, `{text}` JSON, `output_format=pcm_RATE`, native `sm-app`; streamed mono PCM16LE and bounded 503-only retries |
 | `CartesiaHttpClient` | `services/cartesia/tts.py::CartesiaHttpTTSService` | `X-API-Key`, pinned `Cartesia-Version: 2026-03-01`, `/tts/bytes`; model, transcript, `{mode: id, id: ...}` voice, language, generation controls, dictionary, raw PCM16LE format |
 
 There is **no HTTP STT service in `services/deepgram/stt.py`**. Its STT
@@ -82,7 +83,7 @@ No implicit resampling, channel conversion or compressed-audio relabeling occurs
 ## Pipeline processor
 
 `HttpTtsProcessor` implements `pipecat_core::FrameProcessor`. Construct it with
-`HttpTtsBackend::{OpenAi, ElevenLabs, Deepgram, Cartesia}` and a positive pending
+`HttpTtsBackend::{OpenAi, ElevenLabs, Deepgram, Cartesia}` (plus feature-gated `Speechmatics`) and a positive pending
 utterance limit. The backend contains a client and typed request template; incoming
 text overrides only the template text field. Templates may use an empty text field.
 
@@ -143,7 +144,7 @@ fields both select its voice model and cannot conflict. Other runtime fields,
 credentials and output-format changes are rejected. It does not perform
 sentence aggregation, VAD,
 utterance segmentation, voice cloning, pronunciation transforms, callbacks,
-automatic retry/failover, cross-request prosody state, provider word-report
+general retry/failover (Speechmatics alone retries pre-audio 503 responses), cross-request prosody state, provider word-report
 conversion or LLM-context updates. Those features require explicit integration,
 not guessed provider equivalence.
 
@@ -169,7 +170,8 @@ playout. Effects emitted before retirement are not recalled.
 - HTTPS is required except for loopback HTTP; userinfo, query and fragment in a
   base URL are rejected, as are empty/invalid header credentials
 - Redirects are disabled, so authentication cannot follow a redirect to another
-  destination. Requests are never automatically retried
+  destination. The Speechmatics feature retries only pre-audio 503 responses;
+  other clients have no application-level retry loop
 - `max_audio_bytes` limits decoded PCM and WAV uploads; G.711 expansion counts
   toward the decoded limit
 - `max_json_bytes` bounds a transcription JSON response or one ElevenLabs NDJSON
@@ -242,13 +244,15 @@ the streak, whereas the source adapter would have emitted no frame. Strict
 native content-type, malformed-payload and partial-sample rejection also remain
 in effect; the watchdog does not make rejected bytes playable.
 The source pads a final partial PCM sample when closing its audio context;
-native clients reject it. An odd-byte-only response can therefore be source
+native clients reject it. Speechmatics instead silently discards its final odd
+byte in the pinned source; its native client rejects that tail. An odd-byte-only response can therefore be source
 audio while remaining native silence.
 ElevenLabs HTTP validates combined audio/alignment records before admitting
 their audio evidence, while the source yields audio before validating alignment.
 An invalid combined record therefore counts as native silence even if it contains
 an otherwise valid audio field.
-The native HTTP transport accepts other successful 2xx statuses. An empty
+The other native HTTP clients accept successful 2xx statuses; Speechmatics
+requires exactly 200. An empty
 non-200 body has no Cartesia source-frame evidence and reports silence; source
 adapters requiring exactly 200 also report their provider-status error.
 Presence evidence is internal: it does not produce an empty PCM frame, start
@@ -259,3 +263,13 @@ its tracked completion fences release normally after silent completion.
 `tests/zero_audio.rs` exercises local HTTP defaults, reset/disable semantics,
 provider payload distinctions, interruption/retirement, native failover without
 replay, and Continue/End/Cancel policies. No live provider calls are required.
+
+
+## Optional Speechmatics HTTP synthesis
+
+Enable `pipecat-speech/speechmatics` for `speechmatics::{SpeechmaticsHttpClient,
+SpeechmaticsSynthesisRequest}` and `HttpTtsBackend::Speechmatics`. The facade's
+`speechmatics` feature also enables this module as `pipecat::speechmatics_tts`,
+alongside its existing Agent STT module. No new dependencies enter the default
+closure. See [SPEECHMATICS.md](SPEECHMATICS.md) for the pinned source mapping,
+retry/format policy and qualification limits.

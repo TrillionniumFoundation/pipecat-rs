@@ -33,7 +33,7 @@ pub enum GradiumError {
     #[error("Gradium connection settings require a new session")]
     RequiresRestart,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GradiumLimits {
     pub queue_capacity: usize,
     pub max_buffered_audio_bytes: usize,
@@ -73,7 +73,7 @@ impl Default for GradiumLimits {
     }
 }
 impl GradiumLimits {
-    fn validate(&self) -> Result<(), GradiumError> {
+    pub(crate) fn validate(&self) -> Result<(), GradiumError> {
         if !(1..=1024).contains(&self.queue_capacity)
             || !(1..=64 * 1024).contains(&self.max_audio_chunk_bytes)
             || self.max_buffered_audio_bytes < self.max_audio_chunk_bytes
