@@ -2,7 +2,7 @@
 
 The homepage README is intentionally empty. Native implementation and technical documentation are in `rust/`. Run Cargo from that directory. This is an in-progress rewrite, not a full parity or production-readiness certificate.
 
-Source: local rewrite commit `8ae5fd17eead91436ad833a85009fbce0c2a9539`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
+Source: local rewrite commit `1099816e243002175d992ea044a07738de8cea51`, based on public ProfHepta/pipecat baseline `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Native Rust implementation paths and file bytes are preserved. The original complete Python project remains available in its upstream repository; this publication does not import its workflows, agent configuration, symlinks, ordinary Python examples or development environment.
 
 Three original Python files are retained solely because Rust source-parity tests use `include_str!` to read them as text (Azure and Grok contracts). Two existing licensed ONNX model fixtures are retained at the paths used by native VAD/Smart Turn tests; their provenance/license records are in `rust/crates/pipecat-vad/`. Rust runtime and Cargo tests do not invoke Python. Python fixture-generation utilities inside `rust/` are offline developer reference tools, not runtime dependencies.
 
@@ -79,3 +79,44 @@ This increment preserves immutable native executor terminal decisions through th
 Frozen v6 passed 1,164 tests across the selected nine-package integration scope plus 47 MCP native-fixture/doc tests, strict all-target Clippy, formatting, exact patch reconstruction and unchanged complete source hashes. All 37 independent common regressions are included. Exact-source content-seal and declaration-ownership mutations fail the intended assertions while their companion controls pass. The positive source manifest is 1c9831f31247c2fe5116c69dcbcd5996051b25c40deeee1f039257162edf3cc1; reviewed combined patch is dd9f67c663c277acd96e7b94acfd0e3ec0a0fe6a274eadd76616fe197d836c87. Earlier missing-static-fixture compilation failures are preserved as failed packaging attempts, not behavioral passes.
 
 This is scoped qualification, not a new full-workspace certificate. The latest full projection gate remains fe48acc (2,716 tests, 54 explicit ignores, 51 native cases and a generated-app check). A pre-existing nested-parallel graceful shutdown race is now deterministically reproduced and being corrected separately. Full OpenAI/Grok realtime pairing, explicit context-cause synchronization and its concurrent history-replacement boundary remain separate unpublished work. Neither live provider, physical playback, remote exactly-once effects nor complete Python parity is claimed. README.md remains empty.
+
+## Nested composition graceful shutdown
+
+Child runtimes now stage End/Stop until their entire owned composition drains prior accepted work in both directions. Root success waits for descendant cleanup, counts completed-task result publication as owned work, and preserves cancellation and absolute root deadline admission. Bounded weak group membership and successful completed-child snapshot release prevent unnecessary ownership retention. Stop retains resources until explicit cleanup. Root failure/report does not imply every child's already-started bounded cleanup has stopped; retained failed-root senders can retain bounded runtime metadata.
+
+The independently reviewed lifecycle slice passed 419 tests across 58 suites, strict all-target Clippy, formatting, source hashes, 50 original-case repeats and 20 repeated two-target adversarial suites. The original two deterministic probes fail on pristine 3ecb and pass unchanged on the final source. Two exact-source independent mutations compile but fail specifically when admitted cancellation or task-result ownership is omitted. Source manifest 4a7f2c2dda6257cf23e345f609e946216168d1283db3848447c096f6fe112d97, patch c18a725098f05705b5ce216e570a9a0894a3735a06daa2a301b2a61c4178364e. This corrects the previously described nested shutdown race; new realtime context/provider pairing remains separate unpublished work.
+
+## Portable compressed-metadata fixture and whole-source checkpoint
+
+The frozen pre-correction public projection (tree
+633e78ae5bfbfafe5ab7ad07b0d557409a444060, canonical source
+1099816e243002175d992ea044a07738de8cea51) completed its full gate with 3,008
+workspace tests passing, one image-fixture failure, and 54 conditional tests
+ignored. Strict all-target/all-feature Clippy, native formatting, all 51 explicit
+native-engine cases, and the generated-application build/start check passed.
+All 1,275 tracked blobs remained unchanged. This was a failed whole-workspace
+qualification, not a release pass.
+
+The failure occurred before service decoding: workspace feature unification via
+MoQ enabled flate2 1.1.10's zlib-rs 0.6.8 backend. Its fast-compressed PNG was
+20,368 bytes, while miniz_oxide 0.9.1 produced 9,712 bytes; both contained the
+same valid 2 MiB text payload and RGB pixel. The test incorrectly depended on a
+particular compression ratio for its compact-fixture premise.
+
+A three-path, test-only correction now checks in the deterministic 9,712-byte
+fixture and verifies its complete 2 MiB all-x text, compact encoded size and
+native RGB output under the unchanged 128 KiB decoding budget. Production
+code, dependency identities and safety limits are unchanged. Independent review
+passed all 36 isolated image tests and all 120 image-plus-MoQ unified-backend
+tests, strict scoped Clippy and formatting. An independently rebuilt control
+changed only the valid fixture text to one byte; the unchanged test failed at
+the exact 2,097,152-byte inflation assertion. All 1,277 candidate files remained
+unchanged. The reviewed candidate tree is
+ac2492fa6b4d47fe1d9e792178e651e1bcfb4a9e; this publication adds only this
+qualification annotation and lifecycle-note spacing to that tree. Its Rust
+files are identical. The corrected whole-workspace/native qualification is
+still running; no new complete-workspace pass is claimed yet.
+
+Canonical integrated source: 8b844ec09a9aea129d12fc8bbe53445cdcd0e119.
+OpenAI/Grok paired-provider work remains a separate unpublished increment.
+The root README remains empty.

@@ -41,7 +41,7 @@ shutdown timeouts, and cleanup failures make `join` return `Err`.
 - Interruption cancels the active interruptible normal future and drops queued
   interruptible normal frames. Instance overrides and uninterruptible frames
   survive. System frames are never removed by an interruption
-- End stays ordered after normal frames. Each processor runs `prepare_end`,
+- End keeps normal-lane FIFO ordering at each node. Each processor runs `prepare_end`,
   drains tracked background work, then processes End. End is uninterruptible by
   default. The output End waits until all admitted upstream/downstream handlers,
   queued frames, and tracked descendants drain, and appears last at the output.
@@ -80,6 +80,23 @@ lineage and check origin/destination cutoffs under consistently ordered admissio
 locks. Full child lanes return explicit backpressure. Native runtime epochs are
 shared across interruption clones; unrelated runtime/session resets must be
 coordinated by the owner before exchanging generation-sensitive work.
+
+Processor-owned child workers can additionally use `Pipeline::inherit_lifecycle(ctx)`.
+Their End/Stop boundaries stage completion while the whole composition drains,
+including reverse traffic from later `prepare_end` calls and owned tasks. A child
+continues accepting nonterminal internal ingress from its exact owner processor;
+ordinary external input remains closed. One shared admission lock seals all
+runtimes only when queues, handlers, and task-result publication are idle. Root
+End follows descendant cleanup; root cleanup still follows its normal supervisor
+contract. Cancel remains available during descendant cleanup, and Stop retains
+processor resources for explicit owner cleanup. Child membership is weak and
+bounded to 4,096 live runtimes; completed entries are pruned during registration.
+A root can report shutdown failure while previously started descendant cleanup
+is still running within that child's own `shutdown_timeout`; root failure or drop
+does not restart this deadline or promise successful cleanup. An inherited child
+cancels if its owner terminates or disappears. Consumers must
+still drain each child output stream; untracked external relay tasks do not gain
+implicit ownership through lifecycle inheritance.
 
 Native interruption clones and broadcast siblings share a logical epoch token,
 including after bounded ID-history eviction. `duplicate()` starts a new logical

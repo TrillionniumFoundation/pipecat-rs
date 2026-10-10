@@ -201,6 +201,7 @@ struct State {
     completed: Vec<bool>,
     stopped: Vec<bool>,
     terminal: Option<u64>,
+    terminal_forwarded: bool,
     buffered: Vec<Output>,
     batch: Option<Batch>,
     seen: RecentIds,
@@ -259,6 +260,7 @@ impl Engine {
                 completed: vec![false; count],
                 stopped: vec![false; count],
                 terminal: None,
+                terminal_forwarded: false,
                 buffered: vec![],
                 batch: None,
                 seen: RecentIds::new(config.deduplication_capacity),
@@ -313,6 +315,7 @@ impl Engine {
                     index,
                     Pipeline::new(processors)
                         .inherit_observers(&parent_context)
+                        .inherit_lifecycle(&parent_context)
                         .start(config)
                         .await,
                 )
@@ -402,7 +405,22 @@ impl Engine {
                 }
             }
             self.fanout(&frame, direction, ctx)?;
-            self.wait_for(None).await?;
+            if frame.data.is_cancel() {
+                self.wait_for(None).await?;
+            } else {
+                let senders = self.state.lock().unwrap().senders.clone();
+                tokio::time::timeout(self.config.synchronization_timeout, async {
+                    for sender in senders {
+                        sender
+                            .wait_terminal_staged()
+                            .await
+                            .map_err(branch_admission)?;
+                    }
+                    Ok::<_, ProcessorError>(())
+                })
+                .await
+                .map_err(|_| ProcessorError::fatal("parallel synchronization timed out"))??;
+            }
             let _emission = self.emission.lock().await;
             let outputs = {
                 let mut state = self.state.lock().unwrap();
@@ -410,6 +428,7 @@ impl Engine {
                 if state.terminal != Some(frame.id) {
                     return Ok(());
                 }
+                state.terminal_forwarded = true;
                 std::mem::take(&mut state.buffered)
             };
             self.emit(outputs).await?;
@@ -613,7 +632,7 @@ impl Engine {
                     return Ok(());
                 }
                 let system = output.item.frame.is_system();
-                if !state.started || state.terminal.is_some() {
+                if !state.started || (state.terminal.is_some() && !state.terminal_forwarded) {
                     if state.buffered.len() >= self.config.buffered_frames {
                         return Err(ProcessorError::fatal("parallel lifecycle buffer is full"));
                     }

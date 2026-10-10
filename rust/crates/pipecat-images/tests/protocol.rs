@@ -761,22 +761,22 @@ async fn source_text_inheritance_includes_system_input_but_excludes_thought() {
 }
 #[tokio::test]
 async fn compressed_png_text_is_ignored_and_jpeg_scan_bombs_rejected() {
-    let mut bytes = vec![];
-    {
-        let mut encoder = png::Encoder::new(&mut bytes, 1, 1);
-        encoder.set_color(png::ColorType::Rgb);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder.write_header().unwrap();
-        writer
-            .write_text_chunk(&png::text_metadata::ZTXtChunk::new(
-                "comment",
-                "x".repeat(2 * 1024 * 1024),
-            ))
-            .unwrap();
-        writer.write_image_data(&[1, 2, 3]).unwrap();
-    }
+    // Keep the compressed attack fixture independent of workspace feature
+    // unification: flate2's fast zlib-rs and miniz backends have different ratios.
+    let bytes = include_bytes!("fixtures/compressed-text-2mib.png");
     assert!(bytes.len() < 16384);
-    let (url, _, task) = server(vec![inline(&bytes)]).await;
+    {
+        let reader = png::Decoder::new(std::io::Cursor::new(bytes))
+            .read_info()
+            .unwrap();
+        let metadata = &reader.info().compressed_latin1_text;
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata[0].keyword, "comment");
+        let text = metadata[0].get_text().unwrap();
+        assert_eq!(text.len(), 2 * 1024 * 1024);
+        assert!(text.bytes().all(|byte| byte == b'x'));
+    }
+    let (url, _, task) = server(vec![inline(bytes)]).await;
     let mut c = config(url);
     c.limits.max_decode_bytes = 128 * 1024;
     let image = OpenAiImageClient::new(c)

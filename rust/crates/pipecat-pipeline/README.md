@@ -40,6 +40,11 @@ assert!(report.errors.is_empty());
 - End and Cancel are emitted once, after every branch reaches its terminal
   state **and finishes cleanup**. End-buffered output precedes End. Cancel can
   supersede a pending End and cancels active branch work
+- Nested branches share one graceful commit. A child End first stages at its
+  boundary while branches remain able to receive already-admitted reverse work,
+  including later `prepare_end` and background output. The root closes the group
+  only after every queue, active handler, and owned task result has drained;
+  descendant cleanup completes before the root terminal is published
 - `SyncParallelPipeline`: each ordinary input is followed by one unique control
   sentinel per branch. Output is released only after all sentinels arrive in the
   input direction. `Arrival` preserves capture order; `Pipeline` uses branch
@@ -58,7 +63,9 @@ assert!(report.errors.is_empty());
 - Cleanup signals all owned worker monitors, cancels live workers, and joins
   them. Dropping an outer running worker triggers the same cleanup through core
   supervision. Startup futures canceled before worker construction follow core's
-  bounded asynchronous startup-cleanup/Drop contract
+  bounded asynchronous startup-cleanup/Drop contract. A failed or dropped root
+  can finish reporting before already-started descendant cleanup times out;
+  those cleanup futures keep their own bounded child deadlines
 
 The FIFO sentinel is a barrier for synchronously handled output, not arbitrary
 background work started by a branch. This restriction also exists in the Python
@@ -71,6 +78,7 @@ or supply an explicit completion-aware branch processor.
 `ParallelPipelineConfig` defaults to at most 64 branches, 4,096 buffered frames,
 a 16,384-ID recent deduplication window, and a 30-second synchronization timeout.
 Child queue, background, startup, shutdown, and error limits use `PipelineConfig`.
+A composition can contain at most 4,096 live child/root runtimes.
 Limits count frames/IDs/tasks, not payload bytes. Applications handling large
 media frames must also bound their payload sizes.
 

@@ -1,6 +1,9 @@
 //! Linear pipelines with two concurrent processing lanes per processor.
+#[path = "pipeline_lifecycle.rs"]
+mod lifecycle;
 #[path = "pipeline_stream.rs"]
 pub(crate) mod stream;
+use lifecycle::{LifecycleGroup, LifecycleOwner};
 
 use crate::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -117,6 +120,7 @@ pub struct Pipeline {
     observers: Vec<crate::observer::ObserverRegistration>,
     observer_clock: Arc<dyn ObserverClock>,
     inherited_observers: Option<Arc<crate::observer::ObserverHub>>,
+    lifecycle_owner: Option<LifecycleOwner>,
 }
 impl Pipeline {
     pub fn new(processors: Vec<Arc<dyn FrameProcessor>>) -> Self {
@@ -125,6 +129,7 @@ impl Pipeline {
             observers: vec![],
             observer_clock: Arc::new(MonotonicObserverClock::default()),
             inherited_observers: None,
+            lifecycle_owner: None,
         }
     }
     /// Register a bounded, independently dispatched observer before starting.
@@ -160,6 +165,19 @@ impl Pipeline {
     /// owns shutdown. Local registrations cannot be combined with inheritance.
     pub fn inherit_observers(mut self, context: &ProcessorContext) -> Self {
         self.inherited_observers = Some(context.runtime.observers.clone());
+        self
+    }
+    /// Join a processor-owned composition's graceful shutdown. Child terminals
+    /// stage at their boundaries; the root drains the entire composition before
+    /// closing children, and waits for their cleanup before publishing its End.
+    /// At most 4096 live runtimes may belong to one composition. Consumers of
+    /// each child output stream remain responsible for reading it; untracked
+    /// external forwarding tasks are not implicitly owned by this lifecycle.
+    pub fn inherit_lifecycle(mut self, context: &ProcessorContext) -> Self {
+        self.lifecycle_owner = Some(LifecycleOwner {
+            runtime: Arc::downgrade(&context.runtime),
+            index: context.index,
+        });
         self
     }
     pub async fn start(mut self, config: PipelineConfig) -> Result<PipelineWorker, PipelineError> {
@@ -214,7 +232,16 @@ impl Pipeline {
             .collect();
         let (output_tx, output_rx) = mpsc::channel(config.output_capacity);
         let (state_tx, _) = watch::channel(WorkerState::Starting);
-        let admission = Arc::new(Mutex::new(()));
+        let owner = self
+            .lifecycle_owner
+            .as_ref()
+            .map(|owner| owner.runtime.upgrade().ok_or(PipelineError::Closed))
+            .transpose()?;
+        let lifecycle = owner.as_ref().map_or_else(
+            || Arc::new(LifecycleGroup::new(runtime_id)),
+            |parent| parent.lifecycle.clone(),
+        );
+        let admission = lifecycle.admission.clone();
         let interruptions = Arc::new(Mutex::new(crate::queue::InterruptionRegistry::default()));
         let dropped = Arc::new(AtomicU64::new(0));
         let runtime = Arc::new(Runtime {
@@ -223,6 +250,11 @@ impl Pipeline {
             observer_owner,
             processor_info,
             admission: admission.clone(),
+            lifecycle: lifecycle.clone(),
+            lifecycle_owner: self.lifecycle_owner.clone(),
+            draining_children: Mutex::new(None),
+            cleanup_complete: AtomicBool::new(false),
+            terminal_ready: Notify::new(),
             queues: self
                 .processors
                 .iter()
@@ -264,6 +296,26 @@ impl Pipeline {
             policy_changed: Notify::new(),
             health_observations: Mutex::new(vec![]),
         });
+        {
+            let _admission = admission.lock().unwrap();
+            if lifecycle.sealed.load(Ordering::SeqCst)
+                || owner.as_ref().is_some_and(|parent| parent.is_finished())
+            {
+                return Err(PipelineError::Closed);
+            }
+            let mut members = lifecycle.members.lock().unwrap();
+            members.retain(|member| {
+                member
+                    .upgrade()
+                    .is_some_and(|runtime| !runtime.cleanup_complete.load(Ordering::SeqCst))
+            });
+            if members.len() >= 4096 {
+                return Err(PipelineError::Backpressure(
+                    "composition runtime limit reached".into(),
+                ));
+            }
+            members.push(Arc::downgrade(&runtime));
+        }
         if runtime.observers.enabled() {
             runtime.observers.emit(PipelineObservation::RuntimeStarted {
                 runtime_id,
@@ -502,7 +554,9 @@ impl PipelineSender {
                         | FrameData::ProcessorPauseUrgent { .. }
                 );
             if self.state().is_finished()
-                || (!administrative && !self.runtime.accepting.load(Ordering::SeqCst))
+                || (!administrative
+                    && !self.runtime.accepting.load(Ordering::SeqCst)
+                    && (terminal || !self.runtime.owned_admission(source)))
             {
                 return Err(PipelineError::Closed);
             }
@@ -522,6 +576,27 @@ impl PipelineSender {
             }
             Ok(())
         })
+    }
+    /// Await arrival of a graceful terminal at this runtime's output boundary.
+    /// An inherited child remains live until the composition's root commits it.
+    pub async fn wait_terminal_staged(&self) -> Result<(), PipelineError> {
+        loop {
+            let ready = self.runtime.terminal_ready.notified();
+            tokio::pin!(ready);
+            ready.as_mut().enable();
+            if let Some(error) = self.runtime.failure.lock().unwrap().clone() {
+                return Err(error);
+            }
+            if self.runtime.graceful_terminal.lock().unwrap().is_some()
+                || matches!(self.state(), WorkerState::Ended | WorkerState::Stopped)
+            {
+                return Ok(());
+            }
+            if self.state().is_finished() {
+                return Err(PipelineError::Closed);
+            }
+            ready.await;
+        }
     }
     pub async fn end(&self) -> Result<(), PipelineError> {
         self.send(Frame::end(), Direction::Downstream).await
@@ -634,6 +709,11 @@ pub(crate) struct Runtime {
     observer_owner: bool,
     pub(crate) processor_info: Vec<ObservedProcessor>,
     pub(crate) admission: Arc<Mutex<()>>,
+    lifecycle: Arc<LifecycleGroup>,
+    lifecycle_owner: Option<LifecycleOwner>,
+    draining_children: Mutex<Option<Vec<Arc<Runtime>>>>,
+    cleanup_complete: AtomicBool,
+    terminal_ready: Notify,
     pub(crate) queues: Vec<Arc<FrameQueue>>,
     nodes: Vec<Arc<NodeState>>,
     pub(crate) config: PipelineConfig,
@@ -656,7 +736,7 @@ pub(crate) struct Runtime {
 }
 impl Runtime {
     pub(crate) fn is_finished(&self) -> bool {
-        self.state.borrow().is_finished()
+        self.state.borrow().is_finished() || self.lifecycle.sealed.load(Ordering::SeqCst)
     }
     pub(crate) fn drop_frame(&self) {
         self.dropped.fetch_add(1, Ordering::Relaxed);
@@ -674,7 +754,9 @@ impl Runtime {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return Ok(());
         }
-        if self.state.borrow().is_finished() {
+        if self.state.borrow().is_finished()
+            || (self.lifecycle.sealed.load(Ordering::SeqCst) && !Self::sealed_control(&frame))
+        {
             return Err(ProcessorError::new("pipeline is closed"));
         }
         let destination = match direction {
@@ -851,6 +933,7 @@ impl Runtime {
                 .lock()
                 .unwrap()
                 .get_or_insert((DirectedFrame::new(frame, direction), terminal.unwrap()));
+            self.terminal_ready.notify_waiters();
             return Ok(());
         }
         let start = direction == Direction::Downstream && frame.data.is_start();
@@ -945,37 +1028,6 @@ impl Runtime {
             Err((QueueError::Closed, _)) => self.fail(PipelineError::Closed),
         }
     }
-    /// Queue admission and task creation share this lock, so quiescence cannot
-    /// race a newly admitted descendant of an active handler or owned task.
-    fn finish_if_drained(&self) {
-        let _admission = self.admission.lock().unwrap();
-        if self.state.borrow().is_finished()
-            || self.pending_policy.lock().unwrap().is_some()
-            || !self.queues.iter().all(|queue| queue.is_idle())
-            || !self
-                .nodes
-                .iter()
-                .all(|node| node.background.lock().unwrap().is_empty())
-        {
-            return;
-        }
-        let Some((frame, state)) = self.graceful_terminal.lock().unwrap().take() else {
-            return;
-        };
-        let result = self.output.lock().unwrap().as_ref().map(|output| {
-            output.try_send(frame).map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => PipelineError::Backpressure(
-                    "worker output queue is full; consume output concurrently".into(),
-                ),
-                mpsc::error::TrySendError::Closed(_) => PipelineError::Closed,
-            })
-        });
-        match result {
-            Some(Ok(())) => self.finish(state),
-            Some(Err(error)) => self.fail(error),
-            None => self.fail(PipelineError::Closed),
-        }
-    }
     pub(crate) fn record_frame_error(&self, frame: &mut Frame) -> Option<ErrorFrame> {
         let error = frame.data.as_error_frame()?;
         let reported = frame.reported_runtimes.get_or_insert_with(Default::default);
@@ -1034,6 +1086,9 @@ impl Runtime {
         frame: Frame,
         direction: Direction,
     ) -> Result<(), ProcessorError> {
+        if self.lifecycle.sealed.load(Ordering::SeqCst) && !Self::sealed_control(&frame) {
+            return Err(ProcessorError::new("pipeline is closed"));
+        }
         if frame.interruptible
             && generation.is_some_and(|epoch| self.queues[index].generation() > epoch)
         {
@@ -1066,14 +1121,21 @@ impl Runtime {
             }
         });
         self.accepting.store(false, Ordering::SeqCst);
+        self.terminal_ready.notify_waiters();
         for queue in &self.queues {
             queue.close();
         }
     }
     pub(crate) fn fail(&self, error: PipelineError) {
+        self.lifecycle
+            .failure
+            .lock()
+            .unwrap()
+            .get_or_insert(error.clone());
         self.failure.lock().unwrap().get_or_insert(error);
         self.state.send_replace(WorkerState::Failed);
         self.accepting.store(false, Ordering::SeqCst);
+        self.terminal_ready.notify_waiters();
         for queue in &self.queues {
             queue.close();
         }
@@ -1469,6 +1531,7 @@ impl Drop for OutputCloseGuard {
                 "supervisor terminated unexpectedly".into(),
             ));
         }
+        self.0.cleanup_complete.store(true, Ordering::SeqCst);
     }
 }
 async fn supervise(
@@ -1500,8 +1563,7 @@ async fn supervise(
             _ = tick.tick() => {
                 runtime.admit_pending_policy();
                 for ctx in &contexts { for task in ctx.node.take_finished() { complete_background(task, ctx).await; } }
-                let expired = runtime.ending.lock().unwrap().is_some_and(|start| start.elapsed() >= runtime.config.shutdown_timeout);
-                if expired { runtime.fail(PipelineError::ShutdownTimeout); }
+                runtime.enforce_shutdown_deadline();
                 runtime.finish_if_drained();
             },
         }
