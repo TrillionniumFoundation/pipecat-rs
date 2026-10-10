@@ -1,0 +1,4909 @@
+[
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5001,
+      "name": "BusFrameMessage#0",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.AggregatedTextFrame",
+        "__data__": {
+          "id": 5000,
+          "name": "AggregatedTextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "AggregatedTextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "aggregated_by": "sentence",
+          "context_id": "ctx-1",
+          "raw_text": "<s>hello 世界</s>",
+          "will_be_spoken": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5005,
+      "name": "BusFrameMessage#2",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.AggregatedTextProgressFrame",
+        "__data__": {
+          "id": 5004,
+          "name": "AggregatedTextProgressFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "AggregatedTextProgressFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "segment_id": 42,
+          "context_id": "ctx-1",
+          "text": "hello 世界",
+          "aggregated_by": "sentence",
+          "accumulated_text": "hello",
+          "remaining_text": " 世界"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5009,
+      "name": "BusFrameMessage#4",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.AssistantImageRawFrame",
+        "__data__": {
+          "image": {
+            "__type__": "bytes",
+            "__data__": "AAH+/wAB/v8AAf7/AAH+/w=="
+          },
+          "size": [
+            2,
+            2
+          ],
+          "format": "RGBA",
+          "id": 5008,
+          "name": "AssistantImageRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "AssistantImageRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "sync_with_audio": true,
+          "original_data": {
+            "__type__": "bytes",
+            "__data__": "iVBORw=="
+          },
+          "original_mime_type": "image/png"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5013,
+      "name": "BusFrameMessage#6",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.AudioBufferStartRecordingFrame",
+        "__data__": {
+          "id": 5012,
+          "name": "AudioBufferStartRecordingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "AudioBufferStartRecordingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5017,
+      "name": "BusFrameMessage#8",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.AudioBufferStopRecordingFrame",
+        "__data__": {
+          "id": 5016,
+          "name": "AudioBufferStopRecordingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "AudioBufferStopRecordingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5021,
+      "name": "BusFrameMessage#10",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.BotConnectedFrame",
+        "__data__": {
+          "id": 5020,
+          "name": "BotConnectedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "BotConnectedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5025,
+      "name": "BusFrameMessage#12",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.BotSpeakingFrame",
+        "__data__": {
+          "id": 5024,
+          "name": "BotSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "BotSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5029,
+      "name": "BusFrameMessage#14",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.BotStartedSpeakingFrame",
+        "__data__": {
+          "id": 5028,
+          "name": "BotStartedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "BotStartedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5033,
+      "name": "BusFrameMessage#16",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.BotStoppedSpeakingFrame",
+        "__data__": {
+          "id": 5032,
+          "name": "BotStoppedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "BotStoppedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5037,
+      "name": "BusFrameMessage#18",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.CancelFrame",
+        "__data__": {
+          "id": 5036,
+          "name": "CancelFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "CancelFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "reason": {
+            "code": "done",
+            "count": 3
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5041,
+      "name": "BusFrameMessage#20",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.CancelWorkerFrame",
+        "__data__": {
+          "id": 5040,
+          "name": "CancelWorkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "CancelWorkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "reason": {
+            "code": "done",
+            "count": 3
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5045,
+      "name": "BusFrameMessage#22",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ClientConnectedFrame",
+        "__data__": {
+          "id": 5044,
+          "name": "ClientConnectedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ClientConnectedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5049,
+      "name": "BusFrameMessage#24",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ControlFrame",
+        "__data__": {
+          "id": 5048,
+          "name": "ControlFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ControlFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5053,
+      "name": "BusFrameMessage#26",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.DataFrame",
+        "__data__": {
+          "id": 5052,
+          "name": "DataFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "DataFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5057,
+      "name": "BusFrameMessage#28",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.EagerEndOfTurnCancelFrame",
+        "__data__": {
+          "id": 5056,
+          "name": "EagerEndOfTurnCancelFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "EagerEndOfTurnCancelFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5061,
+      "name": "BusFrameMessage#30",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.EagerTranscriptionFrame",
+        "__data__": {
+          "id": 5060,
+          "name": "EagerTranscriptionFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "EagerTranscriptionFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "user_id": "user-9",
+          "timestamp": "2026-10-09T17:00:00Z",
+          "language": "en-US",
+          "result": {
+            "provider": {
+              "words": [
+                "hello"
+              ]
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5065,
+      "name": "BusFrameMessage#32",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.EndFrame",
+        "__data__": {
+          "id": 5064,
+          "name": "EndFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "EndFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "reason": {
+            "code": "done",
+            "count": 3
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5069,
+      "name": "BusFrameMessage#34",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.EndWorkerFrame",
+        "__data__": {
+          "id": 5068,
+          "name": "EndWorkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "EndWorkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "reason": {
+            "code": "done",
+            "count": 3
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5073,
+      "name": "BusFrameMessage#36",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ErrorFrame",
+        "__data__": {
+          "id": 5072,
+          "name": "ErrorFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ErrorFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "error": "example failure",
+          "fatal": false,
+          "category": {
+            "__type__": "pipecat.utils.errors.ErrorCategory",
+            "__data__": "RATE_LIMIT"
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5077,
+      "name": "BusFrameMessage#38",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ExternalFunctionCallCancelFrame",
+        "__data__": {
+          "id": 5076,
+          "name": "ExternalFunctionCallCancelFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ExternalFunctionCallCancelFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_name": "lookup",
+          "tool_call_id": "call-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5081,
+      "name": "BusFrameMessage#40",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ExternalFunctionCallInProgressFrame",
+        "__data__": {
+          "id": 5080,
+          "name": "ExternalFunctionCallInProgressFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ExternalFunctionCallInProgressFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_name": "lookup",
+          "tool_call_id": "call-1",
+          "arguments": {
+            "key": "abc"
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5085,
+      "name": "BusFrameMessage#42",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ExternalFunctionCallResultFrame",
+        "__data__": {
+          "id": 5084,
+          "name": "ExternalFunctionCallResultFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ExternalFunctionCallResultFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_name": "lookup",
+          "tool_call_id": "call-1",
+          "arguments": {
+            "key": "abc"
+          },
+          "result": {
+            "provider": {
+              "words": [
+                "hello"
+              ]
+            }
+          },
+          "is_final": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5089,
+      "name": "BusFrameMessage#44",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ExternalFunctionCallsStartedFrame",
+        "__data__": {
+          "id": 5088,
+          "name": "ExternalFunctionCallsStartedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ExternalFunctionCallsStartedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_calls": [
+            {
+              "__type__": "pipecat.frames.frames.ExternalFunctionCall",
+              "__data__": {
+                "function_name": "lookup",
+                "tool_call_id": "call-1"
+              }
+            }
+          ]
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5093,
+      "name": "BusFrameMessage#46",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FatalErrorFrame",
+        "__data__": {
+          "id": 5092,
+          "name": "FatalErrorFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FatalErrorFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "error": "example failure",
+          "fatal": true,
+          "category": {
+            "__type__": "pipecat.utils.errors.ErrorCategory",
+            "__data__": "RATE_LIMIT"
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5097,
+      "name": "BusFrameMessage#48",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FilterControlFrame",
+        "__data__": {
+          "id": 5096,
+          "name": "FilterControlFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FilterControlFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5101,
+      "name": "BusFrameMessage#50",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FilterEnableFrame",
+        "__data__": {
+          "id": 5100,
+          "name": "FilterEnableFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FilterEnableFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "enable": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5105,
+      "name": "BusFrameMessage#52",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FilterUpdateSettingsFrame",
+        "__data__": {
+          "id": 5104,
+          "name": "FilterUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FilterUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5109,
+      "name": "BusFrameMessage#54",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.Frame",
+        "__data__": {
+          "id": 5108,
+          "name": "Frame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "Frame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5113,
+      "name": "BusFrameMessage#56",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FunctionCallCancelFrame",
+        "__data__": {
+          "id": 5112,
+          "name": "FunctionCallCancelFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FunctionCallCancelFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_name": "lookup",
+          "tool_call_id": "call-1",
+          "run_llm": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5117,
+      "name": "BusFrameMessage#58",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FunctionCallInProgressFrame",
+        "__data__": {
+          "id": 5116,
+          "name": "FunctionCallInProgressFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FunctionCallInProgressFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "function_name": "lookup",
+          "tool_call_id": "call-1",
+          "arguments": {
+            "key": "abc"
+          },
+          "cancel_on_interruption": true,
+          "group_id": "group-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5121,
+      "name": "BusFrameMessage#60",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FunctionCallResultFrame",
+        "__data__": {
+          "id": 5120,
+          "name": "FunctionCallResultFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FunctionCallResultFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "function_name": "lookup",
+          "tool_call_id": "call-1",
+          "arguments": {
+            "key": "abc"
+          },
+          "result": {
+            "provider": {
+              "words": [
+                "hello"
+              ]
+            }
+          },
+          "run_llm": false,
+          "properties": {
+            "__type__": "pipecat.frames.frames.FunctionCallResultProperties",
+            "__data__": {
+              "run_llm": false,
+              "is_final": false
+            }
+          },
+          "error": "example failure"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5125,
+      "name": "BusFrameMessage#62",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.FunctionCallsStartedFrame",
+        "__data__": {
+          "id": 5124,
+          "name": "FunctionCallsStartedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "FunctionCallsStartedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "function_calls": [
+            {
+              "__type__": "pipecat.frames.frames.FunctionCallFromLLM",
+              "__data__": {
+                "function_name": "lookup",
+                "tool_call_id": "call-1",
+                "arguments": {
+                  "key": "abc"
+                },
+                "context": {
+                  "__type__": "pipecat.processors.aggregators.llm_context.LLMContext",
+                  "__data__": {
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "hello 世界"
+                          },
+                          {
+                            "type": "image_url",
+                            "image_url": {
+                              "url": "https://example.invalid/image.png",
+                              "detail": "high"
+                            }
+                          }
+                        ],
+                        "provider_flag": {
+                          "retained": true
+                        }
+                      }
+                    ],
+                    "tools": {
+                      "standard_tools": [
+                        {
+                          "name": "lookup",
+                          "description": "Look up a record",
+                          "parameters": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ]
+                          }
+                        }
+                      ],
+                      "custom_tools": {
+                        "gemini": [
+                          {
+                            "google_search": {}
+                          }
+                        ]
+                      }
+                    },
+                    "tool_choice": {
+                      "type": "function",
+                      "function": {
+                        "name": "lookup"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5129,
+      "name": "BusFrameMessage#64",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.HeartbeatFrame",
+        "__data__": {
+          "id": 5128,
+          "name": "HeartbeatFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "HeartbeatFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "timestamp": 1234567890123
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5133,
+      "name": "BusFrameMessage#66",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 5132,
+          "name": "InputAudioRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputAudioRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5137,
+      "name": "BusFrameMessage#68",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputDTMFFrame",
+        "__data__": {
+          "id": 5136,
+          "name": "InputDTMFFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputDTMFFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "button": "1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5141,
+      "name": "BusFrameMessage#70",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputFileRawFrame",
+        "__data__": {
+          "file": "data:application/pdf;base64,AAE=",
+          "type": "bytes",
+          "filename": "example.pdf",
+          "format": "RGBA",
+          "id": 5140,
+          "name": "InputFileRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputFileRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5145,
+      "name": "BusFrameMessage#72",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputImageRawFrame",
+        "__data__": {
+          "image": {
+            "__type__": "bytes",
+            "__data__": "AAH+/wAB/v8AAf7/AAH+/w=="
+          },
+          "size": [
+            2,
+            2
+          ],
+          "format": "RGBA",
+          "id": 5144,
+          "name": "InputImageRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputImageRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5149,
+      "name": "BusFrameMessage#74",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputTextRawFrame",
+        "__data__": {
+          "id": 5148,
+          "name": "InputTextRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputTextRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5153,
+      "name": "BusFrameMessage#76",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputTransportMessageFrame",
+        "__data__": {
+          "id": 5152,
+          "name": "InputTransportMessageFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputTransportMessageFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "message": {
+            "payload": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5157,
+      "name": "BusFrameMessage#78",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InputTransportStartAudioStreamingFrame",
+        "__data__": {
+          "id": 5156,
+          "name": "InputTransportStartAudioStreamingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InputTransportStartAudioStreamingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5161,
+      "name": "BusFrameMessage#80",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InterimTranscriptionFrame",
+        "__data__": {
+          "id": 5160,
+          "name": "InterimTranscriptionFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InterimTranscriptionFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "user_id": "user-9",
+          "timestamp": "2026-10-09T17:00:00Z",
+          "language": "en-US",
+          "result": {
+            "provider": {
+              "words": [
+                "hello"
+              ]
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5165,
+      "name": "BusFrameMessage#82",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InterruptionFrame",
+        "__data__": {
+          "id": 5164,
+          "name": "InterruptionFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InterruptionFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5169,
+      "name": "BusFrameMessage#84",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.InterruptionWorkerFrame",
+        "__data__": {
+          "id": 5168,
+          "name": "InterruptionWorkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "InterruptionWorkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5173,
+      "name": "BusFrameMessage#86",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMAssistantPushAggregationFrame",
+        "__data__": {
+          "id": 5172,
+          "name": "LLMAssistantPushAggregationFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMAssistantPushAggregationFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5177,
+      "name": "BusFrameMessage#88",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMConfigureOutputFrame",
+        "__data__": {
+          "id": 5176,
+          "name": "LLMConfigureOutputFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMConfigureOutputFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "skip_tts": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5181,
+      "name": "BusFrameMessage#90",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextAssistantTimestampFrame",
+        "__data__": {
+          "id": 5180,
+          "name": "LLMContextAssistantTimestampFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMContextAssistantTimestampFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "timestamp": "2026-10-09T17:00:00Z"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5185,
+      "name": "BusFrameMessage#92",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextAssistantTurnFrame",
+        "__data__": {
+          "id": 5184,
+          "name": "LLMContextAssistantTurnFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMContextAssistantTurnFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "timestamp": "2026-10-09T17:00:00Z"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5189,
+      "name": "BusFrameMessage#94",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextFrame",
+        "__data__": {
+          "id": 5188,
+          "name": "LLMContextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMContextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "context": {
+            "__type__": "pipecat.processors.aggregators.llm_context.LLMContext",
+            "__data__": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "hello 世界"
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "https://example.invalid/image.png",
+                        "detail": "high"
+                      }
+                    }
+                  ],
+                  "provider_flag": {
+                    "retained": true
+                  }
+                }
+              ],
+              "tools": {
+                "standard_tools": [
+                  {
+                    "name": "lookup",
+                    "description": "Look up a record",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  }
+                ],
+                "custom_tools": {
+                  "gemini": [
+                    {
+                      "google_search": {}
+                    }
+                  ]
+                }
+              },
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "lookup"
+                }
+              }
+            }
+          },
+          "speculation": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5193,
+      "name": "BusFrameMessage#96",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextSummaryRequestFrame",
+        "__data__": {
+          "id": 5192,
+          "name": "LLMContextSummaryRequestFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMContextSummaryRequestFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "request_id": "summary-1",
+          "context": {
+            "__type__": "pipecat.processors.aggregators.llm_context.LLMContext",
+            "__data__": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "hello 世界"
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "https://example.invalid/image.png",
+                        "detail": "high"
+                      }
+                    }
+                  ],
+                  "provider_flag": {
+                    "retained": true
+                  }
+                }
+              ],
+              "tools": {
+                "standard_tools": [
+                  {
+                    "name": "lookup",
+                    "description": "Look up a record",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  }
+                ],
+                "custom_tools": {
+                  "gemini": [
+                    {
+                      "google_search": {}
+                    }
+                  ]
+                }
+              },
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "lookup"
+                }
+              }
+            }
+          },
+          "min_messages_to_keep": 2,
+          "target_context_tokens": 1000,
+          "summarization_prompt": "summarize",
+          "summarization_timeout": 9.0
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5197,
+      "name": "BusFrameMessage#98",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextSummaryResultFrame",
+        "__data__": {
+          "id": 5196,
+          "name": "LLMContextSummaryResultFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMContextSummaryResultFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "request_id": "summary-1",
+          "summary": "summary text",
+          "last_summarized_index": 8,
+          "error": "example failure"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5201,
+      "name": "BusFrameMessage#100",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMEnablePromptCachingFrame",
+        "__data__": {
+          "id": 5200,
+          "name": "LLMEnablePromptCachingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMEnablePromptCachingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "enable": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5205,
+      "name": "BusFrameMessage#102",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMFullResponseEndFrame",
+        "__data__": {
+          "id": 5204,
+          "name": "LLMFullResponseEndFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMFullResponseEndFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "skip_tts": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5209,
+      "name": "BusFrameMessage#104",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMFullResponseStartFrame",
+        "__data__": {
+          "id": 5208,
+          "name": "LLMFullResponseStartFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMFullResponseStartFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "skip_tts": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5213,
+      "name": "BusFrameMessage#106",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMMarkerFrame",
+        "__data__": {
+          "id": 5212,
+          "name": "LLMMarkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMMarkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "marker": "●",
+          "append_to_context_immediately": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5217,
+      "name": "BusFrameMessage#108",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMMarkerResponseFrame",
+        "__data__": {
+          "id": 5216,
+          "name": "LLMMarkerResponseFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMMarkerResponseFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "raw": "● hello",
+          "marker": "●",
+          "kind": "complete",
+          "markers": [
+            "●",
+            "◐",
+            "○"
+          ]
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5221,
+      "name": "BusFrameMessage#110",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMMessagesAppendFrame",
+        "__data__": {
+          "id": 5220,
+          "name": "LLMMessagesAppendFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMMessagesAppendFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "hello 世界"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "https://example.invalid/image.png",
+                    "detail": "high"
+                  }
+                }
+              ],
+              "provider_flag": {
+                "retained": true
+              }
+            }
+          ],
+          "run_llm": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5225,
+      "name": "BusFrameMessage#112",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMMessagesUpdateFrame",
+        "__data__": {
+          "id": 5224,
+          "name": "LLMMessagesUpdateFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMMessagesUpdateFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "hello 世界"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "https://example.invalid/image.png",
+                    "detail": "high"
+                  }
+                }
+              ],
+              "provider_flag": {
+                "retained": true
+              }
+            }
+          ],
+          "run_llm": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5229,
+      "name": "BusFrameMessage#114",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMRunFrame",
+        "__data__": {
+          "id": 5228,
+          "name": "LLMRunFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMRunFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5233,
+      "name": "BusFrameMessage#116",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMServiceMetadataFrame",
+        "__data__": {
+          "id": 5232,
+          "name": "LLMServiceMetadataFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMServiceMetadataFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "service_name": "test-service",
+          "is_realtime_service": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5237,
+      "name": "BusFrameMessage#118",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMSetToolChoiceFrame",
+        "__data__": {
+          "id": 5236,
+          "name": "LLMSetToolChoiceFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMSetToolChoiceFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "tool_choice": {
+            "type": "function",
+            "function": {
+              "name": "lookup"
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5241,
+      "name": "BusFrameMessage#120",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMSetToolsFrame",
+        "__data__": {
+          "id": 5240,
+          "name": "LLMSetToolsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMSetToolsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "tools": {
+            "__type__": "pipecat.adapters.schemas.tools_schema.ToolsSchema",
+            "__data__": {
+              "standard_tools": [
+                {
+                  "name": "lookup",
+                  "description": "Look up a record",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key"
+                    ]
+                  }
+                }
+              ],
+              "custom_tools": {
+                "gemini": [
+                  {
+                    "google_search": {}
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5245,
+      "name": "BusFrameMessage#122",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMSummarizeContextFrame",
+        "__data__": {
+          "id": 5244,
+          "name": "LLMSummarizeContextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMSummarizeContextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "config": {
+            "__type__": "pipecat.utils.context.llm_context_summarization.LLMContextSummaryConfig",
+            "__data__": {
+              "target_context_tokens": 1000,
+              "min_messages_after_summary": 2,
+              "summarization_prompt": "summarize",
+              "summary_message_template": "Conversation summary: {summary}",
+              "summarization_timeout": 9.0
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5249,
+      "name": "BusFrameMessage#124",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMTextFrame",
+        "__data__": {
+          "id": 5248,
+          "name": "LLMTextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMTextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5253,
+      "name": "BusFrameMessage#126",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMThoughtEndFrame",
+        "__data__": {
+          "id": 5252,
+          "name": "LLMThoughtEndFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMThoughtEndFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "signature": {
+            "signed": "signature"
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5257,
+      "name": "BusFrameMessage#128",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMThoughtStartFrame",
+        "__data__": {
+          "id": 5256,
+          "name": "LLMThoughtStartFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMThoughtStartFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "append_to_context": false,
+          "llm": "provider-key"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5261,
+      "name": "BusFrameMessage#130",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMThoughtTextFrame",
+        "__data__": {
+          "id": 5260,
+          "name": "LLMThoughtTextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMThoughtTextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "includes_inter_frame_spaces": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5265,
+      "name": "BusFrameMessage#132",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMUpdateSettingsFrame",
+        "__data__": {
+          "id": 5264,
+          "name": "LLMUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "LLMUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          },
+          "delta": {
+            "__type__": "pipecat.services.settings.LLMSettings",
+            "__data__": {
+              "model": "model-v2",
+              "extra": {
+                "vendor": 3
+              },
+              "system_instruction": "system",
+              "temperature": 0.5,
+              "max_tokens": 42,
+              "top_p": 0.9,
+              "top_k": 7,
+              "frequency_penalty": 0.25,
+              "presence_penalty": 0.5,
+              "seed": -3,
+              "filter_incomplete_user_turns": true,
+              "user_turn_completion_config": {
+                "__type__": "pipecat.turns.user_turn_completion_mixin.UserTurnCompletionConfig",
+                "__data__": {
+                  "instructions": "complete?",
+                  "complete_marker": "●",
+                  "incomplete_short_marker": "◐",
+                  "incomplete_long_marker": "○",
+                  "incomplete_short_timeout": 3.0,
+                  "incomplete_long_timeout": 10.0
+                }
+              }
+            }
+          },
+          "reach_inactive_services": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5269,
+      "name": "BusFrameMessage#134",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.MixerControlFrame",
+        "__data__": {
+          "id": 5268,
+          "name": "MixerControlFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "MixerControlFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5273,
+      "name": "BusFrameMessage#136",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.MixerEnableFrame",
+        "__data__": {
+          "id": 5272,
+          "name": "MixerEnableFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "MixerEnableFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "enable": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5277,
+      "name": "BusFrameMessage#138",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.MixerUpdateSettingsFrame",
+        "__data__": {
+          "id": 5276,
+          "name": "MixerUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "MixerUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5281,
+      "name": "BusFrameMessage#140",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 5280,
+          "name": "OutputAudioRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputAudioRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5285,
+      "name": "BusFrameMessage#142",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputDTMFFrame",
+        "__data__": {
+          "id": 5284,
+          "name": "OutputDTMFFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputDTMFFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "button": "1",
+          "buttons": [
+            "1",
+            "*",
+            "#"
+          ]
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5289,
+      "name": "BusFrameMessage#144",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputDTMFUrgentFrame",
+        "__data__": {
+          "id": 5288,
+          "name": "OutputDTMFUrgentFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputDTMFUrgentFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "button": "1",
+          "buttons": [
+            "1",
+            "*",
+            "#"
+          ]
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5293,
+      "name": "BusFrameMessage#146",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputImageRawFrame",
+        "__data__": {
+          "image": {
+            "__type__": "bytes",
+            "__data__": "AAH+/wAB/v8AAf7/AAH+/w=="
+          },
+          "size": [
+            2,
+            2
+          ],
+          "format": "RGBA",
+          "id": 5292,
+          "name": "OutputImageRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputImageRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "sync_with_audio": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5297,
+      "name": "BusFrameMessage#148",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputTransportMessageFrame",
+        "__data__": {
+          "id": 5296,
+          "name": "OutputTransportMessageFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputTransportMessageFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "message": {
+            "payload": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5301,
+      "name": "BusFrameMessage#150",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputTransportMessageUrgentFrame",
+        "__data__": {
+          "id": 5300,
+          "name": "OutputTransportMessageUrgentFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputTransportMessageUrgentFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "message": {
+            "payload": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5305,
+      "name": "BusFrameMessage#152",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.OutputTransportReadyFrame",
+        "__data__": {
+          "id": 5304,
+          "name": "OutputTransportReadyFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "OutputTransportReadyFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5309,
+      "name": "BusFrameMessage#154",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.PipelineFlushFrame",
+        "__data__": {
+          "id": 5308,
+          "name": "PipelineFlushFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "PipelineFlushFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "returning": true,
+          "origin": "bridge"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5313,
+      "name": "BusFrameMessage#156",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ProposedUserStartedSpeakingFrame",
+        "__data__": {
+          "id": 5312,
+          "name": "ProposedUserStartedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ProposedUserStartedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5317,
+      "name": "BusFrameMessage#158",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ProposedUserStoppedSpeakingFrame",
+        "__data__": {
+          "id": 5316,
+          "name": "ProposedUserStoppedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ProposedUserStoppedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5321,
+      "name": "BusFrameMessage#160",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.STTMetadataFrame",
+        "__data__": {
+          "id": 5320,
+          "name": "STTMetadataFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "STTMetadataFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "service_name": "test-service",
+          "ttfs_p99_latency": 0.15
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5325,
+      "name": "BusFrameMessage#162",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.STTMuteFrame",
+        "__data__": {
+          "id": 5324,
+          "name": "STTMuteFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "STTMuteFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "mute": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5329,
+      "name": "BusFrameMessage#164",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.STTUpdateSettingsFrame",
+        "__data__": {
+          "id": 5328,
+          "name": "STTUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "STTUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          },
+          "delta": {
+            "__type__": "pipecat.services.settings.STTSettings",
+            "__data__": {
+              "model": "model-v2",
+              "extra": {
+                "vendor": 3
+              },
+              "language": "en-US"
+            }
+          },
+          "reach_inactive_services": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5333,
+      "name": "BusFrameMessage#166",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ServiceMetadataFrame",
+        "__data__": {
+          "id": 5332,
+          "name": "ServiceMetadataFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ServiceMetadataFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "service_name": "test-service"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5337,
+      "name": "BusFrameMessage#168",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ServiceSwitcherFrame",
+        "__data__": {
+          "id": 5336,
+          "name": "ServiceSwitcherFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ServiceSwitcherFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5341,
+      "name": "BusFrameMessage#170",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.ServiceUpdateSettingsFrame",
+        "__data__": {
+          "id": 5340,
+          "name": "ServiceUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "ServiceUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          },
+          "delta": {
+            "__type__": "pipecat.services.settings.ServiceSettings",
+            "__data__": {
+              "model": "model-v2",
+              "extra": {
+                "vendor": 3
+              }
+            }
+          },
+          "reach_inactive_services": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5345,
+      "name": "BusFrameMessage#172",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.SpeechControlParamsFrame",
+        "__data__": {
+          "id": 5344,
+          "name": "SpeechControlParamsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "SpeechControlParamsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "vad_params": {
+            "__type__": "pipecat.audio.vad.vad_analyzer.VADParams",
+            "__data__": {
+              "confidence": 0.9,
+              "start_secs": 0.4,
+              "stop_secs": 0.7,
+              "min_volume": 0.5
+            }
+          },
+          "turn_params": {
+            "__type__": "pipecat.audio.turn.base_turn_analyzer.BaseTurnParams",
+            "__data__": {}
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5349,
+      "name": "BusFrameMessage#174",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.SpeechOutputAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 5348,
+          "name": "SpeechOutputAudioRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "SpeechOutputAudioRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5353,
+      "name": "BusFrameMessage#176",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.StartFrame",
+        "__data__": {
+          "id": 5352,
+          "name": "StartFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "StartFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "audio_in_sample_rate": 8000,
+          "audio_out_sample_rate": 48000,
+          "enable_metrics": true,
+          "enable_tracing": true,
+          "enable_usage_metrics": true,
+          "report_only_initial_ttfb": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5357,
+      "name": "BusFrameMessage#178",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.StopFrame",
+        "__data__": {
+          "id": 5356,
+          "name": "StopFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "StopFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5361,
+      "name": "BusFrameMessage#180",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.StopWorkerFrame",
+        "__data__": {
+          "id": 5360,
+          "name": "StopWorkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "StopWorkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5365,
+      "name": "BusFrameMessage#182",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.SystemFrame",
+        "__data__": {
+          "id": 5364,
+          "name": "SystemFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "SystemFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5369,
+      "name": "BusFrameMessage#184",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 5368,
+          "name": "TTSAudioRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSAudioRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "context_id": "ctx-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5373,
+      "name": "BusFrameMessage#186",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSSpeakFrame",
+        "__data__": {
+          "id": 5372,
+          "name": "TTSSpeakFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSSpeakFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5377,
+      "name": "BusFrameMessage#188",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSStartedFrame",
+        "__data__": {
+          "id": 5376,
+          "name": "TTSStartedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSStartedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "context_id": "ctx-1",
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5381,
+      "name": "BusFrameMessage#190",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSStoppedFrame",
+        "__data__": {
+          "id": 5380,
+          "name": "TTSStoppedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSStoppedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "context_id": "ctx-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5385,
+      "name": "BusFrameMessage#192",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSTextFrame",
+        "__data__": {
+          "id": 5384,
+          "name": "TTSTextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSTextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "aggregated_by": "sentence",
+          "context_id": "ctx-1",
+          "raw_text": "<s>hello 世界</s>",
+          "will_be_spoken": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5389,
+      "name": "BusFrameMessage#194",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSUpdateSettingsFrame",
+        "__data__": {
+          "id": 5388,
+          "name": "TTSUpdateSettingsFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TTSUpdateSettingsFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "settings": {
+            "nested": {
+              "field": 3
+            }
+          },
+          "delta": {
+            "__type__": "pipecat.services.settings.TTSSettings",
+            "__data__": {
+              "model": "model-v2",
+              "extra": {
+                "vendor": 3
+              },
+              "voice": "voice-v2",
+              "language": "en-US"
+            }
+          },
+          "reach_inactive_services": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5393,
+      "name": "BusFrameMessage#196",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TaskFrame",
+        "__data__": {
+          "id": 5392,
+          "name": "TaskFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TaskFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5397,
+      "name": "BusFrameMessage#198",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TaskSystemFrame",
+        "__data__": {
+          "id": 5396,
+          "name": "TaskSystemFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TaskSystemFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5401,
+      "name": "BusFrameMessage#200",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TextFrame",
+        "__data__": {
+          "id": 5400,
+          "name": "TextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5405,
+      "name": "BusFrameMessage#202",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TranscriptionFrame",
+        "__data__": {
+          "id": 5404,
+          "name": "TranscriptionFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TranscriptionFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "user_id": "user-9",
+          "timestamp": "2026-10-09T17:00:00Z",
+          "language": "en-US",
+          "result": {
+            "provider": {
+              "words": [
+                "hello"
+              ]
+            }
+          },
+          "finalized": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5409,
+      "name": "BusFrameMessage#204",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TranslationFrame",
+        "__data__": {
+          "id": 5408,
+          "name": "TranslationFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "TranslationFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false,
+          "user_id": "user-9",
+          "timestamp": "2026-10-09T17:00:00Z",
+          "language": "en-US"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5413,
+      "name": "BusFrameMessage#206",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.URLImageRawFrame",
+        "__data__": {
+          "image": {
+            "__type__": "bytes",
+            "__data__": "AAH+/wAB/v8AAf7/AAH+/w=="
+          },
+          "size": [
+            2,
+            2
+          ],
+          "format": "RGBA",
+          "id": 5412,
+          "name": "URLImageRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "URLImageRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "sync_with_audio": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5417,
+      "name": "BusFrameMessage#208",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 5416,
+          "name": "UserAudioRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserAudioRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "user_id": "user-9"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5421,
+      "name": "BusFrameMessage#210",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserFileRawFrame",
+        "__data__": {
+          "file": "data:application/pdf;base64,AAE=",
+          "type": "bytes",
+          "filename": "example.pdf",
+          "format": "RGBA",
+          "id": 5420,
+          "name": "UserFileRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserFileRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "user_id": "user-9",
+          "text": "hello 世界",
+          "append_to_context": false,
+          "custom_options": {
+            "pdf": {
+              "pages": [
+                1,
+                2
+              ]
+            }
+          },
+          "run_llm": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5425,
+      "name": "BusFrameMessage#212",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserIdleTimeoutUpdateFrame",
+        "__data__": {
+          "id": 5424,
+          "name": "UserIdleTimeoutUpdateFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserIdleTimeoutUpdateFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "timeout": 30.5
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5429,
+      "name": "BusFrameMessage#214",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserImageRawFrame",
+        "__data__": {
+          "image": {
+            "__type__": "bytes",
+            "__data__": "AAH+/wAB/v8AAf7/AAH+/w=="
+          },
+          "size": [
+            2,
+            2
+          ],
+          "format": "RGBA",
+          "id": 5428,
+          "name": "UserImageRawFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserImageRawFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "user_id": "user-9",
+          "text": "hello 世界",
+          "append_to_context": false,
+          "run_llm": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5433,
+      "name": "BusFrameMessage#216",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserImageRequestFrame",
+        "__data__": {
+          "id": 5432,
+          "name": "UserImageRequestFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserImageRequestFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "user_id": "user-9",
+          "text": "hello 世界",
+          "append_to_context": false,
+          "video_source": "camera",
+          "function_name": "lookup",
+          "tool_call_id": "call-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5437,
+      "name": "BusFrameMessage#218",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserMuteStartedFrame",
+        "__data__": {
+          "id": 5436,
+          "name": "UserMuteStartedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserMuteStartedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5441,
+      "name": "BusFrameMessage#220",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserMuteStoppedFrame",
+        "__data__": {
+          "id": 5440,
+          "name": "UserMuteStoppedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserMuteStoppedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5445,
+      "name": "BusFrameMessage#222",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserSpeakingFrame",
+        "__data__": {
+          "id": 5444,
+          "name": "UserSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5449,
+      "name": "BusFrameMessage#224",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserStartedSpeakingFrame",
+        "__data__": {
+          "id": 5448,
+          "name": "UserStartedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserStartedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5453,
+      "name": "BusFrameMessage#226",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserStoppedSpeakingFrame",
+        "__data__": {
+          "id": 5452,
+          "name": "UserStoppedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserStoppedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5457,
+      "name": "BusFrameMessage#228",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.UserTurnInferenceCompletedFrame",
+        "__data__": {
+          "id": 5456,
+          "name": "UserTurnInferenceCompletedFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "UserTurnInferenceCompletedFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5461,
+      "name": "BusFrameMessage#230",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VADParamsUpdateFrame",
+        "__data__": {
+          "id": 5460,
+          "name": "VADParamsUpdateFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VADParamsUpdateFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "params": {
+            "__type__": "pipecat.audio.vad.vad_analyzer.VADParams",
+            "__data__": {
+              "confidence": 0.8,
+              "start_secs": 0.2,
+              "stop_secs": 0.2,
+              "min_volume": 0.6
+            }
+          }
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5465,
+      "name": "BusFrameMessage#232",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VADUserStartedSpeakingFrame",
+        "__data__": {
+          "id": 5464,
+          "name": "VADUserStartedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VADUserStartedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "start_secs": 0.3,
+          "timestamp": 1720000000.25
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5469,
+      "name": "BusFrameMessage#234",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VADUserStoppedSpeakingFrame",
+        "__data__": {
+          "id": 5468,
+          "name": "VADUserStoppedSpeakingFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VADUserStoppedSpeakingFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "stop_secs": 0.8,
+          "timestamp": 1720000000.25
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5473,
+      "name": "BusFrameMessage#236",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VisionFullResponseEndFrame",
+        "__data__": {
+          "id": 5472,
+          "name": "VisionFullResponseEndFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VisionFullResponseEndFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "skip_tts": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5477,
+      "name": "BusFrameMessage#238",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VisionFullResponseStartFrame",
+        "__data__": {
+          "id": 5476,
+          "name": "VisionFullResponseStartFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VisionFullResponseStartFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "skip_tts": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5481,
+      "name": "BusFrameMessage#240",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VisionTextFrame",
+        "__data__": {
+          "id": 5480,
+          "name": "VisionTextFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VisionTextFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true,
+          "text": "hello 世界",
+          "skip_tts": true,
+          "includes_inter_frame_spaces": true,
+          "append_to_context": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5485,
+      "name": "BusFrameMessage#242",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VolumeFrame",
+        "__data__": {
+          "id": 5484,
+          "name": "VolumeFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VolumeFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "volume": 0.5
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5489,
+      "name": "BusFrameMessage#244",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.VolumeGainFrame",
+        "__data__": {
+          "id": 5488,
+          "name": "VolumeGainFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "VolumeGainFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": false,
+          "gain": 1.5
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5493,
+      "name": "BusFrameMessage#246",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.WorkerFrame",
+        "__data__": {
+          "id": 5492,
+          "name": "WorkerFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "WorkerFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 5497,
+      "name": "BusFrameMessage#248",
+      "source": "python-source",
+      "target": "rust-target",
+      "frame": {
+        "__type__": "pipecat.frames.frames.WorkerSystemFrame",
+        "__data__": {
+          "id": 5496,
+          "name": "WorkerSystemFrame#0",
+          "pts": 9001,
+          "broadcast_sibling_id": 9002,
+          "metadata": {
+            "fixture": "WorkerSystemFrame",
+            "bytes": {
+              "__type__": "bytes",
+              "__data__": "AP8="
+            }
+          },
+          "transport_source": "microphone",
+          "transport_destination": "speaker",
+          "interruptible": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      },
+      "bridge": "media"
+    }
+  }
+]

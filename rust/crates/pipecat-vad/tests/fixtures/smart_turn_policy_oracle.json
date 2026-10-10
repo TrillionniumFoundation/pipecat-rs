@@ -1,0 +1,774 @@
+{
+  "sources": {
+    "src/pipecat/audio/turn/base_turn_analyzer.py": "f2afb70b72a058bfe5fde7810130bd012ffd09706b3d63910fd8421776fabcf1",
+    "src/pipecat/audio/turn/smart_turn/base_smart_turn.py": "8c5c11aa3a72abb9d37447baa58475126bee7eb5932d5c8a17ee56d858be6c8a",
+    "src/pipecat/metrics/metrics.py": "e9a662930b5c3b00f8f075e8235d56ea1e3b611af957860d96a83dc28a84007a"
+  },
+  "numpy": "2.3.5",
+  "cases": [
+    {
+      "name": "pre_roll_vad_delay_and_reanalysis",
+      "rate": 16000,
+      "params": {
+        "stop_secs": 0.3,
+        "pre_speech_ms": 50,
+        "max_duration_secs": 0.2
+      },
+      "steps": [
+        {
+          "event": {
+            "op": "append",
+            "at": 100,
+            "sample": 1,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.1,
+            "sample": 2,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.2,
+            "sample": 3,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "vad_start",
+            "seconds": 0.1
+          },
+          "state": null,
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.3,
+            "sample": 4,
+            "count": 160,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100.3,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.31,
+            "sample": 5,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 10.0,
+          "speech_start": 100.3,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.2
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 10.0,
+          "speech_start": 100.3,
+          "model_input": [
+            [
+              3,
+              160
+            ],
+            [
+              4,
+              160
+            ],
+            [
+              5,
+              160
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.2,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.8
+          },
+          "state": "COMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              3,
+              160
+            ],
+            [
+              4,
+              160
+            ],
+            [
+              5,
+              160
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": true,
+            "probability": 0.8,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.2
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "name": "maximum_duration_is_tail_not_completion",
+      "rate": 16000,
+      "params": {
+        "stop_secs": 0.3,
+        "pre_speech_ms": 500,
+        "max_duration_secs": 0.005
+      },
+      "steps": [
+        {
+          "event": {
+            "op": "append",
+            "at": 100,
+            "sample": 1,
+            "count": 40,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.01,
+            "sample": 2,
+            "count": 60,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.5
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": [
+            [
+              1,
+              20
+            ],
+            [
+              2,
+              60
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.5,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.02,
+            "sample": 3,
+            "count": 10,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0.625,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.1
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0.625,
+          "speech_start": 100,
+          "model_input": [
+            [
+              1,
+              10
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              10
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.1,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.03,
+            "sample": 4,
+            "count": 120,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.9
+          },
+          "state": "COMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              4,
+              80
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": true,
+            "probability": 0.9,
+            "e2e_processing_time_ms": 125.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "sample_timed_silence_resume_and_forced_clear",
+      "rate": 16000,
+      "params": {
+        "stop_secs": 0.025,
+        "pre_speech_ms": 50,
+        "max_duration_secs": 0.2
+      },
+      "steps": [
+        {
+          "event": {
+            "op": "append",
+            "at": 100,
+            "sample": 1,
+            "count": 160,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 110,
+            "sample": 2,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 10.0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 120,
+            "sample": 3,
+            "count": 80,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 15.0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 121,
+            "sample": 4,
+            "count": 160,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 122,
+            "sample": 5,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 10.0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 122.01,
+            "sample": 6,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 20.0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 122.02,
+            "sample": 7,
+            "count": 80,
+            "speech": false
+          },
+          "state": "COMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.8
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 123,
+            "sample": 8,
+            "count": 160,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 124,
+            "sample": 9,
+            "count": 160,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 124,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "clear"
+          },
+          "state": null,
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 130,
+            "sample": 10,
+            "count": 800,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.2
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              10,
+              800
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.2,
+            "e2e_processing_time_ms": 125.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "pre_speech_time_eviction",
+      "rate": 1000,
+      "params": {
+        "stop_secs": 0.2,
+        "pre_speech_ms": 100,
+        "max_duration_secs": 0.1
+      },
+      "steps": [
+        {
+          "event": {
+            "op": "append",
+            "at": 100,
+            "sample": 1,
+            "count": 10,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.4,
+            "sample": 2,
+            "count": 10,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.1
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              1,
+              10
+            ],
+            [
+              2,
+              10
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.1,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.401,
+            "sample": 3,
+            "count": 10,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.1
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              2,
+              10
+            ],
+            [
+              3,
+              10
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.1,
+            "e2e_processing_time_ms": 125.0
+          }
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 101,
+            "sample": 4,
+            "count": 10,
+            "speech": false
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.1
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              4,
+              10
+            ]
+          ],
+          "metrics": {
+            "processor": "BaseSmartTurn",
+            "is_complete": false,
+            "probability": 0.1,
+            "e2e_processing_time_ms": 125.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty_chunks_and_predictor_timeout",
+      "rate": 16000,
+      "params": {
+        "stop_secs": 0.3,
+        "pre_speech_ms": 0,
+        "max_duration_secs": 0.2
+      },
+      "steps": [
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.1
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100,
+            "sample": 1,
+            "count": 0,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.8
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "append",
+            "at": 100.01,
+            "sample": 2,
+            "count": 10,
+            "speech": true
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": true,
+          "silence_ms": 0,
+          "speech_start": 100,
+          "model_input": null,
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": "timeout"
+          },
+          "state": "COMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": [
+            [
+              2,
+              10
+            ]
+          ],
+          "metrics": null
+        },
+        {
+          "event": {
+            "op": "analyze",
+            "probability": 0.8
+          },
+          "state": "INCOMPLETE",
+          "speech_triggered": false,
+          "silence_ms": 0,
+          "speech_start": 0,
+          "model_input": null,
+          "metrics": null
+        }
+      ]
+    }
+  ]
+}

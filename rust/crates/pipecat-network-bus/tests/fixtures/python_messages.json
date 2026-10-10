@@ -1,0 +1,531 @@
+[
+  {
+    "__type__": "pipecat.bus.messages.BusMessage",
+    "__data__": {
+      "id": 1,
+      "name": "BusMessage#0",
+      "source": "worker-a",
+      "target": "worker-b"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusDataMessage",
+    "__data__": {
+      "id": 2,
+      "name": "BusDataMessage#0",
+      "source": "worker-a",
+      "target": "worker-b"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusSystemMessage",
+    "__data__": {
+      "id": 3,
+      "name": "BusSystemMessage#0",
+      "source": "worker-a",
+      "target": "worker-b"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusDeactivateWorkerMessage",
+    "__data__": {
+      "id": 4,
+      "name": "BusDeactivateWorkerMessage#0",
+      "source": "worker-a",
+      "target": "worker-b"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusActivateWorkerMessage",
+    "__data__": {
+      "id": 5,
+      "name": "BusActivateWorkerMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "args": {
+        "mode": "test"
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusEndMessage",
+    "__data__": {
+      "id": 6,
+      "name": "BusEndMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "reason": "done"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusEndWorkerMessage",
+    "__data__": {
+      "id": 7,
+      "name": "BusEndWorkerMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "reason": "done"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusCancelMessage",
+    "__data__": {
+      "id": 8,
+      "name": "BusCancelMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "reason": "done"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusCancelWorkerMessage",
+    "__data__": {
+      "id": 9,
+      "name": "BusCancelWorkerMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "reason": "done"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusTTSSpeakMessage",
+    "__data__": {
+      "id": 10,
+      "name": "BusTTSSpeakMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "text": "hello 世界",
+      "append_to_context": false
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFlushProgressMessage",
+    "__data__": {
+      "id": 11,
+      "name": "BusFlushProgressMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "flush_id": 17
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusWorkerReadyMessage",
+    "__data__": {
+      "id": 12,
+      "name": "BusWorkerReadyMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "runner": "runner-a",
+      "parent": "parent",
+      "active": true,
+      "bridged": true,
+      "started_at": 1720000000.5
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusWorkerRegistryMessage",
+    "__data__": {
+      "id": 13,
+      "name": "BusWorkerRegistryMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "runner": "runner-a",
+      "workers": [
+        {
+          "__type__": "pipecat.registry.types.WorkerRegistryEntry",
+          "__data__": {
+            "name": "worker-a",
+            "active": true,
+            "bridged": false,
+            "started_at": 1720000000.5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusWorkerErrorMessage",
+    "__data__": {
+      "id": 14,
+      "name": "BusWorkerErrorMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "error": "example error"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusWorkerLocalErrorMessage",
+    "__data__": {
+      "id": 15,
+      "name": "BusWorkerLocalErrorMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "error": "example error"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobRequestMessage",
+    "__data__": {
+      "id": 16,
+      "name": "BusJobRequestMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "job_name": "research",
+      "payload": {
+        "query": "weather",
+        "bytes": {
+          "__type__": "bytes",
+          "__data__": "AP8="
+        }
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseMessage",
+    "__data__": {
+      "id": 17,
+      "name": "BusJobResponseMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "completed",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseMessage",
+    "__data__": {
+      "id": 18,
+      "name": "BusJobResponseMessage#1",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "cancelled",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseMessage",
+    "__data__": {
+      "id": 19,
+      "name": "BusJobResponseMessage#2",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "failed",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseMessage",
+    "__data__": {
+      "id": 20,
+      "name": "BusJobResponseMessage#3",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "error",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseUrgentMessage",
+    "__data__": {
+      "id": 21,
+      "name": "BusJobResponseUrgentMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "completed",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseUrgentMessage",
+    "__data__": {
+      "id": 22,
+      "name": "BusJobResponseUrgentMessage#1",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "cancelled",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseUrgentMessage",
+    "__data__": {
+      "id": 23,
+      "name": "BusJobResponseUrgentMessage#2",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "failed",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobResponseUrgentMessage",
+    "__data__": {
+      "id": 24,
+      "name": "BusJobResponseUrgentMessage#3",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "status": "error",
+      "response": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobUpdateMessage",
+    "__data__": {
+      "id": 25,
+      "name": "BusJobUpdateMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "update": {
+        "progress": 0.5
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobUpdateUrgentMessage",
+    "__data__": {
+      "id": 26,
+      "name": "BusJobUpdateUrgentMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "update": {
+        "progress": 0.5
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobUpdateRequestMessage",
+    "__data__": {
+      "id": 27,
+      "name": "BusJobUpdateRequestMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobCancelMessage",
+    "__data__": {
+      "id": 28,
+      "name": "BusJobCancelMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "reason": "cancel"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobStreamStartMessage",
+    "__data__": {
+      "id": 29,
+      "name": "BusJobStreamStartMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "data": {
+        "metadata": "preserved"
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobStreamDataMessage",
+    "__data__": {
+      "id": 30,
+      "name": "BusJobStreamDataMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "data": {
+        "metadata": "preserved"
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusJobStreamEndMessage",
+    "__data__": {
+      "id": 31,
+      "name": "BusJobStreamEndMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "job_id": "job-1",
+      "data": {
+        "metadata": "preserved"
+      }
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 35,
+      "name": "BusFrameMessage#0",
+      "source": "worker-a",
+      "target": "worker-b",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TextFrame",
+        "__data__": {
+          "id": 32,
+          "name": "TextFrame#0",
+          "metadata": {
+            "trace": "fixture"
+          },
+          "interruptible": true,
+          "text": "hello",
+          "includes_inter_frame_spaces": false,
+          "append_to_context": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "DOWNSTREAM"
+      },
+      "bridge": "voice"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 36,
+      "name": "BusFrameMessage#1",
+      "source": "worker-a",
+      "target": "worker-b",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMTextFrame",
+        "__data__": {
+          "id": 33,
+          "name": "LLMTextFrame#0",
+          "metadata": {
+            "trace": "fixture"
+          },
+          "interruptible": true,
+          "text": "hello ",
+          "includes_inter_frame_spaces": true,
+          "append_to_context": true
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "DOWNSTREAM"
+      },
+      "bridge": "voice"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 37,
+      "name": "BusFrameMessage#2",
+      "source": "worker-a",
+      "target": "worker-b",
+      "frame": {
+        "__type__": "pipecat.frames.frames.TTSAudioRawFrame",
+        "__data__": {
+          "audio": {
+            "__type__": "bytes",
+            "__data__": "AQD/fw=="
+          },
+          "sample_rate": 16000,
+          "num_channels": 1,
+          "num_frames": 2,
+          "id": 34,
+          "name": "TTSAudioRawFrame#0",
+          "metadata": {
+            "trace": "fixture"
+          },
+          "interruptible": true,
+          "context_id": "tts-1"
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "DOWNSTREAM"
+      },
+      "bridge": "voice"
+    }
+  },
+  {
+    "__type__": "pipecat.bus.messages.BusFrameMessage",
+    "__data__": {
+      "id": 39,
+      "name": "BusFrameMessage#3",
+      "source": "worker-a",
+      "target": "worker-b",
+      "frame": {
+        "__type__": "pipecat.frames.frames.LLMContextFrame",
+        "__data__": {
+          "id": 38,
+          "name": "LLMContextFrame#0",
+          "metadata": {},
+          "interruptible": true,
+          "context": {
+            "__type__": "pipecat.processors.aggregators.llm_context.LLMContext",
+            "__data__": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "tools": {
+                "standard_tools": [
+                  {
+                    "name": "get_weather",
+                    "description": "Get the weather",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    }
+                  }
+                ],
+                "custom_tools": {
+                  "gemini": [
+                    {
+                      "google_search": {}
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "speculation": false
+        }
+      },
+      "direction": {
+        "__type__": "pipecat.processors.frame_processor.FrameDirection",
+        "__data__": "UPSTREAM"
+      }
+    }
+  }
+]

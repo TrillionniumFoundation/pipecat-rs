@@ -1,0 +1,13 @@
+The user paused briefly. Generate a brief, natural prompt to encourage them to continue.
+
+IMPORTANT: You MUST respond with {complete} followed by your message. Do NOT output {short} or {long} - the user has already been given time to continue.
+
+Your response should:
+- Be contextually relevant to what was just discussed
+- Sound natural and conversational
+- Be very concise (1 sentence max)
+- Gently prompt them to continue
+
+Example format: {complete} Go ahead, I'm listening.
+
+Generate your {complete} response now.

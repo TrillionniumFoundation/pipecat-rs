@@ -1,0 +1,29 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "sources": [
+    "src/pipecat/pipeline/parallel_pipeline.py",
+    "src/pipecat/pipeline/sync_parallel_pipeline.py"
+  ],
+  "parallel_barriers": [
+    "StartFrame",
+    "EndFrame",
+    "CancelFrame"
+  ],
+  "parallel_deduplication": "frame.id",
+  "sync_sentinel": "SyncFrame(ControlFrame)",
+  "sync_order": {
+    "arrival": [
+      "second:input",
+      "first:input"
+    ],
+    "pipeline": [
+      "first:input",
+      "second:input"
+    ]
+  },
+  "notes": "Manually derived source contract, not a claim of executing Python. First branch is delayed; second produces immediately. Each branch forwards FIFO control sentinels.",
+  "source_sha256": {
+    "src/pipecat/pipeline/parallel_pipeline.py": "e4ce6957991a50503e1de02c75bfbadba6d6baa978305b788e2585153519adc6",
+    "src/pipecat/pipeline/sync_parallel_pipeline.py": "c28b2527cb0713095ef3652900f1f4d034f31615b4e0933117739a0e5e7d6561"
+  }
+}

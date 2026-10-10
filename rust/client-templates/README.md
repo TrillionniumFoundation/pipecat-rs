@@ -1,0 +1,126 @@
+# Rust browser client template
+
+A standalone Rust/WASM browser client for Pipecat's SmallWebRTC and protobuf
+WebSocket transports. Application state, browser transport calls, microphone
+capture, audio scheduling, protocol serialization, and DOM updates live in Rust.
+The only shipped JavaScript is generated wasm-bindgen interop plus the one-line
+module initializer in `web/index.html`. This Cargo workspace is deliberately
+independent of the native pipeline workspace: it does not import native-core,
+Tokio, provider credentials, or native media libraries into the browser.
+
+## Build and run
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
+./build.sh
+```
+
+Use Rust 1.99 or newer. `build.sh` produces the complete static bundle in `dist/`.
+Edit `web/config.json` and rebuild, or change the copied `dist/config.json`:
+
+```json
+{
+  "project_name": "Pipecat Bot",
+  "start_endpoint": "/api/start",
+  "transports": ["smallwebrtc", "websocket"]
+}
+```
+
+Serve these assets and the native start/session proxy on one loopback origin:
+
+```sh
+cd ..
+cargo run -p pipecat-client-server --example serve -- \
+  client-templates/dist http://127.0.0.1:7860/start 8080
+```
+
+Then open `http://127.0.0.1:8080/`. See the proxy crate's README for its supported
+configuration and local-only security boundary. Direct backend URLs ending in
+`/start` also work when the backend explicitly permits the browser origin via
+CORS. HTTPS is required for non-loopback microphone access. A static file server
+alone does not provide `/api/start`; the bot backend and proxy are separate
+services. The browser needs microphone permission after Connect, and platform
+permissions remain under the user's control.
+
+No private API key belongs in `config.json`, HTML, WASM, or a browser URL.
+Configure upstream authentication only in the native server. The browser accepts
+a short-lived WebSocket connection token from `/start` and URL-encodes it while
+preserving existing query parameters. Application event messages do not print
+connection URLs, tokens, or SDP. Provider-supplied RTVI event data is displayed as
+text and may contain conversation content; avoid recording it without consent.
+
+## Source compatibility inventory
+
+| Source surface | Rust implementation | Remaining limits |
+| --- | --- | --- |
+| `vanilla-js-vite/index.html`, `style.css` | Preserved layout, brand SVG, theme, controls, conversation and events panels | System font fallbacks replace npm font imports |
+| `vanilla-js-vite/src/app.js` | Connect/Cancel/Disconnect, transport state, mic toggle, audio output, bounded event log and transcripts | No original JS SDK object/API exports |
+| Three client `config.*.jinja2` files | JSON project name, selected transport list, start endpoint, transport-specific request bodies | CLI generation must explicitly copy this template; old CLI JS/TS templates are unchanged |
+| SmallWebRTC | Browser RTCPeerConnection, local audio track, gathered SDP offer/session route, configured ICE servers, remote audio, data-channel RTVI, ping, track-status mute | No trickle ICE, automatic ICE restart, SDP renegotiation, or custom SDP munging; requested renegotiation closes with an actionable error |
+| WebSocket | `/start`, token-aware socket URL, actual binary Pipecat protobuf framing, mono PCM16 capture, mono/stereo PCM16 playback, interruption flush | Only protobuf serializer, not provider-specific telephony protocols; no compressed-codec negotiation |
+| `@pipecat-ai/client-js` RTVI events | Version 2.2.0 `client-ready`, `bot-ready`, all RTVI event JSON, final user transcription and segment-updating `bot-output` | Legacy bot-transcription-only servers need an adapter; advanced client-message/function/tool APIs are not exposed |
+| Next.js `/api/start` and session routes | Separate `pipecat-client-server` Rust crate, fixed-upstream proxy and loopback host | Production authentication, session ownership, reverse proxy and deployment policy are host responsibilities |
+| React/Vite and Next console components | Core voice session controls and conversation/events purpose covered by the shared static Rust UI | React/shadcn component APIs, metrics charts, camera/video, screen sharing, device picker, text input, DTMF, codec picker, attachments and session-info panels are not ported |
+| Daily and LiveKit transports | Explicit configuration error before session creation | No Daily/LiveKit adapter; neither is simulated or silently mapped to another transport |
+
+This is a runnable core voice-client scaffold, **not complete parity with the
+React consoles or every provider SDK**, and not an automatically integrated
+replacement for the Python CLI's generated templates.
+
+## Ownership and bounds
+
+A session owns its media tracks, AudioContext, capture graph, socket or peer,
+callbacks, playback nodes, fetch AbortController and keepalive timer. Disconnect,
+page hide, start failure, socket close, peer failure, and cancellation stop those
+resources. Generation checks reject late fetch, media and negotiation completions;
+a microphone stream arriving after cancellation is stopped immediately. Browsers
+cannot abort their microphone permission prompt programmatically, so Cancel
+invalidates its result rather than attempting to dismiss that prompt.
+
+Start/offer HTTP requests have a 15-second deadline, ICE gathering a 10-second
+deadline, and transport establishment a 20-second deadline. Outgoing microphone
+frames are dropped when WebSocket bufferedAmount exceeds 256 KiB. Playback is
+bounded to three seconds and 256 scheduled nodes; interruptions stop queued
+sources. Binary frames and JSON messages are limited to 1 MiB; HTTP JSON size is
+checked after browser response buffering. Events retain 300 rows and transcripts
+retain 500 rows. Configuration and unsupported adapters fail closed.
+
+WebSocket microphone capture uses the browser's deprecated ScriptProcessorNode
+with a 2048-sample buffer and browser-native AudioContext sample rate, included in
+each protobuf frame. This avoids handwritten JavaScript AudioWorklet code but
+runs audio callbacks on the main thread, so latency, UI stalls, and eventual
+browser removal are meaningful limitations. Production low-latency use should
+supply a Rust/WASM AudioWorklet pipeline and browser compatibility testing. There
+is no echo-cancellation guarantee beyond the browser's default microphone
+constraints. SmallWebRTC audio uses browser-native WebRTC media tracks.
+
+Cancellation cannot undo a bot session already created upstream. The backend
+must expire abandoned sessions; the source `/start` contract provides no general
+session-delete operation. Disconnect does not send an unrequested bot shutdown
+command.
+
+## Validation
+
+```sh
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings
+./build.sh
+python3 tests/browser_acceptance.py
+```
+
+The browser fixture requires Python `aiohttp`, Python `playwright`, and system
+Chromium at `/usr/bin/chromium`. It starts only loopback HTTP/WebSocket services,
+uses Chromium's synthetic microphone and synthetic remote audio, and creates a
+real paired RTCPeerConnection. Test-only JavaScript implements the remote fixture
+and instrumentation; none is bundled in the app. Results and screenshot are
+written under ignored `target/`.
+
+Unit tests cover wire-compatible protobuf golden bytes, PCM conversion and
+validation, URL/token handling, config/adapter validation, RTVI projection,
+connection generations, cancellation/reconnection, and audio-flow limits.
+See `VALIDATION.md` for the recorded passed checks and blocked browser stage.
+Browser acceptance must be reported separately from live-provider, physical
+microphone/speaker, WAN TURN traversal, multi-browser, autoplay-restriction and
+production-auth acceptance. Those environments are not exercised by the fixture.

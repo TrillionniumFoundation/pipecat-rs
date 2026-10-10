@@ -1,0 +1,25 @@
+[package]
+name = "pipecat-assemblyai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+async-trait.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-audio = { path = "../pipecat-audio" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", features = ["sink"] }
+url = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+order:
+  task_messages: !include prompts/order.yaml
+  functions:
+    - name: save_order
+      transition_to:
+        field: saved
+        cases:
+          true: confirm
+  respond_immediately: false
+confirm:
+  task_messages:
+    - role: developer
+      content: Confirm {{ item }} with the caller.
+  respond_immediately: false

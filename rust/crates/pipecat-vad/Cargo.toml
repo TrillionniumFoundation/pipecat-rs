@@ -1,0 +1,24 @@
+[package]
+name = "pipecat-vad"
+version.workspace = true
+edition.workspace = true
+license = "BSD-2-Clause AND Apache-2.0 AND MIT"
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+ort = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic", "ndarray"] }
+ort-sys = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic"] }
+ndarray = "0.16"
+rustfft = "6.4"
+
+[dev-dependencies]
+serde_json.workspace = true
+pipecat-audio = { path = "../pipecat-audio" }
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

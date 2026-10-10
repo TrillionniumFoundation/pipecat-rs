@@ -1,0 +1,3 @@
+# All includes are relative to the application's explicit examples/yaml root.
+initial_node: order
+nodes: !include nodes.yaml

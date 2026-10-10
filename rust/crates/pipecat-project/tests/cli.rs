@@ -1,0 +1,124 @@
+//! Process-level checks; generation never calls Python or external package installers.
+use std::{fs, path::PathBuf, process::Command};
+
+fn source() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
+}
+fn command() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_pipecat-init"))
+}
+
+#[test]
+fn dry_run_then_generation_and_repeat_have_correct_exit_status() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut args = vec![
+        "example-bot".to_owned(),
+        "--source-rust".into(),
+        source().display().to_string(),
+        "--parent".into(),
+        temp.path().display().to_string(),
+    ];
+    args.push("--dry-run".into());
+    let output = command().args(&args).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(summary["config"]["name"], "example-bot");
+    assert!(!temp.path().join("example-bot").exists());
+    args.pop();
+    assert!(command().args(&args).output().unwrap().status.success());
+    let output = command().args(&args).output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("destination already exists"));
+    assert!(temp.path().join("example-bot/src/main.rs").is_file());
+}
+
+#[test]
+fn unsupported_and_malicious_input_does_not_create_anything() {
+    let temp = tempfile::tempdir().unwrap();
+    for args in [
+        vec!["../escape"],
+        vec!["safe-bot", "--transport", "daily"],
+        vec!["safe-bot", "--transport", "livekit"],
+        vec!["safe-bot", "--deploy-to-cloud"],
+    ] {
+        let output = command()
+            .args(args)
+            .arg("--parent")
+            .arg(temp.path())
+            .arg("--source-rust")
+            .arg(source())
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+}
+
+#[test]
+fn process_environment_secrets_never_appear_in_generated_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = command()
+        .args(["secret-free", "--client", "rust-wasm", "--parent"])
+        .arg(temp.path())
+        .arg("--source-rust")
+        .arg(source())
+        .env("DEEPGRAM_API_KEY", "SHOULD_NEVER_BE_COPIED_18A6")
+        .env("OPENAI_API_KEY", "SHOULD_NEVER_BE_COPIED_18A6")
+        .env("CARTESIA_API_KEY", "SHOULD_NEVER_BE_COPIED_18A6")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let mut pending = vec![temp.path().to_owned()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let content = fs::read_to_string(&path).unwrap();
+                assert!(
+                    !content.contains("SHOULD_NEVER_BE_COPIED_18A6"),
+                    "secret copied to {}",
+                    path.display()
+                );
+                assert_ne!(path.file_name().unwrap(), ".env");
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "compiles a complete generated native application using the cached Cargo registry"]
+fn generated_application_builds_and_runs_without_credentials() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = pipecat_project::ProjectConfig::new("generated-check");
+    let plan = pipecat_project::ProjectPlan::new(config, temp.path(), &source()).unwrap();
+    let project = pipecat_project::generate(&plan).unwrap();
+    let output = Command::new(env!("CARGO"))
+        .args(["run", "--offline", "--manifest-path"])
+        .arg(project.join("Cargo.toml"))
+        .arg("--target-dir")
+        // This generated workspace must not reuse another source tree's Cargo
+        // artifacts. Its temporary directory owns the build cache as well.
+        .arg(project.join("target"))
+        .args(["--", "--help"])
+        .env_remove("DEEPGRAM_API_KEY")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("CARTESIA_API_KEY")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Native HTTP /api/start"));
+    assert!(project.join("Cargo.lock").exists());
+}

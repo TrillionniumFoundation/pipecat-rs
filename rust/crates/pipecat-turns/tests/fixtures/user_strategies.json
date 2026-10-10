@@ -1,0 +1,76 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "basis": "Manually source-mapped deterministic assertions, not a Python execution oracle",
+  "sources": [
+    "src/pipecat/turns/user_start/vad_user_turn_start_strategy.py",
+    "src/pipecat/turns/user_start/transcription_user_turn_start_strategy.py",
+    "src/pipecat/turns/user_start/external_user_turn_start_strategy.py",
+    "src/pipecat/turns/user_start/min_words_user_turn_start_strategy.py",
+    "src/pipecat/turns/user_start/wake_phrase_user_turn_start_strategy.py",
+    "src/pipecat/turns/user_mute/always_user_mute_strategy.py",
+    "src/pipecat/turns/user_mute/first_speech_user_mute_strategy.py",
+    "src/pipecat/turns/user_mute/function_call_user_mute_strategy.py",
+    "src/pipecat/turns/user_mute/mute_until_first_bot_complete_user_mute_strategy.py",
+    "tests/test_user_turn_start_strategy.py",
+    "tests/test_wake_phrase_user_turn_start_strategy.py",
+    "tests/test_user_mute_strategy.py",
+    "tests/test_context_aggregators_universal.py::test_start_frame_before_mute_event"
+  ],
+  "native_strengthening": "Function-call mute retains the native bounded typed id/name/arguments/finality and replay contract; Python removes by id on any result. Wake configuration rejects empty/oversize phrases and nonpositive/over-one-day timeouts. Empty explicit start lists disable starts; None keeps native defaults.",
+  "start_cases": [
+    {"name":"vad_only", "strategy":"vad", "steps":[
+      {"frame":"vad_stop", "start":false},
+      {"frame":"final", "text":"hello", "start":false},
+      {"frame":"vad_start", "start":true}
+    ]},
+    {"name":"transcription_final_only", "strategy":"transcription", "use_interim":false, "steps":[
+      {"frame":"interim", "text":"hello", "start":false},
+      {"frame":"final", "text":"hello", "start":true}
+    ]},
+    {"name":"transcription_interim", "strategy":"transcription", "use_interim":true, "steps":[
+      {"frame":"vad_start", "start":false},
+      {"frame":"interim", "text":"hello", "start":true}
+    ]},
+    {"name":"external_proposals_and_announcements", "strategy":"external", "steps":[
+      {"frame":"vad_start", "start":false},
+      {"frame":"proposed_start", "start":true, "interrupt":true, "emit":true},
+      {"frame":"user_start", "start":true, "interrupt":false, "emit":false}
+    ]},
+    {"name":"minimum_per_hypothesis_and_start_reset", "strategy":"min_words", "min_words":3, "use_interim":true, "steps":[
+      {"frame":"bot_start", "start":false},
+      {"frame":"final", "text":"one", "start":false, "reset":true},
+      {"frame":"final", "text":"two", "start":false, "reset":true},
+      {"frame":"interim", "text":"one two", "start":false, "reset":true},
+      {"frame":"final", "text":"one two three", "start":true, "notify_start":true},
+      {"frame":"final", "text":"one", "start":true}
+    ]},
+    {"name":"minimum_final_only_silent_bot", "strategy":"min_words", "min_words":3, "use_interim":false, "steps":[
+      {"frame":"interim", "text":"one two three", "start":false},
+      {"frame":"final", "text":"one", "start":true}
+    ]},
+    {"name":"wake_final_split_punctuation_boundary", "strategy":"wake", "timeout_ms":100, "single_activation":false, "steps":[
+      {"frame":"vad_start", "start":false},
+      {"frame":"interim", "text":"hey pipecat", "start":false},
+      {"frame":"final", "text":"they pipecats", "start":false, "reset":true},
+      {"frame":"final", "text":"Hey,", "start":false, "reset":true},
+      {"frame":"final", "text":"Pipecat!", "ms":10, "start":true, "event":"detected", "notify_start":true},
+      {"frame":"user_speaking", "ms":90, "start":false},
+      {"frame":"advance", "ms":189, "start":false},
+      {"frame":"advance", "ms":190, "start":false, "event":"timeout"},
+      {"frame":"final", "text":"hello", "ms":191, "start":false, "reset":true}
+    ]},
+    {"name":"wake_single_activation_keepalive", "strategy":"wake", "timeout_ms":100, "single_activation":true, "steps":[
+      {"frame":"final", "text":"HEYPIPEcat", "start":true, "event":"detected", "notify_start":true},
+      {"frame":"bot_speaking", "ms":90, "start":false},
+      {"frame":"advance", "ms":100, "start":false, "event":"timeout"},
+      {"frame":"final", "text":"hey pipecat", "ms":101, "start":true, "event":"detected"}
+    ]}
+  ],
+  "mute_cases": [
+    {"strategy":"always", "steps":[["interruption",false],["bot_start",true],["interruption",true],["bot_stop",false],["bot_start",true]]},
+    {"strategy":"first", "steps":[["interruption",false],["bot_start",true],["interruption",true],["bot_stop",false],["bot_start",false]]},
+    {"strategy":"until", "steps":[["interruption",true],["bot_start",true],["error",true],["bot_stop",false],["bot_start",false]]},
+    {"strategy":"until", "steps":[["interruption",true],["error",false],["bot_start",false]]},
+    {"strategy":"first", "steps":[["error",false],["bot_start",true],["bot_stop",false]]}
+  ]
+}

@@ -1,0 +1,2524 @@
+{
+  "source_commit": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_file": "src/pipecat/frames/frames.py",
+  "source_sha256": "765266f414354ec753cda52b40f0517fffa056c868fbb767f3b41179d4f86449",
+  "classes": [
+    {
+      "name": "Frame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "SystemFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "DataFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "ControlFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UninterruptibleFrame",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {}
+    },
+    {
+      "name": "AudioRawFrame",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int"
+      }
+    },
+    {
+      "name": "ImageRawFrame",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None"
+      }
+    },
+    {
+      "name": "FileRawFrame",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "file": "str",
+        "type": "FileSourceType",
+        "filename": "str | None",
+        "format": "str"
+      }
+    },
+    {
+      "name": "OutputAudioRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int"
+      }
+    },
+    {
+      "name": "OutputImageRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None",
+        "sync_with_audio": "bool"
+      }
+    },
+    {
+      "name": "TTSAudioRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int",
+        "context_id": "str | None"
+      }
+    },
+    {
+      "name": "SpeechOutputAudioRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int"
+      }
+    },
+    {
+      "name": "URLImageRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None",
+        "sync_with_audio": "bool",
+        "url": "str | None"
+      }
+    },
+    {
+      "name": "SpriteFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "images": "list[OutputImageRawFrame]"
+      }
+    },
+    {
+      "name": "TextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "LLMTextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "LLMMarkerFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "marker": "str",
+        "append_to_context_immediately": "bool"
+      }
+    },
+    {
+      "name": "LLMMarkerResponseFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "raw": "str",
+        "marker": "str | None",
+        "kind": "str | None",
+        "markers": "list[str]"
+      }
+    },
+    {
+      "name": "AggregatedTextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "aggregated_by": "AggregationType | str",
+        "context_id": "str | None",
+        "raw_text": "str | None",
+        "will_be_spoken": "bool"
+      }
+    },
+    {
+      "name": "VisionTextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "TTSTextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "aggregated_by": "AggregationType | str",
+        "context_id": "str | None",
+        "raw_text": "str | None",
+        "will_be_spoken": "bool"
+      }
+    },
+    {
+      "name": "AggregatedTextProgressFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "segment_id": "int",
+        "context_id": "str | None",
+        "text": "str",
+        "aggregated_by": "AggregationType | str",
+        "accumulated_text": "str",
+        "remaining_text": "str"
+      }
+    },
+    {
+      "name": "TranscriptionFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "user_id": "str",
+        "timestamp": "str",
+        "language": "Language | None",
+        "result": "Any | None",
+        "finalized": "bool"
+      }
+    },
+    {
+      "name": "InterimTranscriptionFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "user_id": "str",
+        "timestamp": "str",
+        "language": "Language | None",
+        "result": "Any | None"
+      }
+    },
+    {
+      "name": "EagerTranscriptionFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "user_id": "str",
+        "timestamp": "str",
+        "language": "Language | None",
+        "result": "Any | None"
+      }
+    },
+    {
+      "name": "TranslationFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool",
+        "user_id": "str",
+        "timestamp": "str",
+        "language": "Language | None"
+      }
+    },
+    {
+      "name": "LLMContextAssistantTimestampFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "timestamp": "str"
+      }
+    },
+    {
+      "name": "LLMContextAssistantTurnFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "timestamp": "str"
+      }
+    },
+    {
+      "name": "LLMContextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "context": "LLMContext",
+        "speculation": "bool"
+      }
+    },
+    {
+      "name": "LLMThoughtStartFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "append_to_context": "bool",
+        "llm": "str | None"
+      }
+    },
+    {
+      "name": "LLMThoughtTextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "includes_inter_frame_spaces": "bool"
+      }
+    },
+    {
+      "name": "LLMThoughtEndFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "signature": "Any"
+      }
+    },
+    {
+      "name": "LLMRunFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "LLMMessagesAppendFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "messages": "list[LLMContextMessage]",
+        "run_llm": "bool | None"
+      }
+    },
+    {
+      "name": "LLMMessagesUpdateFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "messages": "list[LLMContextMessage]",
+        "run_llm": "bool | None"
+      }
+    },
+    {
+      "name": "LLMMessagesTransformFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "transform": "Callable[[list[LLMContextMessage]], list[LLMContextMessage]]",
+        "run_llm": "bool | None"
+      }
+    },
+    {
+      "name": "LLMSetToolsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "tools": "list[FunctionSchema | DirectFunction] | ToolsSchema | NotGiven"
+      }
+    },
+    {
+      "name": "LLMSetToolChoiceFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "tool_choice": "Literal['none', 'auto', 'required'] | dict"
+      }
+    },
+    {
+      "name": "LLMEnablePromptCachingFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "enable": "bool"
+      }
+    },
+    {
+      "name": "LLMConfigureOutputFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "skip_tts": "bool"
+      }
+    },
+    {
+      "name": "FunctionCallResultProperties",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "run_llm": "bool | None",
+        "on_context_updated": "Callable[[], Awaitable[None]] | None",
+        "is_final": "bool"
+      }
+    },
+    {
+      "name": "FunctionCallResultFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str",
+        "arguments": "Any",
+        "result": "Any",
+        "run_llm": "bool | None",
+        "properties": "FunctionCallResultProperties | None",
+        "error": "str | None"
+      }
+    },
+    {
+      "name": "TTSSpeakFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "OutputTransportMessageFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "message": "Any"
+      }
+    },
+    {
+      "name": "DTMFFrame",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {}
+    },
+    {
+      "name": "OutputDTMFFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "button": "KeypadEntry | None",
+        "buttons": "list[KeypadEntry] | None"
+      }
+    },
+    {
+      "name": "StartFrame",
+      "frame": true,
+      "priority": "start",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio_in_sample_rate": "int",
+        "audio_out_sample_rate": "int",
+        "enable_metrics": "bool",
+        "enable_tracing": "bool",
+        "enable_usage_metrics": "bool",
+        "report_only_initial_ttfb": "bool",
+        "tracing_context": "TracingContext | None"
+      }
+    },
+    {
+      "name": "CancelFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "reason": "Any | None"
+      }
+    },
+    {
+      "name": "ErrorFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "error": "str",
+        "fatal": "bool",
+        "processor": "FrameProcessor | None",
+        "exception": "Exception | None",
+        "category": "ErrorCategory | None"
+      }
+    },
+    {
+      "name": "FatalErrorFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "error": "str",
+        "fatal": "bool",
+        "processor": "FrameProcessor | None",
+        "exception": "Exception | None",
+        "category": "ErrorCategory | None"
+      }
+    },
+    {
+      "name": "FrameProcessorPauseUrgentFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "processor": "FrameProcessor"
+      }
+    },
+    {
+      "name": "FrameProcessorResumeUrgentFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "processor": "FrameProcessor"
+      }
+    },
+    {
+      "name": "InterruptionFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserStartedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserStoppedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "EagerEndOfTurnCancelFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserMuteStartedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserMuteStoppedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "UserTurnInferenceCompletedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "VADUserStartedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "start_secs": "float",
+        "timestamp": "float"
+      }
+    },
+    {
+      "name": "VADUserStoppedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "stop_secs": "float",
+        "timestamp": "float"
+      }
+    },
+    {
+      "name": "ProposedUserStartedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "ProposedUserStoppedSpeakingFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "BotStartedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "BotStoppedSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "BotSpeakingFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "MetricsFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "data": "list[MetricsData]"
+      }
+    },
+    {
+      "name": "FunctionCallFromLLM",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "function_name": "str",
+        "tool_call_id": "str",
+        "arguments": "Mapping[str, Any]",
+        "context": "Any"
+      }
+    },
+    {
+      "name": "FunctionCallsStartedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_calls": "Sequence[FunctionCallFromLLM]"
+      }
+    },
+    {
+      "name": "ExternalFunctionCall",
+      "frame": false,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "function_name": "str",
+        "tool_call_id": "str"
+      }
+    },
+    {
+      "name": "ExternalFunctionCallsStartedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_calls": "Sequence[ExternalFunctionCall]"
+      }
+    },
+    {
+      "name": "ExternalFunctionCallInProgressFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str",
+        "arguments": "Any"
+      }
+    },
+    {
+      "name": "ExternalFunctionCallResultFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str",
+        "arguments": "Any",
+        "result": "Any",
+        "is_final": "bool"
+      }
+    },
+    {
+      "name": "ExternalFunctionCallCancelFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str"
+      }
+    },
+    {
+      "name": "FunctionCallCancelFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str",
+        "run_llm": "bool"
+      }
+    },
+    {
+      "name": "STTMuteFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "mute": "bool"
+      }
+    },
+    {
+      "name": "InputTransportMessageFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "message": "Any"
+      }
+    },
+    {
+      "name": "OutputTransportMessageUrgentFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "message": "Any"
+      }
+    },
+    {
+      "name": "UserImageRequestFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "user_id": "str",
+        "text": "str | None",
+        "append_to_context": "bool | None",
+        "video_source": "str | None",
+        "function_name": "str | None",
+        "tool_call_id": "str | None",
+        "result_callback": "Any | None"
+      }
+    },
+    {
+      "name": "InputAudioRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int"
+      }
+    },
+    {
+      "name": "InputImageRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None"
+      }
+    },
+    {
+      "name": "InputFileRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "file": "str",
+        "type": "FileSourceType",
+        "filename": "str | None",
+        "format": "str"
+      }
+    },
+    {
+      "name": "InputTextRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "text": "str",
+        "skip_tts": "bool | None",
+        "includes_inter_frame_spaces": "bool",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "UserAudioRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "audio": "bytes",
+        "sample_rate": "int",
+        "num_channels": "int",
+        "num_frames": "int",
+        "user_id": "str"
+      }
+    },
+    {
+      "name": "UserImageRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None",
+        "user_id": "str",
+        "text": "str | None",
+        "append_to_context": "bool | None",
+        "request": "UserImageRequestFrame | None",
+        "run_llm": "bool | None"
+      }
+    },
+    {
+      "name": "UserFileRawFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "file": "str",
+        "type": "FileSourceType",
+        "filename": "str | None",
+        "format": "str",
+        "user_id": "str",
+        "text": "str",
+        "append_to_context": "bool | None",
+        "custom_options": "dict | None",
+        "run_llm": "bool | None"
+      }
+    },
+    {
+      "name": "AssistantImageRawFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "image": "bytes",
+        "size": "tuple[int, int]",
+        "format": "str | None",
+        "sync_with_audio": "bool",
+        "original_data": "bytes | None",
+        "original_mime_type": "str | None"
+      }
+    },
+    {
+      "name": "InputDTMFFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "button": "KeypadEntry"
+      }
+    },
+    {
+      "name": "OutputDTMFUrgentFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "button": "KeypadEntry | None",
+        "buttons": "list[KeypadEntry] | None"
+      }
+    },
+    {
+      "name": "SpeechControlParamsFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "vad_params": "VADParams | None",
+        "turn_params": "BaseTurnParams | None"
+      }
+    },
+    {
+      "name": "ServiceMetadataFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "service_name": "str",
+        "user_turn_strategies": "UserTurnStrategies | None"
+      }
+    },
+    {
+      "name": "STTMetadataFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "service_name": "str",
+        "user_turn_strategies": "UserTurnStrategies | None",
+        "ttfs_p99_latency": "float"
+      }
+    },
+    {
+      "name": "LLMServiceMetadataFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "service_name": "str",
+        "user_turn_strategies": "UserTurnStrategies | None",
+        "is_realtime_service": "bool"
+      }
+    },
+    {
+      "name": "ServiceSwitcherRequestMetadataFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "service": "FrameProcessor"
+      }
+    },
+    {
+      "name": "WorkerFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "WorkerSystemFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "EndWorkerFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "reason": "Any | None"
+      }
+    },
+    {
+      "name": "StopWorkerFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "CancelWorkerFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "reason": "Any | None"
+      }
+    },
+    {
+      "name": "InterruptionWorkerFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "TaskFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "TaskSystemFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "EndFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "reason": "Any | None"
+      }
+    },
+    {
+      "name": "StopFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "PipelineFlushFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "event": "asyncio.Event | None",
+        "returning": "bool",
+        "origin": "str | None"
+      }
+    },
+    {
+      "name": "BotConnectedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "ClientConnectedFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "OutputTransportReadyFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "InputTransportStartAudioStreamingFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "HeartbeatFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "timestamp": "int"
+      }
+    },
+    {
+      "name": "FrameProcessorPauseFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "processor": "FrameProcessor"
+      }
+    },
+    {
+      "name": "FrameProcessorResumeFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "processor": "FrameProcessor"
+      }
+    },
+    {
+      "name": "LLMFullResponseStartFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "skip_tts": "bool | None"
+      }
+    },
+    {
+      "name": "LLMFullResponseEndFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "skip_tts": "bool | None"
+      }
+    },
+    {
+      "name": "LLMAssistantPushAggregationFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "LLMSummarizeContextFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "config": "LLMContextSummaryConfig | None"
+      }
+    },
+    {
+      "name": "LLMContextSummaryRequestFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "request_id": "str",
+        "context": "LLMContext",
+        "min_messages_to_keep": "int",
+        "target_context_tokens": "int",
+        "summarization_prompt": "str",
+        "summarization_timeout": "float | None"
+      }
+    },
+    {
+      "name": "LLMContextSummaryResultFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "request_id": "str",
+        "summary": "str",
+        "last_summarized_index": "int",
+        "error": "str | None"
+      }
+    },
+    {
+      "name": "FunctionCallInProgressFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "function_name": "str",
+        "tool_call_id": "str",
+        "arguments": "Any",
+        "cancel_on_interruption": "bool",
+        "group_id": "str | None"
+      }
+    },
+    {
+      "name": "VisionFullResponseStartFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "skip_tts": "bool | None"
+      }
+    },
+    {
+      "name": "VisionFullResponseEndFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "skip_tts": "bool | None"
+      }
+    },
+    {
+      "name": "TTSStartedFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "context_id": "str | None",
+        "append_to_context": "bool"
+      }
+    },
+    {
+      "name": "TTSStoppedFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "context_id": "str | None"
+      }
+    },
+    {
+      "name": "ServiceUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]",
+        "delta": "TSettings | None",
+        "service": "FrameProcessor | None",
+        "reach_inactive_services": "bool"
+      }
+    },
+    {
+      "name": "LLMUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]",
+        "delta": "TSettings | None",
+        "service": "FrameProcessor | None",
+        "reach_inactive_services": "bool"
+      }
+    },
+    {
+      "name": "TTSUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]",
+        "delta": "TSettings | None",
+        "service": "FrameProcessor | None",
+        "reach_inactive_services": "bool"
+      }
+    },
+    {
+      "name": "STTUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]",
+        "delta": "TSettings | None",
+        "service": "FrameProcessor | None",
+        "reach_inactive_services": "bool"
+      }
+    },
+    {
+      "name": "UserIdleTimeoutUpdateFrame",
+      "frame": true,
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "timeout": "float"
+      }
+    },
+    {
+      "name": "VADParamsUpdateFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "params": "VADParams"
+      }
+    },
+    {
+      "name": "FilterControlFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "FilterUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]"
+      }
+    },
+    {
+      "name": "FilterEnableFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "enable": "bool"
+      }
+    },
+    {
+      "name": "AudioBufferStartRecordingFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "AudioBufferStopRecordingFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "MixerControlFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "MixerUpdateSettingsFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "settings": "Mapping[str, Any]"
+      }
+    },
+    {
+      "name": "MixerEnableFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "enable": "bool"
+      }
+    },
+    {
+      "name": "VolumeFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "volume": "float"
+      }
+    },
+    {
+      "name": "VolumeGainFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": false,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "gain": "float"
+      }
+    },
+    {
+      "name": "ServiceSwitcherFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool"
+      }
+    },
+    {
+      "name": "ManuallySwitchServiceFrame",
+      "frame": true,
+      "priority": "normal",
+      "interruptible": true,
+      "fields": {
+        "id": "int",
+        "name": "str",
+        "pts": "int | None",
+        "broadcast_sibling_id": "int | None",
+        "metadata": "dict[str, Any]",
+        "transport_source": "str | None",
+        "transport_destination": "str | None",
+        "interruptible": "bool",
+        "service": "FrameProcessor"
+      }
+    }
+  ]
+}

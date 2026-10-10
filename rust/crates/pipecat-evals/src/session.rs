@@ -1,0 +1,543 @@
+//! Owned native sessions with bounded transport, handshake, runtime, and cancellation.
+use crate::{
+    events::{EventLimits, EventStream},
+    matcher::{
+        AssertionFailure, ExpectationMatcher, ExpectationResult, MatchOutcome, PendingCheck,
+        ScriptResult,
+    },
+    serializer, EvalError, ScriptScenario, ScriptTurn,
+};
+use pipecat_protocol::rtvi::{Envelope, PROTOCOL_VERSION};
+use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
+use serde_json::{json, Value};
+use std::time::Duration;
+use tokio::{sync::watch, time::Instant};
+
+#[derive(Debug, Clone)]
+pub struct Cancellation {
+    tx: watch::Sender<bool>,
+}
+impl Default for Cancellation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Cancellation {
+    pub fn new() -> Self {
+        let (tx, _) = watch::channel(false);
+        Self { tx }
+    }
+    pub fn cancel(&self) {
+        self.tx.send_replace(true);
+    }
+    pub fn is_cancelled(&self) -> bool {
+        *self.tx.borrow()
+    }
+    pub async fn cancelled(&self) {
+        let mut rx = self.tx.subscribe();
+        loop {
+            if *rx.borrow_and_update() {
+                return;
+            }
+            if rx.changed().await.is_err() {
+                return;
+            }
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct SessionOptions {
+    pub transport: SessionConfig,
+    pub handshake_timeout: Duration,
+    pub default_timeout: Duration,
+    pub send_after_timeout: Duration,
+    pub bot_quiet_timeout: Duration,
+    pub max_duration: Duration,
+    pub event_limits: EventLimits,
+    pub max_wire_messages: usize,
+    pub max_wire_bytes: usize,
+    /// Send eval-cancel on every exit, including assertion failure or cancellation.
+    pub stop_bot: bool,
+}
+impl Default for SessionOptions {
+    fn default() -> Self {
+        Self {
+            transport: SessionConfig::default(),
+            handshake_timeout: Duration::from_secs(10),
+            default_timeout: Duration::from_secs(60),
+            send_after_timeout: Duration::from_secs(30),
+            bot_quiet_timeout: Duration::from_secs(30),
+            max_duration: Duration::from_secs(600),
+            event_limits: EventLimits::default(),
+            max_wire_messages: 65_536,
+            max_wire_bytes: 64 * 1024 * 1024,
+            stop_bot: false,
+        }
+    }
+}
+impl SessionOptions {
+    fn validate(&self) -> Result<(), EvalError> {
+        let durations = [
+            self.handshake_timeout,
+            self.default_timeout,
+            self.send_after_timeout,
+            self.bot_quiet_timeout,
+            self.max_duration,
+            self.transport.connect_timeout,
+            self.transport.write_timeout,
+            self.transport.close_timeout,
+        ];
+        if durations
+            .iter()
+            .any(|d| d.is_zero() || *d > Duration::from_secs(86_400))
+            || self.transport.queue_capacity == 0
+            || self.transport.max_message_bytes == 0
+            || self.max_wire_messages == 0
+            || self.max_wire_bytes == 0
+            || self.event_limits.max_events == 0
+            || self.event_limits.max_event_bytes == 0
+            || self.event_limits.max_text_bytes == 0
+        {
+            return Err(EvalError::Scenario(
+                "limits must be positive; timeouts must be <=24h".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+pub struct EvalSession {
+    scenario: ScriptScenario,
+    url: String,
+    options: SessionOptions,
+    socket: Option<WebSocketSession>,
+    stream: EventStream,
+    matcher: ExpectationMatcher,
+    result: ScriptResult,
+    next_id: u64,
+    active_turn: i64,
+    active_turn_started: Option<Instant>,
+    phase: &'static str,
+    wire_messages: usize,
+    wire_bytes: usize,
+}
+impl EvalSession {
+    pub fn new(
+        scenario: ScriptScenario,
+        url: impl Into<String>,
+        options: SessionOptions,
+    ) -> Result<Self, EvalError> {
+        scenario.validate()?;
+        options.validate()?;
+        let url = connect_url(&url.into(), &scenario)?;
+        let result = ScriptResult::new(&scenario.name, scenario.turns.len());
+        Ok(Self {
+            scenario,
+            url,
+            stream: EventStream::new(options.event_limits.clone()),
+            matcher: ExpectationMatcher::new(
+                options.event_limits.max_text_bytes,
+                options.event_limits.max_events,
+            ),
+            options,
+            socket: None,
+            result,
+            next_id: 0,
+            active_turn: -1,
+            active_turn_started: None,
+            phase: "connect",
+            wire_messages: 0,
+            wire_bytes: 0,
+        })
+    }
+    /// Dropping this future also drops its transport owner; no reader task is detached.
+    pub async fn run(mut self, cancel: Cancellation) -> ScriptResult {
+        let started = Instant::now();
+        self.stream = EventStream::new(self.options.event_limits.clone());
+        let max_duration = self.options.max_duration;
+        let outcome = tokio::select! {
+            biased;
+            _=cancel.cancelled()=>Err(EvalError::Cancelled),
+            _=tokio::time::sleep(max_duration)=>Err(EvalError::Timeout("session")),
+            result=self.drive()=>result,
+        };
+        if let Err(error) = outcome {
+            if let (Ok(index), Some(started)) =
+                (usize::try_from(self.active_turn), self.active_turn_started)
+            {
+                self.result.turns[index].duration_ms = started.elapsed().as_millis() as u64;
+            }
+            let kind = match &error {
+                EvalError::Cancelled => "cancelled",
+                EvalError::Limit(_) => "limit_exceeded",
+                EvalError::Disconnected => "disconnected",
+                _ if self.phase == "connect" => "connect_failed",
+                EvalError::Timeout("handshake") => "handshake_timeout",
+                EvalError::Timeout("send_after") => "send_after_timeout",
+                EvalError::Timeout(_) => "timeout",
+                _ => "error",
+            };
+            self.result.fail(AssertionFailure {
+                turn_index: self.active_turn,
+                expectation_index: -1,
+                event_name: self.phase.into(),
+                reason: error.to_string(),
+                kind: kind.into(),
+            });
+        }
+        self.shutdown().await;
+        self.result.events_seen = std::mem::take(&mut self.stream.events_seen);
+        self.result.duration_ms = started.elapsed().as_millis() as u64;
+        self.result.passed = self.result.failures.is_empty()
+            && self.result.turns.iter().all(|t| t.status == "passed");
+        self.result
+    }
+    /// The hosted runner retries only before a WebSocket is established. No
+    /// user turn or RTVI handshake is replayed on a fresh connection.
+    pub(crate) async fn connect_hosted(&mut self) -> Result<(), EvalError> {
+        loop {
+            match WebSocketSession::connect(&self.url, self.options.transport.clone()).await {
+                Ok(socket) => {
+                    self.socket = Some(socket);
+                    return Ok(());
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(25)).await,
+            }
+        }
+    }
+    async fn drive(&mut self) -> Result<(), EvalError> {
+        if self.socket.is_none() {
+            self.socket =
+                Some(WebSocketSession::connect(&self.url, self.options.transport.clone()).await?);
+        }
+        self.phase = "handshake";
+        self.send("client-ready",json!({"version":PROTOCOL_VERSION,"about":{"library":"pipecat-evals-rust","library_version":env!("CARGO_PKG_VERSION")}})).await?;
+        let deadline = Instant::now() + self.options.handshake_timeout;
+        loop {
+            if self.pump(deadline).await.map_err(|e| {
+                if matches!(e, EvalError::Timeout(_)) {
+                    EvalError::Timeout("handshake")
+                } else {
+                    e
+                }
+            })? {
+                break;
+            }
+        }
+        let config = self.scenario.observer_config();
+        if config.as_object().is_some_and(|v| !v.is_empty()) {
+            self.send_control(serializer::EVAL_CONFIGURE, config)
+                .await?;
+        }
+        if !self.scenario.context.is_empty() {
+            self.send_control(
+                serializer::EVAL_CONTEXT,
+                json!({"messages":self.scenario.context}),
+            )
+            .await?;
+        }
+        self.phase = "turn";
+        for index in 0..self.scenario.turns.len() {
+            self.active_turn = index as i64;
+            let started = Instant::now();
+            self.active_turn_started = Some(started);
+            let turn = self.scenario.turns[index].clone();
+            let send_after_event = turn
+                .send_after
+                .as_ref()
+                .and_then(|after| after.event.clone());
+            match self.run_turn(index, turn).await {
+                Err(EvalError::Timeout("send_after")) => self.result.fail(AssertionFailure {
+                    turn_index: index as i64,
+                    expectation_index: -1,
+                    event_name: send_after_event.unwrap_or_else(|| "send_after".into()),
+                    reason: "send_after event was not observed before its deadline".into(),
+                    kind: "send_after_timeout".into(),
+                }),
+                result => result?,
+            }
+            let record = &mut self.result.turns[index];
+            record.duration_ms = started.elapsed().as_millis() as u64;
+            record.status = if record.failures.is_empty() {
+                "passed"
+            } else {
+                "failed"
+            }
+            .into();
+            if !record.failures.is_empty() && self.scenario.stop_on_failure {
+                break;
+            }
+        }
+        self.active_turn = -1;
+        self.active_turn_started = None;
+        Ok(())
+    }
+    async fn run_turn(&mut self, index: usize, turn: ScriptTurn) -> Result<(), EvalError> {
+        self.matcher.reset_turn();
+        // Drain the bounded transport admission queue before the send boundary so
+        // already received output cannot satisfy a subsequent user turn.
+        self.drain_received().await?;
+        if let Some(after) = turn.send_after {
+            let target = if let Some(event) = after.event {
+                let deadline = Instant::now() + self.options.send_after_timeout;
+                loop {
+                    if let Some(at) = self.stream.latest_event_times.get(&event) {
+                        break *at + Duration::from_millis(after.delay_ms);
+                    }
+                    self.pump(deadline).await.map_err(|e| {
+                        if matches!(e, EvalError::Timeout(_)) {
+                            EvalError::Timeout("send_after")
+                        } else {
+                            e
+                        }
+                    })?;
+                }
+            } else {
+                Instant::now() + Duration::from_millis(after.delay_ms)
+            };
+            self.pump_until(target).await?;
+        } else if self.stream.bot_speaking
+            && (turn.user.is_some() || turn.dtmf.is_some() || index > 0)
+        {
+            let deadline = Instant::now() + self.options.bot_quiet_timeout;
+            while self.stream.bot_speaking {
+                match self.pump(deadline).await {
+                    Err(EvalError::Timeout(_)) => break,
+                    other => {
+                        other?;
+                    }
+                }
+            }
+            if turn.user.is_none() && turn.dtmf.is_none() && index > 0 {
+                self.stream.turn_boundary();
+            }
+        }
+        if let Some(user) = turn.user {
+            self.stream.turn_boundary();
+            self.send(
+                "send-text",
+                json!({"content":user,"options":{"run_immediately":true,"audio_response":false}}),
+            )
+            .await?;
+        } else if let Some(dtmf) = turn.dtmf {
+            self.stream.turn_boundary();
+            self.send(
+                "dtmf",
+                json!({"buttons":dtmf.chars().map(|c|c.to_string()).collect::<Vec<_>>()}),
+            )
+            .await?;
+        }
+        let anchor = Instant::now();
+        for (ei, expectation) in turn.expect.into_iter().enumerate() {
+            let deadline = anchor
+                + expectation
+                    .within_ms
+                    .map(Duration::from_millis)
+                    .unwrap_or(self.options.default_timeout);
+            let name = expectation.event.clone();
+            let mut check = PendingCheck::new(expectation);
+            let mut outcome = self.matcher.buffered(&mut check);
+            while outcome == MatchOutcome::Pending {
+                if Instant::now() >= deadline {
+                    outcome = self.matcher.timeout(&check);
+                    break;
+                }
+                if let Some(event) = self.stream.pop() {
+                    outcome = self.matcher.feed(&mut check, event)?;
+                    continue;
+                }
+                match self.pump(deadline).await {
+                    Err(EvalError::Timeout(_)) => {
+                        outcome = self.matcher.timeout(&check);
+                        break;
+                    }
+                    other => {
+                        other?;
+                    }
+                }
+            }
+            let (passed, matched, timeout) = match outcome {
+                MatchOutcome::Passed(text) => (true, text, false),
+                MatchOutcome::Failed { kind, reason } => {
+                    let timeout = kind == "timeout";
+                    self.result.fail(AssertionFailure {
+                        turn_index: index as i64,
+                        expectation_index: ei as i64,
+                        event_name: name.clone(),
+                        reason,
+                        kind,
+                    });
+                    (false, String::new(), timeout)
+                }
+                MatchOutcome::Pending => unreachable!("matching loop must resolve"),
+            };
+            self.result.turns[index]
+                .expectations
+                .push(ExpectationResult {
+                    expectation_index: ei,
+                    event_name: name,
+                    passed,
+                    matched,
+                });
+            if timeout {
+                break;
+            }
+        }
+        Ok(())
+    }
+    async fn send(&mut self, kind: &str, data: Value) -> Result<(), EvalError> {
+        self.next_id += 1;
+        self.send_envelope(serializer::message(self.next_id, kind, data))
+            .await
+    }
+    async fn send_control(&mut self, kind: &str, data: Value) -> Result<(), EvalError> {
+        self.next_id += 1;
+        self.send_envelope(serializer::control(self.next_id, kind, data))
+            .await
+    }
+    async fn send_envelope(&self, envelope: Envelope) -> Result<(), EvalError> {
+        let wire = envelope.encode()?;
+        let sender = self
+            .socket
+            .as_ref()
+            .ok_or(EvalError::Disconnected)?
+            .sender();
+        tokio::time::timeout(
+            self.options.transport.write_timeout,
+            sender.send(Packet::Text(wire)),
+        )
+        .await
+        .map_err(|_| EvalError::Timeout("send"))??;
+        Ok(())
+    }
+    async fn pump(&mut self, deadline: Instant) -> Result<bool, EvalError> {
+        if Instant::now() >= deadline {
+            return Err(EvalError::Timeout("event"));
+        }
+        let packet = tokio::time::timeout_at(
+            deadline,
+            self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv(),
+        )
+        .await
+        .map_err(|_| EvalError::Timeout("event"))?
+        .ok_or(EvalError::Disconnected)?;
+        self.ingest(packet)
+    }
+    fn ingest(&mut self, packet: Packet) -> Result<bool, EvalError> {
+        let bytes = match packet {
+            Packet::Text(text) => text.into_bytes(),
+            Packet::Binary(bytes) => bytes.to_vec(),
+        };
+        self.wire_messages += 1;
+        if self.wire_messages > self.options.max_wire_messages
+            || bytes.len() > self.options.max_wire_bytes.saturating_sub(self.wire_bytes)
+        {
+            return Err(EvalError::Limit("wire message traffic"));
+        }
+        self.wire_bytes += bytes.len();
+        // Invalid envelopes and unrelated protocol traffic are ignored, as by
+        // EvalClientSerializer; traffic still counts toward the session limits.
+        let envelope =
+            match Envelope::parse_with_limit(&bytes, self.options.transport.max_message_bytes) {
+                Ok(message) => message,
+                Err(_) => return Ok(false),
+            };
+        if envelope.message_type == "bot-ready" {
+            return Ok(true);
+        }
+        self.stream.ingest(&envelope)?;
+        Ok(false)
+    }
+    async fn drain_received(&mut self) -> Result<(), EvalError> {
+        loop {
+            match tokio::time::timeout(
+                Duration::ZERO,
+                self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv(),
+            )
+            .await
+            {
+                Ok(Some(packet)) => {
+                    self.ingest(packet)?;
+                }
+                Ok(None) => return Err(EvalError::Disconnected),
+                Err(_) => return Ok(()),
+            }
+        }
+    }
+    async fn pump_until(&mut self, target: Instant) -> Result<(), EvalError> {
+        while Instant::now() < target {
+            match self.pump(target).await {
+                Err(EvalError::Timeout(_)) => break,
+                other => {
+                    other?;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(crate) async fn shutdown(&mut self) {
+        if self.socket.is_none() {
+            return;
+        }
+        if self.options.stop_bot {
+            if let Err(error) = self.send_control(serializer::EVAL_CANCEL, json!({})).await {
+                self.result
+                    .debug_log
+                    .push(format!("eval-cancel could not be sent: {error}"));
+            }
+        }
+        if let Some(socket) = self.socket.take() {
+            // Finish drains admitted control messages; dropping a timed-out finish
+            // aborts and drops the transport owner rather than detaching its task.
+            match tokio::time::timeout(
+                self.options.transport.close_timeout + self.options.transport.write_timeout,
+                socket.finish(),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => self
+                    .result
+                    .debug_log
+                    .push(format!("transport cleanup: {error}")),
+                Err(_) => self
+                    .result
+                    .debug_log
+                    .push("transport cleanup exceeded deadline; connection aborted".into()),
+            }
+        }
+    }
+}
+fn connect_url(raw: &str, scenario: &ScriptScenario) -> Result<String, EvalError> {
+    let mut url = url::Url::parse(raw).map_err(|e| EvalError::Scenario(format!("bot URL: {e}")))?;
+    if !matches!(url.scheme(), "ws" | "wss") || url.host_str().is_none() || url.fragment().is_some()
+    {
+        return Err(EvalError::Scenario(
+            "bot URL must be ws:// or wss:// without a fragment".into(),
+        ));
+    }
+    let pairs: Vec<_> = url
+        .query_pairs()
+        .filter(|(key, _)| {
+            !matches!(
+                key.as_ref(),
+                "skip_tts" | "capture_bot_audio" | "capture_bot_images" | "trigger_disconnect"
+            )
+        })
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    url.set_query(None);
+    {
+        let mut query = url.query_pairs_mut();
+        for (key, value) in pairs {
+            query.append_pair(&key, &value);
+        }
+        query.append_pair("skip_tts", "true");
+        if scenario.needs_images() {
+            query.append_pair("capture_bot_images", "true");
+        }
+        if scenario.trigger_disconnect {
+            query.append_pair("trigger_disconnect", "true");
+        }
+    }
+    Ok(url.into())
+}

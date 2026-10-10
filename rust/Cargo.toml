@@ -1,0 +1,42 @@
+[workspace]
+members = ["crates/*"]
+exclude = [
+    "vendor/moq-tokio-0.19.19",
+    "vendor/webrtc-0.14.0",
+    "client-templates",
+    "crates/pipecat-whisper/vendor/whisper-rs",
+    "crates/pipecat-livekit/vendor/livekit-0.9.4",
+    "crates/pipecat-livekit/vendor/livekit-signaling-0.1.5",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "BSD-2-Clause"
+version = "0.1.0"
+rust-version = "1.99"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+async-trait = "0.1"
+bytes = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+
+# Bounded build-cache footprint for the multi-crate native rewrite.
+[profile.dev]
+incremental = false
+debug = 1
+
+[profile.test]
+incremental = false
+debug = 1
+
+[patch.crates-io]
+# Retain SCTP shutdown across callbacks; see vendor/webrtc-0.14.0/PATCHES.md.
+webrtc = { path = "vendor/webrtc-0.14.0" }

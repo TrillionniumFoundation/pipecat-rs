@@ -1,0 +1,911 @@
+//! Browser APIs are called directly from Rust. Generated wasm-bindgen glue only marshals values.
+use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
+use crate::{
+    client_ready, offer_endpoint, protocol, transcript, websocket_endpoint, Config, Transport,
+};
+use js_sys::{Promise, Reflect, Uint8Array};
+use serde_json::{json, Value};
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    rc::{Rc, Weak},
+};
+use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen_futures::{spawn_local, JsFuture};
+use web_sys::*;
+
+type Shared = Rc<RefCell<App>>;
+type Callback = Closure<dyn FnMut(Event)>;
+thread_local! { static APP: RefCell<Option<Shared>> = const { RefCell::new(None) }; }
+
+struct App {
+    config: Config,
+    start_url: url::Url,
+    lifecycle: Lifecycle,
+    session: Option<Session>,
+    ui_callbacks: Vec<Callback>,
+    conversation: VecDeque<(Option<String>, Element)>,
+}
+struct Session {
+    mic: bool,
+    media: Option<MediaStream>,
+    context: AudioContext,
+    capture: Option<(MediaStreamAudioSourceNode, ScriptProcessorNode, GainNode)>,
+    audio_callback: Option<Closure<dyn FnMut(AudioProcessingEvent)>>,
+    ws: Option<WebSocket>,
+    rtc: Option<RtcPeerConnection>,
+    data: Option<RtcDataChannel>,
+    audio: Option<HtmlAudioElement>,
+    callbacks: Vec<Callback>,
+    heartbeat: Option<(i32, Closure<dyn FnMut()>)>,
+    abort: AbortController,
+    playback: VecDeque<(f64, AudioBufferSourceNode)>,
+    next_audio: f64,
+}
+impl Session {
+    fn clear_playback(&mut self) {
+        for (_, node) in self.playback.drain(..) {
+            let _ = node.unchecked_ref::<AudioScheduledSourceNode>().stop();
+            let _ = node.disconnect();
+        }
+        self.next_audio = self.context.current_time();
+    }
+    fn close(&mut self) {
+        self.abort.abort();
+        if let Some((timer, _)) = self.heartbeat.take() {
+            window().clear_interval_with_handle(timer);
+        }
+        if let Some(ws) = self.ws.take() {
+            ws.set_onopen(None);
+            ws.set_onmessage(None);
+            ws.set_onerror(None);
+            ws.set_onclose(None);
+            let _ = ws.close();
+        }
+        if let Some(data) = self.data.take() {
+            data.set_onopen(None);
+            data.set_onmessage(None);
+            data.set_onclose(None);
+            data.close();
+        }
+        if let Some(rtc) = self.rtc.take() {
+            rtc.set_ontrack(None);
+            rtc.set_onconnectionstatechange(None);
+            rtc.close();
+        }
+        if let Some(media) = self.media.take() {
+            stop_media(&media);
+        }
+        if let Some((source, processor, gain)) = self.capture.take() {
+            processor.set_onaudioprocess(None);
+            let _ = processor.disconnect();
+            let _ = source.disconnect();
+            let _ = gain.disconnect();
+        }
+        if let Some(audio) = self.audio.take() {
+            let _ = audio.pause();
+            audio.set_src_object(None);
+            audio.remove();
+        }
+        self.clear_playback();
+        let _ = self.context.close();
+        self.audio_callback.take();
+        self.callbacks.clear();
+    }
+    fn send(&self, value: &Value) -> Result<(), JsValue> {
+        if let Some(data) = &self.data {
+            if data.ready_state() == RtcDataChannelState::Open {
+                return data.send_with_str(&value.to_string());
+            }
+        }
+        if let Some(ws) = &self.ws {
+            if ws.ready_state() == WebSocket::OPEN {
+                return ws.send_with_u8_array(&protocol::encode_message(value));
+            }
+        }
+        Err(error("transport is not connected"))
+    }
+}
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+fn window() -> Window {
+    web_sys::window().expect("browser window")
+}
+fn document() -> Document {
+    window().document().expect("browser document")
+}
+fn element(id: &str) -> Element {
+    document().get_element_by_id(id).expect("template element")
+}
+fn error(message: &str) -> JsValue {
+    js_sys::Error::new(message).into()
+}
+fn js_error(value: JsValue) -> String {
+    value
+        .as_string()
+        .or_else(|| Reflect::get(&value, &"message".into()).ok()?.as_string())
+        .unwrap_or_else(|| "browser operation failed".into())
+}
+fn stop_media(media: &MediaStream) {
+    for track in media.get_tracks().iter() {
+        track.unchecked_into::<MediaStreamTrack>().stop();
+    }
+}
+fn current(app: &Shared, epoch: u64) -> bool {
+    let app = app.borrow();
+    app.lifecycle.accepts(epoch) && app.session.is_some()
+}
+fn checked(app: &Shared, epoch: u64) -> Result<(), JsValue> {
+    if current(app, epoch) {
+        Ok(())
+    } else {
+        Err(error("connection cancelled"))
+    }
+}
+fn update(app: &App) {
+    let button: HtmlButtonElement = element("connect-btn").unchecked_into();
+    button.set_disabled(false);
+    button.set_text_content(Some(match app.lifecycle.state {
+        State::Idle => "Connect",
+        State::Connecting => "Cancel",
+        State::Connected => "Disconnect",
+    }));
+    let _ = button
+        .class_list()
+        .toggle_with_force("disconnect", app.lifecycle.state != State::Idle);
+    element("transport-state").set_text_content(Some(match app.lifecycle.state {
+        State::Idle => "Disconnected",
+        State::Connecting => "Connecting",
+        State::Connected => "Connected",
+    }));
+    element("transport-select")
+        .unchecked_into::<HtmlSelectElement>()
+        .set_disabled(app.lifecycle.state != State::Idle);
+    let mic =
+        app.session.as_ref().is_some_and(|s| s.mic) && app.lifecycle.state == State::Connected;
+    let button: HtmlButtonElement = element("mic-btn").unchecked_into();
+    button.set_disabled(app.lifecycle.state != State::Connected);
+    let _ = button.class_list().toggle_with_force("on", mic);
+    element("mic-status").set_text_content(Some(if mic { "Mic on" } else { "Mic off" }));
+}
+fn event(name: &str, data: &str) {
+    let row = document().create_element("div").unwrap();
+    row.set_class_name("event-entry");
+    let stamp = js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default();
+    for (class, text) in [
+        ("timestamp", stamp.get(11..23).unwrap_or("")),
+        ("event-name", name),
+        ("event-data", data),
+    ] {
+        let span = document().create_element("span").unwrap();
+        span.set_class_name(class);
+        let text: String = text.chars().take(2048).collect();
+        span.set_text_content(Some(&text));
+        let _ = row.append_child(&span);
+    }
+    let log = element("events-log");
+    let _ = log.append_child(&row);
+    while log.child_element_count() > 300 {
+        if let Some(first) = log.first_element_child() {
+            first.remove();
+        }
+    }
+    let log: HtmlElement = log.unchecked_into();
+    log.set_scroll_top(log.scroll_height());
+}
+fn disconnect(app: &Shared, reason: &str) {
+    let mut app = app.borrow_mut();
+    app.lifecycle.cancel();
+    app.session.take();
+    update(&app);
+    event("disconnected", reason);
+}
+fn fail(app: &Shared, epoch: u64, err: JsValue) {
+    if current(app, epoch) {
+        event("error", &js_error(err));
+        disconnect(app, "Connection closed after error");
+    }
+}
+fn add_transcript(app: &mut App, item: crate::Transcript) {
+    if let Some(id) = &item.segment_id {
+        if let Some((_, row)) = app
+            .conversation
+            .iter()
+            .find(|(key, _)| key.as_ref() == Some(id))
+        {
+            if let Some(text) = row.last_element_child() {
+                text.set_text_content(Some(&item.text));
+            }
+            return;
+        }
+    }
+    let log = element("conversation-log");
+    if app.conversation.is_empty() {
+        log.set_text_content(None);
+    }
+    let row = document().create_element("div").unwrap();
+    row.set_class_name(&format!("conversation-message {}", item.role));
+    let label = document().create_element("div").unwrap();
+    label.set_class_name("role");
+    label.set_text_content(Some(if item.role == "user" { "You" } else { "Bot" }));
+    let text = document().create_element("div").unwrap();
+    text.set_text_content(Some(&item.text));
+    let _ = row.append_child(&label);
+    let _ = row.append_child(&text);
+    let _ = log.append_child(&row);
+    app.conversation.push_back((item.segment_id, row));
+    while app.conversation.len() > 500 {
+        if let Some((_, row)) = app.conversation.pop_front() {
+            row.remove();
+        }
+    }
+    let log: HtmlElement = log.unchecked_into();
+    log.set_scroll_top(log.scroll_height());
+}
+fn message(app: &Shared, epoch: u64, text: &str) {
+    if !current(app, epoch) {
+        return;
+    }
+    if text.len() > protocol::MAX_FRAME_BYTES {
+        event("error", "RTVI message exceeds 1 MiB");
+        return;
+    }
+    let Ok(value) = serde_json::from_str::<Value>(text) else {
+        event("error", "Invalid transport JSON");
+        return;
+    };
+    if value["type"] == "signalling" {
+        match value["message"]["type"].as_str() {
+            Some("peerLeft") => disconnect(app, "Peer left"),
+            Some("renegotiate") => {
+                event(
+                    "error",
+                    "Peer requested unsupported renegotiation; reconnect to continue",
+                );
+                disconnect(app, "Renegotiation required");
+            }
+            _ => {}
+        }
+        return;
+    }
+    if value["label"] != "rtvi-ai" {
+        return;
+    }
+    let kind = value["type"].as_str().unwrap_or("unknown");
+    event(
+        kind,
+        &crate::diagnostic_data(value.get("data").unwrap_or(&Value::Null)).to_string(),
+    );
+    let mut app = app.borrow_mut();
+    if matches!(kind, "user-started-speaking" | "bot-interrupted") {
+        if let Some(s) = app.session.as_mut() {
+            s.clear_playback();
+        }
+    }
+    if let Some(item) = transcript(&value) {
+        add_transcript(&mut app, item);
+    }
+}
+fn connected(app: &Shared, epoch: u64) {
+    if !current(app, epoch) {
+        return;
+    }
+    let result = {
+        let mut app = app.borrow_mut();
+        if !app.lifecycle.connected(epoch) {
+            return;
+        }
+        update(&app);
+        app.session.as_ref().unwrap().send(&client_ready(epoch))
+    };
+    if let Err(err) = result {
+        fail(app, epoch, err);
+    } else {
+        event("connected", "Transport open; waiting for bot-ready");
+    }
+}
+fn handler(
+    weak: Weak<RefCell<App>>,
+    epoch: u64,
+    mut callback: impl FnMut(Shared, Event) + 'static,
+) -> Callback {
+    Closure::wrap(Box::new(move |evt: Event| {
+        if let Some(app) = weak.upgrade() {
+            if current(&app, epoch) {
+                callback(app, evt);
+            }
+        }
+    }) as Box<dyn FnMut(Event)>)
+}
+async fn sleep(ms: i32) -> Result<(), JsValue> {
+    let promise = Promise::new(&mut |resolve, _| {
+        let callback = Closure::once_into_js(move || {
+            let _ = resolve.call0(&JsValue::NULL);
+        });
+        let _ = window()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(callback.unchecked_ref(), ms);
+    });
+    JsFuture::from(promise).await.map(|_| ())
+}
+async fn fetch_json(
+    url: &str,
+    body: Option<&Value>,
+    abort: &AbortController,
+) -> Result<Value, JsValue> {
+    let init = RequestInit::new();
+    init.set_method(if body.is_some() { "POST" } else { "GET" });
+    init.set_signal(Some(&abort.signal()));
+    if let Some(body) = body {
+        init.set_body(&JsValue::from_str(&body.to_string()));
+    }
+    let request = Request::new_with_str_and_init(url, &init)?;
+    request.headers().set("Accept", "application/json")?;
+    if body.is_some() {
+        request.headers().set("Content-Type", "application/json")?;
+    }
+    let abort_timeout = abort.clone();
+    let timeout = Closure::wrap(Box::new(move || abort_timeout.abort()) as Box<dyn FnMut()>);
+    let timer = window().set_timeout_with_callback_and_timeout_and_arguments_0(
+        timeout.as_ref().unchecked_ref(),
+        15000,
+    )?;
+    let result = async {
+        let response: Response = JsFuture::from(window().fetch_with_request(&request))
+            .await?
+            .dyn_into()?;
+        if !response.ok() {
+            return Err(error(&format!(
+                "Server returned HTTP {}",
+                response.status()
+            )));
+        }
+        let text = JsFuture::from(response.text()?)
+            .await?
+            .as_string()
+            .ok_or_else(|| error("response is not text"))?;
+        if text.len() > protocol::MAX_FRAME_BYTES {
+            return Err(error("HTTP JSON response exceeds 1 MiB"));
+        }
+        let value: Value =
+            serde_json::from_str(&text).map_err(|_| error("Server returned invalid JSON"))?;
+        if value
+            .get("error")
+            .is_some_and(|v| !v.is_null() && *v != false && *v != "")
+        {
+            return Err(error("Server returned an error response"));
+        }
+        Ok(value)
+    }
+    .await;
+    window().clear_timeout_with_handle(timer);
+    drop(timeout);
+    result
+}
+fn begin_connect(app: &Shared) {
+    let transport = {
+        let app = app.borrow();
+        let select = element("transport-select")
+            .unchecked_into::<HtmlSelectElement>()
+            .value();
+        app.config
+            .transports
+            .iter()
+            .find(|t| t.key() == select)
+            .copied()
+    };
+    let Some(transport) = transport else {
+        event("error", "Unsupported transport");
+        return;
+    };
+    let context = match AudioContext::new() {
+        Ok(v) => v,
+        Err(e) => {
+            event("error", &js_error(e));
+            return;
+        }
+    };
+    let _ = context.resume();
+    let abort = match AbortController::new() {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = context.close();
+            event("error", &js_error(e));
+            return;
+        }
+    };
+    let epoch = {
+        let mut app = app.borrow_mut();
+        let Some(epoch) = app.lifecycle.begin() else {
+            let _ = context.close();
+            return;
+        };
+        for (segment, _) in &mut app.conversation {
+            *segment = None;
+        }
+        app.session = Some(Session {
+            mic: true,
+            media: None,
+            context,
+            capture: None,
+            audio_callback: None,
+            ws: None,
+            rtc: None,
+            data: None,
+            audio: None,
+            callbacks: vec![],
+            heartbeat: None,
+            abort,
+            playback: VecDeque::new(),
+            next_audio: 0.,
+        });
+        update(&app);
+        epoch
+    };
+    event("connecting", transport.label());
+    let app = app.clone();
+    spawn_local(async move {
+        if let Err(e) = connect(&app, epoch, transport).await {
+            fail(&app, epoch, e);
+        }
+    });
+}
+async fn connect(app: &Shared, epoch: u64, transport: Transport) -> Result<(), JsValue> {
+    let constraints = MediaStreamConstraints::new();
+    constraints.set_audio_bool(true);
+    constraints.set_video_bool(false);
+    let media: MediaStream = JsFuture::from(
+        window()
+            .navigator()
+            .media_devices()?
+            .get_user_media_with_constraints(&constraints)?,
+    )
+    .await?
+    .dyn_into()?;
+    if !current(app, epoch) {
+        stop_media(&media);
+        return Err(error("connection cancelled"));
+    }
+    app.borrow_mut().session.as_mut().unwrap().media = Some(media);
+    let (start, abort) = {
+        let app = app.borrow();
+        (
+            app.start_url.clone(),
+            app.session.as_ref().unwrap().abort.clone(),
+        )
+    };
+    let response = fetch_json(start.as_str(), Some(&transport.start_body()), &abort).await?;
+    checked(app, epoch)?;
+    match transport {
+        Transport::WebSocket => connect_websocket(app, epoch, &start, &response)?,
+        Transport::SmallWebRtc => connect_webrtc(app, epoch, &start, &response).await?,
+        _ => return Err(error("transport adapter is not implemented")),
+    }
+    for _ in 0..400 {
+        checked(app, epoch)?;
+        if app.borrow().lifecycle.state == State::Connected {
+            return Ok(());
+        }
+        sleep(50).await?;
+    }
+    Err(error("Transport connection timed out"))
+}
+fn connect_websocket(
+    app: &Shared,
+    epoch: u64,
+    start: &url::Url,
+    response: &Value,
+) -> Result<(), JsValue> {
+    let url = websocket_endpoint(start, response).map_err(|e| error(&e))?;
+    let ws = WebSocket::new(url.as_str())?;
+    ws.set_binary_type(BinaryType::Arraybuffer);
+    let onopen = handler(Rc::downgrade(app), epoch, move |app, _| {
+        connected(&app, epoch)
+    });
+    let onclose = handler(Rc::downgrade(app), epoch, move |app, _| {
+        disconnect(&app, "WebSocket closed")
+    });
+    let onerror = handler(Rc::downgrade(app), epoch, move |app, _| {
+        fail(&app, epoch, error("WebSocket connection failed"))
+    });
+    let onmessage = handler(Rc::downgrade(app), epoch, move |app, evt| {
+        let evt: MessageEvent = evt.unchecked_into();
+        if let Some(text) = evt.data().as_string() {
+            message(&app, epoch, &text);
+            return;
+        }
+        if !evt.data().is_instance_of::<js_sys::ArrayBuffer>() {
+            event("error", "Expected binary protobuf frame");
+            return;
+        }
+        let data = Uint8Array::new(&evt.data());
+        if data.length() as usize > protocol::MAX_FRAME_BYTES {
+            event("error", "WebSocket frame exceeds 1 MiB");
+            return;
+        }
+        match protocol::decode(&data.to_vec()) {
+            Ok(frame) => match frame.body.unwrap() {
+                protocol::frame::Body::Message(msg) => message(&app, epoch, &msg.data),
+                protocol::frame::Body::Audio(audio) => {
+                    if let Err(err) = play_audio(&app, &audio) {
+                        event("error", &js_error(err));
+                    }
+                }
+                protocol::frame::Body::Interruption(_) => {
+                    if let Some(session) = app.borrow_mut().session.as_mut() {
+                        session.clear_playback();
+                    }
+                    event("interruption", "Playback cleared");
+                }
+                protocol::frame::Body::Text(text) => event("text-frame", &text.text),
+                protocol::frame::Body::Transcription(text) => {
+                    event("transcription-frame", &text.text)
+                }
+            },
+            Err(err) => event("error", &err),
+        }
+    });
+    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+    {
+        let mut app = app.borrow_mut();
+        let session = app.session.as_mut().unwrap();
+        session.ws = Some(ws);
+        session
+            .callbacks
+            .extend([onopen, onclose, onerror, onmessage]);
+    }
+    start_capture(app, epoch)
+}
+fn start_capture(app: &Shared, epoch: u64) -> Result<(), JsValue> {
+    let (context, media) = {
+        let app = app.borrow();
+        let s = app.session.as_ref().unwrap();
+        (s.context.clone(), s.media.clone().unwrap())
+    };
+    let source = context.create_media_stream_source(&media)?;
+    #[allow(deprecated)]
+    let processor=context.create_script_processor_with_buffer_size_and_number_of_input_channels_and_number_of_output_channels(2048,1,1)?;
+    let gain = context.create_gain()?;
+    gain.gain().set_value(0.);
+    let weak = Rc::downgrade(app);
+    let callback = Closure::wrap(Box::new(move |evt: AudioProcessingEvent| {
+        let Some(app) = weak.upgrade() else {
+            return;
+        };
+        if !current(&app, epoch) {
+            return;
+        }
+        let app = app.borrow();
+        if app.lifecycle.state != State::Connected {
+            return;
+        }
+        let Some(s) = app.session.as_ref() else {
+            return;
+        };
+        if !s.mic {
+            return;
+        }
+        let Some(ws) = s.ws.as_ref() else {
+            return;
+        };
+        if ws.ready_state() != WebSocket::OPEN
+            || !capture_allowed(app.lifecycle.state, s.mic, ws.buffered_amount())
+        {
+            return;
+        }
+        if let Ok(samples) = evt.input_buffer().and_then(|b| b.get_channel_data(0)) {
+            let bytes = protocol::encode_audio(&samples, s.context.sample_rate() as u32);
+            if ws.send_with_u8_array(&bytes).is_err() {
+                event("error", "Microphone send failed");
+            }
+        }
+    }) as Box<dyn FnMut(AudioProcessingEvent)>);
+    processor.set_onaudioprocess(Some(callback.as_ref().unchecked_ref()));
+    source.connect_with_audio_node(&processor)?;
+    processor.connect_with_audio_node(&gain)?;
+    gain.connect_with_audio_node(&context.destination())?;
+    let mut app = app.borrow_mut();
+    let s = app.session.as_mut().unwrap();
+    s.capture = Some((source, processor, gain));
+    s.audio_callback = Some(callback);
+    Ok(())
+}
+fn play_audio(app: &Shared, audio: &protocol::Audio) -> Result<(), JsValue> {
+    let channels = protocol::audio_channels(audio).map_err(|e| error(&e))?;
+    let mut app = app.borrow_mut();
+    let Some(s) = app.session.as_mut() else {
+        return Ok(());
+    };
+    let now = s.context.current_time();
+    while s.playback.front().is_some_and(|(end, _)| *end < now) {
+        if let Some((_, node)) = s.playback.pop_front() {
+            let _ = node.disconnect();
+        }
+    }
+    let duration = channels[0].len() as f64 / audio.sample_rate as f64;
+    if !playback_allowed(now, s.next_audio, duration, s.playback.len()) {
+        return Err(error(
+            "Playback backlog exceeds three seconds; frame dropped",
+        ));
+    }
+    let buffer = s.context.create_buffer(
+        audio.num_channels,
+        channels[0].len() as u32,
+        audio.sample_rate as f32,
+    )?;
+    for (i, samples) in channels.iter().enumerate() {
+        buffer.copy_to_channel(samples, i as i32)?;
+    }
+    let node = s.context.create_buffer_source()?;
+    node.set_buffer(Some(&buffer));
+    node.connect_with_audio_node(&s.context.destination())?;
+    let start = s.next_audio.max(now + 0.01);
+    node.start_with_when(start)?;
+    s.next_audio = start + duration;
+    s.playback.push_back((s.next_audio, node));
+    event(
+        "audio-playback",
+        &format!("{} Hz, {} channels", audio.sample_rate, audio.num_channels),
+    );
+    Ok(())
+}
+async fn connect_webrtc(
+    app: &Shared,
+    epoch: u64,
+    start: &url::Url,
+    response: &Value,
+) -> Result<(), JsValue> {
+    let session_id = response["sessionId"]
+        .as_str()
+        .ok_or_else(|| error("start response lacks sessionId"))?;
+    let offer_url = offer_endpoint(start, session_id).map_err(|e| error(&e))?;
+    let config = RtcConfiguration::new();
+    if let Some(servers) = response.pointer("/iceConfig/iceServers") {
+        config.set_ice_servers(&js_sys::JSON::parse(&servers.to_string())?);
+    }
+    let rtc = RtcPeerConnection::new_with_configuration(&config)?;
+    let data = rtc.create_data_channel("chat");
+    let open = handler(Rc::downgrade(app), epoch, move |app, _| {
+        connected(&app, epoch)
+    });
+    let receive = handler(Rc::downgrade(app), epoch, move |app, evt| {
+        let evt: MessageEvent = evt.unchecked_into();
+        if let Some(text) = evt.data().as_string() {
+            message(&app, epoch, &text);
+        }
+    });
+    let close = handler(Rc::downgrade(app), epoch, move |app, _| {
+        disconnect(&app, "WebRTC data channel closed")
+    });
+    data.set_onopen(Some(open.as_ref().unchecked_ref()));
+    data.set_onmessage(Some(receive.as_ref().unchecked_ref()));
+    data.set_onclose(Some(close.as_ref().unchecked_ref()));
+    let state = handler(Rc::downgrade(app), epoch, move |app, _| {
+        let state = app
+            .borrow()
+            .session
+            .as_ref()
+            .and_then(|s| s.rtc.as_ref())
+            .map(|p| p.connection_state());
+        if let Some(state) = state {
+            event("transport-state", &format!("{state:?}"));
+            if matches!(
+                state,
+                RtcPeerConnectionState::Failed
+                    | RtcPeerConnectionState::Disconnected
+                    | RtcPeerConnectionState::Closed
+            ) {
+                disconnect(&app, "WebRTC connection ended");
+            }
+        }
+    });
+    rtc.set_onconnectionstatechange(Some(state.as_ref().unchecked_ref()));
+    let track = handler(Rc::downgrade(app), epoch, move |app, evt| {
+        let evt: RtcTrackEvent = evt.unchecked_into();
+        if evt.track().kind() != "audio" {
+            return;
+        }
+        let outcome = (|| -> Result<(), JsValue> {
+            let stream = MediaStream::new()?;
+            stream.add_track(&evt.track());
+            let audio = HtmlAudioElement::new()?;
+            audio.set_autoplay(true);
+            audio.set_src_object(Some(&stream));
+            document().body().unwrap().append_child(&audio)?;
+            let play = audio.play()?;
+            let mut app = app.borrow_mut();
+            if let Some(s) = app.session.as_mut() {
+                if let Some(old) = s.audio.replace(audio) {
+                    let _ = old.pause();
+                    old.set_src_object(None);
+                    old.remove();
+                }
+            }
+            spawn_local(async move {
+                if JsFuture::from(play).await.is_err() {
+                    event(
+                        "error",
+                        "Browser blocked bot audio playback; reconnect after allowing audio",
+                    );
+                }
+            });
+            Ok(())
+        })();
+        if let Err(err) = outcome {
+            event("error", &js_error(err));
+        } else {
+            event("track-started", "Bot audio track");
+        }
+    });
+    rtc.set_ontrack(Some(track.as_ref().unchecked_ref()));
+    let (media, abort) = {
+        let app = app.borrow();
+        let s = app.session.as_ref().unwrap();
+        (s.media.clone().unwrap(), s.abort.clone())
+    };
+    for track in media.get_audio_tracks().iter() {
+        rtc.add_track_0(&track.unchecked_into::<MediaStreamTrack>(), &media);
+    }
+    {
+        let mut app = app.borrow_mut();
+        let s = app.session.as_mut().unwrap();
+        s.rtc = Some(rtc.clone());
+        s.data = Some(data);
+        s.callbacks.extend([open, receive, close, state, track]);
+    }
+    let offer = JsFuture::from(rtc.create_offer()).await?;
+    checked(app, epoch)?;
+    let local: RtcSessionDescriptionInit = offer.unchecked_into();
+    JsFuture::from(rtc.set_local_description(&local)).await?;
+    for attempt in 0..200 {
+        checked(app, epoch)?;
+        if rtc.ice_gathering_state() == RtcIceGatheringState::Complete {
+            break;
+        }
+        if attempt == 199 {
+            return Err(error("ICE gathering timed out"));
+        }
+        sleep(50).await?;
+    }
+    let local = rtc
+        .local_description()
+        .ok_or_else(|| error("WebRTC offer is absent"))?;
+    let answer = fetch_json(
+        offer_url.as_str(),
+        Some(&json!({"sdp":local.sdp(),"type":"offer"})),
+        &abort,
+    )
+    .await?;
+    checked(app, epoch)?;
+    if answer["type"] != "answer" {
+        return Err(error("Server returned an invalid SDP answer type"));
+    }
+    let desc = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+    desc.set_sdp(
+        answer["sdp"]
+            .as_str()
+            .ok_or_else(|| error("Server returned no SDP answer"))?,
+    );
+    JsFuture::from(rtc.set_remote_description(&desc))
+        .await
+        .map_err(|_| error("Browser rejected the remote SDP answer"))?;
+    checked(app, epoch)?;
+    let weak = Rc::downgrade(app);
+    let heartbeat = Closure::wrap(Box::new(move || {
+        if let Some(app) = weak.upgrade() {
+            if current(&app, epoch) {
+                if let Some(data) = app.borrow().session.as_ref().and_then(|s| s.data.as_ref()) {
+                    if data.ready_state() == RtcDataChannelState::Open {
+                        let _ = data.send_with_str("ping");
+                    }
+                }
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    let timer = window().set_interval_with_callback_and_timeout_and_arguments_0(
+        heartbeat.as_ref().unchecked_ref(),
+        1000,
+    )?;
+    app.borrow_mut().session.as_mut().unwrap().heartbeat = Some((timer, heartbeat));
+    Ok(())
+}
+
+/// Initialize the static template after its configuration has loaded.
+async fn initialize() -> Result<(), JsValue> {
+    let value = fetch_json("./config.json", None, &AbortController::new()?).await?;
+    let config: Config = serde_json::from_value(value)
+        .map_err(|e| error(&format!("Invalid client configuration: {e}")))?;
+    let start_url = config
+        .validate(&window().location().href()?)
+        .map_err(|e| error(&e))?;
+    document().set_title(&config.project_name);
+    element("title").set_text_content(Some(&config.project_name));
+    let select = element("transport-select");
+    select.set_text_content(None);
+    for transport in &config.transports {
+        let option = document().create_element("option")?;
+        option.set_attribute("value", transport.key())?;
+        option.set_text_content(Some(transport.label()));
+        select.append_child(&option)?;
+    }
+    select
+        .unchecked_ref::<HtmlElement>()
+        .set_hidden(config.transports.len() == 1);
+    let app = Rc::new(RefCell::new(App {
+        config,
+        start_url,
+        lifecycle: Lifecycle::default(),
+        session: None,
+        ui_callbacks: vec![],
+        conversation: VecDeque::new(),
+    }));
+    let weak = Rc::downgrade(&app);
+    let click = Closure::wrap(Box::new(move |_: Event| {
+        if let Some(app) = weak.upgrade() {
+            let idle = app.borrow().lifecycle.state == State::Idle;
+            if idle {
+                begin_connect(&app);
+            } else {
+                disconnect(&app, "Disconnected by user");
+            }
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("connect-btn")
+        .add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+    let weak = Rc::downgrade(&app);
+    let mic = Closure::wrap(Box::new(move |_: Event| {
+        if let Some(app) = weak.upgrade() {
+            let mut app = app.borrow_mut();
+            if let Some(session) = app.session.as_mut() {
+                session.mic = !session.mic;
+                if let Some(media) = &session.media {
+                    for track in media.get_audio_tracks().iter() {
+                        track
+                            .unchecked_into::<MediaStreamTrack>()
+                            .set_enabled(session.mic);
+                    }
+                }
+                if let Some(data) = &session.data {
+                    let _ = data.send_with_str(&json!({
+                        "type": "signalling",
+                        "message": {"type": "trackStatus", "receiver_index": 0, "enabled": session.mic}
+                    }).to_string());
+                }
+                event("microphone", if session.mic { "enabled" } else { "muted" });
+            }
+            update(&app);
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("mic-btn").add_event_listener_with_callback("click", mic.as_ref().unchecked_ref())?;
+    let weak = Rc::downgrade(&app);
+    let unload = Closure::wrap(Box::new(move |_: Event| {
+        if let Some(app) = weak.upgrade() {
+            disconnect(&app, "Page closed");
+        }
+    }) as Box<dyn FnMut(Event)>);
+    window().add_event_listener_with_callback("pagehide", unload.as_ref().unchecked_ref())?;
+    app.borrow_mut().ui_callbacks.extend([click, mic, unload]);
+    update(&app.borrow());
+    element("conversation-log").set_text_content(Some("Connect to start talking with your bot"));
+    event("initialized", "Rust/WASM browser client ready");
+    APP.with(|slot| *slot.borrow_mut() = Some(app));
+    Ok(())
+}
+
+#[wasm_bindgen(start)]
+pub fn main() {
+    spawn_local(async {
+        if let Err(err) = initialize().await {
+            event("error", &js_error(err));
+            element("transport-state").set_text_content(Some("Configuration error"));
+        }
+    });
+}

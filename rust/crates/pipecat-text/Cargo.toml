@@ -1,0 +1,21 @@
+[package]
+name = "pipecat-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+serde.workspace = true
+regex = "1"
+sentencex = "=0.1.32"
+unicode-normalization = "0.1"
+pulldown-cmark = "0.13"
+
+[dev-dependencies]
+tokio.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

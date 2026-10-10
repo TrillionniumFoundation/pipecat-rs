@@ -1,0 +1,32 @@
+[package]
+name = "pipecat-aws-speech"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-speech = { path = "../pipecat-speech" }
+pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
+pipecat-text = { path = "../pipecat-text" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", features = ["sink"] }
+url = "2"
+hmac = "0.12"
+sha2 = "0.10"
+crc32fast = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+pipecat-pipeline = { path = "../pipecat-pipeline" }
+
+[lints]
+workspace = true

@@ -1,0 +1,31 @@
+# Source-derived from tests/test_evals_session.py and script.py's public schema.
+name: native_contract
+judge: {modality: text}
+user: {modality: text}
+context:
+  - {role: system, content: Be terse}
+scenarios:
+  - name: tools_and_markers
+    turns:
+      - user: weather
+        expect:
+          - event: function_call
+            calls:
+              - {name: weather, args: {city: Paris}}
+              - time
+            within_ms: 250
+          - event: llm_marker
+            marker: complete
+            marker_first: true
+            markers: 1
+            text_after: true
+            within_ms: 250
+          - event: response
+            text_contains: "Hello world"
+            text_excludes: "●"
+            within_ms: 250
+      - dtmf: "012#"
+        expect:
+          - event: user_transcription
+            text_contains: "DTMF: 012#"
+            within_ms: 250

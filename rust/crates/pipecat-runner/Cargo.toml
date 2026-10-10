@@ -1,0 +1,45 @@
+[package]
+name = "pipecat-runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "pipecat-browser-agent"
+path = "src/main.rs"
+
+[features]
+default = []
+webrtc = ["dep:pipecat-webrtc"]
+whisper = ["dep:pipecat-whisper"]
+
+[dependencies]
+pipecat-whisper = { path = "../pipecat-whisper", optional = true }
+pipecat-webrtc = { path = "../pipecat-webrtc", optional = true }
+async-trait.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+uuid = { version = "1", features = ["v4"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+url = "2"
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-cli = { path = "../pipecat-cli" }
+pipecat-client-server = { path = "../pipecat-client-server" }
+pipecat-core = { path = "../pipecat-core" }
+pipecat-protocol = { path = "../pipecat-protocol" }
+pipecat-rtvi = { path = "../pipecat-rtvi" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
+pipecat-transports = { path = "../pipecat-transports" }
+pipecat-turns = { path = "../pipecat-turns" }
+pipecat-vad = { path = "../pipecat-vad" }
+
+[dev-dependencies]
+base64 = "0.22"
+pipecat-browser-client = { path = "../../client-templates" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+[lints]
+workspace = true

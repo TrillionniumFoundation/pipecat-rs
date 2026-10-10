@@ -1,0 +1,15 @@
+{
+  "twilio_start": {"event":"start","sequenceNumber":"1","streamSid":"stream123","start":{"streamSid":"stream123","callSid":"call123","accountSid":"account123","tracks":["inbound"],"mediaFormat":{"encoding":"audio/x-mulaw","sampleRate":8000,"channels":1},"customParameters":{"user_id":"test_user"}}},
+  "twilio_media": {"event":"media","sequenceNumber":"2","streamSid":"stream123","media":{"track":"inbound","chunk":"1","timestamp":"20","payload":"/38A"}},
+  "twilio_mark": {"event":"mark","sequenceNumber":"3","streamSid":"stream123","mark":{"name":"segment-1"}},
+  "twilio_stop": {"event":"stop","sequenceNumber":"4","streamSid":"stream123","stop":{"accountSid":"account123","callSid":"call123"}},
+  "plivo_start": {"event":"start","sequenceNumber":1,"start":{"streamId":"stream123","callId":"call123","accountId":"account123","tracks":["inbound"],"mediaFormat":{"encoding":"audio/x-mulaw","sampleRate":8000}},"extra_headers":"userId=12345"},
+  "plivo_media": {"event":"media","sequenceNumber":2,"streamId":"stream123","media":{"track":"inbound","chunk":1,"timestamp":"1705312200000","payload":"/38A"}},
+  "plivo_mark": {"event":"playedStream","sequenceNumber":3,"streamId":"stream123","name":"segment-1"},
+  "telnyx_start": {"event":"start","sequence_number":"1","stream_id":"stream123","start":{"call_control_id":"call123","user_id":"user123","media_format":{"encoding":"PCMA","sample_rate":8000,"channels":1}}},
+  "telnyx_media": {"event":"media","sequence_number":"4","stream_id":"stream123","media":{"track":"inbound","chunk":"2","timestamp":"20","payload":"1VUA"}},
+  "telnyx_mark": {"event":"mark","sequence_number":"5","stream_id":"stream123","mark":{"name":"segment-1"}},
+  "telnyx_stop": {"event":"stop","sequence_number":"6","stream_id":"stream123","stop":{"call_control_id":"call123"}},
+  "vonage_connected": {"event":"websocket:connected","content-type":"audio/l16;rate=16000"},
+  "vonage_dtmf": {"event":"websocket:dtmf","digit":"5","duration":260}
+}

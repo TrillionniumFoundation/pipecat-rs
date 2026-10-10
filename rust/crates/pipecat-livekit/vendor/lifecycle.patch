@@ -1,0 +1,139 @@
+--- a/livekit-0.9.4/Cargo.toml
++++ b/livekit-0.9.4/Cargo.toml
+@@ -177,6 +177,7 @@
+ version = "0.1.3"
+ 
+ [dependencies.livekit-signaling]
++path = "../livekit-signaling-0.1.5"
+ version = "0.1.5"
+ 
+ [dependencies.log]
+--- a/livekit-signaling-0.1.5/src/lib.rs
++++ b/livekit-signaling-0.1.5/src/lib.rs
+@@ -329,6 +329,23 @@
+     handle: Mutex<Option<JoinHandle<()>>>,
+ }
+ 
++impl Drop for SignalClient {
++    fn drop(&mut self) {
++        if let Some(handle) = self.handle.get_mut().take() {
++            handle.abort();
++        }
++    }
++}
++
++/// Preserve cancellation ownership while explicit close awaits the dispatcher.
++struct SignalTaskOwner(tokio::task::AbortHandle);
++
++impl Drop for SignalTaskOwner {
++    fn drop(&mut self) {
++        self.0.abort();
++    }
++}
++
+ impl Debug for SignalClient {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+         f.debug_struct("SignalClient")
+@@ -459,6 +476,7 @@
+ 
+         let handle = self.handle.lock().take();
+         if let Some(signal_task) = handle {
++            let _task_owner = SignalTaskOwner(signal_task.abort_handle());
+             let _ = signal_task.await;
+         }
+     }
+--- a/livekit-signaling-0.1.5/src/signal_stream.rs
++++ b/livekit-signaling-0.1.5/src/signal_stream.rs
+@@ -15,7 +15,7 @@
+ use livekit_protocol as proto;
+ use prost::Message as ProtoMessage;
+ use std::{sync::Arc, time::Duration};
+-use tokio::task::JoinHandle;
++use tokio::task::{AbortHandle, JoinHandle};
+ 
+ use tokio::sync::{mpsc, oneshot};
+ 
+@@ -41,6 +41,21 @@
+     internal_tx: mpsc::Sender<InternalMessage>,
+     read_handle: JoinHandle<()>,
+     write_handle: JoinHandle<()>,
++    task_owner: StreamTaskOwner,
++}
++
++/// Task handles detach on drop. Keep cancellation ownership separate so both
++/// transport tasks also stop if connect, reconnect or explicit close is dropped.
++struct StreamTaskOwner {
++    read: AbortHandle,
++    write: AbortHandle,
++}
++
++impl Drop for StreamTaskOwner {
++    fn drop(&mut self) {
++        self.read.abort();
++        self.write.abort();
++    }
+ }
+ 
+ /// Terse: this appears inside `SignalState` in logs and tests.
+@@ -94,8 +109,12 @@
+         let (internal_tx, internal_rx) = mpsc::channel::<InternalMessage>(8);
+         let write_handle = tokio::spawn(Self::write_task(internal_rx, conn.clone()));
+         let read_handle = tokio::spawn(Self::read_task(internal_tx.clone(), conn, emitter));
++        let task_owner = StreamTaskOwner {
++            read: read_handle.abort_handle(),
++            write: write_handle.abort_handle(),
++        };
+ 
+-        (Self { internal_tx, read_handle, write_handle }, events)
++        (Self { internal_tx, read_handle, write_handle, task_owner }, events)
+     }
+ 
+     /// Close the websocket.
+@@ -108,7 +127,7 @@
+     /// otherwise a dead link stalls the resume that needs the stream lock this
+     /// close is called under, and `Room::close` with it.
+     pub async fn close(self, notify_close: bool) {
+-        let Self { internal_tx, read_handle, mut write_handle } = self;
++        let Self { internal_tx, read_handle, mut write_handle, task_owner: _task_owner } = self;
+         if notify_close {
+             let _ = internal_tx.send(InternalMessage::Close).await;
+         }
+@@ -256,4 +275,38 @@
+                 });
+         }
+     }
++
++    #[tokio::test]
++    async fn dropped_stream_releases_half_open_connection() {
++        let conn = Arc::new(HalfOpenConn);
++        let weak = Arc::downgrade(&conn);
++        let (stream, _events) = SignalStream::spawn(conn);
++        tokio::task::yield_now().await;
++        drop(stream);
++        tokio::time::timeout(Duration::from_secs(1), async {
++            while weak.upgrade().is_some() {
++                tokio::task::yield_now().await;
++            }
++        })
++        .await
++        .expect("dropped stream retained its transport");
++    }
++
++    #[tokio::test]
++    async fn cancelled_close_releases_stalled_connection() {
++        let conn = Arc::new(StalledCloseConn);
++        let weak = Arc::downgrade(&conn);
++        let (stream, _events) = SignalStream::spawn(conn);
++        let closing = tokio::spawn(stream.close(true));
++        tokio::time::sleep(Duration::from_millis(10)).await;
++        closing.abort();
++        assert!(closing.await.unwrap_err().is_cancelled());
++        tokio::time::timeout(Duration::from_secs(1), async {
++            while weak.upgrade().is_some() {
++                tokio::task::yield_now().await;
++            }
++        })
++        .await
++        .expect("cancelled close retained its transport");
++    }
+ }

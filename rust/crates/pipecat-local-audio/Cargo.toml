@@ -1,0 +1,17 @@
+[package]
+name = "pipecat-local-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+cpal = "=0.18.2"
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

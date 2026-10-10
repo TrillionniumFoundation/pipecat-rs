@@ -1,0 +1,28 @@
+[package]
+name = "pipecat-media-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+turn-recording = ["dep:pipecat-observers"]
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-observers = { path = "../pipecat-observers", optional = true }
+tokio.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
+futures-util = { version = "0.3", features = ["sink"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+base64 = "0.22"
+pipecat-turns = { path = "../pipecat-turns" }
+pipecat-services = { path = "../pipecat-services" }
+
+[lints]
+workspace = true

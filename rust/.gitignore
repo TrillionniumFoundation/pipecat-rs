@@ -1,0 +1,4 @@
+/target/
+!/Cargo.lock
+!/vendor/**/Cargo.lock
+!/crates/*/vendor/**/Cargo.lock

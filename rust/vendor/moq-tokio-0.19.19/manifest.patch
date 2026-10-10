@@ -1,0 +1,12 @@
+--- upstream/Cargo.toml
++++ vendored/Cargo.toml
+@@ -208,6 +208,9 @@
+ 
+ [dependencies.rustls]
+ version = "0.23"
++# Pipecat manifest-only correction; see PATCHES.md.
++default-features = false
++features = ["std", "tls12", "logging"]
+ 
+ [dependencies.rustls-platform-verifier]
+ version = "0.7"

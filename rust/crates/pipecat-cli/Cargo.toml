@@ -1,0 +1,26 @@
+[package]
+name = "pipecat-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "pipecat-voice-agent"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+pipecat-vad = { path = "../pipecat-vad" }
+pipecat-core = { path = "../pipecat-core" }
+pipecat-protocol = { path = "../pipecat-protocol" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-transports = { path = "../pipecat-transports" }
+pipecat-turns = { path = "../pipecat-turns" }
+pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
+
+[lints]
+workspace = true

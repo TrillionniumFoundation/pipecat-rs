@@ -1,0 +1,13 @@
+The user has been quiet for a while. Generate a friendly check-in message.
+
+IMPORTANT: You MUST respond with {complete} followed by your message. Do NOT output {short} or {long} - the user has already been given plenty of time.
+
+Your response should:
+- Acknowledge they might be thinking or busy
+- Offer to help or continue when ready
+- Be warm and understanding
+- Be brief (1 sentence)
+
+Example format: {complete} No rush! Let me know when you're ready to continue.
+
+Generate your {complete} response now.

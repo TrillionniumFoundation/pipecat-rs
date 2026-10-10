@@ -1,0 +1,21 @@
+[package]
+name = "pipecat-whisper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+whisper-rs = { version = "=0.16.0", path = "vendor/whisper-rs", default-features = false }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+pipecat-audio = { path = "../pipecat-audio" }

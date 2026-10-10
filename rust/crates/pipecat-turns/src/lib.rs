@@ -1,0 +1,273 @@
+//! Loss-aware conversation aggregation, deterministic turns, and native Smart Turn.
+//!
+//! VAD decisions and STT frames drive the controller; optional Smart Turn uses
+//! the native ONNX analyzer. Playback acknowledgements remain transport-owned.
+mod assistant;
+mod completion;
+mod context;
+mod controller;
+mod empty;
+mod idle;
+mod signed_history;
+mod smart_turn;
+mod stop;
+mod strategies;
+mod summary;
+mod user;
+
+pub use assistant::{AssistantAggregatorConfig, AssistantTextMode, LLMAssistantAggregator};
+pub use completion::{
+    LLMTurnCompletionConfig, LLMTurnCompletionProcessor, LLMTurnCompletionStrategy,
+    USER_TURN_COMPLETE_MARKER, USER_TURN_INCOMPLETE_LONG_MARKER, USER_TURN_INCOMPLETE_SHORT_MARKER,
+};
+pub use context::{context_to_frame, SharedContext};
+pub use controller::{TurnStopReason, UserTurnConfig, UserTurnController, UserTurnEvent};
+pub use empty::{EmptyUserTurnConfig, DEFAULT_EMPTY_USER_TURN_INTERRUPTED_PROMPT};
+pub use idle::UserIdleController;
+pub use smart_turn::SmartTurnUserAggregator;
+pub use stop::{UserTurnStopStrategies, UserTurnStopStrategy};
+pub use strategies::{
+    UserMuteStrategies, UserMuteStrategy, UserStartStrategyEvent, UserStartStrategyOutput,
+    UserTurnStartStrategies, UserTurnStartStrategy, UserTurnStartedParams,
+};
+pub use summary::{
+    estimate_context_tokens, get_messages_to_summarize, ContextSummarizationConfig,
+    LLMContextSummarizer, LLMContextSummaryProcessor, SummaryAppliedEvent, SummaryLlm,
+    DEFAULT_SUMMARIZATION_PROMPT,
+};
+pub use user::{LLMUserAggregator, UserAggregatorConfig};
+
+use pipecat_core::{DirectedFrame, Direction, Frame, FrameData, ProcessorContext, ProcessorError};
+use pipecat_services::Context;
+use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
+
+/// Accepted final text for an external, out-of-band turn-completion decision.
+/// This is not a speculative conversational LLM request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserTurnInferenceRequest {
+    pub request_id: u64,
+    pub strategy_index: usize,
+    pub text: String,
+    pub reason: TurnStopReason,
+}
+
+impl UserTurnInferenceRequest {
+    /// Send this through the same pipeline input that carries speech frames.
+    /// The aggregator rejects it after new evidence or a terminal boundary.
+    pub fn completion_frame(&self) -> Frame {
+        let mut frame = Frame::new(FrameData::UserTurnInferenceCompleted);
+        frame
+            .metadata
+            .insert("user_turn_inference_id".into(), self.request_id.into());
+        frame
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AggregationEvent {
+    UserStartStrategy(UserStartStrategyEvent),
+    UserMuteChanged {
+        muted: bool,
+    },
+    UserTurnStarted,
+    /// External classification is requested; no conversational inference has run.
+    UserTurnInferenceRequested(UserTurnInferenceRequest),
+    UserTurnIdle,
+    UserTurnStopped {
+        text: String,
+        reason: TurnStopReason,
+    },
+    AssistantTurnStarted,
+    SummaryApplied(SummaryAppliedEvent),
+    AssistantTurnStopped {
+        text: String,
+        interrupted: bool,
+    },
+    ToolResultIgnored {
+        tool_call_id: String,
+    },
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregationAction {
+    Push(DirectedFrame),
+    Broadcast(Frame),
+    Interrupt,
+    /// Cancel the previous response without discarding the context admitted in this batch.
+    InterruptBeforeContext,
+    /// Run a result callback in a tracked task, after its context update.
+    ContextUpdated(pipecat_core::LocalAsyncCallback),
+}
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AggregationOutput {
+    pub actions: Vec<AggregationAction>,
+    pub events: Vec<AggregationEvent>,
+}
+impl AggregationOutput {
+    fn push(&mut self, frame: Frame, direction: Direction) {
+        self.actions
+            .push(AggregationAction::Push(DirectedFrame::new(
+                frame, direction,
+            )));
+    }
+    fn broadcast(&mut self, data: FrameData) {
+        self.actions
+            .push(AggregationAction::Broadcast(Frame::new(data)));
+    }
+    fn context(
+        &mut self,
+        context: &SharedContext,
+        direction: Direction,
+    ) -> Result<(), ProcessorError> {
+        self.context_frame(context.frame_data()?, direction);
+        Ok(())
+    }
+    fn context_frame(&mut self, context: FrameData, direction: Direction) {
+        if direction == Direction::Downstream {
+            for action in &mut self.actions {
+                let boundary = match action {
+                    AggregationAction::Broadcast(frame) => Some(frame),
+                    AggregationAction::Push(frame) => Some(&mut frame.frame),
+                    AggregationAction::Interrupt => {
+                        *action = AggregationAction::InterruptBeforeContext;
+                        None
+                    }
+                    AggregationAction::InterruptBeforeContext
+                    | AggregationAction::ContextUpdated(_) => None,
+                };
+                if let Some(frame) = boundary {
+                    if matches!(
+                        frame.data,
+                        FrameData::UserStartedSpeaking | FrameData::UserStoppedSpeaking
+                    ) {
+                        frame
+                            .metadata
+                            .insert("user_context_follows".into(), true.into());
+                    }
+                }
+            }
+        }
+        self.push(Frame::new(context), direction);
+    }
+    pub async fn emit(self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        for action in self.actions {
+            match action {
+                AggregationAction::Push(frame) => ctx.push(frame.frame, frame.direction).await?,
+                AggregationAction::Broadcast(frame) => ctx.broadcast(frame).await?,
+                AggregationAction::Interrupt => ctx.broadcast_interruption().await?,
+                AggregationAction::ContextUpdated(callback) => {
+                    ctx.spawn("tool-context-updated", false, async move {
+                        callback.call().await
+                    })?;
+                }
+                AggregationAction::InterruptBeforeContext => {
+                    ctx.broadcast_interruption_with_metadata(
+                        [("user_context_follows".into(), true.into())].into(),
+                    )
+                    .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Both halves share the same provider-neutral context. Place the user half
+/// before the LLM and the assistant half after text delivery/audio output.
+pub struct LLMContextAggregatorPair {
+    context: SharedContext,
+    user: Arc<LLMUserAggregator>,
+    assistant: Arc<LLMAssistantAggregator>,
+}
+impl LLMContextAggregatorPair {
+    pub fn new(
+        context: Context,
+        user: UserAggregatorConfig,
+        assistant: AssistantAggregatorConfig,
+    ) -> Self {
+        Self::with_shared_context(SharedContext::new(context), user, assistant)
+    }
+    pub fn new_rich(
+        context: pipecat_core::LlmContextData,
+        user: UserAggregatorConfig,
+        assistant: AssistantAggregatorConfig,
+    ) -> Self {
+        Self::with_shared_context(SharedContext::new_rich(context), user, assistant)
+    }
+    pub fn with_shared_context(
+        context: SharedContext,
+        user: UserAggregatorConfig,
+        assistant: AssistantAggregatorConfig,
+    ) -> Self {
+        let assistant = Arc::new(LLMAssistantAggregator::new(context.clone(), assistant));
+        let user = Arc::new(
+            LLMUserAggregator::new(context.clone(), user)
+                .with_assistant(Arc::downgrade(&assistant)),
+        );
+        Self {
+            user,
+            assistant,
+            context,
+        }
+    }
+    pub fn context(&self) -> SharedContext {
+        self.context.clone()
+    }
+    pub fn user(&self) -> Arc<LLMUserAggregator> {
+        self.user.clone()
+    }
+    pub fn assistant(&self) -> Arc<LLMAssistantAggregator> {
+        self.assistant.clone()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct TextBuffer {
+    text: String,
+    last_includes_spaces: bool,
+}
+impl TextBuffer {
+    /// Mirrors concatenate_aggregated_text, including transitions between
+    /// token streams containing whitespace and independently stripped parts.
+    fn append(&mut self, text: &str, includes_spaces: bool) {
+        if text.is_empty() {
+            return;
+        }
+        if !self.text.is_empty()
+            && ((!includes_spaces && !self.last_includes_spaces)
+                || (includes_spaces != self.last_includes_spaces
+                    && !self.text.ends_with(char::is_whitespace)
+                    && !text.starts_with(char::is_whitespace)))
+        {
+            self.text.push(' ');
+        }
+        self.text.push_str(text);
+        self.last_includes_spaces = includes_spaces;
+    }
+    fn take(&mut self) -> String {
+        self.last_includes_spaces = false;
+        std::mem::take(&mut self.text).trim().to_owned()
+    }
+}
+
+/// Replay protection is bounded. Distinct frame identities are never deduped
+/// merely because a user said the same words on two different turns.
+#[derive(Debug, Default)]
+struct RecentFrames {
+    order: VecDeque<u64>,
+    set: HashSet<u64>,
+}
+impl RecentFrames {
+    fn insert(&mut self, id: u64) -> bool {
+        if !self.set.insert(id) {
+            return false;
+        }
+        self.order.push_back(id);
+        if self.order.len() > 512 {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+        true
+    }
+}

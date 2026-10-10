@@ -1,0 +1,28 @@
+[package]
+name = "pipecat-webrtc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Native SmallWebRTC SDP, encrypted media, and RTVI transport"
+
+[features]
+default = ["opus"]
+opus = ["dep:opus"]
+
+[dependencies]
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-core = { path = "../pipecat-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+# Keep the audited shutdown fixes when consumed from an independent workspace;
+# Cargo does not inherit a dependency workspace's [patch] table.
+webrtc = { version = "=0.14.0", path = "../../vendor/webrtc-0.14.0" }
+opus = { version = "0.4.0", optional = true }
+
+[lints]
+workspace = true

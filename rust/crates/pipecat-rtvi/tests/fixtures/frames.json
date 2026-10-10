@@ -1,0 +1,117 @@
+{
+  "source_file": "src/pipecat/processors/frameworks/rtvi/frames.py",
+  "source_sha256": "e4ba0fea776a45255b35be26301f4d4e3b869482f8da6c4544e0a8f1e216b8d9",
+  "classes": [
+    {
+      "name": "RTVIClientMessageFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "msg_id": "str",
+        "type": "str",
+        "data": "Any | None"
+      }
+    },
+    {
+      "name": "RTVIServerMessageFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "data": "Any"
+      }
+    },
+    {
+      "name": "RTVIServerResponseFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "client_msg": "RTVIClientMessageFrame",
+        "data": "Any | None",
+        "error": "str | None"
+      }
+    },
+    {
+      "name": "RTVIConfigureObserverFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "function_call_report_level": "dict[str, RTVIFunctionCallReportLevel] | None",
+        "vad_user_speaking_enabled": "bool | None",
+        "bot_llm_marker_enabled": "bool | None"
+      }
+    },
+    {
+      "name": "RTVIUICommandFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "command": "str",
+        "payload": "Any"
+      }
+    },
+    {
+      "name": "RTVIUIJobGroupFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "data": "UIJobGroupData | None"
+      }
+    },
+    {
+      "name": "RTVIUIEventFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "msg_id": "str",
+        "event": "str",
+        "payload": "Any"
+      }
+    },
+    {
+      "name": "RTVIUISnapshotFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "msg_id": "str",
+        "tree": "Any"
+      }
+    },
+    {
+      "name": "RTVIUICancelJobGroupFrame",
+      "bases": [
+        "SystemFrame"
+      ],
+      "priority": "system",
+      "interruptible": true,
+      "fields": {
+        "msg_id": "str",
+        "job_id": "str",
+        "reason": "str | None"
+      }
+    }
+  ]
+}

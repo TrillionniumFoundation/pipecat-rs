@@ -1,0 +1,18 @@
+[package]
+name = "pipecat-pipeline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+tokio.workspace = true
+
+[dev-dependencies]
+pipecat-processors = { path = "../pipecat-processors" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

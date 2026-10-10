@@ -1,0 +1,44 @@
+[package]
+name = "pipecat-browser-client"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-2-Clause"
+rust-version = "1.99"
+
+# Browser dependencies stay outside the native server workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+prost = "0.13.5"
+url = "2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = [
+  "Window", "Document", "Element", "Node", "Event", "EventTarget", "DomTokenList",
+  "HtmlElement", "HtmlButtonElement", "HtmlSelectElement", "HtmlAudioElement", "HtmlMediaElement",
+  "Navigator", "MediaDevices", "MediaStream", "MediaStreamTrack", "MediaStreamConstraints",
+  "Request", "RequestInit", "Response", "Headers", "AbortController", "AbortSignal", "Location",
+  "WebSocket", "BinaryType", "MessageEvent", "CloseEvent",
+  "RtcPeerConnection", "RtcConfiguration", "RtcSessionDescriptionInit", "RtcSessionDescription",
+  "RtcSdpType", "RtcDataChannel", "RtcDataChannelState", "RtcTrackEvent", "RtcRtpSender",
+  "RtcIceGatheringState", "RtcPeerConnectionState",
+  "AudioContext", "AudioContextState", "AudioNode", "AudioDestinationNode", "AudioBuffer",
+  "AudioBufferSourceNode", "AudioScheduledSourceNode", "AudioProcessingEvent", "ScriptProcessorNode",
+  "MediaStreamAudioSourceNode", "GainNode", "AudioParam", "console"
+] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"

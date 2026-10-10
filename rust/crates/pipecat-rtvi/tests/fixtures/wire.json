@@ -1,0 +1,108 @@
+{
+  "source_commit": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_sha256": {
+    "observer.py": "81e0c5085f815b4695d2f4e323d5ee82151cb8c878fcfc9cb5c6871c1aa29f07",
+    "processor.py": "c4b98180244d228fd10e54675d839198782d16e0a141050361a7d3ee2c6039aa",
+    "frames.py": "e4ba0fea776a45255b35be26301f4d4e3b869482f8da6c4544e0a8f1e216b8d9",
+    "__init__.py": "746adbc1237b002f46532a66b1852f24f18a2c94754958c988203a6ee61015f2",
+    "models.py": "2689d3cf72ea8348a20c869e01c868a8838e6068f3a7b5366b225dfc28205dd2"
+  },
+  "method": "Source-inspected golden wire contracts; no Python runtime imports",
+  "lifecycle": [
+    {
+      "label": "rtvi-ai",
+      "type": "user-started-speaking"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "user-stopped-speaking"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-started-speaking"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-stopped-speaking"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "user-mute-started"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "user-mute-stopped"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-llm-started"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-llm-stopped"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-tts-started"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-tts-stopped"
+    },
+    {
+      "label": "rtvi-ai",
+      "type": "bot-interrupted"
+    }
+  ],
+  "marker": {
+    "label": "rtvi-ai",
+    "type": "bot-llm-marker",
+    "data": {
+      "text": "●",
+      "kind": "complete",
+      "raw": "●done",
+      "markers": [
+        "●"
+      ]
+    }
+  },
+  "metrics": {
+    "label": "rtvi-ai",
+    "type": "metrics",
+    "data": {
+      "ttfb": [
+        {
+          "processor": "llm",
+          "value": 0.1
+        }
+      ],
+      "processing": [
+        {
+          "processor": "tts",
+          "value": 0.2
+        }
+      ],
+      "tokens": [
+        {
+          "prompt_tokens": 1,
+          "completion_tokens": 2,
+          "total_tokens": 3
+        }
+      ],
+      "characters": [
+        {
+          "processor": "tts",
+          "value": 5
+        }
+      ],
+      "stt_usage": [
+        {
+          "processor": "stt",
+          "value": {
+            "audio_seconds": 1.25
+          }
+        }
+      ]
+    }
+  }
+}

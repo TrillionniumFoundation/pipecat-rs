@@ -1,0 +1,846 @@
+//! Bridges native completion streams into interruption-aware core pipelines.
+use crate::{frame_context, settings};
+use crate::{CompletionRequest, LlmClient, ServiceError, StreamEvent};
+use pipecat_core::{
+    async_trait, Direction, ErrorCategory, ErrorFrame, Frame, FrameData, FrameProcessor,
+    FunctionCall, LlmContextData, LlmContinuationBlock, LlmContinuationProvider,
+    LlmServiceMetadataFrame, LlmSettings, Metric, NativeLlmContinuation, ProcessorContext,
+    ProcessorError, ProcessorHealth, ProcessorReference, ServiceMetadataFrame, TextFrame,
+};
+use std::future::{poll_fn, Future};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::task::Poll;
+use tokio::time::Instant;
+
+/// Per-call overrides and finite accumulation limit for out-of-band inference.
+#[derive(Debug, Clone)]
+pub struct InferenceOptions {
+    pub settings: LlmSettings,
+    pub max_output_bytes: usize,
+}
+impl Default for InferenceOptions {
+    fn default() -> Self {
+        Self {
+            settings: LlmSettings::default(),
+            max_output_bytes: 1024 * 1024,
+        }
+    }
+}
+/// Explicit-context inference capability for a native LLM processor.
+/// Calls perform provider inference when configured; they never execute tools.
+#[async_trait]
+pub trait LlmInference: FrameProcessor {
+    async fn run_inference(
+        &self,
+        context: LlmContextData,
+        options: InferenceOptions,
+    ) -> Result<Option<String>, ServiceError>;
+}
+
+/// A text/context LLM processor. Slow network work is owned by the pipeline.
+///
+/// Context frames and message updates replace/extend the request context. An
+/// external context aggregator owns conversation history; this processor does
+/// not implicitly append assistant text or execute tool calls. Completions are
+/// serialized, so overlapping context frames cannot interleave their output.
+pub struct LlmProcessor {
+    health: ProcessorHealth,
+    name: String,
+    client: LlmClient,
+    state: Mutex<State>,
+    completion_lock: Arc<tokio::sync::Mutex<()>>,
+}
+#[derive(Clone)]
+struct State {
+    request: CompletionRequest,
+    skip_tts: Option<bool>,
+}
+enum Consumption {
+    Forward,
+    Consumed,
+    Run(Box<State>),
+}
+impl LlmProcessor {
+    pub fn new(client: LlmClient, request: CompletionRequest) -> Self {
+        Self {
+            health: ProcessorHealth::default(),
+            name: "LlmService".into(),
+            client,
+            state: Mutex::new(State {
+                request,
+                skip_tts: None,
+            }),
+            completion_lock: Arc::new(tokio::sync::Mutex::new(())),
+        }
+    }
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
+    /// A clone is independent from pending and future frame updates.
+    pub fn request_snapshot(&self) -> Result<CompletionRequest, ServiceError> {
+        self.state
+            .lock()
+            .map(|state| state.request.clone())
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
+    }
+    /// Validate the entire prospective request before committing an atomic delta.
+    pub fn update_settings(&self, delta: &LlmSettings) -> Result<(), ServiceError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
+        let mut candidate = state.request.clone();
+        settings::merge_settings(&mut candidate.settings, delta);
+        self.client.request_body(&candidate)?;
+        state.request = candidate;
+        Ok(())
+    }
+    async fn metadata(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        ctx.broadcast(Frame::new(FrameData::LlmServiceMetadata(
+            LlmServiceMetadataFrame {
+                base: ServiceMetadataFrame {
+                    service_name: self.name.clone(),
+                    user_turn_strategies: None,
+                },
+                is_realtime_service: false,
+            },
+        )))
+        .await
+    }
+    fn targets_self(&self, target: &Option<ProcessorReference>) -> bool {
+        match target {
+            None => true,
+            Some(ProcessorReference::Name(name)) => name == &self.name,
+            Some(ProcessorReference::Local(target)) => {
+                // Trait-object vtables can differ across codegen units even
+                // when both references point to the same processor.
+                std::ptr::addr_eq(target.0.as_ref(), self as &dyn FrameProcessor)
+            }
+        }
+    }
+    fn consume(&self, frame: &Frame) -> Result<Consumption, ServiceError> {
+        if let FrameData::LlmUpdateSettings(update) = &frame.data {
+            if !self.targets_self(&update.service) {
+                return Ok(Consumption::Forward);
+            }
+            let delta = match &update.delta {
+                Some(delta) => delta.clone(),
+                None => settings::settings_from_mapping(&update.settings)?,
+            };
+            self.update_settings(&delta)?;
+            return Ok(Consumption::Consumed);
+        }
+        if let FrameData::ServiceUpdateSettings(update) = &frame.data {
+            if !self.targets_self(&update.service) {
+                return Ok(Consumption::Forward);
+            }
+            let delta = match &update.delta {
+                Some(delta) => settings::service_delta(delta),
+                None => settings::settings_from_mapping(&update.settings)?,
+            };
+            self.update_settings(&delta)?;
+            return Ok(Consumption::Consumed);
+        }
+        if let FrameData::LlmMessagesTransform(transform) = &frame.data {
+            let original = self.request_snapshot()?.context.messages;
+            let input: Vec<_> = original
+                .iter()
+                .map(frame_context::to_core_message)
+                .collect();
+            // Application code must not run under the state mutex: transforms
+            // may inspect the service or update independent settings.
+            let transformed = transform
+                .transform
+                .apply(input.clone())
+                .map_err(|e| ServiceError::InvalidRequest(e.to_string()))?;
+            let messages = restore_native_messages(&original, &input, &transformed)?;
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
+            let mut next = state.clone();
+            next.request.context.messages = messages;
+            self.client.request_body(&next.request)?;
+            *state = next.clone();
+            return Ok(if transform.run_llm.unwrap_or(false) {
+                Consumption::Run(Box::new(next))
+            } else {
+                Consumption::Consumed
+            });
+        }
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
+        let mut next = state.clone();
+        let run = match &frame.data {
+            FrameData::LlmContext(context) => {
+                next.request.context = frame_context::legacy_context(context);
+                true
+            }
+            FrameData::LlmContextDetailed(context) => {
+                if context.speculation {
+                    return Err(ServiceError::Unsupported(
+                        "speculative context requires an output gate".into(),
+                    ));
+                }
+                next.request.context = frame_context::context(&context.context)?;
+                true
+            }
+            FrameData::LlmRun => return Ok(Consumption::Run(Box::new(next))),
+            FrameData::LlmMessagesAppend(messages) => {
+                next.request
+                    .context
+                    .messages
+                    .extend(messages.messages.iter().map(frame_context::legacy_message));
+                messages.run_llm
+            }
+            FrameData::LlmMessagesUpdate(messages) => {
+                next.request.context.messages = messages
+                    .messages
+                    .iter()
+                    .map(frame_context::legacy_message)
+                    .collect();
+                messages.run_llm
+            }
+            FrameData::LlmMessagesAppendDetailed(messages) => {
+                next.request.context.messages.extend(
+                    messages
+                        .messages
+                        .iter()
+                        .map(frame_context::message)
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+                messages.run_llm.unwrap_or(false)
+            }
+            FrameData::LlmMessagesUpdateDetailed(messages) => {
+                next.request.context.messages = messages
+                    .messages
+                    .iter()
+                    .map(frame_context::message)
+                    .collect::<Result<_, _>>()?;
+                messages.run_llm.unwrap_or(false)
+            }
+            FrameData::LlmSetTools(tools) => {
+                next.request.context.tools = frame_context::tools(tools)?;
+                false
+            }
+            FrameData::LlmSetToolChoice(choice) => {
+                next.request.context.tool_choice = Some(frame_context::tool_choice(choice));
+                false
+            }
+            FrameData::LlmConfigureOutput { skip_tts } => {
+                state.skip_tts = Some(*skip_tts);
+                return Ok(Consumption::Consumed);
+            }
+            FrameData::LlmEnablePromptCaching { .. } => {
+                return Err(ServiceError::Unsupported(
+                    "runtime prompt caching policy".into(),
+                ))
+            }
+            _ => return Ok(Consumption::Forward),
+        };
+        self.client.request_body(&next.request)?;
+        *state = next.clone();
+        Ok(if run {
+            Consumption::Run(Box::new(next))
+        } else {
+            Consumption::Consumed
+        })
+    }
+    async fn launch(&self, state: State, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        let client = self.client.clone();
+        let output = ctx.clone();
+        let mut guard = Box::pin(self.completion_lock.clone().lock_owned());
+        // Reserve the FIFO position before background task scheduling can reorder it.
+        let acquired = poll_fn(|cx| Poll::Ready(guard.as_mut().poll(cx))).await;
+        ctx.spawn("llm-completion", true, async move {
+            let _guard = match acquired {
+                Poll::Ready(guard) => guard,
+                Poll::Pending => guard.await,
+            };
+            process_completion(client, state.request, state.skip_tts, output).await
+        })?;
+        Ok(())
+    }
+}
+
+/// Equal core projections can conceal distinct native forms, such as inline
+/// images and files. Keep every retained occurrence, and reject partial
+/// selection when the projection cannot identify which original survived.
+fn restore_native_messages(
+    original: &[crate::Message],
+    input: &[pipecat_core::ContextMessage],
+    transformed: &[pipecat_core::ContextMessage],
+) -> Result<Vec<crate::Message>, ServiceError> {
+    let mut consumed = vec![false; input.len()];
+    transformed
+        .iter()
+        .map(|message| {
+            let indices: Vec<_> = input
+                .iter()
+                .enumerate()
+                .filter_map(|(index, prior)| (prior == message).then_some(index))
+                .collect();
+            let Some(&first) = indices.first() else {
+                return frame_context::message(message);
+            };
+            if indices.iter().all(|&index| original[index] == original[first]) {
+                return Ok(original[first].clone());
+            }
+            if transformed.iter().filter(|other| *other == message).count() != indices.len() {
+                return Err(ServiceError::Unsupported(
+                    "message transform ambiguously selects distinct native content with identical core projections".into(),
+                ));
+            }
+            let index = indices
+                .into_iter()
+                .find(|&index| !consumed[index])
+                .expect("retained occurrence counts match");
+            consumed[index] = true;
+            Ok(original[index].clone())
+        })
+        .collect()
+}
+
+#[async_trait]
+impl FrameProcessor for LlmProcessor {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn health(&self) -> Option<ProcessorHealth> {
+        Some(self.health.clone())
+    }
+    fn process_when_unusable(&self, frame: &Frame, _: Direction) -> bool {
+        !matches!(
+            frame.data,
+            FrameData::LlmContext(_)
+                | FrameData::LlmContextDetailed(_)
+                | FrameData::LlmRun
+                | FrameData::LlmMessagesAppend(_)
+                | FrameData::LlmMessagesUpdate(_)
+                | FrameData::LlmMessagesAppendDetailed(_)
+                | FrameData::LlmMessagesUpdateDetailed(_)
+                | FrameData::LlmMessagesTransform(_)
+        )
+    }
+    async fn process(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if frame.data.is_start() {
+            ctx.push(frame, direction).await?;
+            return self.metadata(ctx).await;
+        }
+        if let FrameData::ServiceSwitcherRequestMetadata(target) = &frame.data {
+            if self.targets_self(&Some(target.clone())) {
+                self.metadata(ctx).await?;
+            }
+            return ctx.push(frame, direction).await;
+        }
+        if direction == Direction::Downstream
+            && matches!(&frame.data, FrameData::FlushDetailed(flush)
+                if !flush.returning && flush.origin.as_deref() == Some("pipecat.flows"))
+        {
+            let output = ctx.clone();
+            let mut guard = Box::pin(self.completion_lock.clone().lock_owned());
+            // Join the same FIFO as completions at admission, before spawning.
+            // Waiting inside process() would prevent interruption/terminal work.
+            let acquired = poll_fn(|cx| Poll::Ready(guard.as_mut().poll(cx))).await;
+            ctx.spawn("llm-flow-fence", false, async move {
+                let _guard = match acquired {
+                    Poll::Ready(guard) => guard,
+                    Poll::Pending => guard.await,
+                };
+                output.push(frame, direction).await
+            })?;
+            return Ok(());
+        }
+        match self.consume(&frame) {
+            Ok(Consumption::Run(state)) => self.launch(*state, ctx).await?,
+            Ok(Consumption::Forward) => ctx.push(frame, direction).await?,
+            Ok(Consumption::Consumed) => {}
+            Err(error) => {
+                let proposal = matches!(
+                    frame.data,
+                    FrameData::LlmUpdateSettings(_) | FrameData::ServiceUpdateSettings(_)
+                );
+                ctx.push_error_with_permanence_override(
+                    error_frame(error),
+                    proposal.then_some(false),
+                )
+                .await?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl LlmInference for LlmProcessor {
+    /// Snapshot current settings and use only the supplied context. Dropping
+    /// this future drops its stream and cancels the owned HTTP request. A
+    /// subsequent switch/settings update does not change an admitted call.
+    async fn run_inference(
+        &self,
+        context: LlmContextData,
+        options: InferenceOptions,
+    ) -> Result<Option<String>, ServiceError> {
+        if options.max_output_bytes == 0 {
+            return Err(ServiceError::InvalidRequest(
+                "inference output limit must be positive".into(),
+            ));
+        }
+        if !self.health.is_usable() {
+            return Err(ServiceError::InvalidRequest(
+                "LLM service is not usable".into(),
+            ));
+        }
+        let mut request = self.request_snapshot()?;
+        request.context = frame_context::context(&context)?;
+        settings::merge_settings(&mut request.settings, &options.settings);
+        let mut stream = self.client.stream(request)?;
+        let mut text = String::new();
+        while let Some(event) = stream.next().await {
+            if let StreamEvent::TextDelta(delta) = event? {
+                if delta.len() > options.max_output_bytes.saturating_sub(text.len()) {
+                    return Err(ServiceError::Protocol(
+                        "inference text exceeds output limit".into(),
+                    ));
+                }
+                text.push_str(&delta);
+            }
+        }
+        Ok((!text.is_empty()).then_some(text))
+    }
+}
+
+async fn process_completion(
+    client: LlmClient,
+    request: CompletionRequest,
+    skip_tts: Option<bool>,
+    ctx: ProcessorContext,
+) -> Result<(), ProcessorError> {
+    let started = Instant::now();
+    let mut ttfb_reported = false;
+    let mut thinking = false;
+    let mut failed = false;
+    let mut calls = vec![];
+    let mut continuation = None;
+    let anthropic = client.provider() == crate::Provider::Anthropic;
+    let effective_model = match &request.settings.base.model {
+        pipecat_core::Setting::Value(model) => model,
+        _ => &request.model,
+    };
+    let gemini_requires_signature = client.provider() == crate::Provider::Gemini
+        && crate::adapters::gemini_requires_tool_signature(effective_model);
+    let history_provider = match client.provider() {
+        crate::Provider::Anthropic => Some(LlmContinuationProvider::Anthropic),
+        crate::Provider::Gemini => Some(LlmContinuationProvider::Gemini),
+        _ => None,
+    };
+    static RESPONSE_ID: AtomicU64 = AtomicU64::new(1);
+    let response_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
+    let mut start = response_boundary(FrameData::LlmResponseStart, skip_tts);
+    if let Some(provider) = history_provider {
+        start
+            .set_native_llm_continuation(Arc::new(
+                NativeLlmContinuation::start(response_id, provider)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?,
+            ))
+            .map_err(|error| ProcessorError::new(error.to_string()))?;
+    }
+    ctx.push(start, Direction::Downstream).await?;
+    let mut stream = match client.stream(request) {
+        Ok(stream) => stream,
+        Err(error) => {
+            ctx.push_error(error_frame(error)).await?;
+            let mut end = response_boundary(FrameData::LlmResponseEnd, skip_tts);
+            end.metadata.insert("failed".into(), true.into());
+            ctx.push(end, Direction::Downstream).await?;
+            return Ok(());
+        }
+    };
+    while let Some(event) = stream.next().await {
+        if !ttfb_reported
+            && matches!(
+                &event,
+                Ok(StreamEvent::TextDelta(_)
+                    | StreamEvent::ThoughtDelta(_)
+                    | StreamEvent::ToolCall(_))
+            )
+        {
+            ttfb_reported = true;
+            if ctx.configuration().enable_metrics {
+                ctx.push(
+                    Frame::new(FrameData::Metrics(vec![Metric::Ttfb {
+                        processor: ctx.name().into(),
+                        seconds: started.elapsed().as_secs_f64(),
+                    }])),
+                    Direction::Downstream,
+                )
+                .await?;
+            }
+        }
+        match event {
+            Ok(StreamEvent::Started | StreamEvent::ToolCallDelta { .. }) => {}
+            Ok(StreamEvent::GeminiCheckpoint(messages)) => {
+                match native_gemini_history(response_id, messages, true) {
+                    Ok(history) => {
+                        let mut frame = Frame::new(FrameData::LlmContinuationCheckpoint);
+                        frame
+                            .set_native_llm_continuation(Arc::new(history))
+                            .map_err(|error| ProcessorError::new(error.to_string()))?;
+                        ctx.push(frame, Direction::Downstream).await?;
+                    }
+                    Err(error) => {
+                        failed = true;
+                        ctx.push_error(error_frame(error)).await?;
+                    }
+                }
+            }
+            Ok(StreamEvent::GeminiHistory(messages)) => {
+                match native_gemini_history(response_id, messages, false) {
+                    Ok(history) => {
+                        if gemini_requires_signature
+                            && history
+                                .blocks()
+                                .iter()
+                                .any(|b| matches!(b, LlmContinuationBlock::ToolCall(_)))
+                            && !history
+                                .blocks()
+                                .iter()
+                                .find_map(|b| match b {
+                                    LlmContinuationBlock::GeminiToolMetadata {
+                                        signature, ..
+                                    } => Some(signature.is_some()),
+                                    _ => None,
+                                })
+                                .unwrap_or(false)
+                        {
+                            failed = true;
+                            ctx.push_error(error_frame(ServiceError::Protocol(
+                                "native Gemini tool group is missing its signed anchor".into(),
+                            )))
+                            .await?;
+                        } else {
+                            continuation = Some(Arc::new(history));
+                        }
+                    }
+                    Err(error) => {
+                        failed = true;
+                        ctx.push_error(error_frame(error)).await?;
+                    }
+                }
+            }
+            Ok(StreamEvent::AnthropicThoughtStart) => {
+                ctx.push(
+                    Frame::new(FrameData::LlmThoughtStart),
+                    Direction::Downstream,
+                )
+                .await?;
+                thinking = true;
+            }
+            Ok(StreamEvent::AnthropicThoughtEnd) => {
+                ctx.push(Frame::new(FrameData::LlmThoughtEnd), Direction::Downstream)
+                    .await?;
+                thinking = false;
+            }
+            Ok(StreamEvent::AnthropicCheckpoint(messages)) => {
+                match native_history(response_id, messages, true) {
+                    Ok(history) => {
+                        let mut frame = Frame::new(FrameData::LlmContinuationCheckpoint);
+                        frame
+                            .set_native_llm_continuation(Arc::new(history))
+                            .map_err(|error| ProcessorError::new(error.to_string()))?;
+                        ctx.push(frame, Direction::Downstream).await?;
+                    }
+                    Err(error) => {
+                        failed = true;
+                        ctx.push_error(error_frame(error)).await?;
+                    }
+                }
+            }
+            Ok(StreamEvent::AnthropicHistory(messages)) => {
+                match native_history(response_id, messages, false) {
+                    Ok(history) => continuation = Some(Arc::new(history)),
+                    Err(error) => {
+                        failed = true;
+                        ctx.push_error(error_frame(error)).await?;
+                    }
+                }
+            }
+            Ok(StreamEvent::TextDelta(text)) => {
+                if thinking && !anthropic {
+                    ctx.push(Frame::new(FrameData::LlmThoughtEnd), Direction::Downstream)
+                        .await?;
+                    thinking = false;
+                }
+                let mut text = TextFrame::llm(text);
+                text.skip_tts = skip_tts;
+                ctx.push(Frame::new(FrameData::LlmText(text)), Direction::Downstream)
+                    .await?;
+            }
+            Ok(StreamEvent::ThoughtDelta(text)) => {
+                if !thinking {
+                    ctx.push(
+                        Frame::new(FrameData::LlmThoughtStart),
+                        Direction::Downstream,
+                    )
+                    .await?;
+                    thinking = true;
+                }
+                let mut text = TextFrame::llm(text);
+                text.skip_tts = Some(true);
+                text.append_to_context = false;
+                ctx.push(
+                    Frame::new(FrameData::LlmThoughtText(text)),
+                    Direction::Downstream,
+                )
+                .await?;
+            }
+            Ok(StreamEvent::ToolCall(call)) => calls.push(FunctionCall {
+                function_name: call.name,
+                tool_call_id: call.id,
+                arguments: call.arguments,
+            }),
+            Ok(StreamEvent::Usage(usage)) => {
+                if ctx.configuration().enable_usage_metrics {
+                    let mut frame = Frame::new(FrameData::Metrics(vec![Metric::LlmUsage {
+                        processor: ctx.name().into(),
+                        prompt_tokens: usage.prompt_tokens,
+                        completion_tokens: usage.completion_tokens,
+                        total_tokens: usage.total_tokens,
+                    }]));
+                    frame.metadata.insert(
+                        "llm_usage".into(),
+                        serde_json::to_value(usage)
+                            .map_err(|e| ProcessorError::new(e.to_string()))?,
+                    );
+                    ctx.push(frame, Direction::Downstream).await?;
+                }
+            }
+            Err(error) => {
+                failed = true;
+                ctx.push_error(error_frame(error)).await?;
+            }
+            Ok(StreamEvent::Finished { reason }) => {
+                if thinking {
+                    ctx.push(Frame::new(FrameData::LlmThoughtEnd), Direction::Downstream)
+                        .await?;
+                }
+                if let Some(history) = &continuation {
+                    let ordered: Vec<_> = history
+                        .blocks()
+                        .iter()
+                        .filter_map(|block| match block {
+                            LlmContinuationBlock::ToolCall(call) => Some(call.clone()),
+                            _ => None,
+                        })
+                        .collect();
+                    if ordered.len() != calls.len()
+                        || ordered.iter().any(|call| !calls.contains(call))
+                    {
+                        failed = true;
+                        ctx.push_error(error_frame(ServiceError::Protocol(
+                            "signed tool history does not match completion".into(),
+                        )))
+                        .await?;
+                    } else {
+                        calls = ordered;
+                    }
+                }
+                if !failed && !calls.is_empty() {
+                    let mut frame =
+                        Frame::new(FrameData::FunctionCallsStarted(std::mem::take(&mut calls)));
+                    if let Some(history) = continuation.take() {
+                        frame
+                            .set_native_llm_continuation(history)
+                            .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    }
+                    ctx.push(frame, Direction::Downstream).await?;
+                }
+                if ctx.configuration().enable_metrics {
+                    ctx.push(
+                        Frame::new(FrameData::Metrics(vec![Metric::Processing {
+                            processor: ctx.name().into(),
+                            seconds: started.elapsed().as_secs_f64(),
+                        }])),
+                        Direction::Downstream,
+                    )
+                    .await?;
+                }
+                let mut frame = response_boundary(FrameData::LlmResponseEnd, skip_tts);
+                if !failed {
+                    if let Some(history) = continuation.take() {
+                        frame
+                            .set_native_llm_continuation(history)
+                            .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    }
+                }
+                if let Some(reason) = reason {
+                    frame.metadata.insert(
+                        "finish_reason".into(),
+                        serde_json::to_value(reason)
+                            .map_err(|e| ProcessorError::new(e.to_string()))?,
+                    );
+                }
+                frame.metadata.insert("failed".into(), failed.into());
+                ctx.push(frame, Direction::Downstream).await?;
+                return Ok(());
+            }
+        }
+    }
+    Err(ProcessorError::new(
+        "LLM stream closed without a terminal event",
+    ))
+}
+fn error_frame(error: ServiceError) -> ErrorFrame {
+    let category = match &error {
+        ServiceError::Http { status, .. } => ErrorCategory::from_http_status(*status),
+        ServiceError::InvalidRequest(_) | ServiceError::Unsupported(_) => {
+            ErrorCategory::InvalidRequest
+        }
+        ServiceError::Transport(_) | ServiceError::Timeout => ErrorCategory::Connectivity,
+        _ => ErrorCategory::Application,
+    };
+    ErrorFrame {
+        error: error.to_string(),
+        category,
+        ..ErrorFrame::new("")
+    }
+}
+fn response_boundary(data: FrameData, skip_tts: Option<bool>) -> Frame {
+    let mut frame = Frame::new(data);
+    if let Some(skip) = skip_tts {
+        frame.metadata.insert("skip_tts".into(), skip.into());
+    }
+    frame
+}
+
+fn native_history(
+    response_id: u64,
+    messages: Vec<crate::Message>,
+    checkpoint: bool,
+) -> Result<NativeLlmContinuation, ServiceError> {
+    let mut blocks = Vec::with_capacity(messages.len());
+    for message in messages {
+        if message.role != crate::Role::Assistant {
+            return Err(ServiceError::Protocol(
+                "non-assistant signed continuation".into(),
+            ));
+        }
+        match message.content {
+            Some(crate::Content::Text(text)) if message.tool_calls.is_empty() => {
+                blocks.push(LlmContinuationBlock::Text(text))
+            }
+            Some(crate::Content::Parts(parts))
+                if parts.len() == 1 && message.tool_calls.is_empty() =>
+            {
+                match parts.into_iter().next().expect("one thinking block") {
+                    crate::ContentPart::Thinking {
+                        text,
+                        signature: Some(signature),
+                    } => blocks.push(LlmContinuationBlock::Thinking { text, signature }),
+                    _ => {
+                        return Err(ServiceError::Protocol(
+                            "invalid signed continuation part".into(),
+                        ))
+                    }
+                }
+            }
+            None if message.tool_calls.len() == 1 => {
+                let call = message
+                    .tool_calls
+                    .into_iter()
+                    .next()
+                    .expect("one tool call");
+                blocks.push(LlmContinuationBlock::ToolCall(FunctionCall {
+                    function_name: call.name,
+                    tool_call_id: call.id,
+                    arguments: call.arguments,
+                }));
+            }
+            _ => {
+                return Err(ServiceError::Protocol(
+                    "ambiguous signed continuation block".into(),
+                ))
+            }
+        }
+    }
+    let make = if checkpoint {
+        NativeLlmContinuation::checkpoint
+    } else {
+        NativeLlmContinuation::new
+    };
+    make(response_id, LlmContinuationProvider::Anthropic, blocks)
+        .map_err(|error| ServiceError::Protocol(error.to_string()))
+}
+
+fn native_gemini_history(
+    response_id: u64,
+    messages: Vec<crate::Message>,
+    checkpoint: bool,
+) -> Result<NativeLlmContinuation, ServiceError> {
+    let mut blocks = vec![];
+    for message in messages {
+        if message.role != crate::Role::Assistant {
+            return Err(ServiceError::Protocol(
+                "non-assistant Gemini history".into(),
+            ));
+        }
+        let Some(crate::Content::Parts(mut parts)) = message.content else {
+            return Err(ServiceError::Protocol(
+                "invalid Gemini history content".into(),
+            ));
+        };
+        if parts.len() != 1 {
+            return Err(ServiceError::Protocol(
+                "ambiguous Gemini history Part".into(),
+            ));
+        }
+        match parts.remove(0) {
+            crate::ContentPart::GeminiText {
+                text,
+                thought,
+                signature,
+                incomplete: false,
+            } if message.tool_calls.is_empty() => blocks.push(LlmContinuationBlock::GeminiText {
+                text,
+                thought,
+                signature,
+            }),
+            crate::ContentPart::GeminiToolMetadata {
+                tool_call_id,
+                signature,
+            } if message.tool_calls.len() == 1 && message.tool_calls[0].id == tool_call_id => {
+                let call = message.tool_calls.into_iter().next().unwrap();
+                blocks.push(LlmContinuationBlock::ToolCall(FunctionCall {
+                    function_name: call.name,
+                    tool_call_id: call.id,
+                    arguments: call.arguments,
+                }));
+                blocks.push(LlmContinuationBlock::GeminiToolMetadata {
+                    tool_call_id,
+                    signature,
+                });
+            }
+            _ => {
+                return Err(ServiceError::Protocol(
+                    "invalid Gemini history bookmark".into(),
+                ))
+            }
+        }
+    }
+    let make = if checkpoint {
+        NativeLlmContinuation::checkpoint
+    } else {
+        NativeLlmContinuation::new
+    };
+    make(response_id, LlmContinuationProvider::Gemini, blocks)
+        .map_err(|error| ServiceError::Protocol(error.to_string()))
+}

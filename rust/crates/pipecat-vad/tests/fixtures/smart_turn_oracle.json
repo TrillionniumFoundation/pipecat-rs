@@ -1,0 +1,11 @@
+{
+  "source": "src/pipecat/audio/turn/smart_turn/_whisper_features.py",
+  "model": "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+  "source_sha256": "139b047d10dee42ad5b4894489012e515a882d8f5e2bffe8ad27b30728fc9968",
+  "model_sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+  "speech_sha256": "dbfccc2e39b708ff8cad6ec3139e87e42004be04b6328ad42304ff215e80d8ad",
+  "numpy": "2.3.5",
+  "onnxruntime": "1.21.0",
+  "features": "little-endian float32; row-major 80 x 800; front-pad/take final 128000 samples; normalize=True",
+  "pcm": "little-endian signed int16; mono 16000 Hz"
+}

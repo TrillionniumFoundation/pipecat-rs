@@ -1,0 +1,9 @@
+name: echo
+scenarios:
+  - name: hello
+    turns:
+      - user: Hello native Rust
+        expect:
+          - event: response
+            text_contains: Hello native Rust
+            within_ms: 1000

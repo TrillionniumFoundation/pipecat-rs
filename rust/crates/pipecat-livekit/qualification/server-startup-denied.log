@@ -1,0 +1,7 @@
+2026-10-10T04:07:32.878+0900	INFO	livekit	server/main.go:210	starting in development mode
+2026-10-10T04:07:32.878+0900	INFO	livekit	server/main.go:213	no keys provided, using placeholder keys	{"API Key": "devkey", "API Secret": "secret"}
+2026-10-10T04:07:32.879+0900	INFO	livekit	hwstats/cpu_linux.go:77	failed reading cgroup specific cpu stats, falling back to system wide implementation
+2026-10-10T04:07:32.879+0900	INFO	livekit	hwstats/memory_linux.go:77	failed reading cgroup specific memory stats, falling back to system wide implementation
+2026-10-10T04:07:32.880+0900	INFO	livekit	routing/interfaces.go:181	using single-node routing
+2026-10-10T04:07:32.880+0900	INFO	livekit	rtcconfig/webrtc_config.go:112	using explicit node IP for NAT1To1Ips	{"ip": {"V4":"127.0.0.1","V6":""}, "advertiseInternalIP": false}
+failed to get create network: route ip+net: netlinkrib: operation not permitted

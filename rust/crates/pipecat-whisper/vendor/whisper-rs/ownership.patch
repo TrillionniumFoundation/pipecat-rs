@@ -1,0 +1,316 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -26,6 +26,7 @@
+ repository = "https://codeberg.org/tazz4843/whisper-rs"
+ 
+ [features]
++nightly-bench = []
+ _gpu = []
+ coreml = ["whisper-rs-sys/coreml"]
+ cuda = [
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,5 +1,4 @@
+ **/target
+-**/Cargo.lock
+ /.idea
+ /.vscode
+ *.bin
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,5 +1,5 @@
+ #![allow(clippy::uninlined_format_args)]
+-#![cfg_attr(test, feature(test))]
++#![cfg_attr(all(test, feature = "nightly-bench"), feature(test))]
+ 
+ //! Most users will be looking for nothing more than [`WhisperState::full`] to run a full transcription pipeline.
+ //!
+--- a/src/utilities.rs
++++ b/src/utilities.rs
+@@ -79,8 +79,10 @@
+     use super::*;
+     use rand::distributions::{Distribution, Standard};
+     use rand::Rng;
++    #[cfg(feature = "nightly-bench")]
+     use std::hint::black_box;
+ 
++    #[cfg(feature = "nightly-bench")]
+     extern crate test;
+ 
+     fn random_sample_data<T>() -> Vec<T>
+@@ -135,6 +137,7 @@
+         );
+     }
+ 
++    #[cfg(feature = "nightly-bench")]
+     #[bench]
+     pub fn bench_stereo_to_mono(b: &mut test::Bencher) {
+         let samples = random_sample_data::<f32>();
+@@ -147,6 +150,7 @@
+         });
+     }
+ 
++    #[cfg(feature = "nightly-bench")]
+     #[bench]
+     pub fn bench_integer_to_float(b: &mut test::Bencher) {
+         let samples = random_sample_data::<i16>();
+--- a/src/whisper_params.rs
++++ b/src/whisper_params.rs
+@@ -5,7 +5,7 @@
+ use std::fmt::Formatter;
+ use std::fmt::Result as FmtResult;
+ use std::marker::PhantomData;
+-use std::sync::Arc;
++use std::sync::{Arc, Mutex};
+ use whisper_rs_sys::whisper_token;
+ 
+ /// The sampling strategy to use to pick tokens from a list of likely possibilities.
+@@ -48,7 +48,9 @@
+     phantom_tokens: PhantomData<&'b [c_int]>,
+     grammar: Option<Vec<whisper_rs_sys::whisper_grammar_element>>,
+     progress_callback_safe: Option<Arc<Box<dyn FnMut(i32)>>>,
+-    abort_callback_safe: Option<Arc<Box<dyn FnMut() -> bool>>>,
++    abort_callback_safe: Option<Arc<Mutex<Box<dyn FnMut() -> bool + Send>>>>,
++    owned_language: Option<Arc<CString>>,
++    owned_initial_prompt: Option<Arc<CString>>,
+     segment_calllback_safe: Option<Arc<SegmentCallbackFn>>,
+ }
+ 
+@@ -90,6 +92,8 @@
+             grammar: None,
+             progress_callback_safe: None,
+             abort_callback_safe: None,
++            owned_language: None,
++            owned_initial_prompt: None,
+             segment_calllback_safe: None,
+         }
+     }
+@@ -287,12 +291,12 @@
+     ///
+     /// Defaults to "en".
+     pub fn set_language(&mut self, language: Option<&'a str>) {
+-        self.fp.language = match language {
+-            Some(language) => CString::new(language)
+-                .expect("Language contains null byte")
+-                .into_raw() as *const _,
+-            None => std::ptr::null(),
+-        };
++        self.owned_language = language
++            .map(|language| Arc::new(CString::new(language).expect("Language contains null byte")));
++        self.fp.language = self
++            .owned_language
++            .as_ref()
++            .map_or(std::ptr::null(), |s| s.as_ptr());
+     }
+ 
+     /// Set `detect_language`.
+@@ -620,38 +624,36 @@
+     /// Defaults to None.
+     pub fn set_abort_callback_safe<O, F>(&mut self, closure: O)
+     where
+-        F: FnMut() -> bool + 'static,
++        F: FnMut() -> bool + Send + 'static,
+         O: Into<Option<F>>,
+     {
+         use std::ffi::c_void;
+-
+-        unsafe extern "C" fn trampoline<F>(user_data: *mut c_void) -> bool
+-        where
+-            F: FnMut() -> bool,
+-        {
+-            let user_data = &mut *(user_data as *mut F);
+-            user_data()
++        type Callback = Mutex<Box<dyn FnMut() -> bool + Send>>;
++        unsafe extern "C" fn trampoline(user_data: *mut c_void) -> bool {
++            // The Arc stored in FullParams owns this allocation for the full call.
++            let callback = unsafe { &*(user_data as *const Callback) };
++            // Do not unwind across the C ABI. A poisoned or panicking callback aborts.
++            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                callback.lock().map_or(true, |mut callback| callback())
++            }))
++            .unwrap_or(true)
+         }
+-
+-        match closure.into() {
+-            Some(closure) => {
+-                // Stable address
+-                let closure = Box::new(closure) as Box<dyn FnMut() -> bool>;
+-                // Thin pointer
+-                let closure = Box::new(closure);
+-                // Raw pointer
+-                let closure = Box::into_raw(closure);
+-
+-                self.fp.abort_callback = Some(trampoline::<F>);
+-                self.fp.abort_callback_user_data = closure as *mut c_void;
+-                self.abort_callback_safe = None;
+-            }
+-            None => {
+-                self.fp.abort_callback = None;
+-                self.fp.abort_callback_user_data = std::ptr::null_mut::<c_void>();
+-                self.abort_callback_safe = None;
+-            }
++        let callback = closure.into().map(|callback| {
++            Arc::new(Mutex::new(
++                Box::new(callback) as Box<dyn FnMut() -> bool + Send>
++            ))
++        });
++        let previous = std::mem::replace(&mut self.abort_callback_safe, callback);
++        if let Some(callback) = &self.abort_callback_safe {
++            self.fp.abort_callback = Some(trampoline);
++            self.fp.abort_callback_user_data = Arc::as_ptr(callback) as *mut c_void;
++        } else {
++            self.fp.abort_callback = None;
++            self.fp.abort_callback_user_data = std::ptr::null_mut();
+         }
++        // A captured destructor can panic. Publish the new pointer/owner pair
++        // first so catching that panic cannot expose the freed previous callback.
++        drop(previous);
+     }
+ 
+     /// Set the user data to be passed to the progress callback.
+@@ -810,9 +812,10 @@
+     /// // ... further usage of params ...
+     /// ```
+     pub fn set_initial_prompt(&mut self, initial_prompt: &str) {
+-        self.fp.initial_prompt = CString::new(initial_prompt)
+-            .expect("Initial prompt contains null byte")
+-            .into_raw() as *const c_char;
++        self.owned_initial_prompt = Some(Arc::new(
++            CString::new(initial_prompt).expect("Initial prompt contains null byte"),
++        ));
++        self.fp.initial_prompt = self.owned_initial_prompt.as_ref().unwrap().as_ptr();
+     }
+ 
+     /// Enable or disable VAD.
+@@ -958,3 +961,131 @@
+         );
+     }
+ }
++
++#[cfg(test)]
++mod pipecat_ownership_tests {
++    use super::*;
++    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
++    struct DropCounter(Arc<AtomicUsize>);
++    impl Drop for DropCounter {
++        fn drop(&mut self) {
++            self.0.fetch_add(1, Ordering::SeqCst);
++        }
++    }
++    fn call(params: &FullParams<'_, '_>) -> bool {
++        // This invokes exactly the ABI pointer/user-data pair used by whisper.cpp.
++        unsafe { params.fp.abort_callback.unwrap()(params.fp.abort_callback_user_data) }
++    }
++    #[test]
++    fn captured_callback_has_correct_layout_and_drops_after_last_clone() {
++        let drops = Arc::new(AtomicUsize::new(0));
++        let cancelled = Arc::new(AtomicBool::new(false));
++        let capture = DropCounter(drops.clone());
++        let flag = cancelled.clone();
++        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
++        params.set_abort_callback_safe(move || {
++            let _keep_alive = &capture;
++            flag.load(Ordering::SeqCst)
++        });
++        assert!(!call(&params));
++        let clone = params.clone();
++        params.set_abort_callback_safe::<_, fn() -> bool>(None::<fn() -> bool>);
++        assert_eq!(drops.load(Ordering::SeqCst), 0);
++        cancelled.store(true, Ordering::SeqCst);
++        assert!(call(&clone));
++        drop(params);
++        assert_eq!(drops.load(Ordering::SeqCst), 0);
++        drop(clone);
++        assert_eq!(drops.load(Ordering::SeqCst), 1);
++    }
++    #[test]
++    fn repeated_callback_replacement_releases_previous_capture() {
++        let drops = Arc::new(AtomicUsize::new(0));
++        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
++        for expected in 0..100 {
++            let capture = DropCounter(drops.clone());
++            params.set_abort_callback_safe(move || {
++                let _keep_alive = &capture;
++                false
++            });
++            assert!(!call(&params));
++            assert_eq!(drops.load(Ordering::SeqCst), expected);
++        }
++        drop(params);
++        assert_eq!(drops.load(Ordering::SeqCst), 100);
++    }
++    #[test]
++    fn callback_panics_abort_without_crossing_native_abi() {
++        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
++        params.set_abort_callback_safe(|| panic!("test callback failure"));
++        assert!(call(&params));
++        assert!(call(&params)); // poisoned callback also aborts
++    }
++    #[test]
++    fn replacing_callback_is_unwind_safe_when_a_capture_destructor_panics() {
++        struct PanicOnDrop;
++        impl Drop for PanicOnDrop {
++            fn drop(&mut self) {
++                panic!("captured destructor failed");
++            }
++        }
++        for install_replacement in [false, true] {
++            let capture = PanicOnDrop;
++            let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
++            params.set_abort_callback_safe(move || {
++                let _keep_alive = &capture;
++                false
++            });
++            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                if install_replacement {
++                    params.set_abort_callback_safe(|| false);
++                } else {
++                    params.set_abort_callback_safe::<_, fn() -> bool>(None::<fn() -> bool>);
++                }
++            }));
++            assert!(outcome.is_err());
++            if install_replacement {
++                assert!(params.abort_callback_safe.is_some());
++                assert!(!call(&params));
++            } else {
++                assert!(params.abort_callback_safe.is_none());
++                assert!(params.fp.abort_callback.is_none());
++                assert!(params.fp.abort_callback_user_data.is_null());
++            }
++        }
++    }
++    #[test]
++    fn owned_cstrings_survive_clone_and_release_on_replace_and_drop() {
++        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
++        params.set_language(Some("en"));
++        params.set_initial_prompt("first");
++        let language = Arc::downgrade(params.owned_language.as_ref().unwrap());
++        let prompt = Arc::downgrade(params.owned_initial_prompt.as_ref().unwrap());
++        let clone = params.clone();
++        params.set_language(Some("es"));
++        params.set_initial_prompt("second");
++        assert_eq!(
++            unsafe { std::ffi::CStr::from_ptr(clone.fp.language) }
++                .to_str()
++                .unwrap(),
++            "en"
++        );
++        assert_eq!(
++            unsafe { std::ffi::CStr::from_ptr(clone.fp.initial_prompt) }
++                .to_str()
++                .unwrap(),
++            "first"
++        );
++        assert!(language.upgrade().is_some());
++        assert!(prompt.upgrade().is_some());
++        drop(clone);
++        assert!(language.upgrade().is_none());
++        assert!(prompt.upgrade().is_none());
++        let language = Arc::downgrade(params.owned_language.as_ref().unwrap());
++        let prompt = Arc::downgrade(params.owned_initial_prompt.as_ref().unwrap());
++        params.set_language(None);
++        assert!(language.upgrade().is_none());
++        drop(params);
++        assert!(prompt.upgrade().is_none());
++    }
++}

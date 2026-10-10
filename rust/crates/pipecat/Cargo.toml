@@ -1,0 +1,69 @@
+[package]
+name = "pipecat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
+pipecat-core = { path = "../pipecat-core" }
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-protocol = { path = "../pipecat-protocol" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-transports = { path = "../pipecat-transports" }
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+pipecat-workers = { path = "../pipecat-workers" }
+pipecat-worker-proxy = { path = "../pipecat-worker-proxy", optional = true }
+pipecat-agent-workers = { path = "../pipecat-agent-workers", optional = true }
+pipecat-whisper = { path = "../pipecat-whisper", optional = true }
+pipecat-livekit = { path = "../pipecat-livekit", optional = true }
+pipecat-evals = { path = "../pipecat-evals", optional = true }
+pipecat-elevenlabs = { path = "../pipecat-elevenlabs", optional = true }
+pipecat-gemini-live = { path = "../pipecat-gemini-live", optional = true }
+pipecat-mcp = { path = "../pipecat-mcp", optional = true }
+pipecat-local-audio = { path = "../pipecat-local-audio", optional = true }
+
+serde_json.workspace = true
+
+pipecat-speech = { path = "../pipecat-speech" }
+pipecat-processors = { path = "../pipecat-processors" }
+pipecat-turns = { path = "../pipecat-turns" }
+
+pipecat-text = { path = "../pipecat-text" }
+pipecat-streaming-speech = { path = "../pipecat-streaming-speech" }
+pipecat-network-bus = { path = "../pipecat-network-bus" }
+pipecat-vad = { path = "../pipecat-vad" }
+pipecat-rtvi = { path = "../pipecat-rtvi" }
+pipecat-pipeline = { path = "../pipecat-pipeline" }
+pipecat-flows = { path = "../pipecat-flows" }
+pipecat-observers = { path = "../pipecat-observers" }
+pipecat-client-server = { path = "../pipecat-client-server", optional = true }
+pipecat-webrtc = { path = "../pipecat-webrtc", optional = true }
+pipecat-realtime = { path = "../pipecat-realtime", optional = true }
+pipecat-responses = { path = "../pipecat-responses", optional = true }
+
+[features]
+assemblyai = ["dep:pipecat-assemblyai"]
+agent-workers = ["dep:pipecat-agent-workers"]
+whisper = ["dep:pipecat-whisper"]
+livekit = ["dep:pipecat-livekit"]
+evals = ["dep:pipecat-evals"]
+elevenlabs = ["dep:pipecat-elevenlabs"]
+gemini-live = ["dep:pipecat-gemini-live"]
+mcp = ["dep:pipecat-mcp"]
+local-audio = ["dep:pipecat-local-audio"]
+worker-proxy = ["dep:pipecat-worker-proxy"]
+client-server = ["dep:pipecat-client-server"]
+pgmq = ["pipecat-network-bus/pgmq"]
+webrtc = ["dep:pipecat-webrtc"]
+realtime = ["dep:pipecat-realtime"]
+responses = ["dep:pipecat-responses"]
+
+[dev-dependencies]
+tokio.workspace = true
+bytes.workspace = true
+futures-util = { version = "0.3", features = ["sink"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+
+[lints]
+workspace = true

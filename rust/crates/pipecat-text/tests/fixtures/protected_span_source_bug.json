@@ -1,0 +1,13 @@
+{
+  "description": "Documented intentional correctness fix: closed protected spans remain indivisible during later sentence matching",
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_file": "src/pipecat/utils/text/skip_tags_aggregator.py",
+  "source_sha256": "cc3081f593302675c1164e1f0e6a72c95f06101506ac33b6c8eea1e4ace0eb08",
+  "sentencex_version": "1.0.32",
+  "class": "SkipTagsAggregator",
+  "mode": "sentence",
+  "tags": [["<spell>", "</spell>"]],
+  "chunks": ["Call <sp", "ell>A.", "B.</spell> now.", " N", "ext sentence."],
+  "observed_unchanged_python_output_including_flush": ["Call <spell>A.", "B.</spell> now. Next sentence."],
+  "corrected_native_output_including_flush": ["Call <spell>A.B.</spell> now.", "Next sentence."]
+}

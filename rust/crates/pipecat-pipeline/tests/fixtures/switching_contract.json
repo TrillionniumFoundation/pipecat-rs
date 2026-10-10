@@ -1,0 +1,30 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_sha256": {
+    "src/pipecat/pipeline/service_switcher.py": "acd9bb0626c504be1739de25f258489580f2790e93b462da4d9352570da1a58a",
+    "src/pipecat/pipeline/llm_switcher.py": "08abf47ea17c9fae936c97dc454092557f4a6fb1e21a8b7fdc005841777e091a",
+    "src/pipecat/services/ai_service.py": "1bd1d8c8f1b31d7115ba50368c6d7cc6fcba367a561ecfd806c86883540da7c7",
+    "src/pipecat/services/llm_service.py": "05c279bd5b85bc20b339cb06a41c810e309b03c85b90e898562d17b808de9402",
+    "tests/test_service_switcher.py": "408e11a9329161ba47d52a5e55e3a81e19c2a5591fde6449a0019f9c9d5ec9af",
+    "tests/test_llm_switcher.py": "124798e3ae1f0703ef43fde593680c5fc181e0912f8581585c9ad021108c8774"
+  },
+  "initial_service": 0,
+  "failover": "next usable service after current, wrapping; only active attributed nonfatal unusable-service errors",
+  "manual_refusal": "unknown or unusable member; native additionally refuses ambiguous names",
+  "settings": {
+    "default": "active only",
+    "addressed": "target member, active or inactive; other pipeline targets pass through",
+    "reach_inactive_services": "all only when no address",
+    "inactive_output": "consume private copies"
+  },
+  "metadata_refresh": "request service metadata, no inference",
+  "llm_context_replay_on_switch": false,
+  "native_boundaries": [
+    "one shared interruption epoch cancels/fences interruptible work at selection",
+    "uninterruptible frames and tasks retain core survival semantics",
+    "typed explicit-context inference uses bounded existing HTTP/SSE client",
+    "shared downstream ToolExecutor owns native callbacks and deduplication",
+    "Python decorator/direct-handler registration is unsupported; use native callbacks plus schemas"
+  ],
+  "evidence": "Manually derived pinned source contract. No Python runtime was executed."
+}

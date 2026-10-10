@@ -1,0 +1,43 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "basis": "Manually mapped source assertions; no Python execution oracle",
+  "sources": [
+    "src/pipecat/turns/empty_user_turn.py",
+    "src/pipecat/processors/aggregators/llm_response_universal.py::_on_user_turn_started",
+    "src/pipecat/processors/aggregators/llm_response_universal.py::_maybe_recover_empty_user_turn",
+    "tests/test_empty_user_turn.py"
+  ],
+  "source_files": [
+    {
+      "path": "src/pipecat/turns/empty_user_turn.py",
+      "git_blob": "d94733816d3ff749ba635159a7e9d7f9a19d561b",
+      "sha256": "b5867fb059a2b1a280dbc9be0871cbc30fa5c157102d0b2b9f91c64ae83f8655"
+    },
+    {
+      "path": "src/pipecat/processors/aggregators/llm_response_universal.py",
+      "git_blob": "7c18aa616c9e8e5b00e7518d2af1df57c647d631",
+      "sha256": "b44680dd1804a7a7c23de029f1e89c65a6045842b2cc4e24c32ce7475ae46642"
+    },
+    {
+      "path": "tests/test_empty_user_turn.py",
+      "git_blob": "656598775289367a8ac6cdc737801c18e1e788da",
+      "sha256": "8a039c3d980d4f1ea6d35ac31b7e6b0d297a91ab26bba4bea93415c380ae80cc"
+    }
+  ],
+  "default_prompt": "The user may have said something while you were responding, but it was not recognized. Your response was cut off there, and the conversation only includes the part they heard, which may be none of it. Briefly ask them to repeat what they said, and repeat any question of yours they may have missed.",
+  "native_scope": "Cascade only: realtime metadata is rejected before state changes. Replay protection, tool ID/name/arguments/finality checks, mute closure, and terminal task ownership retain the native contracts.",
+  "cases": [
+    {"name":"test_interrupted_while_speaking", "steps":["bot_speaking","empty"], "prompts":["interrupted, nothing recognized"], "inferences":2, "heard_prefix":true},
+    {"name":"test_interrupted_before_response_started", "steps":["bot_idle","transcribed","empty"], "prompts":["interrupted, nothing recognized"], "inferences":2},
+    {"name":"test_before_bot_spoke", "steps":["empty"], "prompts":["interrupted, nothing recognized"], "inferences":1},
+    {"name":"test_idle_ignored_by_default", "steps":["bot_idle","empty"], "prompts":[], "inferences":0},
+    {"name":"test_idle_prompt", "idle_prompt":"idle, nothing recognized", "steps":["bot_idle","empty"], "prompts":["idle, nothing recognized"], "inferences":1},
+    {"name":"test_idle_after_response_finished", "idle_prompt":"idle, nothing recognized", "steps":["bot_speaking","response_end","bot_idle","empty"], "prompts":["idle, nothing recognized"], "inferences":2},
+    {"name":"test_enabled_by_default", "default_config":true, "steps":["bot_speaking","empty"], "prompts":["$default"], "inferences":2},
+    {"name":"test_disabled", "disabled":true, "steps":["bot_speaking","empty"], "prompts":[], "inferences":1},
+    {"name":"test_transcribed_turn_not_recovered", "steps":["bot_speaking","transcribed"], "prompts":[], "inferences":2},
+    {"name":"test_consecutive_recoveries_are_bounded", "steps":["bot_speaking","empty","empty","transcribed","empty"], "prompts":["interrupted, nothing recognized","interrupted, nothing recognized"], "inferences":4},
+    {"name":"test_function_call_in_progress_not_recovered", "steps":["run","bot_idle","tool_pending","empty"], "prompts":[], "inferences":1},
+    {"name":"test_without_pair", "standalone":true, "steps":["bot_speaking","empty"], "prompts":["interrupted, nothing recognized"], "inferences":2}
+  ]
+}

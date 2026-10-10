@@ -1,0 +1,29 @@
+[
+  {
+    "region": "us-west-2",
+    "endpoint": "wss://transcribestreaming.us-west-2.amazonaws.com:8443/stream-transcription-websocket",
+    "token": null,
+    "language": "en-US",
+    "rate": 16000,
+    "date": "20260301T012345Z",
+    "url": "wss://transcribestreaming.us-west-2.amazonaws.com:8443/stream-transcription-websocket?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=REVIEWACCESS%2F20260301%2Fus-west-2%2Ftranscribe%2Faws4_request&X-Amz-Date=20260301T012345Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&enable-partial-results-stabilization=true&language-code=en-US&media-encoding=pcm&partial-results-stability=high&sample-rate=16000&X-Amz-Signature=1fbbb03239f015061ce07839dee2376ae830dcc7b1676fd8ee960b592e04df42"
+  },
+  {
+    "region": "cn-north-1",
+    "endpoint": "wss://transcribestreaming.cn-north-1.amazonaws.com.cn:8443/stream-transcription-websocket",
+    "token": "SESSION/with+equals=and%literal~",
+    "language": "zh-CN",
+    "rate": 8000,
+    "date": "20240229T235959Z",
+    "url": "wss://transcribestreaming.cn-north-1.amazonaws.com.cn:8443/stream-transcription-websocket?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=REVIEWACCESS%2F20240229%2Fcn-north-1%2Ftranscribe%2Faws4_request&X-Amz-Date=20240229T235959Z&X-Amz-Expires=300&X-Amz-Security-Token=SESSION%2Fwith%2Bequals%253Dand%25literal~&X-Amz-SignedHeaders=host&enable-partial-results-stabilization=true&language-code=zh-CN&media-encoding=pcm&partial-results-stability=high&sample-rate=8000&X-Amz-Signature=9a1fd6fd85973ca216afe053bb9a4d95a341a3365a32090e637d228450941cfa"
+  },
+  {
+    "region": "us-east-1",
+    "endpoint": "ws://[::1]:43210/stream-transcription-websocket",
+    "token": "TOKEN/+==",
+    "language": "cy-WL",
+    "rate": 16000,
+    "date": "20261010T004400Z",
+    "url": "ws://[::1]:43210/stream-transcription-websocket?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=REVIEWACCESS%2F20261010%2Fus-east-1%2Ftranscribe%2Faws4_request&X-Amz-Date=20261010T004400Z&X-Amz-Expires=300&X-Amz-Security-Token=TOKEN%2F%2B%253D%253D&X-Amz-SignedHeaders=host&enable-partial-results-stabilization=true&language-code=cy-WL&media-encoding=pcm&partial-results-stability=high&sample-rate=16000&X-Amz-Signature=d1115a83aa155a8c593197af1da39722900cf87cc60514898410b520dd3e107f"
+  }
+]

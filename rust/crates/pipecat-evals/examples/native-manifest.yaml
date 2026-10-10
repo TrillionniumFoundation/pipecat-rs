@@ -1,0 +1,13 @@
+# Native subset of src/pipecat/evals/suite.py. Build echo_bot first.
+# This deterministic protocol target does not call a provider or simulate an LLM.
+native_version: 1
+concurrency: 2
+repeat: 2
+base_port: 7900
+bots_dir: ../../../target/debug/examples
+suite:
+  - name: native-echo
+    bot: echo_bot
+    args: ["{port}"]
+    concurrency: 1
+    scenarios: [../tests/fixtures/echo.yaml]

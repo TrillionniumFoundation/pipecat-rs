@@ -1,0 +1,12 @@
+{
+  "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "sources": ["src/pipecat/services/elevenlabs/stt.py", "src/pipecat/services/elevenlabs/tts.py", "src/pipecat/services/elevenlabs/tts_base.py", "tests/test_elevenlabs_stt.py", "tests/test_elevenlabs_tts.py"],
+  "stt_plain": {"message_type":"committed_transcript","text":"Hello."},
+  "stt_timestamped": {"message_type":"committed_transcript_with_timestamps","text":"Hello.","language_code":"en","words":[{"text":"Hello.","start":0.0,"end":0.5,"type":"word"}]},
+  "flash_chunks": [" Why did the math book", " look so sad? ", " Because it had too m", "any problems. "],
+  "flash_words": ["Why","did","the","math","book","look","so","sad?","Because","it","had","too","many","problems."],
+  "japanese_chunks": ["どんなことでも気 ", "軽に相談してくださいね。 "],
+  "japanese_words": ["どんなことでも気", "軽に相談してくださいね。"],
+  "chinese_chunks": ["你好，我是 ", "你的智能助手。 "],
+  "chinese_words": ["你好，我是", "你的智能助手。"]
+}

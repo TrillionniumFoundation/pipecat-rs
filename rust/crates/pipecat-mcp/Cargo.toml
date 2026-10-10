@@ -1,0 +1,43 @@
+[package]
+name = "pipecat-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# Native server executable used only by the stdio integration suite.
+native-fixtures = []
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-processors = { path = "../pipecat-processors" }
+pipecat-agent-workers = { path = "../pipecat-agent-workers" }
+rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-streamable-http-client"] }
+tokio = { workspace = true, features = ["process", "io-std"] }
+tokio-util = { version = "0.7", features = ["codec", "rt"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+futures-util = { version = "0.3", features = ["sink"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+sse-stream = "0.2.4"
+http = "1"
+bytes.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "pipecat-mcp-fixture"
+path = "tests/support/stdio_fixture.rs"
+test = false
+bench = false
+required-features = ["native-fixtures"]
+
+[[test]]
+name = "stdio"
+path = "tests/stdio.rs"
+required-features = ["native-fixtures"]

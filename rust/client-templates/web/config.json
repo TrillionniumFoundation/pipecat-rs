@@ -1,0 +1,5 @@
+{
+  "project_name": "Pipecat Bot",
+  "start_endpoint": "/api/start",
+  "transports": ["smallwebrtc", "websocket"]
+}

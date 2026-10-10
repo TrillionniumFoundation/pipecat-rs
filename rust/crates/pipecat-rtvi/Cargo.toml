@@ -1,0 +1,23 @@
+[package]
+name = "pipecat-rtvi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-protocol = { path = "../pipecat-protocol" }
+pipecat-text = { path = "../pipecat-text" }
+async-trait.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+base64 = "0.22"
+
+[dev-dependencies]
+pipecat-transports = { path = "../pipecat-transports" }
+
+[lints]
+workspace = true

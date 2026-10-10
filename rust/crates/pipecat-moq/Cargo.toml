@@ -1,0 +1,36 @@
+[package]
+name = "pipecat-moq"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Native bounded MoQ Lite 06 Opus and ordered JSON client"
+publish = false
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+tokio.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror.workspace = true
+bytes.workspace = true
+moq-net = "=0.3.7"
+moq-json = "=0.5.5"
+moq-flate = "=0.2.0"
+hang = "=0.21.8"
+# Only the upstream async-to-poll adapter; endpoint helpers are unused.
+moq-tokio = { version = "=0.19.19", path = "../../vendor/moq-tokio-0.19.19", default-features = false }
+web-transport-moq = { version = "=1.3.1", default-features = false, features = ["ring"] }
+moq-noq = { version = "=1.3.1", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+opus = "=0.4.0"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+webpki-roots = "1"
+url = "2"
+
+[dev-dependencies]
+rcgen = "=0.13.2"
+tokio = { workspace = true, features = ["test-util"] }
+tokio-tungstenite-028 = { package = "tokio-tungstenite", version = "=0.28.0", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+tokio-tungstenite-029 = { package = "tokio-tungstenite", version = "=0.29.0", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+
+[lints]
+workspace = true

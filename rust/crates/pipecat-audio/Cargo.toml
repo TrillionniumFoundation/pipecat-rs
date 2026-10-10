@@ -1,0 +1,14 @@
+[package]
+name = "pipecat-audio"
+version = "0.1.0"
+edition = "2021"
+rust-version.workspace = true
+description = "Native PCM16, G.711, DTMF, and streaming audio primitives for Pipecat"
+license = "BSD-2-Clause"
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true
+

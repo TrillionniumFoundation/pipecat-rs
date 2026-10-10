@@ -1,0 +1,30 @@
+[package]
+name = "pipecat-livekit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Native LiveKit room, participant, PCM audio and data transport"
+
+[dependencies]
+pipecat-core = { path = "../pipecat-core" }
+pipecat-audio = { path = "../pipecat-audio" }
+async-trait.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["rt"] }
+url = "2"
+livekit = { path = "vendor/livekit-0.9.4", version = "=0.9.4", features = ["rustls-tls-webpki-roots"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+livekit-net = "=0.1.3"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+tokio-tungstenite = "0.29"

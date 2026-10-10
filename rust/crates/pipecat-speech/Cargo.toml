@@ -1,0 +1,25 @@
+[package]
+name = "pipecat-speech"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-text = { path = "../pipecat-text" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
+futures-util = "0.3"
+base64 = "0.22"
+
+[dev-dependencies]
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+pipecat-pipeline = { path = "../pipecat-pipeline" }
+
+[lints]
+workspace = true

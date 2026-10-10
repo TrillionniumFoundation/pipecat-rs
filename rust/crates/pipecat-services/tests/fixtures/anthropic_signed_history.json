@@ -1,0 +1,49 @@
+{
+  "provenance": {
+    "source_commit": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+    "evidence": "Source-derived static fixture; signatures are synthetic opaque bytes, not provider-issued cryptographic signatures",
+    "sources": [
+      {"path":"src/pipecat/services/anthropic/llm.py","sha256":"dd10bc58d89268fbb3df4ad936de205ae3f37fa0f13b060274ab31466e80ba72"},
+      {"path":"src/pipecat/adapters/services/anthropic_adapter.py","sha256":"22d84997004de3aad44876ad7423c741f4fe1ab24b3d43e3e5b368637f46635c"},
+      {"path":"tests/test_anthropic_llm_context_conversion.py","sha256":"6ce8642dec999bc862d4aff39791fc2a5efe36997aad8080f747f5e6f040f92c"},
+      {"path":"tests/test_anthropic_thinking_defaults.py","sha256":"b0d16c27359859b25f2929bef6a9b7f7c2239fdb2333813c66b24e47a4c9512f"}
+    ],
+    "contract": "llm.py streamed thinking_delta/signature_delta; adapter signed empty thought and adjacent assistant merge. Multi-fragment signatures, out-of-order indexes and stream bounds are native adversarial extensions."
+  },
+  "events": [
+    {"type":"message_start","message":{"usage":{"input_tokens":2,"output_tokens":0}}},
+    {"type":"content_block_start","index":0,"content_block":{"type":"text","text":"same"}},
+    {"type":"content_block_stop","index":0},
+    {"type":"content_block_start","index":1,"content_block":{"type":"thinking","thinking":""}},
+    {"type":"content_block_delta","index":1,"delta":{"type":"thinking_delta","thinking":"私の"}},
+    {"type":"content_block_delta","index":1,"delta":{"type":"thinking_delta","thinking":"思考"}},
+    {"type":"content_block_delta","index":1,"delta":{"type":"signature_delta","signature":"opaque+/"}},
+    {"type":"content_block_delta","index":1,"delta":{"type":"signature_delta","signature":"bytes=="}},
+    {"type":"content_block_stop","index":1},
+    {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"tool-b","name":"echo","input":{}}},
+    {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"tool-a","name":"echo","input":{}}},
+    {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"n\":"}},
+    {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"n\":2}"}},
+    {"type":"content_block_stop","index":3},
+    {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"1}"}},
+    {"type":"content_block_stop","index":2},
+    {"type":"content_block_start","index":4,"content_block":{"type":"thinking","thinking":""}},
+    {"type":"content_block_delta","index":4,"delta":{"type":"signature_delta","signature":"omitted-text-signature"}},
+    {"type":"content_block_stop","index":4},
+    {"type":"content_block_start","index":5,"content_block":{"type":"text","text":"same"}},
+    {"type":"content_block_stop","index":5},
+    {"type":"content_block_start","index":6,"content_block":{"type":"tool_use","id":"tool-c","name":"echo","input":{"n":3}}},
+    {"type":"content_block_stop","index":6},
+    {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":8}},
+    {"type":"message_stop"}
+  ],
+  "expected_content": [
+    {"type":"text","text":"same"},
+    {"type":"thinking","thinking":"私の思考","signature":"opaque+/bytes=="},
+    {"type":"tool_use","id":"tool-a","name":"echo","input":{"n":1}},
+    {"type":"tool_use","id":"tool-b","name":"echo","input":{"n":2}},
+    {"type":"thinking","thinking":"","signature":"omitted-text-signature"},
+    {"type":"text","text":"same"},
+    {"type":"tool_use","id":"tool-c","name":"echo","input":{"n":3}}
+  ]
+}
