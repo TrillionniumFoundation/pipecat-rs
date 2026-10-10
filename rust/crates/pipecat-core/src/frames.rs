@@ -7,6 +7,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Semantic intent of a paired realtime trailing-history snapshot. This is
+/// not authorization or provider provenance. Explicit inference requests must
+/// use a fresh context frame without this marker.
+pub const REALTIME_CONTEXT_UPDATE_METADATA: &str = "realtime_context_update";
+
 fn next_name(class: &'static str) -> String {
     static COUNTS: std::sync::OnceLock<std::sync::Mutex<BTreeMap<&'static str, u64>>> =
         std::sync::OnceLock::new();
@@ -443,6 +448,17 @@ impl Frame {
         frame.interruption_epoch =
             matches!(frame.data, FrameData::Interruption).then(|| Arc::new(AtomicU64::new(0)));
         frame
+    }
+    /// Whether this is a non-speculative state-only realtime context update.
+    /// Metadata on input text, run requests or other payloads cannot set it.
+    pub fn is_realtime_context_update(&self) -> bool {
+        (matches!(self.data, FrameData::LlmContext(_))
+            || matches!(&self.data, FrameData::LlmContextDetailed(context) if !context.speculation))
+            && self
+                .metadata
+                .get(REALTIME_CONTEXT_UPDATE_METADATA)
+                .and_then(Value::as_bool)
+                == Some(true)
     }
     pub fn broadcast_pair(&self) -> (Self, Self) {
         let mut down = self.duplicate();

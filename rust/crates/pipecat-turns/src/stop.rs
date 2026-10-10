@@ -132,6 +132,24 @@ pub struct UserTurnStopStrategies {
     now: Duration,
 }
 impl UserTurnStopStrategies {
+    pub(crate) fn disable_transcript_wait(&mut self) {
+        for (strategy, _) in &mut self.entries {
+            match &mut strategy.kind {
+                StopKind::SpeechTimeout {
+                    wait_for_transcript,
+                    ..
+                }
+                | StopKind::TurnAnalyzer {
+                    wait_for_transcript,
+                }
+                | StopKind::External {
+                    wait_for_transcript,
+                    ..
+                } => *wait_for_transcript = false,
+                StopKind::ExternalCompletion => {}
+            }
+        }
+    }
     pub fn new(strategies: Vec<UserTurnStopStrategy>) -> Result<Self, ProcessorError> {
         if strategies.len() > 64 {
             return Err(ProcessorError::new(

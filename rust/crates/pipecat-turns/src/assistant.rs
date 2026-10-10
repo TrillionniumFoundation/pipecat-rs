@@ -68,6 +68,7 @@ pub struct LLMAssistantAggregator {
     summarizer: crate::LLMContextSummarizer,
     state: Mutex<AssistantState>,
     callback_tasks: Arc<Mutex<BTreeMap<u64, ProcessorContext>>>,
+    realtime: Arc<crate::realtime::RealtimeState>,
 }
 impl LLMAssistantAggregator {
     pub fn new(context: SharedContext, config: AssistantAggregatorConfig) -> Self {
@@ -76,6 +77,11 @@ impl LLMAssistantAggregator {
                 .expect("valid default summary configuration"),
             context,
             config,
+            realtime: Arc::new(crate::realtime::RealtimeState::new(
+                crate::RealtimeServiceMode::Auto,
+                false,
+                false,
+            )),
             callback_tasks: Arc::new(Mutex::new(BTreeMap::new())),
             state: Mutex::new(AssistantState {
                 active: false,
@@ -126,6 +132,13 @@ impl LLMAssistantAggregator {
     pub fn context(&self) -> SharedContext {
         self.context.clone()
     }
+    pub(crate) fn with_realtime(mut self, realtime: Arc<crate::realtime::RealtimeState>) -> Self {
+        self.realtime = realtime;
+        self
+    }
+    pub fn realtime_service_enabled(&self) -> Result<bool, ProcessorError> {
+        self.realtime.enabled()
+    }
     pub fn has_function_calls_in_progress(&self) -> Result<bool, ProcessorError> {
         Ok(!self.lock()?.pending.is_empty())
     }
@@ -136,8 +149,26 @@ impl LLMAssistantAggregator {
     }
     pub fn process_frame(
         &self,
+        frame: Frame,
+        direction: Direction,
+    ) -> Result<AggregationOutput, ProcessorError> {
+        self.process_at(frame, direction, self.realtime.origin.elapsed())
+    }
+    /// Deterministic paired handoff clock, on the same timeline as the user.
+    pub fn process_at(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        now: std::time::Duration,
+    ) -> Result<AggregationOutput, ProcessorError> {
+        self.process_at_inner(frame, direction, now, None)
+    }
+    fn process_at_inner(
+        &self,
         mut frame: Frame,
         direction: Direction,
+        now: std::time::Duration,
+        cause: Option<&ProcessorContext>,
     ) -> Result<AggregationOutput, ProcessorError> {
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
@@ -174,6 +205,17 @@ impl LLMAssistantAggregator {
         }
         if state.ended {
             return Ok(output);
+        }
+        self.realtime.observe(&frame.data)?;
+        if self.realtime.enabled()?
+            && frame
+                .native_llm_continuation()
+                .map_err(|error| ProcessorError::new(error.to_string()))?
+                .is_some()
+        {
+            return Err(ProcessorError::new(
+                "signed cascade continuation is incompatible with realtime aggregation",
+            ));
         }
         if let Some(history) = frame
             .take_native_llm_continuation()
@@ -261,6 +303,7 @@ impl LLMAssistantAggregator {
             FrameData::LlmContinuationCheckpoint => {}
             FrameData::LlmResponseStart | FrameData::LlmFullResponseStart(_)
             | FrameData::VisionFullResponseStart(_) => {
+                self.realtime.handoff(now, cause)?;
                 state.skip_tts = match &frame.data {
                     FrameData::LlmFullResponseStart(start) | FrameData::VisionFullResponseStart(start) => start.skip_tts,
                     _ => frame.metadata.get("skip_tts").and_then(Value::as_bool),
@@ -274,6 +317,7 @@ impl LLMAssistantAggregator {
             }
             FrameData::LlmResponseEnd | FrameData::LlmFullResponseEnd(_)
             | FrameData::VisionFullResponseEnd(_) => {
+                self.realtime.flush(&self.context, None, &mut output)?;
                 state.llm_active = false;
                 let pending = state.aggregation.text.trim().to_owned();
                 if let Some(history) = &mut state.signed_history {
@@ -621,9 +665,8 @@ impl LLMAssistantAggregator {
             }
             FrameData::LlmSetTools(tools) => self.context.lock()?.tools = tools.clone(),
             FrameData::LlmSetToolChoice(choice) => self.context.lock()?.tool_choice = Some(choice.clone()),
-            FrameData::LlmServiceMetadata(metadata) if metadata.is_realtime_service => {
-                return Err(ProcessorError::new("realtime-service aggregation is not supported by the cascade assistant aggregator"));
-            }
+            FrameData::ProposedUserStartedSpeaking if self.realtime.resolves(true)? => {}
+            FrameData::ProposedUserStoppedSpeaking if self.realtime.resolves(false)? => {}
             FrameData::UserImage(_) | FrameData::AssistantImage(_) | FrameData::UserFileDetailed(_)
             | FrameData::UserFile(_) => return Err(ProcessorError::new("raw image/file context conversion is not supported; submit encoded rich context messages")),
             _ => output.push(frame, direction),
@@ -690,6 +733,12 @@ impl LLMAssistantAggregator {
         let mut output = AggregationOutput::default();
         if state.ended || state.cancelled_contexts.iter().any(|id| id == context_id) {
             return Ok(output);
+        }
+        if self.realtime.enabled()? {
+            // Validate the user projection before consuming the receipt or
+            // adding any of its acknowledged words to pending assistant text.
+            self.context.frame_data()?;
+            self.realtime.flush(&self.context, None, &mut output)?;
         }
         let signed = state.signed_history.is_some();
         if let Some(history) = &state.signed_history {
@@ -783,12 +832,12 @@ impl LLMAssistantAggregator {
     pub(crate) fn prepare_user_interrupt(
         &self,
         speaking: bool,
-    ) -> Result<Vec<AggregationEvent>, ProcessorError> {
+    ) -> Result<AggregationOutput, ProcessorError> {
         let mut frame = Frame::interruption();
         frame
             .metadata
             .insert("user_turn_start".into(), speaking.into());
-        Ok(self.process_frame(frame, Direction::Downstream)?.events)
+        self.process_frame(frame, Direction::Downstream)
     }
     /// Snapshot and acknowledge prior tool results under the same lock that
     /// admits new results. Completions after this snapshot still owe inference.
@@ -820,6 +869,9 @@ impl LLMAssistantAggregator {
         interrupted: bool,
         output: &mut AggregationOutput,
     ) -> Result<(), ProcessorError> {
+        if state.active {
+            self.realtime.flush(&self.context, None, output)?;
+        }
         if !state.active {
             state.transcript_markers.clear();
             return Ok(());
@@ -1147,61 +1199,73 @@ impl FrameProcessor for LLMAssistantAggregator {
                 | FrameData::Cancel(_)
                 | FrameData::CancelDetailed(_)
         );
-        let output = self.process_frame(frame, direction)?;
-        if terminal {
-            self.cancel_callbacks()?;
-        }
-        for action in output.actions {
-            if let crate::AggregationAction::Push(ref directed) = action {
-                if let FrameData::LlmContextSummaryRequest(request) = &directed.frame.data {
-                    if self.summarizer.arm(request, ctx)? {
-                        continue;
-                    }
-                }
+        self.realtime.validate_assistant(ctx, &frame.data)?;
+        let output =
+            self.process_at_inner(frame, direction, self.realtime.origin.elapsed(), Some(ctx))?;
+        let emitted: Result<(), ProcessorError> = async {
+            if terminal {
+                self.cancel_callbacks()?;
             }
-            if let crate::AggregationAction::ContextUpdated(callback) = action {
-                if self.lock()?.callbacks_closed {
-                    continue;
-                }
-                let (registered, registration) = tokio::sync::oneshot::channel();
-                let tasks = self.callback_tasks.clone();
-                let id = ctx.spawn("tool-context-updated", false, async move {
-                    let Ok(id) = registration.await else {
-                        return Ok(());
-                    };
-                    struct RemoveOnDrop(Arc<Mutex<BTreeMap<u64, ProcessorContext>>>, u64);
-                    impl Drop for RemoveOnDrop {
-                        fn drop(&mut self) {
-                            if let Ok(mut tasks) = self.0.lock() {
-                                tasks.remove(&self.1);
-                            }
+            for action in output.actions {
+                if let crate::AggregationAction::Push(ref directed) = action {
+                    if let FrameData::LlmContextSummaryRequest(request) = &directed.frame.data {
+                        if self.summarizer.arm(request, ctx)? {
+                            continue;
                         }
                     }
-                    let _registration = RemoveOnDrop(tasks, id);
-                    callback.call().await
-                })?;
-                {
-                    let state = self.lock()?;
-                    if state.ended || state.callbacks_closed {
-                        ctx.cancel_task(id);
-                    } else {
-                        self.callback_tasks
-                            .lock()
-                            .map_err(|_| ProcessorError::fatal("callback task lock poisoned"))?
-                            .insert(id, ctx.clone());
+                }
+                if let crate::AggregationAction::ContextUpdated(callback) = action {
+                    if self.lock()?.callbacks_closed {
+                        continue;
                     }
+                    let (registered, registration) = tokio::sync::oneshot::channel();
+                    let tasks = self.callback_tasks.clone();
+                    let id = ctx.spawn("tool-context-updated", false, async move {
+                        let Ok(id) = registration.await else {
+                            return Ok(());
+                        };
+                        struct RemoveOnDrop(Arc<Mutex<BTreeMap<u64, ProcessorContext>>>, u64);
+                        impl Drop for RemoveOnDrop {
+                            fn drop(&mut self) {
+                                if let Ok(mut tasks) = self.0.lock() {
+                                    tasks.remove(&self.1);
+                                }
+                            }
+                        }
+                        let _registration = RemoveOnDrop(tasks, id);
+                        callback.call().await
+                    })?;
+                    {
+                        let state = self.lock()?;
+                        if state.ended || state.callbacks_closed {
+                            ctx.cancel_task(id);
+                        } else {
+                            self.callback_tasks
+                                .lock()
+                                .map_err(|_| ProcessorError::fatal("callback task lock poisoned"))?
+                                .insert(id, ctx.clone());
+                        }
+                    }
+                    let _ = registered.send(id);
+                } else {
+                    AggregationOutput {
+                        actions: vec![action],
+                        events: vec![],
+                    }
+                    .emit(ctx)
+                    .await?;
                 }
-                let _ = registered.send(id);
-            } else {
-                AggregationOutput {
-                    actions: vec![action],
-                    events: vec![],
-                }
-                .emit(ctx)
-                .await?;
             }
+            Ok(())
         }
-        Ok(())
+        .await;
+        let released = if terminal {
+            self.realtime.terminal_emitted()
+        } else {
+            Ok(())
+        };
+        emitted?;
+        released
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         self.summarizer.close()?;

@@ -1,6 +1,6 @@
 use crate::{
     AggregationAction, AggregationEvent, AggregationOutput, RecentFrames, SharedContext,
-    TextBuffer, TurnStopReason, UserTurnConfig, UserTurnController, UserTurnEvent,
+    TurnStopReason, UserTurnConfig, UserTurnController, UserTurnEvent,
 };
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, ProcessorContext, ProcessorError,
@@ -45,7 +45,9 @@ struct UserState {
     idle: Arc<crate::idle::UserIdleTracker>,
     now: Duration,
     paired_assistant: Option<std::sync::Weak<crate::LLMAssistantAggregator>>,
-    aggregation: TextBuffer,
+    aggregation: Arc<crate::realtime::RealtimeState>,
+    explicit_strategies: bool,
+    realtime_configured: bool,
     held_external_stop: Option<pipecat_core::DirectedFrame>,
     interim: String,
     muted: bool,
@@ -76,16 +78,17 @@ pub struct LLMUserAggregator {
 type InferenceHandler =
     Arc<dyn Fn(crate::UserTurnInferenceRequest) -> Result<(), ProcessorError> + Send + Sync>;
 impl UserState {
-    fn deadline(&self) -> Option<Duration> {
-        [
+    fn deadline(&self) -> Result<Option<Duration>, ProcessorError> {
+        Ok([
             self.controller.deadline(),
+            self.aggregation.deadline()?,
             self.eager
                 .as_ref()
                 .and_then(crate::eager::EagerState::deadline),
         ]
         .into_iter()
         .flatten()
-        .min()
+        .min())
     }
     fn cancel_eager(&mut self, output: &mut AggregationOutput) -> Result<(), ProcessorError> {
         if let Some(eager) = &mut self.eager {
@@ -96,11 +99,39 @@ impl UserState {
 }
 impl LLMUserAggregator {
     pub fn new(context: SharedContext, config: UserAggregatorConfig) -> Self {
+        let realtime = Arc::new(crate::realtime::RealtimeState::new(
+            crate::RealtimeServiceMode::Auto,
+            false,
+            config.eager.is_some(),
+        ));
+        Self::new_paired(context, config, realtime)
+    }
+    pub(crate) fn new_paired(
+        context: SharedContext,
+        config: UserAggregatorConfig,
+        realtime: Arc<crate::realtime::RealtimeState>,
+    ) -> Self {
         let mut config = config;
         if let Some(eager) = &config.eager {
             eager.configure_turn(&mut config.turn);
         }
-        let origin = Instant::now();
+        let origin = realtime.origin;
+        let explicit_strategies = config.turn.start_strategies.is_some()
+            || config.turn.stop_strategies.is_some()
+            || config.turn.require_model_completion;
+        realtime
+            .strategy_policy(explicit_strategies, config.turn.enable_interruptions)
+            .expect("new realtime state");
+        let mut controller = UserTurnController::new(config.turn);
+        if realtime.enabled().expect("new realtime state") {
+            controller.apply_realtime_mode();
+        }
+        realtime
+            .resolvers(
+                controller.resolves_proposed_turn_start_frames(),
+                controller.resolves_proposed_turn_stop_frames(),
+            )
+            .expect("new realtime state");
         let idle = Arc::new(crate::idle::UserIdleTracker::new(
             config.user_idle_timeout,
             origin,
@@ -108,12 +139,14 @@ impl LLMUserAggregator {
         Self {
             context,
             state: Arc::new(Mutex::new(UserState {
-                controller: UserTurnController::new(config.turn),
+                controller,
                 eager: config.eager.map(crate::eager::EagerState::new),
                 idle: idle.clone(),
                 now: Duration::ZERO,
                 paired_assistant: None,
-                aggregation: TextBuffer::default(),
+                aggregation: realtime.clone(),
+                explicit_strategies,
+                realtime_configured: realtime.enabled().expect("new realtime state"),
                 held_external_stop: None,
                 interim: String::new(),
                 muted: config.initially_muted,
@@ -131,7 +164,7 @@ impl LLMUserAggregator {
                 timer_id: None,
                 timer_running: false,
             })),
-            changed: Arc::new(Notify::new()),
+            changed: realtime.changed.clone(),
             origin,
             idle,
             inference_handlers: Arc::new(Mutex::new(vec![])),
@@ -211,6 +244,22 @@ impl LLMUserAggregator {
     pub fn context(&self) -> SharedContext {
         self.context.clone()
     }
+    pub fn realtime_service_enabled(&self) -> Result<bool, ProcessorError> {
+        self.lock()?.aggregation.enabled()
+    }
+    fn sync_realtime(state: &mut UserState, force: bool) -> Result<(), ProcessorError> {
+        if state.aggregation.enabled()? {
+            if !state.realtime_configured || force {
+                state.controller.apply_realtime_mode();
+                state.realtime_configured = true;
+            }
+            state.empty_user_turn = None;
+        }
+        state.aggregation.resolvers(
+            state.controller.resolves_proposed_turn_start_frames(),
+            state.controller.resolves_proposed_turn_stop_frames(),
+        )
+    }
     pub fn interim_text(&self) -> Result<String, ProcessorError> {
         Ok(self.lock()?.interim.clone())
     }
@@ -222,7 +271,7 @@ impl LLMUserAggregator {
         Ok(self.lock()?.muted)
     }
     pub fn deadline(&self) -> Result<Option<Duration>, ProcessorError> {
-        Ok(self.lock()?.deadline())
+        self.lock()?.deadline()
     }
     /// Deadline for user idleness, independent of the turn-stop watchdog.
     pub fn idle_deadline(&self) -> Result<Option<Duration>, ProcessorError> {
@@ -299,6 +348,19 @@ impl LLMUserAggregator {
             return Ok(output);
         }
         validate_control(&frame.data)?;
+        let recommended = crate::realtime::recommended_strategies(
+            &frame.data,
+            state.explicit_strategies,
+            state.controller.config().enable_interruptions,
+        )?;
+        state.aggregation.observe(&frame.data)?;
+        if let Some((start, stop)) = recommended {
+            state.controller.replace_strategies(start, stop);
+        }
+        Self::sync_realtime(
+            &mut state,
+            matches!(&frame.data, FrameData::LlmServiceMetadata(metadata) if metadata.is_realtime_service),
+        )?;
         if matches!(frame.data, FrameData::UserTurnInferenceCompleted) {
             if let Some(value) = frame.metadata.get("user_turn_inference_id") {
                 let id = value.as_u64().ok_or_else(|| {
@@ -354,8 +416,13 @@ impl LLMUserAggregator {
                 );
                 let events = state.controller.finish(false, TurnStopReason::SessionEnd);
                 Self::apply_events(&mut state, &self.context, events, run_llm, &mut output)?;
-                // Text may be pending even if an externally controlled turn did not start.
-                Self::commit(&mut state, &self.context, run_llm, &mut output)?;
+                // Realtime sessions write trailing speech even on cancellation.
+                if state.aggregation.enabled()? {
+                    state.aggregation.stop_timer()?;
+                    state.aggregation.flush(&self.context, None, &mut output)?;
+                } else {
+                    Self::commit(&mut state, &self.context, run_llm, &mut output)?;
+                }
                 state.ended = true;
                 state.timer_disabled = true;
                 state.idle.stop(None)?;
@@ -493,7 +560,8 @@ impl LLMUserAggregator {
                 {
                     return Ok(output);
                 }
-                if !state.controller.is_active()
+                if !state.aggregation.enabled()?
+                    && !state.controller.is_active()
                     && !state.controller.config().start_on_transcription
                     && state.controller.config().start_strategies.is_none()
                 {
@@ -516,7 +584,7 @@ impl LLMUserAggregator {
                     eager.record_transcript(text, &mut output)?;
                 }
                 if append && !text.trim().is_empty() {
-                    state.aggregation.append(text, spaces);
+                    state.aggregation.append(text, spaces)?;
                 }
                 Self::remember_transcript(&mut state, frame.clone());
                 state.interim.clear();
@@ -530,6 +598,9 @@ impl LLMUserAggregator {
                 Self::remember_transcript(&mut state, frame.clone());
             }
             FrameData::EagerTranscription(_) | FrameData::EagerTranscriptionDetailed(_) => {
+                if state.aggregation.enabled()? {
+                    return Ok(output);
+                }
                 if direction != Direction::Downstream
                     || !state.controller.is_active()
                     || state.eager.is_none()
@@ -578,9 +649,13 @@ impl LLMUserAggregator {
                             .as_ref()
                             .and_then(std::sync::Weak::upgrade)
                         {
+                            let effects = assistant.prepare_user_interrupt(false)?;
+                            output.events.extend(effects.events);
                             output
-                                .events
-                                .extend(assistant.prepare_user_interrupt(false)?);
+                                .actions
+                                .extend(effects.actions.into_iter().filter(|action| {
+                                    matches!(action, AggregationAction::RealtimeUserContext(_))
+                                }));
                         }
                         output.actions.push(AggregationAction::Interrupt);
                     }
@@ -667,7 +742,10 @@ impl LLMUserAggregator {
                 "configure the model gate before pipeline processing",
             ));
         }
-        state.controller.configure_model_gate()
+        let aggregation = state.aggregation.clone();
+        aggregation.configure_model_wrapper(&mut state.controller)?;
+        state.explicit_strategies = true;
+        Ok(())
     }
     pub(crate) fn now(&self) -> Duration {
         self.origin.elapsed()
@@ -729,7 +807,9 @@ impl LLMUserAggregator {
             .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))?;
         let mut output = AggregationOutput::default();
         if !state.ended && !state.timer_disabled {
+            Self::sync_realtime(&mut state, false)?;
             state.now = state.now.max(now);
+            state.aggregation.flush(context, Some(now), &mut output)?;
             if let Some(eager) = &mut state.eager {
                 eager.advance(now, &mut output)?;
             }
@@ -759,12 +839,12 @@ impl LLMUserAggregator {
                                 request_id,
                                 strategy_index,
                                 reason,
-                                text: state.aggregation.text.trim().to_owned(),
+                                text: state.aggregation.text()?.trim().to_owned(),
                             },
                         ));
                 }
                 UserTurnEvent::ResetAggregation => {
-                    state.aggregation.take();
+                    state.aggregation.take()?;
                     if let Some(eager) = &mut state.eager {
                         eager.reset_transcript();
                     }
@@ -801,9 +881,13 @@ impl LLMUserAggregator {
                             .as_ref()
                             .and_then(std::sync::Weak::upgrade)
                         {
+                            let effects = assistant.prepare_user_interrupt(emit_speaking)?;
+                            output.events.extend(effects.events);
                             output
-                                .events
-                                .extend(assistant.prepare_user_interrupt(emit_speaking)?);
+                                .actions
+                                .extend(effects.actions.into_iter().filter(|action| {
+                                    matches!(action, AggregationAction::RealtimeUserContext(_))
+                                }));
                         }
                         output.actions.push(AggregationAction::Interrupt);
                     }
@@ -816,14 +900,12 @@ impl LLMUserAggregator {
                     state
                         .idle
                         .process(&FrameData::UserStoppedSpeaking, state.now)?;
+                    let realtime = state.aggregation.enabled()?;
+                    let pending_text = state.aggregation.text()?;
                     let confirmation = match &mut state.eager {
-                        Some(eager) => eager.finish(
-                            &state.aggregation.text,
-                            reason,
-                            state.now,
-                            context,
-                            output,
-                        )?,
+                        Some(eager) => {
+                            eager.finish(&pending_text, reason, state.now, context, output)?
+                        }
                         None => None,
                     };
                     let held = state.held_external_stop.take();
@@ -846,6 +928,16 @@ impl LLMUserAggregator {
                             .metadata
                             .insert("user_context_follows".into(), false.into());
                         output.actions.push(AggregationAction::Broadcast(boundary));
+                    }
+                    if realtime {
+                        state.interrupted_bot = false;
+                        state.interim.clear();
+                        if !matches!(reason, TurnStopReason::SessionEnd) {
+                            output
+                                .events
+                                .push(AggregationEvent::RealtimeUserTurnStopped { reason });
+                        }
+                        continue;
                     }
                     let interrupted_bot = std::mem::take(&mut state.interrupted_bot);
                     let text =
@@ -874,7 +966,7 @@ impl LLMUserAggregator {
         run_llm: bool,
         output: &mut AggregationOutput,
     ) -> Result<String, ProcessorError> {
-        let text = state.aggregation.take();
+        let text = state.aggregation.take()?;
         if let Some(eager) = &mut state.eager {
             eager.reset_transcript();
         }
@@ -935,7 +1027,10 @@ impl LLMUserAggregator {
         self.schedule_idle_timer(ctx)?;
         self.changed.notify_one();
         let mut state = self.lock()?;
-        if state.timer_disabled || state.ended || state.timer_running || state.deadline().is_none()
+        if state.timer_disabled
+            || state.ended
+            || state.timer_running
+            || (!state.aggregation.paired() && state.deadline()?.is_none())
         {
             return Ok(());
         }
@@ -957,7 +1052,7 @@ impl LLMUserAggregator {
                     if state.timer_disabled || state.ended {
                         return Ok(());
                     }
-                    state.deadline()
+                    state.deadline()?
                 };
                 tokio::select! {
                     _ = async {
@@ -1009,9 +1104,28 @@ impl FrameProcessor for LLMUserAggregator {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let terminal = matches!(
+            frame.data,
+            FrameData::End(_)
+                | FrameData::EndDetailed(_)
+                | FrameData::Stop
+                | FrameData::Cancel(_)
+                | FrameData::CancelDetailed(_)
+        );
+        self.lock()?.aggregation.bind_user(ctx)?;
         let output = self.process_at(frame, direction, self.origin.elapsed())?;
-        self.notify_inference_requests(&output, ctx).await?;
-        output.emit(ctx).await?;
+        let emitted = async {
+            self.notify_inference_requests(&output, ctx).await?;
+            output.emit(ctx).await
+        }
+        .await;
+        let released = if terminal {
+            self.lock()?.aggregation.terminal_emitted()
+        } else {
+            Ok(())
+        };
+        emitted?;
+        released?;
         self.schedule_timer(ctx)
     }
     async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
@@ -1019,6 +1133,7 @@ impl FrameProcessor for LLMUserAggregator {
         let mut state = self.lock()?;
         state.cancel_eager(&mut AggregationOutput::default())?;
         state.timer_disabled = true;
+        state.aggregation.stop_timer()?;
         if let Some(id) = state.timer_id.take() {
             ctx.cancel_task(id);
         }
@@ -1036,6 +1151,7 @@ impl FrameProcessor for LLMUserAggregator {
         state.cancel_eager(&mut AggregationOutput::default())?;
         state.ended = true;
         state.timer_disabled = true;
+        state.aggregation.close()?;
         state.controller.cleanup();
         state.mute_strategies.cleanup();
         state.interim.clear();
@@ -1051,11 +1167,6 @@ pub(crate) fn validate_control(data: &FrameData) -> Result<(), ProcessorError> {
     {
         return Err(ProcessorError::new(
             "STT P99 latency must be finite and within 0..86400 seconds",
-        ));
-    }
-    if matches!(data, FrameData::LlmServiceMetadata(metadata) if metadata.is_realtime_service) {
-        return Err(ProcessorError::new(
-            "realtime-service turn strategy replacement is not supported by the cascade user aggregator",
         ));
     }
     if let FrameData::UserIdleTimeoutUpdate { timeout } = data {
@@ -1077,18 +1188,6 @@ pub(crate) fn validate_control(data: &FrameData) -> Result<(), ProcessorError> {
     }) {
         return Err(ProcessorError::new(
             "VAD timing requires finite nonnegative timestamps and durations within 0..86400 seconds",
-        ));
-    }
-    let strategies = match data {
-        FrameData::ServiceMetadata(metadata) => metadata.user_turn_strategies.as_ref(),
-        FrameData::SttMetadata(metadata) => metadata.base.user_turn_strategies.as_ref(),
-        FrameData::LlmServiceMetadata(metadata) => metadata.base.user_turn_strategies.as_ref(),
-        _ => None,
-    };
-    if strategies.is_some_and(|strategies| strategies.start.is_some() || strategies.stop.is_some())
-    {
-        return Err(ProcessorError::new(
-            "automatic service-recommended strategy replacement is not supported; configure the user aggregator explicitly",
         ));
     }
     Ok(())

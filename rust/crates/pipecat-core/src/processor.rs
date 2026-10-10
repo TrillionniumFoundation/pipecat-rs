@@ -191,6 +191,13 @@ impl ProcessorContext {
     /// their source and destination, including across nested pipelines.
     pub fn forwarding_context(&self, source: &ProcessorContext) -> ProcessorContext {
         let generation = source.emission_generation();
+        self.forwarding_context_at(source, generation)
+    }
+    fn forwarding_context_at(
+        &self,
+        source: &ProcessorContext,
+        generation: Option<u64>,
+    ) -> ProcessorContext {
         let mut context = self.clone();
         context.generation = generation.map(AtomicU64::new);
         context.system_frame_id = source.system_frame_id;
@@ -244,6 +251,13 @@ impl ProcessorContext {
     /// boundary. Internal emission fails explicitly on a full lane instead of
     /// awaiting capacity, which would deadlock cyclic bidirectional flows.
     pub async fn push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
+        self.try_push(frame, direction)
+    }
+    /// Synchronous, nonblocking equivalent of `push`, with identical causal
+    /// admission and backpressure behavior. Useful when a producer's state
+    /// transition and enqueue must be serialized without holding a lock across
+    /// an await. Observer delivery remains on its owned dispatch tasks.
+    pub fn try_push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
         self.with_admission(&self.runtime, || {
             let generation = self.frame_generation(&frame);
             if frame.interruptible && self.source_is_stale(generation) {
@@ -252,6 +266,33 @@ impl ProcessorContext {
             }
             self.runtime
                 .route_unlocked(self.index, generation, frame, direction)
+        })
+    }
+    /// Emit a derived frame here with a retained invocation's exact causal
+    /// scope. Background task survival never removes this fence. Unlike normal
+    /// `push`, even a retained system invocation is fenced; an explicitly
+    /// uninterruptible frame still survives. Enqueue is nonblocking.
+    pub fn try_push_from_invocation(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        source: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let generation = source.current_generation();
+        let context = self.forwarding_context_at(source, generation);
+        context.with_admission(&context.runtime, || {
+            let stale = generation
+                .is_some_and(|epoch| context.runtime.queues[context.index].generation() > epoch)
+                || context.origins.iter().any(|origin| {
+                    origin.runtime.queues[origin.index].generation() > origin.generation
+                });
+            if frame.interruptible && stale {
+                context.runtime.drop_frame();
+                return Ok(());
+            }
+            context
+                .runtime
+                .route_unlocked(context.index, generation, frame, direction)
         })
     }
     /// Atomically fence output against this invocation and inherited origins,

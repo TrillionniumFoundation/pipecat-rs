@@ -134,6 +134,42 @@ impl UserTurnController {
     pub fn config(&self) -> &UserTurnConfig {
         &self.config
     }
+    pub(crate) fn apply_realtime_mode(&mut self) {
+        self.config.start_on_transcription = false;
+        self.config.wait_for_transcript = false;
+        for strategies in [
+            &mut self.config.start_strategies,
+            &mut self.start_strategies,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            strategies.remove_transcription_start();
+        }
+        for strategies in [&mut self.config.stop_strategies, &mut self.stop_strategies]
+            .into_iter()
+            .flatten()
+        {
+            strategies.disable_transcript_wait();
+        }
+    }
+    pub(crate) fn replace_strategies(
+        &mut self,
+        start: Option<UserTurnStartStrategies>,
+        stop: Option<UserTurnStopStrategies>,
+    ) {
+        self.pending_inference_request = None;
+        self.config.start_strategies = start.clone();
+        self.config.stop_strategies = stop.clone();
+        self.start_strategies = start;
+        self.stop_strategies = stop;
+        if let Some(strategies) = &mut self.stop_strategies {
+            strategies.configure(self.config.stt_timeout, self.config.vad_stop_duration);
+            if self.active {
+                strategies.start(self.speaking, self.now);
+            }
+        }
+    }
     pub(crate) fn configure_model_gate(&mut self) -> Result<(), pipecat_core::ProcessorError> {
         if self.active {
             return Err(pipecat_core::ProcessorError::new(

@@ -10,6 +10,8 @@ mod eager;
 mod empty;
 pub use eager::{EagerEndOfTurn, EagerMatchPolicy, EagerUserTurnConfig};
 mod idle;
+mod realtime;
+pub use realtime::{RealtimeServiceMode, RealtimeUserContext};
 mod signed_history;
 mod smart_turn;
 mod stop;
@@ -80,6 +82,14 @@ pub enum AggregationEvent {
         text: String,
         reason: TurnStopReason,
     },
+    /// The realtime turn stopped; its transcript is still awaiting handoff.
+    RealtimeUserTurnStopped {
+        reason: TurnStopReason,
+    },
+    /// Final user text was written by a realtime handoff or terminal flush.
+    UserTurnMessageAdded {
+        text: String,
+    },
     AssistantTurnStarted,
     SummaryApplied(SummaryAppliedEvent),
     AssistantTurnStopped {
@@ -99,6 +109,7 @@ pub enum AggregationAction {
     InterruptBeforeContext,
     /// Run a result callback in a tracked task, after its context update.
     ContextUpdated(pipecat_core::LocalAsyncCallback),
+    RealtimeUserContext(RealtimeUserContext),
 }
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AggregationOutput {
@@ -135,7 +146,8 @@ impl AggregationOutput {
                         None
                     }
                     AggregationAction::InterruptBeforeContext
-                    | AggregationAction::ContextUpdated(_) => None,
+                    | AggregationAction::ContextUpdated(_)
+                    | AggregationAction::RealtimeUserContext(_) => None,
                 };
                 if let Some(frame) = boundary {
                     if matches!(
@@ -162,6 +174,7 @@ impl AggregationOutput {
                         callback.call().await
                     })?;
                 }
+                AggregationAction::RealtimeUserContext(context) => context.emit(ctx)?,
                 AggregationAction::InterruptBeforeContext => {
                     ctx.broadcast_interruption_with_metadata(
                         [("user_context_follows".into(), true.into())].into(),
@@ -201,16 +214,57 @@ impl LLMContextAggregatorPair {
         user: UserAggregatorConfig,
         assistant: AssistantAggregatorConfig,
     ) -> Self {
-        let assistant = Arc::new(LLMAssistantAggregator::new(context.clone(), assistant));
+        Self::with_shared_context_and_realtime_mode(
+            context,
+            user,
+            assistant,
+            RealtimeServiceMode::Auto,
+        )
+        .expect("auto mode is valid until realtime metadata is received")
+    }
+    /// Configure both halves together. Explicit realtime mode rejects eager
+    /// speculation; Auto reports that incompatibility if metadata enables it.
+    pub fn with_realtime_mode(
+        context: Context,
+        user: UserAggregatorConfig,
+        assistant: AssistantAggregatorConfig,
+        mode: RealtimeServiceMode,
+    ) -> Result<Self, ProcessorError> {
+        Self::with_shared_context_and_realtime_mode(
+            SharedContext::new(context),
+            user,
+            assistant,
+            mode,
+        )
+    }
+    pub fn with_shared_context_and_realtime_mode(
+        context: SharedContext,
+        user: UserAggregatorConfig,
+        assistant: AssistantAggregatorConfig,
+        mode: RealtimeServiceMode,
+    ) -> Result<Self, ProcessorError> {
+        if mode == RealtimeServiceMode::Enabled && user.eager.is_some() {
+            return Err(ProcessorError::new(
+                "realtime aggregation and eager speculation cannot share a pair",
+            ));
+        }
+        let realtime = Arc::new(realtime::RealtimeState::new(
+            mode,
+            true,
+            user.eager.is_some(),
+        ));
+        let assistant = Arc::new(
+            LLMAssistantAggregator::new(context.clone(), assistant).with_realtime(realtime.clone()),
+        );
         let user = Arc::new(
-            LLMUserAggregator::new(context.clone(), user)
+            LLMUserAggregator::new_paired(context.clone(), user, realtime)
                 .with_assistant(Arc::downgrade(&assistant)),
         );
-        Self {
+        Ok(Self {
             user,
             assistant,
             context,
-        }
+        })
     }
     pub fn context(&self) -> SharedContext {
         self.context.clone()

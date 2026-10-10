@@ -173,6 +173,10 @@ impl Default for UserTurnStartStrategies {
     }
 }
 impl UserTurnStartStrategies {
+    pub(crate) fn remove_transcription_start(&mut self) {
+        self.strategies
+            .retain(|strategy| !matches!(strategy.kind, StartKind::Transcription { .. }));
+    }
     /// An empty list deliberately disables starts. `None` in `UserTurnConfig`
     /// retains the existing native default controller behavior.
     pub fn new(strategies: Vec<UserTurnStartStrategy>) -> Result<Self, ProcessorError> {

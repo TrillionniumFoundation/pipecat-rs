@@ -752,7 +752,9 @@ fn invalid_control_metadata_and_unconfigured_source_features_fail_explicitly() {
             Frame::new(FrameData::ServiceMetadata(ServiceMetadataFrame {
                 service_name: "changing".into(),
                 user_turn_strategies: Some(UserTurnStrategies {
-                    start: Some(vec![]),
+                    start: Some(vec![UserTurnStrategy::Eager {
+                        speculation_timeout: 1.0
+                    }]),
                     stop: None
                 })
             })),

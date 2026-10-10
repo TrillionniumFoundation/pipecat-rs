@@ -44,6 +44,18 @@ impl DerefMut for ContextState {
     }
 }
 impl ContextState {
+    fn frame_data(&self) -> Result<FrameData, ProcessorError> {
+        self.require_lossless_rich_projection()?;
+        if !self.rich && !matches!(&self.tools, ToolSet::Functions(tools) if tools.is_empty()) {
+            if let Ok(frame) = self.legacy_frame() {
+                return Ok(FrameData::LlmContext(frame));
+            }
+        }
+        Ok(FrameData::LlmContextDetailed(DetailedLlmContextFrame {
+            context: self.data.clone(),
+            speculation: false,
+        }))
+    }
     fn new(context: Context) -> Self {
         let mut state = Self {
             data: LlmContextData {
@@ -307,6 +319,21 @@ impl SharedContext {
         self.lock()?.append_native(message);
         Ok(())
     }
+    /// Commit only when the resulting context has a lossless frame projection.
+    pub(crate) fn append_with_frame(&self, message: Message) -> Result<FrameData, ProcessorError> {
+        let mut state = self.lock()?;
+        state.require_lossless_rich_projection()?;
+        let index = state.messages.len();
+        state.append_native(message);
+        match state.frame_data() {
+            Ok(frame) => Ok(frame),
+            Err(error) => {
+                state.messages.truncate(index);
+                state.originals.remove(&index);
+                Err(error)
+            }
+        }
+    }
     pub fn append_rich(&self, message: ContextMessage) -> Result<(), ProcessorError> {
         self.lock()?.append_rich([message]);
         Ok(())
@@ -330,17 +357,7 @@ impl SharedContext {
     }
     /// Select a lossless frame representation, preserving rich tool sets and extras.
     pub fn frame_data(&self) -> Result<FrameData, ProcessorError> {
-        let state = self.lock()?;
-        state.require_lossless_rich_projection()?;
-        if !state.rich && !matches!(&state.tools, ToolSet::Functions(tools) if tools.is_empty()) {
-            if let Ok(frame) = state.legacy_frame() {
-                return Ok(FrameData::LlmContext(frame));
-            }
-        }
-        Ok(FrameData::LlmContextDetailed(DetailedLlmContextFrame {
-            context: state.data.clone(),
-            speculation: false,
-        }))
+        self.lock()?.frame_data()
     }
     pub(crate) fn lock(&self) -> Result<MutexGuard<'_, ContextState>, ProcessorError> {
         self.0

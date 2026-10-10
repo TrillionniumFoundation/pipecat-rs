@@ -8,6 +8,10 @@ no Python process or substitute energy threshold participates in inference.
 
 ## API
 
+The pair also supports explicit/auto/off [realtime trailing aggregation](REALTIME.md).
+Auto is the pair default; cascade behavior remains until realtime metadata arrives.
+Provider adapters must separately implement its state-only context contract.
+
 - `LLMContextAggregatorPair::new(Context, UserAggregatorConfig, AssistantAggregatorConfig)`
   creates a shared history. `user()` and `assistant()` return `Arc` processors;
   `context().snapshot()` returns the provider-neutral services `Context`
@@ -405,16 +409,15 @@ instances closed by End, Stop, or Cancel are not restartable.
 - The default remains the documented speech-timeout strategy; select the Smart
   Turn wrapper explicitly for native neural turn detection. Silero VAD is a
   separate `pipecat-vad` processor. LLM verdict strategies, speculative/eager
-  inference, arbitrary strategy plugins, and automatic service-recommended
-  strategy replacement are not implemented. Requested strategy replacement and
-  realtime service mode fail explicitly instead of silently retaining cascade
-  behavior
+  inference and arbitrary strategy plugins have separate explicit native contracts.
+  Supported service recommendations and paired realtime behavior are documented in
+  [REALTIME.md](REALTIME.md); unsupported descriptors fail explicitly
 - Explicit mute and the configurable native mute policies below are supported.
-  Empty-turn recovery applies only to cascade mode; realtime service metadata
-  remains explicitly unsupported rather than activating cascade recovery
+  Empty-turn recovery applies only to cascade mode; paired realtime activation
+  disables it
 - Raw image/file-to-context encoding needs an explicit encoder; encoded rich
   messages are supported. Full Python callback/event parity, source timestamp
-  events and realtime speech-to-speech handoff
+  events and provider-specific realtime speech-to-speech qualification
   remain outside this implementation
 - Grouped tool results and active-response deferrals are coalesced. Arbitrary
   adjacent ungrouped append/result frames are not coalesced by queue inspection
@@ -517,8 +520,8 @@ in-flight model result and clears buffered audio at the same boundary.
 assertions, not a Python execution baseline. Deterministic, paused-time runtime,
 and independent review tests cover composition, proposals, context rejection,
 tool finality, timer ownership, and SmartTurn integration. Proprietary Krisp
-classification, eager/speculative turn management, and automatic
-service-recommended strategy replacement are not implemented here. The bounded
+classification and arbitrary strategy plugins are not implemented here.
+Service recommendations are limited to the native descriptors in [REALTIME.md](REALTIME.md). The bounded
 unsigned LLM marker strategy and its external-completion finalizer are described
 in [COMPLETION.md](COMPLETION.md); conversational inference and tool admission
 remain caller-owned.
@@ -639,9 +642,8 @@ SHA-256 hashes, and manually maps the twelve cascade cases in
 `tests/test_empty_user_turn.py`. Native deterministic, paused-time runtime and
 controlled Smart Turn tests cover context ordering, budget reset, muted and
 terminal turns, tool lifecycle/coalescing, idle windows and single-task reuse.
-No Cargo test starts Python. Realtime speech-to-speech remains unsupported: its
-metadata is rejected before any state changes; the source's realtime-mode
-automatic recovery disable is not a claim of native realtime compatibility.
+No Cargo test starts Python. Paired realtime aggregation disables recovery as
+documented in [REALTIME.md](REALTIME.md); it is not provider qualification.
 
 ### Remaining strategy scope
 
@@ -650,8 +652,8 @@ re-prompts are documented in [COMPLETION.md](COMPLETION.md). Signed-provider
 filtering, eager STT speculation, provisional-context output/tool gates, and
 eager match policies remain unimplemented. The existing services inference interface does
 not by itself provide those safety contracts. No synthetic classifier stands in
-for a real verdict. Proprietary Krisp start/analyzer implementations and automatic
-service-recommended strategy replacement also remain unsupported.
+for a real verdict. Proprietary Krisp start/analyzer implementations and opaque service-recommended
+strategy descriptors remain unsupported.
 
 
 ### Native signed history
