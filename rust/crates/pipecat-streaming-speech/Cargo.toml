@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+cartesia-turns-eager = []
+
 [dependencies]
 tokio.workspace = true
 serde.workspace = true
@@ -23,5 +27,6 @@ url = "2"
 workspace = true
 
 [dev-dependencies]
+pipecat-processors = { path = "../pipecat-processors" }
 pipecat-turns = { path = "../pipecat-turns" }
 tokio = { workspace = true, features = ["test-util"] }

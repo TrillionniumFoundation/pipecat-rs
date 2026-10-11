@@ -3,6 +3,13 @@
 //! Each session owns bounded input/output queues and its WebSocket. Cancellation
 //! bypasses those queues, discards pending events, and performs bounded cleanup.
 //! Provider failures are surfaced without automatically replaying audio or text.
+//!
+//! Cartesia Turns remains committed-only by default. The non-default
+//! `cartesia-turns-eager` feature exposes `CartesiaTurnsProcessor::with_eager_turns`;
+//! callers must also configure a source-aware eager user aggregator and a
+//! supported native LLM processor. Opting in suppresses interim transcripts and
+//! raw upstream proposed-speaking events; admitted consumer speaking events
+//! remain available. Provider events have no authenticated turn identity.
 
 pub mod cartesia;
 pub mod cartesia_stt;
@@ -33,6 +40,8 @@ pub use cartesia_stt::{
 pub use cartesia_stt_processor::CartesiaSttProcessor;
 
 pub mod cartesia_turns;
+#[cfg(feature = "cartesia-turns-eager")]
+mod cartesia_turns_eager;
 mod cartesia_turns_processor;
 pub use cartesia_turns::{
     CartesiaTurnsClient, CartesiaTurnsConfig, CartesiaTurnsEvent, CartesiaTurnsSender,

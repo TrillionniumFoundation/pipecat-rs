@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
-  "source_tree": "33b0064835ed5a14f49dbf2a14b5c1d042b33f12",
+  "source_commit": "6fc971420127dd10c5baac309dc354f32638723e",
+  "source_tree": "bd5b9936888fc1f7a0d39c86569fcacccde07b54",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -114,6 +114,11 @@
       "commit": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
       "tree": "33b0064835ed5a14f49dbf2a14b5c1d042b33f12",
       "subject": "Add source-bound eager turn ownership and lock-safe admission"
+    },
+    {
+      "commit": "6fc971420127dd10c5baac309dc354f32638723e",
+      "tree": "bd5b9936888fc1f7a0d39c86569fcacccde07b54",
+      "subject": "Add opt-in source-bound Cartesia Turns eager adapter"
     }
   ],
   "scope_evidence": [
@@ -225,6 +230,19 @@
         "EAGER_SOURCE_MAP.md",
         "EAGER_VALIDATION_PLAN.md"
       ]
+    },
+    {
+      "scope": "cartesia_turns_eager_opt_in_adapter",
+      "author_report_sha256": "61707efaebcac97cb9636c6345c751f6bdbc185910915071d49ac83724f5fe1f",
+      "independent_report_sha256": "0814c0016dc8e21d62c3bb4bac12afb6f7cf6c4d24483c3ba5ffcbf91beab61c",
+      "author_source_packet_sha256": "87e33237f5b7627aa41850d8461213d367648f044c6e8120a2d3b5e97a4ee9ff",
+      "author_full_source_archive_sha256": "2d94fc554eeca955f435799fc1682b90f1ff2fb62b7a892fd9792ce6c12267d6",
+      "qualified_source_packet_sha256": "124d9e99890f32bf9e53b177ce8814511ec95fee6680ad819e7fd4f1dddcc721",
+      "qualified_full_source_manifest_sha256": "f0d25455b4b69ed9d49caa6dc4fd411daa30a57f40e160f45f6931587aa2f050",
+      "qualified_12_path_manifest_sha256": "95db259e9e185f7d355315b5c9de9f99d0b54c413ee8926009fb9f404455dfe8",
+      "combined_patch_sha256": "dc34617987b7316507ca1768cd1c56ad684df2d8f2c6c87eaf20a49ec6707245",
+      "independent_execution_ledger_sha256": "85e9112b66be89f446ad0278a7b3613693940676f4e07a973531fd37226985cf",
+      "production_identity_sha256": "3311ad647bc887806d445681973f4e0b03eeb1f8001181c705a64dce3e147ac4"
     }
   ],
   "omitted_native_administrative_paths": [
@@ -240,17 +258,17 @@
     "src/pipecat/audio/vad/data/silero_vad.onnx",
     "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
   ],
-  "raw_source_entries": 1478,
+  "raw_source_entries": 1485,
   "readme_bytes": 0,
   "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
   "new_execution": "NONE",
   "release_ready": false,
   "previous_public_draft": {
     "branch": "draft/native-reviewed-2026-10-10-fcf1752",
-    "commit": "6293c2047c5435d73eec8a0c9c1dfb28536e27c0",
-    "tree": "baf5853f0f2c3ac5968704414f15a487f97a40c6",
-    "canonical_source": "d021c4db10f56a6c1651bf9597390824773a5d43",
-    "update_requires_expected_head": "6293c2047c5435d73eec8a0c9c1dfb28536e27c0"
+    "commit": "2c6bf52f32c3893522469c3e26b01b1b912ca2bc",
+    "tree": "7535e6a951491f1719a5407ff43297d376e42ccc",
+    "canonical_source": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
+    "update_requires_expected_head": "2c6bf52f32c3893522469c3e26b01b1b912ca2bc"
   },
   "voicemail_scoped_results": {
     "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
@@ -360,5 +378,130 @@
     "combined_projection_full_gate": "NOT_RUN",
     "counts_are_source_bound_and_overlap": true,
     "new_native_execution_for_projection": false
+  },
+  "cartesia_turns_eager_adapter_scoped_results": {
+    "accepted_scope": "Default-off opt-in native Cartesia Turns eager adapter; seven author paths plus five new reviewer test files, 12 unique accepted paths",
+    "canonical_source": "6fc971420127dd10c5baac309dc354f32638723e",
+    "qualified_full_source_files": 3436,
+    "accepted_paths": [
+      "rust/Cargo.lock",
+      "rust/crates/pipecat-streaming-speech/Cargo.toml",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns.rs",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns_eager.rs",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns_processor.rs",
+      "rust/crates/pipecat-streaming-speech/src/lib.rs",
+      "rust/crates/pipecat-streaming-speech/src/reviewer_actor.rs",
+      "rust/crates/pipecat-streaming-speech/src/reviewer_reservations.rs",
+      "rust/crates/pipecat-streaming-speech/tests/cartesia_turns_eager.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/default.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/observations.rs"
+    ],
+    "author_paths": [
+      "rust/Cargo.lock",
+      "rust/crates/pipecat-streaming-speech/Cargo.toml",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns.rs",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns_eager.rs",
+      "rust/crates/pipecat-streaming-speech/src/cartesia_turns_processor.rs",
+      "rust/crates/pipecat-streaming-speech/src/lib.rs",
+      "rust/crates/pipecat-streaming-speech/tests/cartesia_turns_eager.rs"
+    ],
+    "new_reviewer_paths": [
+      "rust/crates/pipecat-streaming-speech/src/reviewer_actor.rs",
+      "rust/crates/pipecat-streaming-speech/src/reviewer_reservations.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/default.rs",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/observations.rs"
+    ],
+    "activation": {
+      "feature": "cartesia-turns-eager",
+      "feature_dependencies": [],
+      "enabled_by_default": false,
+      "construction_time_builder": "with_eager_turns",
+      "consumer_requires_separate_opt_in": true,
+      "default_behavior": "committed-only",
+      "facade_forwarding_added": false
+    },
+    "dependency_change": {
+      "new_production_edges": [],
+      "dev_only_edge": "pipecat-streaming-speech -> pipecat-processors",
+      "lock_change": "one existing dependency-list entry only; no package/version/source/checksum changes",
+      "feature_off_on_normal_build_graphs_byte_identical_in_author_evidence": true
+    },
+    "author": {
+      "positive_overlapping_executions": 705,
+      "initial_positive_executions": 540,
+      "restored_positive_executions": 165,
+      "new_authored_functions": 65,
+      "negative_control_families": 16,
+      "isolated_negative_runs": 21,
+      "each_control_compiled_and_failed_intended_predicate": true,
+      "strict_streaming_lib_and_tests_clippy_gates": 4,
+      "unique_test_total_claimed": false
+    },
+    "independent": {
+      "positive_overlapping_executions": 47,
+      "new_test_functions": 9,
+      "phase2_distinct_selected_functions": 17,
+      "isolated_negative_controls": 3,
+      "each_control_compiled_and_failed_intended_predicate": true,
+      "strict_selected_library_integration_clippy_passes": 2,
+      "historical_lint_failures_preserved": 1
+    },
+    "failure_history_preserved": [
+      "Author v3 fixture timeouts and repeated-EagerEnd schedule failure; separate diagnostic failure",
+      "Author v4 test Clippy await_holding_lock failure",
+      "Author v5 feature-off compile exit101; outer tee exit0 is not credited as success",
+      "Author C03/C07b pre-run source audit found masked predicates; v6 fixture repair preserved original causal assertions",
+      "Duplicate-extract retirement check failed on mtime differences before exact content/type/mode/link retry",
+      "Reviewer-v2 strict lint failure followed by equivalent observed? repair and fresh reviewer-v3/restored passes"
+    ],
+    "negative_evidence_limits": [
+      "C06/C07a establish cleanup joins, not the later worker ErrorFrame-list emptiness predicate",
+      "C15a direct actor application-result success remains unobserved after intended failed assertion",
+      "C05 fault intentionally allows ErrorFrames",
+      "R1 later healthy-publication/join-result booleans and final-claim denial are not inferred from failed assertion",
+      "R2 later assertions in failing iteration remain separate positive evidence",
+      "R3 failed conjunction does not individually print each status; own-release checks are positive/restored evidence",
+      "C19 is not claimed against the independent polled-reservation selector",
+      "Some external fixtures retain documented peer Drop-cancellation cleanup limits"
+    ],
+    "behavioral_boundaries": {
+      "unbound_interims_and_raw_upstream_speaking_proposals_suppressed": "eager mode only",
+      "mixed_vad_still_changes_speaking_and_timers": true,
+      "metrics_can_service_due_controller_deadline": true,
+      "unpublished_final_race": "Conservatively discards a final when a core receipt exists but its descriptor proof is not installed",
+      "clean_eof_installed_receipt_retention": "separately tested contract",
+      "same_socket_provider_id_ambiguity_unresolved": true,
+      "health_checks": "observation at admission",
+      "successful_confirmation_transfer": "not later vetoed by STT-only retirement",
+      "runtime_eager_concurrent_effective_setup": "returns already-connecting rather than waiting under legacy setup gate",
+      "exact_noop_settings": "acknowledge no change; no readiness promise"
+    },
+    "baseline_unbound_c_to_q_lock_hazard_resolved": false,
+    "other_unresolved_baselines": [
+      "Generic runtime-admission reentry",
+      "OutputGate mid-flush existing-owner cancellation",
+      "Global epoch wrap behavior"
+    ],
+    "native_evidence": "actual native adapters with localhost WS/HTTP/SSE; some actor-unit publication is not a full HTTP pipeline witness",
+    "live_provider_or_python_sdk_parity": false,
+    "full_provider_schedule_matrix_qualified": false,
+    "combined_projection_full_gate": "NOT_RUN",
+    "smart_turn_onnx_pipeline": "NOT_RUN",
+    "full_workspace_all_features": "NOT_RUN",
+    "model_inference": "NOT_RUN",
+    "original_python_sdk": "NOT_RUN",
+    "browser_gui_webrtc_livekit": "NOT_RUN",
+    "new_native_execution_for_projection": false,
+    "historical_webrtc_release_blocker_unchanged": true,
+    "legacy_documentation": {
+      "path": "rust/crates/pipecat-streaming-speech/CARTESIA_TURNS.md",
+      "stale_statement": "no eager-enabled API",
+      "current_status": "The cartesia-turns-eager feature and with_eager_turns builder now exist; committed-only remains the default",
+      "source_only_documentation_correction": "pending a separate canonical commit; exact accepted source is unchanged"
+    },
+    "counts_overlap_and_are_source_bound": true,
+    "author_and_independent_results_are_separate": true
   }
 }

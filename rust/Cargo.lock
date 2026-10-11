@@ -4265,6 +4265,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "pipecat-core",
+ "pipecat-processors",
  "pipecat-services",
  "pipecat-text",
  "pipecat-turns",

@@ -1,5 +1,7 @@
 //! Bounded Cartesia v2 committed-turn protocol. No reconnect, replay or eager inference.
 use crate::cartesia_stt::{normalize_keyterms, quote, CartesiaKeyterms};
+#[cfg(feature = "cartesia-turns-eager")]
+use crate::cartesia_turns_eager::EagerSession;
 use crate::common::{self, EventStream, Input, Socket};
 use crate::{CancellationToken, StreamingError, StreamingLimits};
 use futures_util::StreamExt;
@@ -26,6 +28,7 @@ pub struct CartesiaTurnsSettings {
     pub turn_end_threshold: Option<f64>,
     pub turn_end_timeout_ms: Option<u32>,
 }
+
 impl Default for CartesiaTurnsSettings {
     fn default() -> Self {
         Self {
@@ -295,8 +298,8 @@ impl CartesiaTurnsConfig {
     }
 }
 
-/// Raw provider events retain cumulative text. The processor only commits End.
-/// EagerEnd and Resume are observable here but have no speculative pipeline effect.
+/// Raw provider events retain cumulative text. Direct clients expose provider
+/// events without granting them speculative pipeline authority.
 #[derive(Clone, PartialEq)]
 pub enum CartesiaTurnsEvent {
     Connected {
@@ -372,6 +375,31 @@ impl CartesiaTurnsClient {
         cancel: CancellationToken,
         admission: Admission,
     ) -> Result<CartesiaTurnsSession, StreamingError> {
+        self.connect_inner(
+            cancel,
+            admission,
+            #[cfg(feature = "cartesia-turns-eager")]
+            None,
+        )
+        .await
+    }
+    #[cfg(feature = "cartesia-turns-eager")]
+    pub(crate) async fn connect_eager_guarded(
+        &self,
+        cancel: CancellationToken,
+        admission: Admission,
+        eager: Arc<EagerSession>,
+    ) -> Result<CartesiaTurnsSession, StreamingError> {
+        self.connect_inner(cancel, admission, Some(eager)).await
+    }
+    async fn connect_inner(
+        &self,
+        cancel: CancellationToken,
+        admission: Admission,
+        #[cfg(feature = "cartesia-turns-eager")] eager: Option<Arc<EagerSession>>,
+    ) -> Result<CartesiaTurnsSession, StreamingError> {
+        #[cfg(feature = "cartesia-turns-eager")]
+        let mut eager_guard = eager.map(EagerActorGuard::new);
         admitted(&admission, &cancel)?;
         let request = common::request(
             &self.config.url()?,
@@ -395,6 +423,14 @@ impl CartesiaTurnsClient {
         let (request_id, connected) = match ready {
             Ok(ready) => ready,
             Err(error) => {
+                #[cfg(feature = "cartesia-turns-eager")]
+                if let Some(guard) = &eager_guard {
+                    guard.revoke();
+                }
+                #[cfg(all(test, feature = "cartesia-turns-eager"))]
+                if let Some(guard) = &eager_guard {
+                    guard.eager.actor_before_close(&cancel).await;
+                }
                 common::close(&mut socket, &self.config.limits).await;
                 return Err(error);
             }
@@ -412,6 +448,8 @@ impl CartesiaTurnsClient {
         let finished = input.finished.clone();
         let worker_cancel = cancel.clone();
         let worker_admission = admission.clone();
+        #[cfg(feature = "cartesia-turns-eager")]
+        let eager = eager_guard.as_ref().map(|guard| guard.eager.clone());
         let task = tokio::spawn(async move {
             let result = common::cancelled(
                 &worker_cancel,
@@ -423,10 +461,36 @@ impl CartesiaTurnsClient {
                     &worker_admission,
                     &worker_cancel,
                     &finished,
+                    #[cfg(feature = "cartesia-turns-eager")]
+                    eager_guard.as_ref().map(|guard| guard.eager.as_ref()),
                 ),
             )
             .await;
+            #[cfg(feature = "cartesia-turns-eager")]
+            if result.is_err() {
+                if let Some(guard) = &eager_guard {
+                    guard.revoke();
+                }
+            }
+            // Successful protocol drain does not protect an abandoned close.
+            // The reader separately completes source drain after final conversion.
+            #[cfg(all(test, feature = "cartesia-turns-eager"))]
+            if let Some(guard) = &eager_guard {
+                guard.eager.actor_before_close(&worker_cancel).await;
+            }
             common::close(&mut socket, &config.limits).await;
+            #[cfg(feature = "cartesia-turns-eager")]
+            if result.is_ok() {
+                if let Some(guard) = &mut eager_guard {
+                    guard.disarm();
+                }
+            }
+            // Current-thread unit fixtures observe this actual result only
+            // after this poll returns; there is no await after the marker.
+            #[cfg(all(test, feature = "cartesia-turns-eager"))]
+            if let Some(guard) = &eager_guard {
+                guard.eager.actor_returned(result.is_ok());
+            }
             result
         });
         Ok(CartesiaTurnsSession {
@@ -437,6 +501,8 @@ impl CartesiaTurnsClient {
             },
             request_id,
             connected,
+            #[cfg(feature = "cartesia-turns-eager")]
+            eager,
             events: EventStream {
                 rx,
                 cancel,
@@ -444,6 +510,31 @@ impl CartesiaTurnsClient {
                 ended: false,
             },
         })
+    }
+}
+#[cfg(feature = "cartesia-turns-eager")]
+struct EagerActorGuard {
+    eager: Arc<EagerSession>,
+    armed: bool,
+}
+#[cfg(feature = "cartesia-turns-eager")]
+impl EagerActorGuard {
+    fn new(eager: Arc<EagerSession>) -> Self {
+        Self { eager, armed: true }
+    }
+    fn revoke(&self) {
+        self.eager.revoke();
+    }
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+#[cfg(feature = "cartesia-turns-eager")]
+impl Drop for EagerActorGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.revoke();
+        }
     }
 }
 fn admitted(admission: &Admission, cancel: &CancellationToken) -> Result<(), StreamingError> {
@@ -538,6 +629,8 @@ pub struct CartesiaTurnsSession {
     sender: CartesiaTurnsSender,
     request_id: Option<String>,
     connected: Value,
+    #[cfg(feature = "cartesia-turns-eager")]
+    eager: Option<Arc<EagerSession>>,
     events: EventStream<CartesiaTurnsEvent>,
 }
 impl CartesiaTurnsSession {
@@ -562,6 +655,10 @@ impl CartesiaTurnsSession {
         event
     }
     pub fn cancel(&self) {
+        #[cfg(feature = "cartesia-turns-eager")]
+        if let Some(eager) = &self.eager {
+            eager.revoke();
+        }
         self.events.cancel.cancel();
     }
 }
@@ -629,6 +726,7 @@ impl WatchdogState {
         Ok(samples)
     }
 }
+#[cfg_attr(feature = "cartesia-turns-eager", allow(clippy::too_many_arguments))]
 async fn run(
     socket: &mut Socket,
     mut commands: mpsc::Receiver<Command>,
@@ -637,6 +735,7 @@ async fn run(
     admission: &Admission,
     cancel: &CancellationToken,
     finished: &Mutex<bool>,
+    #[cfg(feature = "cartesia-turns-eager")] eager: Option<&EagerSession>,
 ) -> Result<(), StreamingError> {
     let mut closing: Option<Instant> = None;
     let mut speaking = false;
@@ -692,7 +791,17 @@ async fn run(
                     if let Some(mut event) = decode_text(&text)? {
                         match &mut event {
                             CartesiaTurnsEvent::Connected { .. } => return Err(StreamingError::Protocol("duplicate Turns connected")),
-                            CartesiaTurnsEvent::Start { .. } => { if closing.is_none() && !terminal_admitted { speaking = true; } else { continue; } },
+                            CartesiaTurnsEvent::Start { .. } => {
+                                if closing.is_none() && !terminal_admitted {
+                                    speaking = true;
+                                } else {
+                                    #[cfg(feature = "cartesia-turns-eager")]
+                                    if let Some(eager) = eager {
+                                        eager.skipped_start();
+                                    }
+                                    continue;
+                                }
+                            },
                             CartesiaTurnsEvent::End { transcript, audio_seconds, .. } => {
                                 speaking = false;
                                 if !transcript.is_empty() { *audio_seconds = pending_samples as f64 / f64::from(config.sample_rate); }
@@ -993,4 +1102,388 @@ mod tests {
             .catch_up_samples(Duration::from_nanos(125000), &c)
             .is_err());
     }
+}
+
+#[cfg(all(test, feature = "cartesia-turns-eager"))]
+mod eager_actor_tests {
+    use super::*;
+    use futures_util::SinkExt;
+    use pipecat_core::{FrameData, NativeEagerPrediction, NativeEagerTurn, TranscriptionFrame};
+    use serde_json::json;
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio_tungstenite::{accept_async, WebSocketStream};
+
+    fn payload(finalized: bool) -> FrameData {
+        let text = TranscriptionFrame {
+            text: "held actor turn".into(),
+            user_id: "actor-test".into(),
+            timestamp: "actor-test-time".into(),
+            finalized,
+            ..Default::default()
+        };
+        if finalized {
+            FrameData::Transcription(text)
+        } else {
+            FrameData::EagerTranscription(text)
+        }
+    }
+
+    fn ready_source() -> (Arc<EagerSession>, NativeEagerTurn, NativeEagerPrediction) {
+        let eager = EagerSession::for_test();
+        assert!(eager.claim_start());
+        let turn = eager.begin_start().unwrap().unwrap();
+        assert!(eager.mark_ready(&turn));
+        let prediction = eager.predict(&turn, payload(false)).unwrap().unwrap();
+        (eager, turn, prediction)
+    }
+
+    async fn within<T>(future: impl std::future::Future<Output = T>) -> T {
+        tokio::time::timeout(Duration::from_secs(3), future)
+            .await
+            .expect("actor fixture deadline")
+    }
+
+    struct ActorPeer {
+        session: CartesiaTurnsSession,
+        peer: WebSocketStream<TcpStream>,
+    }
+    impl ActorPeer {
+        async fn connect(eager: Arc<EagerSession>) -> Self {
+            Self::connect_with_admission(eager, Arc::new(|| true)).await
+        }
+        async fn connect_with_admission(eager: Arc<EagerSession>, admission: Admission) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut config = CartesiaTurnsConfig::new("actor-test-key");
+            config.endpoint = format!("ws://{}/turns", listener.local_addr().unwrap());
+            config.limits.queue_capacity = 1;
+            config.limits.connect_timeout = Duration::from_secs(2);
+            config.limits.write_timeout = Duration::from_secs(2);
+            config.limits.response_timeout = Duration::from_secs(2);
+            config.limits.close_timeout = Duration::from_millis(100);
+            let client = CartesiaTurnsClient::new(config).unwrap();
+            let (session, peer) = within(async {
+                tokio::join!(
+                    client.connect_eager_guarded(CancellationToken::new(), admission, eager,),
+                    async {
+                        let (stream, _) = listener.accept().await.unwrap();
+                        let mut peer = accept_async(stream).await.unwrap();
+                        peer.send(Message::Text(
+                            json!({"type":"connected"}).to_string().into(),
+                        ))
+                        .await
+                        .unwrap();
+                        peer
+                    }
+                )
+            })
+            .await;
+            Self {
+                session: session.unwrap(),
+                peer,
+            }
+        }
+        async fn send(&mut self, value: Value) {
+            within(self.peer.send(Message::Text(value.to_string().into())))
+                .await
+                .unwrap();
+        }
+        async fn read(&mut self) -> Message {
+            within(self.peer.next()).await.unwrap().unwrap()
+        }
+        async fn parsed_barrier(&mut self) -> bool {
+            let marker = b"actor-parse-barrier".to_vec();
+            within(self.peer.send(Message::Ping(marker.clone().into())))
+                .await
+                .unwrap();
+            self.read().await == Message::Pong(marker.into())
+        }
+        async fn finish_command(&mut self) -> bool {
+            within(self.session.sender().finish()).await.unwrap();
+            match self.read().await {
+                Message::Text(text) => serde_json::from_str::<Value>(&text)
+                    .is_ok_and(|value| value == json!({"type":"close"})),
+                _ => false,
+            }
+        }
+        async fn close_peer(&mut self) {
+            within(self.peer.send(Message::Close(None))).await.unwrap();
+        }
+        async fn join(&mut self) -> Result<(), StreamingError> {
+            match tokio::time::timeout(Duration::from_secs(3), &mut self.session.events.task).await
+            {
+                Ok(Ok(result)) => result,
+                Ok(Err(_)) => Err(StreamingError::Transport),
+                Err(_) => {
+                    self.session.cancel();
+                    self.session.events.task.abort();
+                    let _ =
+                        tokio::time::timeout(Duration::from_secs(1), &mut self.session.events.task)
+                            .await;
+                    Err(StreamingError::Timeout("actor fixture cleanup"))
+                }
+            }
+        }
+    }
+    impl Drop for ActorPeer {
+        fn drop(&mut self) {
+            self.session.events.cancel.cancel();
+            self.session.events.task.abort();
+        }
+    }
+
+    #[test]
+    fn armed_guard_drop_revokes_only_its_exact_source() {
+        let (old, old_turn, old_prediction) = ready_source();
+        let (new, new_turn, new_prediction) = ready_source();
+        let guard = EagerActorGuard::new(old);
+        drop(guard);
+        assert!(!old_turn.is_live());
+        assert!(!old_prediction.is_live());
+        assert!(new_turn.is_live());
+        assert!(new_prediction.is_live());
+        new.revoke();
+    }
+
+    #[test]
+    fn successful_guard_disarm_leaves_reader_completion_authority_intact() {
+        let (source, turn, prediction) = ready_source();
+        let mut guard = EagerActorGuard::new(source.clone());
+        guard.disarm();
+        drop(guard);
+        assert!(turn.is_live());
+        assert!(prediction.is_live());
+        source.revoke();
+    }
+
+    #[test]
+    fn abandoning_unpolled_guarded_future_revokes_source() {
+        let (source, turn, prediction) = ready_source();
+        let guard = EagerActorGuard::new(source);
+        let future = async move {
+            let _guard = guard;
+            std::future::pending::<()>().await;
+        };
+        drop(future);
+        assert!(!turn.is_live());
+        assert!(!prediction.is_live());
+    }
+
+    #[tokio::test]
+    async fn full_output_queue_does_not_delay_an_actually_read_provider_fault() {
+        let (source, turn, prediction) = ready_source();
+        let (close_entered, release_close) = source.hold_actor_close();
+        let mut actor = ActorPeer::connect(source).await;
+        actor
+            .send(json!({"type":"turn.update","transcript":"queued raw event"}))
+            .await;
+        let update_parsed = actor.parsed_barrier().await;
+        let queued_before_fault = actor.session.events.rx.len();
+        actor
+            .send(json!({"type":"error","message":"actor-test-fault"}))
+            .await;
+        within(close_entered).await.unwrap();
+        let retired_before_close = !turn.is_live() && !prediction.is_live();
+        let cleanup_still_pending = !actor.session.events.task.is_finished();
+        let _ = release_close.send(());
+        let close_observed = matches!(actor.read().await, Message::Close(_));
+        let retired_before_reader = !turn.is_live() && !prediction.is_live();
+        let queued_after_fault = actor.session.events.rx.len();
+        let result = actor.join().await;
+        drop(actor);
+        assert!(update_parsed);
+        assert_eq!(queued_before_fault, 1);
+        assert!(retired_before_close && cleanup_still_pending);
+        assert!(close_observed);
+        assert!(retired_before_reader);
+        assert_eq!(queued_after_fault, 1);
+        assert_eq!(result, Err(StreamingError::Provider { status: None }));
+    }
+
+    #[tokio::test]
+    async fn abandoning_successful_actor_at_close_boundary_keeps_guard_armed() {
+        let (source, turn, prediction) = ready_source();
+        let (close_entered, release_close) = source.hold_actor_close();
+        let mut actor = ActorPeer::connect(source.clone()).await;
+        source.prepare_end();
+        let close_command = actor.finish_command().await;
+        actor.close_peer().await;
+        within(close_entered).await.unwrap();
+        let live_at_close_boundary = turn.is_live() && prediction.is_live();
+        actor.session.events.task.abort();
+        let result = actor.join().await;
+        let retired_by_abandonment = !turn.is_live() && !prediction.is_live();
+        let _ = release_close.send(());
+        drop(actor);
+        assert!(close_command && live_at_close_boundary);
+        assert_eq!(result, Err(StreamingError::Transport));
+        assert!(retired_by_abandonment);
+    }
+
+    #[tokio::test]
+    async fn mechanical_actor_cancellation_retires_source_before_close() {
+        let (source, turn, prediction) = ready_source();
+        let (close_entered, release_close) = source.hold_actor_close();
+        let mut actor = ActorPeer::connect(source).await;
+        actor.session.events.cancel.cancel();
+        within(close_entered).await.unwrap();
+        let retired_before_close = !turn.is_live() && !prediction.is_live();
+        let _ = release_close.send(());
+        let result = actor.join().await;
+        drop(actor);
+        assert!(retired_before_close);
+        assert_eq!(result, Err(StreamingError::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn explicit_session_cancel_retires_before_actor_can_observe_notification() {
+        let (source, turn, prediction) = ready_source();
+        let mut actor = ActorPeer::connect(source).await;
+        actor.session.cancel();
+        let retired_synchronously = !turn.is_live() && !prediction.is_live();
+        let notified = actor.session.events.cancel.is_cancelled();
+        let result = actor.join().await;
+        drop(actor);
+        assert!(retired_synchronously && notified);
+        assert_eq!(result, Err(StreamingError::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn stale_next_retires_before_its_internal_cancellation_notification() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let (source, turn, prediction) = ready_source();
+        let admitted = Arc::new(AtomicBool::new(true));
+        let admission = admitted.clone();
+        let mut actor = ActorPeer::connect_with_admission(
+            source,
+            Arc::new(move || admission.load(Ordering::Acquire)),
+        )
+        .await;
+        admitted.store(false, Ordering::Release);
+        // Poll locally so the actor cannot run between the internal cancel and
+        // the liveness check on this current-thread runtime.
+        let mut next = Box::pin(actor.session.next());
+        let waker = futures_util::task::noop_waker();
+        let mut context = std::task::Context::from_waker(&waker);
+        let pending = std::future::Future::poll(next.as_mut(), &mut context).is_pending();
+        drop(next);
+        let retired_synchronously = !turn.is_live() && !prediction.is_live();
+        let notified = actor.session.events.cancel.is_cancelled();
+        let result = actor.join().await;
+        drop(actor);
+        assert!(pending && retired_synchronously && notified);
+        assert_eq!(result, Err(StreamingError::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn handshake_failure_retires_exact_source_before_close() {
+        let (source, turn, prediction) = ready_source();
+        let (close_entered, release_close) = source.hold_actor_close();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = CartesiaTurnsConfig::new("actor-handshake-test-key");
+        config.endpoint = format!("ws://{}/turns", listener.local_addr().unwrap());
+        config.limits.connect_timeout = Duration::from_secs(2);
+        config.limits.close_timeout = Duration::from_millis(100);
+        let client = CartesiaTurnsClient::new(config).unwrap();
+        let connect = tokio::spawn(async move {
+            client
+                .connect_eager_guarded(CancellationToken::new(), Arc::new(|| true), source)
+                .await
+        });
+        let (stream, _) = within(listener.accept()).await.unwrap();
+        let mut peer = within(accept_async(stream)).await.unwrap();
+        within(peer.send(Message::Text(json!({"type":"error"}).to_string().into())))
+            .await
+            .unwrap();
+        within(close_entered).await.unwrap();
+        let retired_before_close = !turn.is_live() && !prediction.is_live();
+        let cleanup_still_pending = !connect.is_finished();
+        let _ = release_close.send(());
+        let close_observed = matches!(within(peer.next()).await, Some(Ok(Message::Close(_))));
+        let result = within(connect).await.unwrap();
+        drop(peer);
+        assert!(retired_before_close && cleanup_still_pending && close_observed);
+        assert!(matches!(
+            result,
+            Err(StreamingError::Provider { status: None })
+        ));
+    }
+
+    #[tokio::test]
+    async fn actor_hidden_start_retires_ready_turn_before_reader_or_eof() {
+        let (source, turn, prediction) = ready_source();
+        let mut actor = ActorPeer::connect(source.clone()).await;
+        source.prepare_end();
+        let close_command = actor.finish_command().await;
+        let live_before_skip = turn.is_live() && prediction.is_live();
+        actor
+            .send(json!({"type":"turn.start","transcript":"later turn"}))
+            .await;
+        let start_parsed = actor.parsed_barrier().await;
+        let retired_before_eof = !turn.is_live() && !prediction.is_live();
+        let no_raw_start = actor.session.events.rx.is_empty();
+        actor
+            .send(json!({"type":"turn.end","transcript":"later final"}))
+            .await;
+        let end_parsed = actor.parsed_barrier().await;
+        let tail_stays_unmapped = source.ready_turn().is_none();
+        let raw_end_only = matches!(actor.session.events.rx.try_recv(),
+            Ok(CartesiaTurnsEvent::End { transcript, .. }) if transcript == "later final");
+        actor.close_peer().await;
+        let result = actor.join().await;
+        drop(actor);
+        assert!(close_command && live_before_skip && start_parsed && end_parsed);
+        assert!(retired_before_eof && no_raw_start && tail_stays_unmapped && raw_end_only);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn actor_hidden_start_preserves_an_already_installed_final() {
+        let (source, turn, prediction) = ready_source();
+        let commit = source.offer_final(&turn, payload(true)).unwrap().unwrap();
+        let mut actor = ActorPeer::connect(source.clone()).await;
+        source.prepare_end();
+        let close_command = actor.finish_command().await;
+        actor
+            .send(json!({"type":"turn.start","transcript":"later turn"}))
+            .await;
+        let start_parsed = actor.parsed_barrier().await;
+        let preserved_before_eof = commit.is_live() && prediction.is_live();
+        actor
+            .send(json!({"type":"turn.end","transcript":"unrelated later final"}))
+            .await;
+        let end_parsed = actor.parsed_barrier().await;
+        let prior_receipt_only = source.accepts_final(&commit) && source.ready_turn().is_none();
+        let raw_end_only = matches!(actor.session.events.rx.try_recv(),
+            Ok(CartesiaTurnsEvent::End { transcript, .. }) if transcript == "unrelated later final");
+        actor.close_peer().await;
+        let result = actor.join().await;
+        let completed = source.complete_drain();
+        drop(actor);
+        let preserved_after_stream_drop = commit.is_live() && prediction.is_live();
+        source.revoke();
+        assert!(close_command && start_parsed && end_parsed);
+        assert!(preserved_before_eof && prior_receipt_only && raw_end_only);
+        assert_eq!(result, Ok(()));
+        assert!(completed && preserved_after_stream_drop);
+    }
+
+    #[tokio::test]
+    async fn successful_actor_return_waits_for_reader_to_retire_no_final_rights() {
+        let (source, turn, prediction) = ready_source();
+        let mut actor = ActorPeer::connect(source.clone()).await;
+        source.prepare_end();
+        let close_command = actor.finish_command().await;
+        actor.close_peer().await;
+        let result = actor.join().await;
+        let live_before_reader_completion = turn.is_live() && prediction.is_live();
+        let completed = source.complete_drain();
+        let retired_after_reader_completion = !turn.is_live() && !prediction.is_live();
+        drop(actor);
+        assert!(close_command);
+        assert_eq!(result, Ok(()));
+        assert!(live_before_reader_completion && completed && retired_after_reader_completion);
+    }
+
+    include!("reviewer_actor.rs");
 }
