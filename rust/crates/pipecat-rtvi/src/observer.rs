@@ -134,9 +134,11 @@ impl RtviObserver {
         frame: &Frame,
         observation: Observation<'_>,
     ) -> Result<Vec<Envelope>, ProcessorError> {
-        // Provisional prompts and unconsumed local tool capabilities are not
-        // client-facing transcript or function-call observations.
-        if matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
+        // Source receipts must reach their aggregator before client projection;
+        // otherwise projection would silently shed their pending authority.
+        // Provisional prompts and unconsumed tools likewise stay local.
+        if frame.native_eager_source().is_some()
+            || matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
             || (frame.native_speculation().is_some()
                 && matches!(
                     frame.data,

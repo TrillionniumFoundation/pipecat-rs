@@ -106,6 +106,8 @@ pub enum NativeLlmContinuationError {
     UnconsumedOnWire,
     #[error("native speculation capability must be consumed before wire encoding")]
     UnconsumedSpeculation,
+    #[error("native eager source receipt must be consumed before wire encoding")]
+    UnconsumedEagerSource,
     #[error("native tool outcome must be consumed before wire encoding")]
     UnconsumedToolOutcome,
     #[error("native tool batch must be consumed before wire encoding")]

@@ -72,6 +72,9 @@ struct Queues {
 /// an interruption or cancellation from entering the system lane.
 pub struct FrameQueue {
     queues: Mutex<Queues>,
+    // Observation-only cutoff. Every locked generation writer publishes before
+    // dropping queued payloads, whose destructors may acquire source locks.
+    observed_generation: AtomicU64,
     admission: Arc<Mutex<()>>,
     interruptions: Arc<Mutex<InterruptionRegistry>>,
     dropped: Arc<AtomicU64>,
@@ -105,6 +108,7 @@ impl FrameQueue {
         );
         Self {
             queues: Mutex::new(Queues::default()),
+            observed_generation: AtomicU64::new(0),
             admission,
             interruptions,
             dropped,
@@ -165,6 +169,8 @@ impl FrameQueue {
                         return Ok(());
                     }
                     queues.generation = epoch;
+                    self.observed_generation
+                        .store(queues.generation, Ordering::SeqCst);
                     let removed = Self::reset_before(&mut queues, epoch);
                     self.dropped.fetch_add(removed as u64, Ordering::Relaxed);
                     epoch
@@ -319,6 +325,11 @@ impl FrameQueue {
     pub(crate) fn generation(&self) -> u64 {
         self.queues.lock().unwrap().generation
     }
+    /// Observe the published local cutoff without waiting for queue payload
+    /// destruction. This observation does not reserve runtime admission.
+    pub(crate) fn observed_generation(&self) -> u64 {
+        self.observed_generation.load(Ordering::SeqCst)
+    }
     fn remember_interruption(queues: &mut Queues, id: u64) {
         queues.interruption_ids.insert(id);
         queues.interruptions.push_back(id);
@@ -375,6 +386,8 @@ impl FrameQueue {
         }
         let generation = self.interruptions.lock().unwrap().reserve(identity, token);
         queues.generation = queues.generation.max(generation);
+        self.observed_generation
+            .store(queues.generation, Ordering::SeqCst);
         let removed = Self::reset_before(&mut queues, generation);
         drop(queues);
         self.changed.notify_waiters();
@@ -423,6 +436,10 @@ impl FrameQueue {
         removed
     }
 }
+#[cfg(test)]
+#[path = "queue_observation_tests.rs"]
+mod observation_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

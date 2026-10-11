@@ -215,6 +215,9 @@ impl LlmProcessor {
                             )
                         })?
                         .clone();
+                    if !capability.admits_completion() {
+                        return Ok(Consumption::Consumed);
+                    }
                     next.speculation = Some(capability);
                 }
                 let committed = next
@@ -313,43 +316,21 @@ impl LlmProcessor {
         // Reserve the FIFO position before background task scheduling can reorder it.
         let acquired = poll_fn(|cx| Poll::Ready(guard.as_mut().poll(cx))).await;
         ctx.spawn("llm-completion", true, async move {
-            let capability = state.speculation.clone();
             let completion = async {
+                if !output.admits_completion() {
+                    return Ok(());
+                }
                 let _guard = match acquired {
                     Poll::Ready(guard) => guard,
                     Poll::Pending => guard.await,
                 };
+                // A source can retire while this completion waits in the FIFO.
+                if !output.admits_completion() {
+                    return Ok(());
+                }
                 process_completion(client, state.request, state.skip_tts, output.clone()).await
             };
-            let result = match capability {
-                Some(capability) => {
-                    let mut changed = capability.watch();
-                    let mut health_changed = output.context.health().watch();
-                    tokio::pin!(completion);
-                    let guarded = poll_fn(|cx| {
-                        if !output.context.is_current()
-                            || output.context.health().generation() != output.health_generation
-                        {
-                            capability.cancel();
-                            return Poll::Ready(Ok(()));
-                        }
-                        completion.as_mut().poll(cx)
-                    });
-                    tokio::pin!(guarded);
-                    loop {
-                        if capability.status() == pipecat_core::SpeculationStatus::Cancelled {
-                            break Ok(());
-                        }
-                        tokio::select! {
-                            biased;
-                            _ = changed.changed() => {},
-                            _ = health_changed.changed() => {},
-                            result = &mut guarded => break result,
-                        }
-                    }
-                }
-                None => completion.await,
-            };
+            let result = output.guard_completion(completion).await;
             let result = match result {
                 Err(error) if output.speculation.is_some() => {
                     output
@@ -516,6 +497,12 @@ impl FrameProcessor for LlmProcessor {
             }
             Ok(Consumption::Consumed) => {}
             Err(error) => {
+                if frame
+                    .native_speculation()
+                    .is_some_and(|capability| !capability.source_is_current())
+                {
+                    return Ok(());
+                }
                 let proposal = matches!(
                     frame.data,
                     FrameData::LlmUpdateSettings(_) | FrameData::ServiceUpdateSettings(_)
@@ -584,6 +571,51 @@ struct CompletionOutput {
     health_generation: pipecat_core::ProcessorHealthGeneration,
 }
 impl CompletionOutput {
+    async fn guard_completion<F>(&self, completion: F) -> Result<(), ProcessorError>
+    where
+        F: Future<Output = Result<(), ProcessorError>>,
+    {
+        let Some(capability) = &self.speculation else {
+            return completion.await;
+        };
+        let mut changed = capability.watch();
+        let mut health_changed = self.context.health().watch();
+        tokio::pin!(completion);
+        let guarded = poll_fn(|cx| {
+            // Check on every poll, including FIFO waits. A future may wake
+            // without a watch change or another pass through the outer loop.
+            if !self.admits_completion() {
+                return Poll::Ready(Ok(()));
+            }
+            completion.as_mut().poll(cx)
+        });
+        tokio::pin!(guarded);
+        loop {
+            if !self.admits_completion() {
+                return Ok(());
+            }
+            tokio::select! {
+                biased;
+                _ = changed.changed() => {},
+                _ = health_changed.changed() => {},
+                result = &mut guarded => return result,
+            }
+        }
+    }
+
+    fn admits_completion(&self) -> bool {
+        let Some(capability) = &self.speculation else {
+            return true;
+        };
+        if !self.context.is_current()
+            || self.context.health().generation() != self.health_generation
+            || !capability.admits_completion()
+        {
+            capability.cancel();
+            return false;
+        }
+        true
+    }
     fn configuration(&self) -> &pipecat_core::StartFrame {
         self.context.configuration()
     }
@@ -591,12 +623,7 @@ impl CompletionOutput {
         self.context.name()
     }
     async fn push(&self, frame: Frame, direction: Direction) -> Result<(), ProcessorError> {
-        if self.speculation.is_some()
-            && self.context.health().generation() != self.health_generation
-        {
-            if let Some(capability) = &self.speculation {
-                capability.cancel();
-            }
+        if !self.admits_completion() {
             return Ok(());
         }
         self.gate
@@ -604,6 +631,15 @@ impl CompletionOutput {
             .await
     }
     async fn push_error(&self, error: ErrorFrame) -> Result<(), ProcessorError> {
+        // Failure reporting can follow this completion's own cancellation.
+        // It must still reject retired sources without hiding current errors.
+        if self
+            .speculation
+            .as_ref()
+            .is_some_and(|capability| !capability.source_is_current())
+        {
+            return Ok(());
+        }
         self.context
             .push_error_if_health_generation(error, false, self.health_generation)
             .await
@@ -663,6 +699,11 @@ async fn process_completion(
             .map_err(|error| ProcessorError::new(error.to_string()))?;
     }
     ctx.push(start, Direction::Downstream).await?;
+    // Pushing the boundary may yield while the source retires. Do not even
+    // construct a provider stream after that admission has been lost.
+    if !ctx.admits_completion() {
+        return Ok(());
+    }
     let mut stream = match client.stream(request) {
         Ok(stream) => stream,
         Err(error) => {
@@ -1073,4 +1114,277 @@ fn native_gemini_history(
     };
     make(response_id, LlmContinuationProvider::Gemini, blocks)
         .map_err(|error| ServiceError::Protocol(error.to_string()))
+}
+
+#[cfg(test)]
+mod source_error_tests {
+    use super::*;
+    use pipecat_core::{EagerSourceSessionOwner, NativeEagerConsumer, Pipeline, SpeculationOwner};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    struct ErrorAfterCancel {
+        source: Option<EagerSourceSessionOwner>,
+        owner: SpeculationOwner,
+        retire_source: bool,
+    }
+
+    #[async_trait]
+    impl FrameProcessor for ErrorAfterCancel {
+        fn name(&self) -> &str {
+            "SelfCancelledProviderError"
+        }
+
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            context: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::LlmRun) {
+                let capability = self.owner.capability();
+                assert!(capability.claim_inference());
+                assert!(capability.bind_admission(context.clone(), context.health().generation()));
+                let output = CompletionOutput {
+                    context: context.clone(),
+                    gate: crate::speculation::OutputGate::new(Default::default()),
+                    speculation: Some(capability.clone()),
+                    health_generation: context.health().generation(),
+                };
+                capability.cancel();
+                if self.retire_source {
+                    self.source.as_ref().unwrap().revoke();
+                }
+                assert!(!capability.admits_completion());
+                return output
+                    .push_error(ErrorFrame::new("provider failed after cancellation"))
+                    .await;
+            }
+            context.push(frame, direction).await
+        }
+    }
+
+    #[tokio::test]
+    async fn self_cancel_preserves_current_and_legacy_errors_but_not_retired_source_errors() {
+        for mode in ["legacy", "current source", "retired source"] {
+            let source = (mode != "legacy").then(|| EagerSourceSessionOwner::new(4096).unwrap());
+            let owner = match &source {
+                Some(source) => {
+                    let turn = source.begin_turn().unwrap();
+                    let consumer = NativeEagerConsumer::new();
+                    assert!(turn.claim_start(&consumer));
+                    let prediction = source
+                        .predict(
+                            &turn,
+                            FrameData::EagerTranscription(pipecat_core::TranscriptionFrame {
+                                text: "pending".into(),
+                                ..Default::default()
+                            }),
+                        )
+                        .unwrap();
+                    SpeculationOwner::try_adopt_source_prediction(&prediction, &consumer).unwrap()
+                }
+                None => SpeculationOwner::new(),
+            };
+            let mut worker = Pipeline::new(vec![Arc::new(ErrorAfterCancel {
+                source,
+                owner,
+                retire_source: mode == "retired source",
+            })])
+            .start(Default::default())
+            .await
+            .unwrap();
+            worker
+                .sender()
+                .send(Frame::new(FrameData::LlmRun), Direction::Downstream)
+                .await
+                .unwrap();
+            let barrier = Frame::new(FrameData::Flush(pipecat_core::FlushFrame {
+                returning: false,
+                origin: Some("error-admission".into()),
+            }));
+            let id = barrier.id;
+            worker
+                .sender()
+                .send(barrier, Direction::Downstream)
+                .await
+                .unwrap();
+            let errors = tokio::time::timeout(Duration::from_secs(5), async {
+                let mut errors = 0;
+                loop {
+                    let frame = worker.recv().await.unwrap();
+                    errors += usize::from(matches!(frame.frame.data, FrameData::Error(_)));
+                    if frame.frame.id == id {
+                        return errors;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(errors, usize::from(mode != "retired source"), "{mode}");
+            worker.end().await.unwrap();
+            worker.collect().await.unwrap();
+        }
+    }
+
+    #[derive(Default)]
+    struct PollSource {
+        health: ProcessorHealth,
+        owners: Mutex<Option<(EagerSourceSessionOwner, SpeculationOwner)>>,
+    }
+
+    impl PollSource {
+        fn capability(&self) -> pipecat_core::NativeSpeculation {
+            self.owners.lock().unwrap().as_ref().unwrap().1.capability()
+        }
+    }
+
+    #[async_trait]
+    impl FrameProcessor for PollSource {
+        fn name(&self) -> &str {
+            "IndependentCompletionSource"
+        }
+
+        fn health(&self) -> Option<ProcessorHealth> {
+            Some(self.health.clone())
+        }
+
+        async fn setup(
+            &self,
+            _: &pipecat_core::StartFrame,
+            context: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            let source = EagerSourceSessionOwner::from_context(4096, context)?;
+            let turn = source.begin_turn()?;
+            let consumer = NativeEagerConsumer::new();
+            assert!(turn.claim_start(&consumer));
+            let prediction = source.predict(
+                &turn,
+                FrameData::EagerTranscription(pipecat_core::TranscriptionFrame {
+                    text: "pending".into(),
+                    ..Default::default()
+                }),
+            )?;
+            let owner =
+                SpeculationOwner::try_adopt_source_prediction(&prediction, &consumer).unwrap();
+            *self.owners.lock().unwrap() = Some((source, owner));
+            Ok(())
+        }
+
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            context: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            context.push(frame, direction).await
+        }
+    }
+
+    struct QuietSourceChange {
+        source_health: ProcessorHealth,
+        polls: Arc<AtomicUsize>,
+    }
+
+    impl Future for QuietSourceChange {
+        type Output = Result<(), ProcessorError>;
+
+        fn poll(
+            self: std::pin::Pin<&mut Self>,
+            context: &mut std::task::Context<'_>,
+        ) -> Poll<Self::Output> {
+            if self.polls.fetch_add(1, Ordering::SeqCst) == 0 {
+                // Same-value source restoration changes authority but sends no
+                // watch value. The LLM's independent health also stays current.
+                assert!(!self.source_health.set_usable(true));
+                context.waker().wake_by_ref();
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+    }
+
+    struct GuardedPollProbe {
+        source: Arc<PollSource>,
+        polls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl FrameProcessor for GuardedPollProbe {
+        fn name(&self) -> &str {
+            "ProductionCompletionPollGuard"
+        }
+
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            context: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::LlmRun) {
+                let capability = self.source.capability();
+                assert!(capability.claim_inference());
+                assert!(capability.bind_admission(context.clone(), context.health().generation()));
+                let output = CompletionOutput {
+                    context: context.clone(),
+                    gate: crate::speculation::OutputGate::new(Default::default()),
+                    speculation: Some(capability),
+                    health_generation: context.health().generation(),
+                };
+                return output
+                    .guard_completion(QuietSourceChange {
+                        source_health: self.source.health.clone(),
+                        polls: self.polls.clone(),
+                    })
+                    .await;
+            }
+            context.push(frame, direction).await
+        }
+    }
+
+    #[tokio::test]
+    async fn self_waking_completion_rechecks_source_inside_suspended_select() {
+        let source = Arc::new(PollSource::default());
+        let polls = Arc::new(AtomicUsize::new(0));
+        let mut worker = Pipeline::new(vec![
+            source.clone(),
+            Arc::new(GuardedPollProbe {
+                source: source.clone(),
+                polls: polls.clone(),
+            }),
+        ])
+        .start(Default::default())
+        .await
+        .unwrap();
+        worker
+            .sender()
+            .send(Frame::new(FrameData::LlmRun), Direction::Downstream)
+            .await
+            .unwrap();
+        let barrier = Frame::new(FrameData::Flush(pipecat_core::FlushFrame {
+            returning: false,
+            origin: Some("inner-poll-guard".into()),
+        }));
+        let id = barrier.id;
+        worker
+            .sender()
+            .send(barrier, Direction::Downstream)
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while worker.recv().await.unwrap().frame.id != id {}
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            polls.load(Ordering::SeqCst),
+            1,
+            "completion was polled after silent source retirement inside the suspended select"
+        );
+        assert!(!source.capability().source_is_current());
+        worker.end().await.unwrap();
+        let (_, report) = worker.collect().await.unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
 }

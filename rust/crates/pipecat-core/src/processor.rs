@@ -115,6 +115,19 @@ pub(crate) struct ForwardingOrigin {
 pub struct InvocationFence {
     origins: Vec<(std::sync::Weak<Runtime>, usize, Option<u64>)>,
 }
+/// Keep upgraded runtimes outside any source/capability lock so their final
+/// destruction cannot reenter a source owner's revoke path under that lock.
+pub(crate) struct InvocationObservation {
+    origins: Vec<(Arc<Runtime>, usize, Option<u64>)>,
+}
+impl InvocationObservation {
+    pub(crate) fn is_current(&self) -> bool {
+        self.origins.iter().all(|(runtime, index, epoch)| {
+            !runtime.is_finished()
+                && epoch.is_none_or(|epoch| runtime.queues[*index].observed_generation() <= epoch)
+        })
+    }
+}
 impl std::fmt::Debug for InvocationFence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InvocationFence")
@@ -163,6 +176,18 @@ impl InvocationFence {
     /// Observes freshness; use `with_current` for synchronous local admission.
     pub fn is_current(&self) -> bool {
         self.with_current(|| ()).is_some()
+    }
+    /// Sample weak origins without acquiring runtime admission. Queue generation
+    /// observations use published atomic cutoffs. This is an observation, not an
+    /// admission guard: a concurrent retirement after it can win the next check.
+    pub(crate) fn observe(&self) -> Option<InvocationObservation> {
+        Some(InvocationObservation {
+            origins: self
+                .origins
+                .iter()
+                .map(|(runtime, index, epoch)| Some((runtime.upgrade()?, *index, *epoch)))
+                .collect::<Option<_>>()?,
+        })
     }
     /// Locks all source runtime admission gates in their canonical order. This
     /// fences local enqueue only; it cannot make a remote write atomic.
@@ -355,6 +380,16 @@ impl ProcessorContext {
             self.runtime.queues[self.index].generation() > epoch
                 || self.origins.iter().any(|origin| {
                     origin.runtime.queues[origin.index].generation() > origin.generation
+                })
+        })
+    }
+    /// Bound speculation observes queue cutoffs without acquiring queue locks
+    /// while holding source/capability locks. Preserve legacy None semantics.
+    pub(crate) fn source_is_stale_observed(&self, generation: Option<u64>) -> bool {
+        generation.is_some_and(|epoch| {
+            self.runtime.queues[self.index].observed_generation() > epoch
+                || self.origins.iter().any(|origin| {
+                    origin.runtime.queues[origin.index].observed_generation() > origin.generation
                 })
         })
     }
@@ -745,3 +780,263 @@ impl FrameProcessor for IdentityProcessor {
 
 #[cfg(test)]
 mod causal_scope_tests;
+// Append only to processor.rs in an immutable independent review tree.
+// Source-only preparation for lock addendum18fa4874; no native execution yet.
+#[cfg(test)]
+mod independent_queue_observation_review {
+    use super::*;
+    use crate::{
+        DetailedFunctionCallResultFrame, DirectedFrame, EagerSourceSessionOwner,
+        FunctionCallResultProperties, LlmContextData, LocalAsyncCallback, NativeEagerConsumer,
+        Pipeline, PipelineConfig, PipelineWorker, SpeculationOwner, ToolSet, TranscriptionFrame,
+    };
+    use std::sync::{mpsc, Mutex};
+    use std::time::Duration;
+
+    #[derive(Default)]
+    struct Capture(Mutex<Option<ProcessorContext>>);
+    #[crate::async_trait]
+    impl FrameProcessor for Capture {
+        fn name(&self) -> &str {
+            "independent-queue-observation"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            context: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::Text(_)) {
+                *self.0.lock().unwrap() = Some(context.clone());
+            }
+            context.push(frame, direction).await
+        }
+    }
+    async fn fixture() -> (PipelineWorker, ProcessorContext) {
+        let capture = Arc::new(Capture::default());
+        let mut worker = Pipeline::new(vec![capture.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        worker.recv().await.unwrap();
+        worker
+            .sender()
+            .send(Frame::text("capture epoch"), Direction::Downstream)
+            .await
+            .unwrap();
+        worker.recv().await.unwrap();
+        let context = capture.0.lock().unwrap().take().unwrap();
+        assert!(
+            context.current_generation().is_some(),
+            "normal invocation required"
+        );
+        (worker, context)
+    }
+    fn transcript(eager: bool) -> FrameData {
+        let text = TranscriptionFrame {
+            text: "same".into(),
+            finalized: true,
+            ..Default::default()
+        };
+        if eager {
+            FrameData::EagerTranscription(text)
+        } else {
+            FrameData::Transcription(text)
+        }
+    }
+    fn context_data() -> LlmContextData {
+        LlmContextData {
+            messages: vec![],
+            tools: ToolSet::NotGiven,
+            tool_choice: None,
+        }
+    }
+    struct DropProbe {
+        owner: Option<EagerSourceSessionOwner>,
+        entered: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<bool>>,
+        rescued: mpsc::Sender<EagerSourceSessionOwner>,
+    }
+    impl DropProbe {
+        fn touch(&self) {}
+    }
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            self.entered.send(()).unwrap();
+            if self.release.get_mut().unwrap().recv().unwrap() {
+                drop(self.owner.take()); // Actual source-owner Drop occurs while Q remains held.
+            } else {
+                self.rescued.send(self.owner.take().unwrap()).unwrap();
+            }
+        }
+    }
+    #[derive(Clone, Copy, Debug)]
+    enum Operation {
+        Source,
+        Confirm,
+        Effect,
+    }
+
+    #[tokio::test]
+    async fn review_bound_observations_finish_while_real_callback_destructor_holds_queue() {
+        for operation in [Operation::Source, Operation::Confirm, Operation::Effect] {
+            for inherited in [false, true] {
+                for queued_interruption in [false, true] {
+                    let (worker, mut context) = fixture().await;
+                    let (origin_worker, origin) = fixture().await;
+                    if inherited {
+                        context.origins.push(ForwardingOrigin {
+                            runtime: origin.runtime.clone(),
+                            index: origin.index,
+                            generation: origin.current_generation().unwrap(),
+                        });
+                    }
+                    let queue = if inherited {
+                        origin.runtime.queues[origin.index].clone()
+                    } else {
+                        context.runtime.queues[context.index].clone()
+                    };
+                    queue.set_normal_paused(true);
+                    let source = match operation {
+                        Operation::Source => EagerSourceSessionOwner::from_context(4096, &context),
+                        _ => EagerSourceSessionOwner::new(4096),
+                    }
+                    .unwrap();
+                    let consumer = NativeEagerConsumer::new();
+                    let turn = source.begin_turn().unwrap();
+                    assert!(turn.claim_start(&consumer));
+                    let prediction = source.predict(&turn, transcript(true)).unwrap();
+                    let owner =
+                        SpeculationOwner::try_adopt_source_prediction(&prediction, &consumer)
+                            .unwrap();
+                    let capability = owner.capability();
+                    assert!(capability.claim_inference());
+                    assert!(
+                        capability.bind_admission(context.clone(), context.health().generation())
+                    );
+                    let receipt = source.offer_final(&turn, transcript(false)).unwrap();
+                    assert!(receipt.claim_final(&consumer));
+                    assert!(receipt.claim_stop(&consumer));
+                    if matches!(operation, Operation::Effect) {
+                        assert!(owner.confirm_source_with_context(
+                            &receipt,
+                            &consumer,
+                            context_data()
+                        ));
+                        assert!(capability.release_after_boundary());
+                        assert!(capability.admits_effect());
+                    }
+                    let (entered_tx, entered_rx) = mpsc::channel();
+                    let (release_tx, release_rx) = mpsc::channel();
+                    let (rescued_tx, rescued_rx) = mpsc::channel();
+                    let probe = DropProbe {
+                        owner: Some(source),
+                        entered: entered_tx,
+                        release: Mutex::new(release_rx),
+                        rescued: rescued_tx,
+                    };
+                    let callback = LocalAsyncCallback::new(move || {
+                        probe.touch();
+                        async { Ok(()) }
+                    });
+                    let frame = Frame::new(FrameData::FunctionCallResultDetailed(
+                        DetailedFunctionCallResultFrame {
+                            function_name: "review".into(),
+                            tool_call_id: "queued-owner".into(),
+                            arguments: serde_json::Value::Null,
+                            result: serde_json::Value::Null,
+                            run_llm: None,
+                            properties: Some(FunctionCallResultProperties {
+                                on_context_updated: Some(callback),
+                                ..Default::default()
+                            }),
+                            error: None,
+                        },
+                    ))
+                    .with_interruptible(true);
+                    queue
+                        .try_send(DirectedFrame::new(frame, Direction::Downstream))
+                        .unwrap();
+                    let reset_queue = queue.clone();
+                    let reset = std::thread::spawn(move || {
+                        if queued_interruption {
+                            reset_queue
+                                .try_send(DirectedFrame::new(
+                                    Frame::interruption(),
+                                    Direction::Downstream,
+                                ))
+                                .unwrap();
+                        } else {
+                            assert_eq!(reset_queue.reset_interruptible(), 1);
+                        }
+                    });
+                    entered_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+                    let (answer_tx, answer_rx) = mpsc::channel();
+                    let observation = std::thread::spawn(move || {
+                        let allowed = match operation {
+                            Operation::Source => prediction.is_live(),
+                            Operation::Confirm => owner.confirm_source_with_context(
+                                &receipt,
+                                &consumer,
+                                context_data(),
+                            ),
+                            Operation::Effect => capability.admits_effect(),
+                        };
+                        answer_tx.send(allowed).unwrap();
+                        // Keep the aggregator owner alive until after the observation returned.
+                        owner
+                    });
+                    let before_release = answer_rx.recv_timeout(Duration::from_secs(2));
+                    let completed_before_release = before_release.is_ok();
+                    release_tx.send(completed_before_release).unwrap();
+                    reset.join().unwrap();
+                    let owner = observation.join().unwrap();
+                    if !completed_before_release {
+                        drop(rescued_rx.recv().unwrap());
+                    }
+                    queue.set_normal_paused(false);
+                    drop(owner);
+                    worker.end().await.unwrap();
+                    origin_worker.end().await.unwrap();
+                    tokio::time::timeout(Duration::from_secs(3), worker.collect())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    tokio::time::timeout(Duration::from_secs(3), origin_worker.collect())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(before_release.ok(), Some(false),
+                        "bound observation waited for Q or missed published cutoff: {operation:?}, inherited={inherited}, queued={queued_interruption}");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn review_observed_staleness_keeps_none_and_inherited_epoch_rules() {
+        let (worker, mut context) = fixture().await;
+        let (origin_worker, origin) = fixture().await;
+        let epoch = context.current_generation();
+        context.origins.push(ForwardingOrigin {
+            runtime: origin.runtime.clone(),
+            index: origin.index,
+            generation: origin.current_generation().unwrap(),
+        });
+        assert!(!context.source_is_stale_observed(epoch));
+        origin.runtime.queues[origin.index].reset_interruptible();
+        assert!(context.source_is_stale_observed(epoch));
+        assert!(
+            !context.source_is_stale_observed(None),
+            "None must retain existing origins-skip behavior"
+        );
+        assert_eq!(
+            context.source_is_stale_observed(epoch),
+            context.source_is_stale(epoch)
+        );
+        worker.end().await.unwrap();
+        origin_worker.end().await.unwrap();
+        worker.collect().await.unwrap();
+        origin_worker.collect().await.unwrap();
+    }
+}

@@ -28,6 +28,14 @@ pub struct ProcessorHealthGeneration {
 #[derive(Clone)]
 pub struct ProcessorHealth(Arc<HealthInner>);
 
+#[derive(Clone)]
+pub(crate) struct WeakProcessorHealth(Weak<HealthInner>);
+impl WeakProcessorHealth {
+    pub(crate) fn upgrade(&self) -> Option<ProcessorHealth> {
+        self.0.upgrade().map(ProcessorHealth)
+    }
+}
+
 struct HealthInner {
     read_only: bool,
     changed: watch::Sender<ProcessorHealthSnapshot>,
@@ -55,6 +63,9 @@ impl Default for ProcessorHealth {
 }
 
 impl ProcessorHealth {
+    pub(crate) fn downgrade(&self) -> WeakProcessorHealth {
+        WeakProcessorHealth(Arc::downgrade(&self.0))
+    }
     pub fn new(is_usable: bool) -> Self {
         let (changed, _) = watch::channel(ProcessorHealthSnapshot {
             is_usable,

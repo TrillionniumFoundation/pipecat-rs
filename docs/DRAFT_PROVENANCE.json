@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "d021c4db10f56a6c1651bf9597390824773a5d43",
-  "source_tree": "ccb5a4cdd6d85f632d119040b2743629ee165bd2",
+  "source_commit": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
+  "source_tree": "33b0064835ed5a14f49dbf2a14b5c1d042b33f12",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -109,6 +109,11 @@
       "commit": "d021c4db10f56a6c1651bf9597390824773a5d43",
       "tree": "ccb5a4cdd6d85f632d119040b2743629ee165bd2",
       "subject": "Add bounded Cartesia Turns client and committed-turn processor"
+    },
+    {
+      "commit": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
+      "tree": "33b0064835ed5a14f49dbf2a14b5c1d042b33f12",
+      "subject": "Add source-bound eager turn ownership and lock-safe admission"
     }
   ],
   "scope_evidence": [
@@ -205,6 +210,21 @@
       "qualified_source_manifest_sha256": "3a5287cb6ee7ffaf08637a234fb3375c7ffbaeaf352d1551cfc5561b3f394bd1",
       "owner_patch_sha256": "c5c98a49f00c90aace719cd0c5e55fb302d38720732819f5d2d0d41c4eb53e3b",
       "independent_tests_patch_sha256": "708ac261f6693565dc0f903f4959faef73c38bcf3e6a9cdacb6ef1657e74d211"
+    },
+    {
+      "scope": "native_eager_source_session_prerequisite",
+      "report_sha256": "a31679b9487b75cd1129b8e83b358083b17bd8e252f9a8414b54fd9471d3adaa",
+      "qualified_source_manifest_sha256": "3b21abe33c45c8aacca42d3a139814f70c8954decb8a833286dd6f45c1e9120c",
+      "qualified_source_archive_sha256": "9f5ee5b3be818d987657d7e4007c44b09bc368d96ceb71235f6108c238286c76",
+      "combined_rust_code_patch_sha256": "3a2ee635b3dd05c9fd9c02b2fccd20a57452d91aeb6d74dad7d8166af6a884af",
+      "reviewer_test_overlay_sha256": "ff05628963e10804c535b00bbff95ae010f529597be0614c5c6bfa7bcf132d28",
+      "private_handoff_docs_not_integrated": [
+        "EAGER_API_HANDOFF.md",
+        "EAGER_COVERAGE.md",
+        "EAGER_LOCK_AUDIT.md",
+        "EAGER_SOURCE_MAP.md",
+        "EAGER_VALIDATION_PLAN.md"
+      ]
     }
   ],
   "omitted_native_administrative_paths": [
@@ -220,17 +240,17 @@
     "src/pipecat/audio/vad/data/silero_vad.onnx",
     "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
   ],
-  "raw_source_entries": 1469,
+  "raw_source_entries": 1478,
   "readme_bytes": 0,
   "web_rtc_diagnostic": "INCOMPLETE_IN_THIS_ENVIRONMENT_NO_RETRY_OR_REROUTE",
   "new_execution": "NONE",
   "release_ready": false,
   "previous_public_draft": {
     "branch": "draft/native-reviewed-2026-10-10-fcf1752",
-    "commit": "301610999e0ecb3432c28356324e696105f41a2d",
-    "tree": "4de4c9abdbbbfcd4da5fec2d2179e18ac6e230ae",
-    "canonical_source": "edae99e6741e8675376497f8736e49e8d4203926",
-    "update_requires_expected_head": "301610999e0ecb3432c28356324e696105f41a2d"
+    "commit": "6293c2047c5435d73eec8a0c9c1dfb28536e27c0",
+    "tree": "baf5853f0f2c3ac5968704414f15a487f97a40c6",
+    "canonical_source": "d021c4db10f56a6c1651bf9597390824773a5d43",
+    "update_requires_expected_head": "6293c2047c5435d73eec8a0c9c1dfb28536e27c0"
   },
   "voicemail_scoped_results": {
     "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
@@ -287,5 +307,58 @@
     "live_provider_qualified": false,
     "combined_projection_full_gate": "NOT_RUN",
     "counts_are_source_bound_and_overlap": true
+  },
+  "eager_source_prerequisite_scoped_results": {
+    "accepted_scope": "Native source-session prerequisite only; production Cartesia eager remains disabled",
+    "reviewed_source_file_count_including_private_docs": 3434,
+    "canonical_source_files_matched_by_root": 3429,
+    "accepted_rust_paths": 20,
+    "positive_tests": {
+      "initial_main": 744,
+      "initial_turns": 596,
+      "initial_native_sender": 5,
+      "fresh_restored_main": 744,
+      "fresh_restored_turns": 596,
+      "fresh_restored_native_sender": 5,
+      "distinct_selected_total": 1345,
+      "new_reviewer_definitions_included": 29
+    },
+    "strict_clippy": {
+      "six_main_packages_lib_and_tests": "passed initially and fresh restored",
+      "runner_production_lib_only": "passed initially and fresh restored",
+      "runner_cfg_test_separately_linted": false
+    },
+    "turns_doc_tests": {
+      "tests": 0,
+      "status": "passed initially and fresh restored"
+    },
+    "controls": {
+      "distinct_mutants_with_intended_failures": 24,
+      "compilations": 26,
+      "behavioral_runs": 25,
+      "preserved_uncredited_masked_selector_survivors": 1,
+      "preserved_pre_run_helper_failures": 1,
+      "each_qualifying_compile_exit": 0,
+      "each_qualifying_behavioral_exit": 101
+    },
+    "failure_corrections_preserved": [
+      "Reviewer-v1 strict Clippy test-only single-pattern match; approved if-let repair and fresh reviewer-v2 passes",
+      "Bound-effect helper parser exit2 after compilation; no behavioral credit; frozen corrected helper retry on identical mutant source fails intended assertion",
+      "Exact-turn primary selector survived because retained Scoped predicate masked removed identity; corrected live-A/Scoped-B HTTP selector independently fails intended request assertion"
+    ],
+    "production_cartesia_eager_enabled": false,
+    "full_provider_signed_schedule_matrix_qualified": false,
+    "new_bound_reverse_lock_edge_removed": true,
+    "baseline_unbound_c_to_q_lock_hazard_resolved": false,
+    "other_unresolved_baselines": [
+      "Generic runtime-admission reentry",
+      "OutputGate mid-flush existing-owner cancellation",
+      "Global epoch wrap behavior"
+    ],
+    "queue_health_check_semantics": "Admission observations, not atomic multi-resource snapshot or remote rollback",
+    "smart_turn_onnx_pipeline": "NOT_RUN",
+    "combined_projection_full_gate": "NOT_RUN",
+    "counts_are_source_bound_and_overlap": true,
+    "new_native_execution_for_projection": false
   }
 }

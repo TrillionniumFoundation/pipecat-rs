@@ -94,6 +94,7 @@ pub struct Frame {
     pipeline_pts: bool,
     native_llm_continuation: Option<Arc<crate::NativeLlmContinuation>>,
     native_speculation: Option<crate::NativeSpeculation>,
+    native_eager_source: Option<NativeEagerSourceFrame>,
     pub(crate) native_realtime_context: Option<Arc<crate::NativeRealtimeContextCause>>,
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
     native_tool_timeout_projected: bool,
@@ -102,6 +103,13 @@ pub struct Frame {
     pub(crate) observed_runtimes: crate::observer::ObservedRuntimes,
     pub(crate) interruption_epoch: Option<Arc<AtomicU64>>,
     pub(crate) error_origin: Option<Arc<crate::ProcessorErrorOrigin>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeEagerSourceFrame {
+    source: crate::NativeEagerSource,
+    // Start and Stop each seal their actual/proposed form at attachment.
+    proposed_boundary: Option<bool>,
 }
 
 /// Opaque identity of one native logical frame. Clones preserve it; duplicate
@@ -234,6 +242,7 @@ impl<'de> Deserialize<'de> for Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_eager_source: None,
             native_realtime_context: None,
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
@@ -254,6 +263,7 @@ impl PartialEq for Frame {
             && self.pipeline_pts == other.pipeline_pts
             && self.native_llm_continuation == other.native_llm_continuation
             && self.native_speculation == other.native_speculation
+            && self.native_eager_source == other.native_eager_source
             && self.native_realtime_context == other.native_realtime_context
             && self.native_tool_outcome == other.native_tool_outcome
             && self.native_tool_timeout_projected == other.native_tool_timeout_projected
@@ -358,6 +368,65 @@ impl Frame {
     pub fn take_native_speculation(&mut self) -> Option<crate::NativeSpeculation> {
         self.native_speculation.take()
     }
+    /// Attach source authority only to the downstream sibling after creating
+    /// any broadcast pair. The carrier and its immutable payload stay native.
+    pub fn set_native_eager_source(
+        &mut self,
+        source: crate::NativeEagerSource,
+    ) -> Result<(), crate::ProcessorError> {
+        if self.native_eager_source.is_some() {
+            return Err(crate::ProcessorError::new(
+                "native eager source already attached",
+            ));
+        }
+        source.validate(&self.data, None)?;
+        let proposed_boundary = matches!(
+            source,
+            crate::NativeEagerSource::Start(_) | crate::NativeEagerSource::Stop { .. }
+        )
+        .then(|| {
+            matches!(
+                self.data,
+                FrameData::ProposedUserStartedSpeaking | FrameData::ProposedUserStoppedSpeaking
+            )
+        });
+        self.native_eager_source = Some(NativeEagerSourceFrame {
+            source,
+            proposed_boundary,
+        });
+        Ok(())
+    }
+    pub fn native_eager_source(&self) -> Option<&crate::NativeEagerSource> {
+        self.native_eager_source
+            .as_ref()
+            .map(|carrier| &carrier.source)
+    }
+    /// Consume only at the source-aware downstream user aggregator. Revalidate
+    /// role and payload because public fields may have changed since attachment.
+    pub fn take_native_eager_source(
+        &mut self,
+        direction: Direction,
+    ) -> Result<Option<crate::NativeEagerSource>, crate::ProcessorError> {
+        if let Some(carrier) = &self.native_eager_source {
+            carrier.source.validate(&self.data, Some(direction))?;
+            if carrier.proposed_boundary.is_some_and(|proposed| {
+                proposed
+                    != matches!(
+                        self.data,
+                        FrameData::ProposedUserStartedSpeaking
+                            | FrameData::ProposedUserStoppedSpeaking
+                    )
+            }) {
+                return Err(crate::ProcessorError::new(
+                    "native eager source boundary payload was changed",
+                ));
+            }
+        }
+        Ok(self
+            .native_eager_source
+            .take()
+            .map(|carrier| carrier.source))
+    }
     /// Attach validated provider history only to its matching native boundary.
     /// Existing semantic history cannot be silently replaced.
     pub fn set_native_llm_continuation(
@@ -401,6 +470,9 @@ impl Frame {
     pub fn require_no_native_llm_continuation(
         &self,
     ) -> Result<(), crate::NativeLlmContinuationError> {
+        if self.native_eager_source.is_some() {
+            return Err(crate::NativeLlmContinuationError::UnconsumedEagerSource);
+        }
         if self.native_tool_batch.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedToolBatch);
         }
@@ -482,6 +554,7 @@ impl Frame {
             pipeline_pts: false,
             native_llm_continuation: None,
             native_speculation: None,
+            native_eager_source: None,
             native_realtime_context: None,
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
