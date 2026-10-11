@@ -1,8 +1,8 @@
 {
   "status": "UNQUALIFIED_WORKING_BRANCH_SOURCE",
   "full_gate": "NOT_RUN",
-  "source_commit": "6fc971420127dd10c5baac309dc354f32638723e",
-  "source_tree": "bd5b9936888fc1f7a0d39c86569fcacccde07b54",
+  "source_commit": "839e95528f8319e2f1d1017331608fa29d677556",
+  "source_tree": "69657601d51fe702cef7742ec765feb929410d44",
   "static_original_reference": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
   "public_main_baseline": {
     "commit": "11c9927e0595ec9474fb9157ac56166313b8ac8e",
@@ -119,6 +119,11 @@
       "commit": "6fc971420127dd10c5baac309dc354f32638723e",
       "tree": "bd5b9936888fc1f7a0d39c86569fcacccde07b54",
       "subject": "Add opt-in source-bound Cartesia Turns eager adapter"
+    },
+    {
+      "commit": "839e95528f8319e2f1d1017331608fa29d677556",
+      "tree": "69657601d51fe702cef7742ec765feb929410d44",
+      "subject": "Document opt-in Cartesia eager ownership and lifecycle boundaries"
     }
   ],
   "scope_evidence": [
@@ -243,6 +248,14 @@
       "combined_patch_sha256": "dc34617987b7316507ca1768cd1c56ad684df2d8f2c6c87eaf20a49ec6707245",
       "independent_execution_ledger_sha256": "85e9112b66be89f446ad0278a7b3613693940676f4e07a973531fd37226985cf",
       "production_identity_sha256": "3311ad647bc887806d445681973f4e0b03eeb1f8001181c705a64dce3e147ac4"
+    },
+    {
+      "scope": "cartesia_turns_eager_documentation_correction",
+      "canonical_source": "839e95528f8319e2f1d1017331608fa29d677556",
+      "reviewed_patch_sha256": "dbe424d96a50ec40398ffc5ef07722d3414978dfdaedc21653c13a7a39dc0cf9",
+      "independent_report_sha256": "1b40bd29dd023acc688eb82e546460efb738226059332eb738e6f85596f9df64",
+      "static_checks_sha256": "e5f80fb860d759fcbb0a3bd05b787f5b91f439d022f188b40f5c1871508a36b1",
+      "new_native_execution": false
     }
   ],
   "omitted_native_administrative_paths": [
@@ -265,10 +278,10 @@
   "release_ready": false,
   "previous_public_draft": {
     "branch": "draft/native-reviewed-2026-10-10-fcf1752",
-    "commit": "2c6bf52f32c3893522469c3e26b01b1b912ca2bc",
-    "tree": "7535e6a951491f1719a5407ff43297d376e42ccc",
-    "canonical_source": "855775ef87e74ebdcae6a41508d5360f021b8cb8",
-    "update_requires_expected_head": "2c6bf52f32c3893522469c3e26b01b1b912ca2bc"
+    "commit": "1132b7c0809f2e511ac0f9792e588e091dec2fd6",
+    "tree": "f7a984ac75661b00bb58dfb1e8da88fdca895634",
+    "canonical_source": "6fc971420127dd10c5baac309dc354f32638723e",
+    "update_requires_expected_head": "1132b7c0809f2e511ac0f9792e588e091dec2fd6"
   },
   "voicemail_scoped_results": {
     "accepted_scope": "Optional native single-session CompactTts generated-speech admission; not SpokenHistory integration",
@@ -499,9 +512,33 @@
       "path": "rust/crates/pipecat-streaming-speech/CARTESIA_TURNS.md",
       "stale_statement": "no eager-enabled API",
       "current_status": "The cartesia-turns-eager feature and with_eager_turns builder now exist; committed-only remains the default",
-      "source_only_documentation_correction": "pending a separate canonical commit; exact accepted source is unchanged"
+      "source_only_documentation_correction": "Completed by the source-only documentation commit 839e95528f8319e2f1d1017331608fa29d677556; historical native evidence remains pinned to its original source, with no new execution",
+      "historical_checkpoint": "6fc971420127dd10c5baac309dc354f32638723e",
+      "previous_source_only_documentation_correction": "pending a separate canonical commit; exact accepted source is unchanged"
     },
     "counts_overlap_and_are_source_bound": true,
     "author_and_independent_results_are_separate": true
+  },
+  "cartesia_turns_eager_documentation_scoped_results": {
+    "canonical_source": "839e95528f8319e2f1d1017331608fa29d677556",
+    "source_tree": "69657601d51fe702cef7742ec765feb929410d44",
+    "parent_source": "6fc971420127dd10c5baac309dc354f32638723e",
+    "accepted_paths": [
+      "rust/crates/pipecat-streaming-speech/CARTESIA_TURNS.md",
+      "rust/crates/pipecat-turns/EAGER.md"
+    ],
+    "change_type": "source-only documentation correction",
+    "static_review": "accepted corrected two-document patch",
+    "insertions": 89,
+    "deletions": 19,
+    "reviewed_patch_sha256": "dbe424d96a50ec40398ffc5ef07722d3414978dfdaedc21653c13a7a39dc0cf9",
+    "source_bytes_match_reviewed_documents": true,
+    "description": "Documents explicit feature/builder/consumer opt-in, Start mapping versus consumer adoption, confirmation authority transfer, normal-reader EOF retention, suppressed interim/UI projection and same-socket provider-identity limits",
+    "implementation_or_dependency_changes": false,
+    "new_native_execution": false,
+    "new_python_or_provider_execution": false,
+    "combined_projection_full_gate": "NOT_RUN",
+    "historical_native_evidence_requalified": false,
+    "historical_webrtc_release_blocker_unchanged": true
   }
 }

@@ -1,8 +1,10 @@
-# Cartesia Turns: bounded committed-turn adapter
+# Cartesia Turns: bounded committed and opt-in eager turns
 
 This adapter implements the pinned Cartesia v2 Turns source contract from
 `af9f9da9d7afddaa8811c0e0251b32566c980bdf`, separately from Live STT and TTS.
-The native base is `edae99e6741e8675376497f8736e49e8d4203926`.
+The committed-only native base is `edae99e6741e8675376497f8736e49e8d4203926`.
+Committed-only processing is the default; source-bound eager processing requires
+the explicit feature and topology described below.
 It does not establish live-provider compatibility, recognition quality, provider
 billing, SDK/callback compatibility, or complete Python feature parity.
 
@@ -44,24 +46,82 @@ empty end leaves usage for a later nonempty end or successful graceful drain.
 
 `CartesiaTurnsProcessor` fixes the speaker with `with_user_id`, controls input
 passthrough with `with_audio_passthrough`, and recommends External strategies with
-`with_should_interrupt`. Start precedes metadata. TTFS P99 is zero; metadata and
-start/stop proposals use fresh linked broadcast siblings. Targeted metadata
-requests replay the recommendation. Explicit aggregator policies still win.
+`with_should_interrupt`. Pipeline Start precedes metadata, which reports TTFS P99
+as zero. Metadata uses fresh linked broadcast siblings, as do start/stop proposals
+in committed-only mode. Eager-mode source-bearing proposals are downstream-only.
+Targeted metadata requests replay the recommendation; metadata does not override
+explicit aggregator policies.
 
 Start is a system-priority proposal. The processor awaits the existing bounded
 pipeline flush roundtrip before admitting subsequent turn outputs, so an External
 start's interruption does not purge its immediately following transcript. The
 aggregator decides interruption; the service never emits its own duplicate.
-Nonempty committed end publishes usage, finalized=true English transcription,
-then a normal-priority stop proposal. Interim text is cumulative preview. Eager
-and resume remain raw-session observations only. There is no eager-enabled API;
-`enable_eager_end_of_turn` settings updates are rejected until a separate eager
-integration gate is qualified.
+Nonempty committed end publishes usage (when enabled), finalized=true English
+transcription, then a normal-priority stop proposal. In the default committed-only
+mode, interim text is cumulative preview, while eager and resume remain raw-session
+observations only. The optional eager mode below changes that projection.
+`enable_eager_end_of_turn` runtime settings updates remain rejected; select
+eager behavior through the processor constructor API.
 
 An empty end emits stop without an empty final/user message. The default External
 stop strategy waits for final text; an empty turn may therefore close through the
 aggregator's existing five-second outer watchdog, not immediately. The adapter
 never fabricates empty final text to force completion.
+
+## Opt-in source-bound eager processing
+
+Enable the non-default `pipecat-streaming-speech` feature
+`cartesia-turns-eager` and construct
+`CartesiaTurnsProcessor::new(client).with_eager_turns()`. Also set
+`UserAggregatorConfig.eager` to `Some(EagerUserTurnConfig::default())` (or a
+custom bounded configuration) on the native user aggregator and use the supported
+`pipecat-services::LlmProcessor` topology described in
+[EAGER.md](../pipecat-turns/EAGER.md). The feature alone does not enable the
+processor, and the processor does not configure its consumers.
+Responses, realtime and separate provider-specific inference processors are
+outside this integration.
+
+Each eager-enabled processor socket owns a local source-session authority. The
+adapter settles the Start flush barrier before mapping predictions; downstream
+adoption requires the owning consumer's exact Start claim. Mapped eager-end,
+resume, final and stop carry exact local turn/prediction/commit receipts. A
+matching final plus the matching stop claim can confirm the existing speculative
+inference; held output still requires the downstream LLM stop boundary.
+
+Destructive source retirement, replacement and cancellation revoke untransferred
+rights. Active-session health-generation changes also deny stale source admission.
+Successful confirmation transfers authority to the speculation owner: later
+source-only revocation or source-health changes do not cancel transferred output.
+The downstream owner's lifecycle, LLM output gate and native tool/flow effect
+admission still apply. Buffering alone is not an external-effect safety boundary;
+local cancellation cannot undo an external effect from an already admitted poll.
+
+Successful normal reader completion at EOF preserves already-offered final/stop
+receipt rights still held by native queues or consumer stages, while retiring
+predictions without such a final. Adapter bookkeeping alone cannot preserve them.
+Later explicit retirement can still revoke unconsumed source rights; it cannot
+roll back transferred speculation or an ordinary final already consumed by the
+aggregator.
+
+In eager mode, the processor suppresses its interim-transcript output and raw
+upstream proposed-speaking events. Applications lose this adapter's incremental
+transcript/UI previews; ordinary speaking events admitted by the consumer remain
+available. RTVI suppresses unconsumed source-bearing frames rather than stripping
+their authority into a client event. No replacement interim stream is synthesized.
+
+These identities establish local ownership, not authenticated provider turn
+identity. Provider messages contain no authenticated turn key: a delayed event
+on the same socket that still fits the current event sequence cannot always be
+distinguished from a current event. Cross-socket retirement does not remove that
+same-socket ambiguity. Automatic reconnect/replay is still absent.
+
+Scoped native contracts are recorded in `tests/cartesia_turns_eager.rs`, its
+reviewer modules and the source-aware core/turn/service tests. They do not clear
+the full-workspace release gate, which remains blocked. Live-provider, browser,
+physical-device and platform qualification remain separate; WebRTC work remains
+stopped under the existing platform restriction.
+
+## Session lifecycle and settings
 
 The actor, readiness result, PCM admission, each output segment and errors are
 fenced by socket serial, raw health generation and owner lifecycle. Each new PCM

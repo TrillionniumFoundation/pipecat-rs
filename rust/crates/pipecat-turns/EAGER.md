@@ -24,11 +24,15 @@ with external start/stop policies, preserving the interruption setting. Put a
 native `LlmProcessor` after the user half, and the assistant half after delivery.
 The gate is built into the LLM; no downstream buffering processor is required.
 
-A provider adapter drives `EagerEndOfTurn` with detailed STT transcripts. The
-helper preserves user identity, language and provider payload. Native STT
-provider adapters do not automatically enable eager protocol signals; an
-application must explicitly select and drive this lifecycle. The helper does
-not manufacture a prediction from ordinary interim transcripts.
+A provider adapter can drive `EagerEndOfTurn` with detailed STT transcripts. The
+helper preserves user identity, language and provider payload; it does not
+manufacture a prediction from ordinary interim transcripts. The separately
+opted-in [Cartesia Turns adapter](../pipecat-streaming-speech/CARTESIA_TURNS.md#opt-in-source-bound-eager-processing)
+drives source-bound eager signals through
+`CartesiaTurnsProcessor::with_eager_turns`, behind the non-default
+`cartesia-turns-eager` feature. Its exact local source ownership, suppressed
+interim/UI previews, same-socket provider ambiguity and qualification limits
+are documented there. Other adapters require their own explicit integration.
 `EagerEndOfTurn::with_match_policy` carries an explicit matching policy into the
 helper's recommended eager configuration.
 
@@ -51,12 +55,18 @@ persistent context from that committed snapshot. A stop boundary must then pass
 the LLM before held output is released. This also handles a system stop boundary
 that overtakes the normal-priority provisional context.
 
-A mismatch, source withdrawal, new turn, mute, context revision, deadline,
-interruption, owner drop, or terminal lifecycle invalidates the prediction.
-Matching text cannot revive a withdrawn or expired owner. Tool intent before
-confirmation withdraws the entire prediction; the eventual final transcript
+A mismatch, unconfirmed source withdrawal, new turn, mute, context revision,
+deadline, interruption, owner drop, or terminal lifecycle invalidates the
+prediction. Matching text cannot revive a withdrawn or expired owner. Tool intent
+before confirmation withdraws the entire prediction; the eventual final transcript
 runs an ordinary fresh request. Confirmed tool intent remains ordered behind
 the stop boundary.
+
+For source-bound input, confirmation transfers authority to `SpeculationOwner`;
+later source-only revocation or source-health changes do not cancel transferred
+output. The owner's lifecycle and downstream output/effect admission still apply.
+The Cartesia adapter documents its separate normal-reader-EOF preservation of
+already-offered final rights.
 
 Normalized matching performs NFKC, full default case folding, apostrophe
 removal (`'`, U+2019, U+02BC), Unicode letter/number/underscore preservation and
