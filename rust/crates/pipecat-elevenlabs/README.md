@@ -50,6 +50,56 @@ Dropping a session requests cancellation and leaves only the bounded protocol
 cleanup task. Dropping all senders does not implicitly finish while the session
 still owns its sender; use `finish()` explicitly.
 
+## Realtime STT input audio and speaker identity
+
+The realtime processor accepts both `InputAudio` and `UserAudio`. The original
+downstream frame envelope is forwarded unchanged when audio passthrough is enabled;
+that switch covers both input variants, including muted and unusable input.
+Upstream input retains unconditional forwarding. Upstream, output and TTS audio
+do not enter the provider input path. Valid nonempty PCM
+uses the existing mono/rate validation, base64 JSON wire format and usage metrics.
+
+By default, transcript identity is the latest input speaker consumed by the
+session supervisor: `UserAudio` selects its UTF-8 user ID and plain `InputAudio`
+resets it to empty. Partial and both supported final transcript variants use
+that current identity. This is not per-chunk correlation or provider diarization;
+provider word-level `speaker_id` remains in the result object unchanged.
+`with_user_id`, including an explicitly empty string, remains a fixed native
+override. Ignored per-frame IDs are neither cloned nor charged against its bound.
+
+In dynamic mode, empty input advances identity without sending an audio chunk,
+commit or usage metric. An idle processor retains at most one bounded identity
+seed without opening a connection. Fixed-override empty input retains its no-op
+behavior even when the command queue is full. Empty input retains the geometry
+validation bypass. Muted, unusable, invalid, oversized and queue-rejected input
+never adopts that frame's ID; health retirement can still discard the previous
+identity. The logical lengths of PCM and dynamic UTF-8 ID bytes together must fit
+`limits.max_message_bytes`; PCM also retains its independent
+`max_audio_chunk_bytes` cap. This is not an allocation-capacity or process-memory
+bound: frame envelopes and existing context IDs are outside this budget, and
+configured fixed IDs retain their existing uncapped length contract. The lower
+session separately checks the actual
+base64-plus-JSON message size, so admitted PCM may still fail asynchronously at
+that wire bound. No chunk splitting or resampling is added.
+
+Command admission, supervisor consumption and provider socket effects are
+separate boundaries. During a healthy settings rotation, the old session drains
+with its last consumed identity; queued input changes identity only when the
+replacement session consumes it. Health retirement and cleanup discard the idle
+seed and queued commands. A newly created actor uses its fixed override or the
+latest accepted idle seed, falling back to empty identity; it does not inherit the
+retired actor's consumed identity. This bounded generation behavior differs from Python's shared
+service-level `_user_id`, including its final callbacks' tracing/usage await
+points. There is no automatic recovery or replay: later usable nonempty input or
+an existing start-capable control can open a fresh session. HTTP/batch STT in
+`pipecat-speech` is outside this realtime slice.
+
+`tests/stt_audio_identity.rs` checks authenticated real loopback WebSockets,
+manual commit barriers, raw/base64 message bounds, current-speaker consumption,
+fixed overrides, queue rejection, settings drain, cancellation and health
+retirement. These checks use synthetic provider responses; they do not establish
+live-provider acceptance or exact PCM-to-transcript acknowledgement.
+
 ## Bounds and failure handling
 
 `StreamingLimits` bounds input/event queue capacity, WebSocket frame/message

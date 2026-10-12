@@ -16,7 +16,10 @@ use std::sync::{
 };
 use tokio::sync::mpsc;
 enum Command {
-    Audio(AudioRawFrame),
+    Audio {
+        audio: AudioRawFrame,
+        user_id: Option<String>,
+    },
     Commit,
     Update(Box<ElevenLabsSttClient>),
     Finish,
@@ -25,11 +28,12 @@ struct State {
     client: ElevenLabsSttClient,
     input: Option<Input<Command>>,
     health_revision: u64,
+    idle_user_id: String,
 }
 pub struct ElevenLabsSttProcessor {
     state: Mutex<State>,
     health: ProcessorHealth,
-    user_id: String,
+    user_id: Option<String>,
     mute: AtomicBool,
     audio_passthrough: bool,
 }
@@ -40,15 +44,18 @@ impl ElevenLabsSttProcessor {
                 client,
                 input: None,
                 health_revision: 0,
+                idle_user_id: String::new(),
             }),
             health: ProcessorHealth::default(),
-            user_id: String::new(),
+            user_id: None,
             mute: AtomicBool::new(false),
             audio_passthrough: true,
         }
     }
+    /// Fix the speaker on all results, including an explicitly empty ID.
+    /// Without this override, accepted input audio supplies the current speaker.
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
-        self.user_id = user_id.into();
+        self.user_id = Some(user_id.into());
         self
     }
     pub fn with_audio_passthrough(mut self, enabled: bool) -> Self {
@@ -81,6 +88,7 @@ impl ElevenLabsSttProcessor {
             if let Some(input) = state.input.take() {
                 input.cancel.cancel();
             }
+            state.idle_user_id.clear();
         }
         if let Some(input) = &state.input {
             input.try_send(Command::Update(Box::new(candidate.clone())), false)?;
@@ -100,6 +108,7 @@ impl ElevenLabsSttProcessor {
             if let Some(input) = state.input.take() {
                 input.cancel.cancel();
             }
+            state.idle_user_id.clear();
             state.health_revision = snapshot.revision;
         }
         Ok(())
@@ -139,7 +148,10 @@ impl ElevenLabsSttProcessor {
             finished: Arc::new(Mutex::new(false)),
         });
         let output = ctx.clone();
-        let user_id = self.user_id.clone();
+        let user_id = self
+            .user_id
+            .clone()
+            .unwrap_or_else(|| std::mem::take(&mut state.idle_user_id));
         let revision = self.health.snapshot().revision;
         let mut health = self.health.watch();
         ctx.spawn("elevenlabs-transcripts", false, async move {
@@ -156,7 +168,7 @@ impl ElevenLabsSttProcessor {
                         }
                     }
                 };
-                run(session, rx, &output, &user_id, revision).await
+                run(session, rx, &output, user_id, revision).await
             };
             tokio::select! { biased; _ = cancel.cancelled() => Ok(()), result = operation => result }
         })?;
@@ -252,10 +264,22 @@ impl FrameProcessor for ElevenLabsSttProcessor {
                     input.cancel.cancel();
                 }
             }
-            FrameData::InputAudio(audio) => {
-                if ctx.is_usable() && !self.mute.load(Ordering::Acquire) && !audio.audio.is_empty()
-                {
-                    let config = self.config_snapshot().map_err(processor_error)?;
+            _ => {}
+        }
+        let input_audio = match &frame.data {
+            FrameData::InputAudio(audio) => Some((audio, "")),
+            FrameData::UserAudio(user) => Some((&user.audio, user.user_id.as_str())),
+            _ => None,
+        };
+        if let Some((audio, speaker)) = input_audio {
+            if ctx.is_usable()
+                && !self.mute.load(Ordering::Acquire)
+                && (!audio.audio.is_empty() || self.user_id.is_none())
+            {
+                let config = self.config_snapshot().map_err(processor_error)?;
+                // Empty audio only advances dynamic identity, retaining the
+                // existing geometry bypass and fixed-override no-op behavior.
+                if !audio.audio.is_empty() {
                     audio.validate().map_err(|_| {
                         processor_error(StreamingError::Invalid("incomplete PCM16 samples"))
                     })?;
@@ -264,14 +288,55 @@ impl FrameProcessor for ElevenLabsSttProcessor {
                             "STT requires configured mono PCM16",
                         )));
                     }
-                    if audio.audio.len() > config.max_audio_chunk_bytes
-                        || audio.audio.len() > config.limits.max_message_bytes
+                }
+                let dynamic_speaker = self.user_id.is_none().then_some(speaker);
+                // Bound newly retained PCM and identity independently from the
+                // low-level base64/JSON wire-message limit. This budget excludes
+                // pre-existing context IDs, the forwarded frame envelope and
+                // the already configured fixed override.
+                if audio.audio.len() > config.max_audio_chunk_bytes
+                    || audio
+                        .audio
+                        .len()
+                        .checked_add(dynamic_speaker.map_or(0, str::len))
+                        .is_none_or(|bytes| bytes > config.limits.max_message_bytes)
+                {
+                    return Err(processor_error(StreamingError::TooLarge));
+                }
+                let user_id = dynamic_speaker.map(str::to_owned);
+                if audio.audio.is_empty() {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?;
+                    if let Some(input) = state
+                        .input
+                        .as_ref()
+                        .filter(|input| !input.tx.is_closed() && !input.cancel.is_cancelled())
                     {
-                        return Err(processor_error(StreamingError::TooLarge));
+                        input
+                            .try_send(
+                                Command::Audio {
+                                    audio: audio.clone(),
+                                    user_id,
+                                },
+                                false,
+                            )
+                            .map_err(processor_error)?;
+                    } else if let Some(user_id) = user_id {
+                        // Identity-only input cannot start a connection.
+                        state.idle_user_id = user_id;
                     }
+                } else {
                     self.start_session(ctx)?;
                     self.input()?
-                        .try_send(Command::Audio(audio.clone()), false)
+                        .try_send(
+                            Command::Audio {
+                                audio: audio.clone(),
+                                user_id,
+                            },
+                            false,
+                        )
                         .map_err(processor_error)?;
                     if ctx.configuration().enable_usage_metrics {
                         ctx.push(
@@ -284,11 +349,10 @@ impl FrameProcessor for ElevenLabsSttProcessor {
                         .await?;
                     }
                 }
-                if !self.audio_passthrough {
-                    return Ok(());
-                }
             }
-            _ => {}
+            if !self.audio_passthrough {
+                return Ok(());
+            }
         }
         ctx.push(frame, direction).await
     }
@@ -306,15 +370,14 @@ impl FrameProcessor for ElevenLabsSttProcessor {
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
-        if let Some(input) = self
+        let mut state = self
             .state
             .lock()
-            .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?
-            .input
-            .take()
-        {
+            .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?;
+        if let Some(input) = state.input.take() {
             input.cancel.cancel();
         }
+        state.idle_user_id.clear();
         Ok(())
     }
 }
@@ -322,7 +385,7 @@ async fn run(
     mut session: ElevenLabsSttSession,
     mut commands: mpsc::Receiver<Command>,
     ctx: &ProcessorContext,
-    user_id: &str,
+    mut user_id: String,
     revision: u64,
 ) -> Result<(), ProcessorError> {
     let mut closing = false;
@@ -334,23 +397,31 @@ async fn run(
         tokio::select! {
             biased;
             _ = health.changed() => return Ok(()),
-            event=session.next()=>match event {Some(Ok(event))=>emit(event,ctx,user_id,revision).await?,Some(Err(StreamingError::Cancelled))=>return Ok(()),Some(Err(error))=>{if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());},None=>return Ok(())},
+            event=session.next()=>match event {Some(Ok(event))=>emit(event,ctx,&user_id,revision).await?,Some(Err(StreamingError::Cancelled))=>return Ok(()),Some(Err(error))=>{if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());},None=>return Ok(())},
             command=commands.recv(),if !closing=>{
                 match command {
                     Some(Command::Update(client))=>{
-                        if let Err(error)=submit(&mut session,Command::Finish,ctx,user_id,revision).await? {if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}
+                        if let Err(error)=submit(&mut session,Command::Finish,ctx,&user_id,revision).await? {if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}
                         loop {
                             if !same_generation(ctx, revision) { return Ok(()); }
                             let event = tokio::select! { biased; _ = health.changed() => return Ok(()), event = session.next() => event };
                             let Some(event) = event else { break; };
-                            match event {Ok(event)=>emit(event,ctx,user_id,revision).await?,Err(error)=>{if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}}}
+                            match event {Ok(event)=>emit(event,ctx,&user_id,revision).await?,Err(error)=>{if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}}}
                         if !same_generation(ctx, revision) { return Ok(()); }
                         let replacement = tokio::select! { biased; _ = health.changed() => return Ok(()), result = client.connect() => result };
                         session=match replacement {Ok(session)=>session,Err(error)=>{if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}};
                     },
                     command=>{
-                        let command=command.unwrap_or(Command::Finish);closing=matches!(command,Command::Finish);
-                        if let Err(error)=submit(&mut session,command,ctx,user_id,revision).await? {if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}
+                        let command = match command.unwrap_or(Command::Finish) {
+                            Command::Audio { audio, user_id: next } => {
+                                if let Some(next) = next { user_id = next; }
+                                if audio.audio.is_empty() { continue; }
+                                Command::Audio { audio, user_id: None }
+                            }
+                            command => command,
+                        };
+                        closing=matches!(command,Command::Finish);
+                        if let Err(error)=submit(&mut session,command,ctx,&user_id,revision).await? {if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;return Ok(());}
                     }
                 }
             }
@@ -371,7 +442,7 @@ async fn submit(
     let sender = session.sender();
     let send = async {
         match command {
-            Command::Audio(audio) => sender.send_audio(audio).await,
+            Command::Audio { audio, .. } => sender.send_audio(audio).await,
             Command::Commit => sender.commit().await,
             Command::Finish => sender.finish().await,
             Command::Update(_) => unreachable!(),

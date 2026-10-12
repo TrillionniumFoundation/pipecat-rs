@@ -25,10 +25,16 @@ async fn write(socket: &mut WebSocketStream<TcpStream>, value: Value) {
         .unwrap();
 }
 async fn fixture(replies: Vec<Reply>) -> (CartesiaConfig, tokio::task::JoinHandle<()>) {
+    fixture_with_response_timeout(replies, Duration::from_secs(1)).await
+}
+async fn fixture_with_response_timeout(
+    replies: Vec<Reply>,
+    response_timeout: Duration,
+) -> (CartesiaConfig, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut config = CartesiaConfig::new("test-key", "voice");
     config.endpoint = format!("ws://{}/tts/websocket", listener.local_addr().unwrap());
-    config.limits.response_timeout = Duration::from_millis(100);
+    config.limits.response_timeout = response_timeout;
     config.limits.close_timeout = Duration::from_millis(20);
     let server = tokio::spawn(async move {
         for reply in replies {
@@ -163,9 +169,20 @@ async fn zero_cutoff_and_real_audio_reset_preserve_each_silent_error() {
         .await
         .unwrap();
         for i in 0..4 {
+            let frames = utterance(&mut worker).await;
             assert_eq!(
-                errors(&utterance(&mut worker).await).len(),
-                usize::from(i != 1)
+                errors(&frames).len(),
+                usize::from(i != 1),
+                "maximum={maximum} utterance={i} errors={:?} audio_frames={} health={:?}",
+                errors(&frames)
+                    .iter()
+                    .map(|frame| &frame.data)
+                    .collect::<Vec<_>>(),
+                frames
+                    .iter()
+                    .filter(|frame| matches!(frame.frame.data, FrameData::TtsAudio(_)))
+                    .count(),
+                worker.processor_health(0).unwrap().snapshot(),
             );
             assert_eq!(
                 worker.processor_health(0).unwrap().is_usable(),
@@ -191,7 +208,20 @@ async fn empty_chunk_counts_source_presence_without_pcm_or_clock_and_resets_stre
     for i in 0..3 {
         let frames = utterance(&mut worker).await;
         assert_silent(&frames);
-        assert_eq!(errors(&frames).len(), usize::from(i != 1));
+        assert_eq!(
+            errors(&frames).len(),
+            usize::from(i != 1),
+            "empty-presence utterance={i} errors={:?} audio_frames={} health={:?}",
+            errors(&frames)
+                .iter()
+                .map(|frame| &frame.data)
+                .collect::<Vec<_>>(),
+            frames
+                .iter()
+                .filter(|frame| matches!(frame.frame.data, FrameData::TtsAudio(_)))
+                .count(),
+            worker.processor_health(0).unwrap().snapshot(),
+        );
         assert!(worker.processor_health(0).unwrap().is_usable());
     }
     worker.end().await.unwrap();
@@ -219,4 +249,57 @@ async fn errors_and_timeouts_count_but_explicit_usable_true_resets_the_streak() 
     worker.end().await.unwrap();
     bounded(worker.collect()).await.unwrap();
     bounded(server).await.unwrap();
+}
+
+#[tokio::test]
+async fn unanswered_context_enforces_100ms_response_deadline_without_inventing_audio() {
+    let (config, server) =
+        fixture_with_response_timeout(vec![Reply::Timeout], Duration::from_millis(100)).await;
+    let mut worker = Pipeline::new(vec![Arc::new(CartesiaTtsProcessor::new(
+        CartesiaClient::new(config).unwrap(),
+    ))])
+    .start(PipelineConfig::default())
+    .await
+    .unwrap();
+    let frames = utterance(&mut worker).await;
+    let usable = worker.processor_health(0).unwrap().is_usable();
+    worker.end().await.unwrap();
+    let (tail, report) = bounded(worker.collect()).await.unwrap();
+    bounded(server).await.unwrap();
+
+    let reported: Vec<_> = frames
+        .iter()
+        .filter_map(|frame| match &frame.frame.data {
+            FrameData::Error(error) => Some(error),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(reported.len(), 2, "{reported:?}");
+    assert_eq!(
+        reported
+            .iter()
+            .filter(|error| error.category == ErrorCategory::Connectivity
+                && error.error == "Cartesia response timed out")
+            .count(),
+        1,
+        "{reported:?}"
+    );
+    assert_eq!(
+        reported
+            .iter()
+            .filter(|error| error.category == ErrorCategory::Unknown
+                && error.error.contains("completed with no audio"))
+            .count(),
+        1,
+        "{reported:?}"
+    );
+    assert_silent(&frames);
+    assert_silent(&tail);
+    assert_eq!(
+        frames.last().unwrap().frame.metadata.get("failed"),
+        Some(&json!(true))
+    );
+    assert!(usable);
+    assert_eq!(report.errors.len(), 2);
+    assert_eq!(report.state, WorkerState::Ended);
 }
