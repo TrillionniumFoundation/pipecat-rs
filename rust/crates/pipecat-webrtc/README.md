@@ -172,3 +172,16 @@ The README example is compile-checked as a Rust doctest.
 - [Opus Rust bindings](https://docs.rs/opus/0.4.0/opus/)
 - [Opus RTP payload specification, RFC 7587](https://www.rfc-editor.org/rfc/rfc7587)
 - Source compatibility: `src/pipecat/transports/smallwebrtc/{connection,request_handler,transport}.py`
+
+## ICE close/start race under independent review
+
+The historical combined draft gate observed a genuine UDP-candidate release
+failure during concurrent shutdown before data-channel readiness. A
+terminal-state publication patch is proposed in the locally vendored ICE
+transport and gatherer. It fences late callback state, dial/accept mux
+publication, and candidate generation after Close. The unchanged concurrent
+UDP-port regression remains the required native acceptance test; **no new
+full gate, live browser, NAT/TURN or hardware result is asserted by this
+source-only patch**. The original SCTP/DTLS fixes are retained. Details,
+upstream-file provenance and exact commands are in
+`../../vendor/webrtc-0.14.0/PATCHES.md`.

@@ -8,6 +8,9 @@
   },
   "locally_modified_upstream_files": [
     "src/dtls_transport/mod.rs",
+    "src/ice_transport/ice_gatherer.rs",
+    "src/ice_transport/ice_transport_test.rs",
+    "src/ice_transport/mod.rs",
     "src/sctp_transport/mod.rs"
   ],
   "package": "webrtc",

@@ -41,3 +41,52 @@ cannot be followed by late SRTP publication. Repeated sequential/concurrent
 close, Drop and handshake-close tests exercise both peers. The separate wrapper error classifier only accepts the exact SCTP
 reset-after-close aggregate after all transports report Closed; mixed errors
 remain failures.
+
+## Pending ICE shutdown publication fence
+
+The existing local WebRTC stress regression
+`pipecat-webrtc/tests/review_lifecycle.rs::repeated_peer_shutdown_schedules_release_both_udp_ports`
+failed at schedule 5, iteration 24 during the historical draft workspace
+gate. This is a **real failed gate**; neither the earlier SCTP/DTLS patch nor a
+successful `pc.close().await` alone proves UDP candidate release.
+
+This **candidate**, not yet source-qualified, extends the patch to:
+
+- `src/ice_transport/mod.rs`: async ICE agent callbacks use a monotonic
+  compare/exchange so a late Connected/Checking report cannot overwrite Closed.
+  Start checks terminal ownership before installing its dial/accept cancellation
+  lease and again under the publication lock after dial/accept. A connection
+  completed after Stop is closed and is not installed into the mux.
+- `src/ice_transport/ice_gatherer.rs`: terminal Gatherer Closed cannot
+  regress to Gathering/Complete. Candidate startup shares the ownership mutex
+  with agent removal by Close; a delayed completion callback can no longer
+  resurrect a terminal gatherer. Gather attempted after close fails explicitly.
+- `src/ice_transport/ice_transport_test.rs`: terminal callback-state regression
+  verifies that queued state reports never clear the close verdict.
+  Additional Gatherer internal tests exercise post-close state and concurrent
+  gather/close admission.
+
+The original upstream published-file SHA-256 entries remain the original
+upstream identities; `UPSTREAM_PROVENANCE.json`'s list of *locally modified*
+files is extended instead of rewriting upstream hashes. This patch does not
+change ICE cryptography, candidate wire schemas, credentials or the vendored
+library's version. Neither port closure nor stress flake correction is claimed
+until the exact new source runs native tests.
+
+The mandatory acceptance includes a dedicated immutable-checkout target:
+
+```sh
+cd rust
+export CARGO_TARGET_DIR="$(mktemp -d)/pipecat-rust-target"
+cargo test -p pipecat-webrtc --test review_lifecycle repeated_peer_shutdown_schedules_release_both_udp_ports --locked
+cargo test -p pipecat-webrtc --test review_lifecycle --locked
+cargo test --workspace --all-features --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo fmt -- --check
+```
+
+An independent vendor unit-test invocation is also necessary because vendored
+upstream tests are outside the root workspace test membership. Preserve
+unmodified source hashes, true exit codes, captured output, skipped tests and
+any remaining failure. Live browser/WebRTC and production readiness remain
+unqualified.
