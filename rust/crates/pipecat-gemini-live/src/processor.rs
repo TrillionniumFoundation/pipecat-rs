@@ -286,7 +286,8 @@ impl FrameProcessor for GeminiLiveProcessor {
             let origin = Self::origin(&frame);
             let manual = self.client.config().session.activity_detection.disabled;
             match &frame.data {
-                FrameData::InputAudio(audio) => {
+                FrameData::InputAudio(audio)
+                | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
                     audio
                         .validate()
                         .map_err(|_| ProcessorError::new("invalid Gemini PCM"))?;

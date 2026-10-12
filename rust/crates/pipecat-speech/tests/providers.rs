@@ -713,29 +713,46 @@ async fn transcription_cancellation_timeout_and_bad_json_are_typed() {
     cancel.cancel();
     assert!(matches!(task.await.unwrap(), Err(SpeechError::Cancelled)));
     server.await.unwrap();
-    let (mut config, _, server) = support::server(
-        "200 OK",
-        "application/json",
-        vec![b"{\"text\":\"hi\"}".to_vec()],
-        false,
-        Duration::from_millis(50),
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut config = SpeechConfig::elevenlabs("synthetic-secret");
+    config.base_url = format!("http://{}/proxy", listener.local_addr().unwrap());
+    config.timeout = Duration::from_millis(10);
+    let stop_peer = CancellationToken::new();
+    let peer_cancel = stop_peer.clone();
+    // A deadline may expire before accept or a complete request. Never respond,
+    // and retain any accepted socket without requiring bytes before cleanup.
+    let mut timeout_peer = tokio::task::JoinSet::new();
+    timeout_peer.spawn(async move {
+        let socket = tokio::select! {
+            _ = peer_cancel.cancelled() => None,
+            accepted = listener.accept() => Some(accepted.unwrap().0),
+        };
+        peer_cancel.cancelled().await;
+        drop(socket);
+    });
+    let result = tokio::time::timeout(
+        Duration::from_secs(1),
+        ElevenLabsHttpClient::new(config).unwrap().transcribe_pcm(
+            &[0, 0],
+            16000,
+            1,
+            ElevenLabsTranscriptionRequest::default(),
+            CancellationToken::new(),
+        ),
     )
     .await;
-    config.timeout = Duration::from_millis(10);
+    // Retire the peer even when the independent client watchdog expires.
+    stop_peer.cancel();
+    tokio::time::timeout(Duration::from_secs(1), timeout_peer.join_next())
+        .await
+        .expect("timeout peer did not stop after cancellation")
+        .expect("timeout peer task missing")
+        .expect("timeout peer panicked");
+    assert!(timeout_peer.is_empty());
     assert!(matches!(
-        ElevenLabsHttpClient::new(config)
-            .unwrap()
-            .transcribe_pcm(
-                &[0, 0],
-                16000,
-                1,
-                ElevenLabsTranscriptionRequest::default(),
-                CancellationToken::new()
-            )
-            .await,
+        result.expect("transcription exceeded the independent test watchdog"),
         Err(SpeechError::Timeout)
     ));
-    server.await.unwrap();
     let (config, _, server) = support::server(
         "200 OK",
         "application/json",

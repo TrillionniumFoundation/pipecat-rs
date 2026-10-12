@@ -72,6 +72,16 @@ audio-stream-end under server VAD, and final function responses. Output audio is
 WebSocket message may itself be fragmented; tungstenite reassembles it before
 protocol decoding. No implicit resampling, WAV decoding or stereo downmixing occurs.
 
+The downstream frame adapter accepts both `InputAudio` and `UserAudio`'s inner
+PCM through the same validation, raw/encoded limits and manual-VAD path. It
+forwards the original outer frame, retaining its envelope and local tags. The
+inner audio context, including an explicitly empty context, takes precedence
+over envelope metadata for admitted audio. Valid empty PCM is forwarded without
+sending or buffering; invalid geometry/format and oversized chunks are still
+rejected before that suppression. Upstream audio and output/TTS audio remain
+pass-through and are not replayed to Gemini. The adapter never resamples;
+applications may explicitly place the shared input transport/resampler before it.
+
 Every supported content-bearing field and every model part in a bundled server
 message is handled before `turnComplete`. `generationComplete` does not close a
 turn. `interactionStatus=IDLE` is accepted. Background-work statuses are rejected
@@ -87,12 +97,24 @@ timer is claimed to prove that an independently delivered input transcript is
 finished. This differs deliberately from Python's timeout-based aggregation.
 Applications needing final STT utterances should use transcription mode.
 
+Both native modes keep the default empty transcript user ID or the explicit
+fixed `with_user_id` override; an input `UserAudio.user_id` neither updates that
+identity nor becomes a wire field. Input transcripts have no inferred source
+frame/context correlation. This matches conversational Python Gemini Live's
+empty speaker default. Dynamic speaker attribution in Python's separate
+`GeminiSTTService` and the conversational service's pause API remain outside
+this native family contract.
+
 ## Turns, tools, correlation and interruption
 
 Manual VAD streams only inside activity windows. The frame adapter keeps a
 bounded half-second idle pre-roll (capped by the audio-message limit), sends
 `activityStart` before replaying that pre-roll, and clears it on turn stop.
-`with_preroll_ms` selects a fixed window. Automatic sizing from upstream
+`with_preroll_ms` selects a fixed window; zero disables retention. This bounded
+native behavior deliberately differs from the pinned Python zero-duration
+`buffer[-0:]` edge, which retains the buffer. Pre-roll combines input families as
+PCM bytes only; its flushed origin belongs to the activity-start frame, not a
+buffered speaker or audio context. Automatic sizing from upstream
 `SpeechControlParams` is not implemented. Server VAD receives continuous audio.
 Dedicated STT additionally flushes on VAD stop frames with `audioStreamEnd`.
 
