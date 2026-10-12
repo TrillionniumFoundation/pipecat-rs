@@ -11,7 +11,7 @@ omits license-text files; LICENSE-MIT and LICENSE-APACHE are copied unchanged
 from the published `webrtc-ice` 0.14.0 archive, which records the identical
 upstream commit. Copyright: 2021 WebRTC.rs.
 
-The upstream code deltas are restricted to two transport modules.
+The previously reviewed patch was restricted to the two transport modules below. The additional ICE shutdown candidate is documented separately in the pending section at the end of this file.
 
 `src/sctp_transport/mod.rs`:
 
