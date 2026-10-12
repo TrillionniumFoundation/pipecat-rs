@@ -72,6 +72,24 @@ pub struct RTCIceTransport {
     internal: Mutex<ICETransportInternal>,
 }
 
+fn publish_state_if_open(state: &AtomicU8, next: RTCIceTransportState) -> bool {
+    let mut observed = state.load(Ordering::SeqCst);
+    loop {
+        if observed == RTCIceTransportState::Closed as u8 {
+            return false;
+        }
+        match state.compare_exchange(
+            observed,
+            next as u8,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => return true,
+            Err(current) => observed = current,
+        }
+    }
+}
+
 impl RTCIceTransport {
     /// creates a new new_icetransport.
     pub(crate) fn new(gatherer: Arc<RTCIceGatherer>) -> Self {
@@ -112,8 +130,15 @@ impl RTCIceTransport {
                 let s = RTCIceTransportState::from(ice_state);
                 let on_connection_state_change_handler_clone =
                     Arc::clone(&on_connection_state_change_handler);
-                state.store(s as u8, Ordering::SeqCst);
+                let observed_state = Arc::clone(&state);
+                let admitted = publish_state_if_open(&state, s);
                 Box::pin(async move {
+                    if !admitted
+                        || observed_state.load(Ordering::SeqCst)
+                            == RTCIceTransportState::Closed as u8
+                    {
+                        return;
+                    }
                     if let Some(handler) = &*on_connection_state_change_handler_clone.load() {
                         let mut f = handler.lock().await;
                         f(s).await;
@@ -150,6 +175,9 @@ impl RTCIceTransport {
             let (cancel_tx, cancel_rx) = mpsc::channel(1);
             {
                 let mut internal = self.internal.lock().await;
+                if self.state() == RTCIceTransportState::Closed {
+                    return Err(Error::ErrICETransportNotInNew);
+                }
                 internal.role = role;
                 internal.cancel_tx = Some(cancel_tx);
             }
@@ -185,6 +213,13 @@ impl RTCIceTransport {
 
             {
                 let mut internal = self.internal.lock().await;
+                if self.state() == RTCIceTransportState::Closed {
+                    // A pending dial/accept finished after Stop. It may no longer
+                    // publish an OS connection or a native mux into the transport.
+                    drop(internal);
+                    let _ = conn.close().await;
+                    return Err(Error::ErrICETransportNotInNew);
+                }
                 internal.conn = Some(conn);
                 internal.mux = Some(Mux::new(config));
             }

@@ -120,3 +120,22 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn stopped_ice_transport_rejects_late_connection_state_callbacks() {
+    let state = AtomicU8::new(RTCIceTransportState::New as u8);
+    assert!(publish_state_if_open(&state, RTCIceTransportState::Checking));
+    assert_eq!(state.load(Ordering::SeqCst), RTCIceTransportState::Checking as u8);
+    // Stop publishes terminal state before the async cleanup awaits.
+    state.store(RTCIceTransportState::Closed as u8, Ordering::SeqCst);
+    for late in [
+        RTCIceTransportState::Checking,
+        RTCIceTransportState::Connected,
+        RTCIceTransportState::Completed,
+        RTCIceTransportState::Disconnected,
+        RTCIceTransportState::Failed,
+    ] {
+        assert!(!publish_state_if_open(&state, late));
+        assert_eq!(state.load(Ordering::SeqCst), RTCIceTransportState::Closed as u8);
+    }
+}

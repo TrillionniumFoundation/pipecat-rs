@@ -296,3 +296,30 @@ async fn repeated_peer_shutdown_schedules_release_both_udp_ports() {
         }
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn early_simultaneous_close_releases_offer_and_answer_udp_candidates() {
+    // This isolates schedule 5 of the historical failing all-workspace test:
+    // shutdown can race ICE dial/accept before either data channel is ready.
+    for iteration in 0..16 {
+        let cfg = SmallWebRtcConfig {
+            audio_codec: None,
+            ..config()
+        };
+        let caller = SmallWebRtcConnection::new(cfg.clone()).await.unwrap();
+        let answerer = SmallWebRtcConnection::new(cfg).await.unwrap();
+        let offer = caller.create_offer().await.unwrap();
+        let mut addresses = candidate_addresses(&offer.sdp);
+        let answer = answerer.answer_offer(offer.sdp).await.unwrap();
+        addresses.extend(candidate_addresses(&answer.sdp));
+        assert!(!addresses.is_empty());
+        caller.accept_answer(answer).await.unwrap();
+
+        let (left, right) = tokio::join!(caller.close(), answerer.close());
+        assert!(left.is_ok(), "caller early close iteration {iteration}: {left:?}");
+        assert!(right.is_ok(), "answerer early close iteration {iteration}: {right:?}");
+        // Keep both public wrappers alive: dropping them is not the admission
+        // that determines native ICE resource release.
+        assert_sockets_released(&addresses).await;
+    }
+}

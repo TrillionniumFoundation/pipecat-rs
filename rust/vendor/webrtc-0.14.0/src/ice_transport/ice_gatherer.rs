@@ -156,7 +156,13 @@ impl RTCIceGatherer {
         self.create_agent().await?;
         self.set_state(RTCIceGathererState::Gathering).await;
 
-        if let Some(agent) = self.get_agent().await {
+        // Share the agent ownership lock with Close: a gather that began
+        // before terminal shutdown may never launch candidate work afterward.
+        let agent_guard = self.agent.lock().await;
+        if self.state() == RTCIceGathererState::Closed {
+            return Err(Error::ErrConnectionClosed);
+        }
+        if let Some(agent) = agent_guard.as_ref() {
             let state = Arc::clone(&self.state);
             let on_local_candidate_handler = Arc::clone(&self.on_local_candidate_handler);
             let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
@@ -171,14 +177,30 @@ impl RTCIceGatherer {
                         Arc::clone(&on_gathering_complete_handler);
 
                     Box::pin(async move {
+                        if state_clone.load(Ordering::SeqCst)
+                            == RTCIceGathererState::Closed as u8
+                        {
+                            return;
+                        }
                         if let Some(cand) = candidate {
                             if let Some(handler) = &*on_local_candidate_handler_clone.load() {
                                 let mut f = handler.lock().await;
                                 f(Some(RTCIceCandidate::from(&cand))).await;
                             }
                         } else {
-                            state_clone
-                                .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
+                            // A delayed gathering-complete callback cannot
+                            // reopen the gatherer after Close released its agent.
+                            if state_clone
+                                .compare_exchange(
+                                    RTCIceGathererState::Gathering as u8,
+                                    RTCIceGathererState::Complete as u8,
+                                    Ordering::SeqCst,
+                                    Ordering::SeqCst,
+                                )
+                                .is_err()
+                            {
+                                return;
+                            }
 
                             if let Some(handler) = &*on_state_change_handler_clone.load() {
                                 let mut f = handler.lock().await;
@@ -200,6 +222,8 @@ impl RTCIceGatherer {
             ));
 
             agent.gather_candidates()?;
+        } else {
+            return Err(Error::ErrICEAgentNotExist);
         }
 
         Ok(())
@@ -276,8 +300,25 @@ impl RTCIceGatherer {
     }
 
     pub async fn set_state(&self, s: RTCIceGathererState) {
-        self.state.store(s as u8, Ordering::SeqCst);
-
+        // The final Closed transition is terminal even if a pending gather
+        // callback wakes later. A separate load/store would lose that race.
+        let mut previous = self.state.load(Ordering::SeqCst);
+        loop {
+            if previous == RTCIceGathererState::Closed as u8
+                && s != RTCIceGathererState::Closed
+            {
+                return;
+            }
+            match self.state.compare_exchange(
+                previous,
+                s as u8,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break,
+                Err(current) => previous = current,
+            }
+        }
         if let Some(handler) = &*self.on_state_change_handler.load() {
             let mut f = handler.lock().await;
             f(s).await;
@@ -408,4 +449,39 @@ mod test {
 
         Ok(())
     }
+    #[tokio::test]
+    async fn terminal_close_prevents_late_gather_reopening_or_new_agent() -> Result<()> {
+        let gatherer = APIBuilder::new()
+            .build()
+            .new_ice_gatherer(RTCIceGatherOptions::default())?;
+        gatherer.close().await?;
+        gatherer.set_state(RTCIceGathererState::Gathering).await;
+        gatherer.set_state(RTCIceGathererState::Complete).await;
+        assert_eq!(gatherer.state(), RTCIceGathererState::Closed);
+        assert!(matches!(
+            gatherer.gather().await,
+            Err(Error::ErrConnectionClosed)
+        ));
+        assert!(gatherer.get_agent().await.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn overlapping_gather_and_close_never_restore_closed_candidate_agent() -> Result<()> {
+        for _ in 0..12 {
+            let gatherer = APIBuilder::new()
+                .build()
+                .new_ice_gatherer(RTCIceGatherOptions::default())?;
+            let (gather, close) = tokio::join!(gatherer.gather(), gatherer.close());
+            close?;
+            assert!(
+                matches!(&gather, Ok(()) | Err(Error::ErrConnectionClosed)),
+                "an unrelated candidate-gather failure must not be hidden: {gather:?}"
+            );
+            assert_eq!(gatherer.state(), RTCIceGathererState::Closed);
+            assert!(gatherer.get_agent().await.is_none());
+        }
+        Ok(())
+    }
+
 }
