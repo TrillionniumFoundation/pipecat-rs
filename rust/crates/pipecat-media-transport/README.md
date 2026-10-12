@@ -101,13 +101,47 @@ media. Other origins and ordinary controls retain their existing behavior.
 
 ## Input flow
 
-Captured audio and `InputAudio` frames injected into the pipeline use the same
-bounded queue, streaming resampling, filter, empty-audio suppression and optional
-passthrough. Rate/source changes drain the previous resampler before switching.
+Captured audio and `InputAudio` / `UserAudio` frames injected in either pipeline
+direction use the same bounded queue, PCM validation, native streaming resampling,
+filter and optional downstream passthrough. Disabled or muted input is consumed.
+The original audio family, user, context and envelope survive ordinary forwarding,
+including local provenance and observation identity. Explicit input format
+configuration overrides the pipeline's input format.
+
+A continuous resampling stream is keyed by input rate, transport source, audio
+family, user ID, audio context and destination. Changing a key drains the old
+stream with its own envelope before accepting the new samples. An empty input
+packet neither enters the filter nor seeds or replaces a pending tail. Tail frames
+use fresh logical identities with the last nonempty admitted envelope; their
+stored template retains no PCM allocation. The configured filter is shared:
+`AudioFilter` has no flush/reset hook and may carry state across users.
+
+Input admission charges retained PCM capacity, user/context/routing strings and
+nested metadata, including spare capacities. Fixed frame headers and up to 64
+bytes of generated name allocation use the count bound; additional name capacity
+uses the byte bound. Compact plain PCM without optional fields therefore keeps
+its exact-byte boundary. Metadata accounting is conservative and depth-bounded;
+overflow or excessive depth rejects admission. Rejected frames consume no queue
+credit. The resulting frame is checked again after filtering, before passthrough.
+This native retained-allocation rule deliberately rejects optional envelope or
+reserved allocations that a PCM-length-only limit would admit. It bounds the
+counted owned input payload and envelope allocations, not process RSS: popped
+frames, Sinc history, envelope templates,
+filter internals/return allocation, temporary conversions and allocator overhead
+are separate. A filter's allocation peak occurs before its result can be checked.
+
 `InputTransportStartAudioStreaming` starts capture once; `stream_on_start` can
 delay capture until this frame. The ingress reports readiness, rejects overload,
 and supports mute/resume. Input mute drops newly arriving media; output pause
 retains it. Enabled input images share bounded admission and forwarding.
+
+These are native streaming semantics. The pinned Python shared input loop has no
+resampler or VAD; it filters even empty input, uses an unbounded audio queue, and
+cancels pending audio at End. Native input retains its End drain and serial queued
+filter controls. Python directly invokes only `FilterUpdateSettings` on the
+configured filter, while native queues its filter-control family in audio order.
+No pipeline-global flush barrier or arbitrary stateful-filter user isolation is
+implied by shared input dispatch.
 
 Graceful End stops accepting capture, cancels and joins the capture task, drains
 admitted input and resampler tails, and cleans up the filter/backend. Cancellation

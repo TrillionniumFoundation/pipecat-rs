@@ -570,6 +570,36 @@ mod admission_wait_tests {
     }
 }
 pub(crate) fn frame_bytes(frame: &Frame) -> usize {
+    let input_audio = match &frame.data {
+        FrameData::InputAudio(audio) => Some((audio, 0)),
+        FrameData::UserAudio(audio) => Some((&audio.audio, audio.user_id.capacity())),
+        _ => None,
+    };
+    if let Some((audio, user_bytes)) = input_audio {
+        let entry = 12
+            * (std::mem::size_of::<(String, serde_json::Value)>() + std::mem::size_of::<usize>());
+        // Fixed frame headers and normal generated names are count-bounded.
+        let bytes = audio
+            .audio
+            .capacity()
+            .saturating_add(audio.context_id.as_ref().map_or(0, String::capacity))
+            .saturating_add(user_bytes)
+            .saturating_add(frame.name.capacity().saturating_sub(64))
+            .saturating_add(frame.transport_source.as_ref().map_or(0, String::capacity))
+            .saturating_add(
+                frame
+                    .transport_destination
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
+            .saturating_add(frame.native_llm_continuation_retained_bytes())
+            .saturating_add(frame.metadata.len().saturating_mul(entry));
+        return frame.metadata.iter().fold(bytes, |bytes, (key, value)| {
+            bytes
+                .saturating_add(key.capacity())
+                .saturating_add(continuation_argument_bytes(value, 0))
+        });
+    }
     let output_image = match &frame.data {
         FrameData::OutputImage(image) => Some((image, None)),
         FrameData::OutputImageDetailed(image) => Some((&image.image, None)),

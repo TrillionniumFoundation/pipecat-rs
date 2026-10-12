@@ -1,6 +1,6 @@
 use crate::input_video::VideoInput;
 use crate::output::bounded;
-use crate::queue::MediaQueue;
+use crate::queue::{frame_bytes, MediaQueue};
 use crate::video::*;
 use crate::{error, AudioFilter};
 use async_trait::async_trait;
@@ -152,11 +152,13 @@ impl InputIngress {
             return Ok(());
         }
         match &frame.data {
-            FrameData::InputAudio(a) if self.audio_enabled => {
-                a.validate().map_err(error)?;
+            data if input_audio(data).is_some() && self.audio_enabled => {
+                input_audio(data).unwrap().validate().map_err(error)?;
             }
             FrameData::InputImage(_) if self.video_enabled => {}
-            FrameData::InputAudio(_) | FrameData::InputImage(_) => return Ok(()),
+            FrameData::InputAudio(_) | FrameData::UserAudio(_) | FrameData::InputImage(_) => {
+                return Ok(());
+            }
             _ => {
                 return Err(ProcessorError::new(
                     "capture ingress accepts only input audio and input images",
@@ -318,7 +320,9 @@ impl FrameProcessor for InputTransport {
                 Ok(())
             }
             FrameData::InputTransportStartAudioStreaming => self.start_capture(ctx),
-            FrameData::InputAudio(_) | FrameData::InputImage(_) => self.ingress.push(frame),
+            FrameData::InputAudio(_) | FrameData::UserAudio(_) | FrameData::InputImage(_) => {
+                self.ingress.push(frame)
+            }
             FrameData::UserImageRequest(_)
                 if frame.transport_destination == self.config.video.request_destination =>
             {
@@ -395,34 +399,38 @@ async fn input_worker(
         let mut frame = item.frame;
         let image_request_id = video.request_for_image(&frame);
         let result = async {
-            if let FrameData::InputAudio(input) = &frame.data {
+            if let Some(input) = input_audio(&frame.data) {
                 if input.num_channels != format.channels() {
                     return Err(ProcessorError::new(
                         "input channel conversion requires an explicit converter",
                     ));
                 }
-                let reset = stream.as_ref().is_some_and(|(resampler, previous)| {
-                    resampler.input_format().sample_rate() != input.sample_rate
-                        || previous.transport_source != frame.transport_source
-                });
+                // An empty packet cannot seed a stream or acquire its pending tail.
+                if input.audio.is_empty() {
+                    return Ok(());
+                }
+                let reset = stream
+                    .as_ref()
+                    .is_some_and(|(_, previous)| !same_input_stream(previous, &frame));
                 if reset {
                     flush_input(&mut stream, &filter, format, &config, &ctx).await?;
                 }
-                if stream.is_none() {
-                    stream = Some((
-                        SincResampler::new(
-                            input.sample_rate,
-                            format.sample_rate(),
-                            format.channels(),
-                        )
-                        .map_err(error)?,
-                        frame.clone(),
-                    ));
-                }
-                let (resampler, template) = stream.as_mut().unwrap();
-                let data = resampler.process(&input.audio).map_err(error)?;
-                *template = frame.clone();
-                if let FrameData::InputAudio(input) = &mut frame.data {
+                let data = if let Some((resampler, template)) = stream.as_mut() {
+                    let data = resampler.process(&input.audio).map_err(error)?;
+                    *template = input_template(&frame);
+                    data
+                } else {
+                    let mut resampler = SincResampler::new(
+                        input.sample_rate,
+                        format.sample_rate(),
+                        format.channels(),
+                    )
+                    .map_err(error)?;
+                    let data = resampler.process(&input.audio).map_err(error)?;
+                    stream = Some((resampler, input_template(&frame)));
+                    data
+                };
+                if let Some(input) = input_audio_mut(&mut frame.data) {
                     input.audio = data;
                     input.sample_rate = format.sample_rate();
                 }
@@ -459,7 +467,7 @@ async fn flush_input(
         return Ok(());
     };
     let mut frame = template.duplicate();
-    if let FrameData::InputAudio(input) = &mut frame.data {
+    if let Some(input) = input_audio_mut(&mut frame.data) {
         input.audio = resampler.flush().map_err(error)?;
         input.sample_rate = format.sample_rate();
     }
@@ -472,7 +480,7 @@ async fn filter_input(
     config: &InputTransportConfig,
     ctx: &ProcessorContext,
 ) -> Result<(), ProcessorError> {
-    if let FrameData::InputAudio(input) = &mut frame.data {
+    if let Some(input) = input_audio_mut(&mut frame.data) {
         if input.audio.is_empty() {
             return Ok(());
         }
@@ -483,15 +491,55 @@ async fn filter_input(
             )
             .await?;
         }
-        if input.audio.len() > config.queue_byte_capacity {
-            return Err(ProcessorError::new(
-                "filtered input exceeds the media byte budget",
-            ));
-        }
         format.validate(&input.audio).map_err(error)?;
-        if input.audio.is_empty() || !config.passthrough {
-            return Ok(());
-        }
+    }
+    if frame_bytes(&frame) > config.queue_byte_capacity {
+        return Err(ProcessorError::new(
+            "filtered input exceeds the media byte budget",
+        ));
+    }
+    if input_audio(&frame.data).is_some_and(|input| input.audio.is_empty()) || !config.passthrough {
+        return Ok(());
     }
     ctx.push(frame, Direction::Downstream).await
+}
+
+fn input_audio(data: &FrameData) -> Option<&AudioRawFrame> {
+    match data {
+        FrameData::InputAudio(audio) => Some(audio),
+        FrameData::UserAudio(audio) => Some(&audio.audio),
+        _ => None,
+    }
+}
+fn input_audio_mut(data: &mut FrameData) -> Option<&mut AudioRawFrame> {
+    match data {
+        FrameData::InputAudio(audio) => Some(audio),
+        FrameData::UserAudio(audio) => Some(&mut audio.audio),
+        _ => None,
+    }
+}
+fn same_input_stream(previous: &Frame, next: &Frame) -> bool {
+    let same_user = match (&previous.data, &next.data) {
+        (FrameData::InputAudio(_), FrameData::InputAudio(_)) => true,
+        (FrameData::UserAudio(previous), FrameData::UserAudio(next)) => {
+            previous.user_id == next.user_id
+        }
+        _ => false,
+    };
+    same_user
+        && previous.transport_source == next.transport_source
+        && previous.transport_destination == next.transport_destination
+        && input_audio(&previous.data)
+            .zip(input_audio(&next.data))
+            .is_some_and(|(previous, next)| {
+                previous.sample_rate == next.sample_rate && previous.context_id == next.context_id
+            })
+}
+fn input_template(frame: &Frame) -> Frame {
+    let mut template = frame.clone();
+    if let Some(audio) = input_audio_mut(&mut template.data) {
+        // The resampler owns its sample history; the tail needs only its envelope.
+        audio.audio = Vec::new();
+    }
+    template
 }
