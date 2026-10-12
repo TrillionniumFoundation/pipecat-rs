@@ -59,7 +59,15 @@ topology, explicit seed ownership, state-only snapshots, final-tool relay,
 playback semantics and intentionally unsupported context mutations.
 
 `OpenAiRealtimeProcessor` integrates with `pipecat-core::FrameProcessor`. Configure
-pipeline input and output sample rates to 24 kHz and supply mono PCM16. It maps
+pipeline input and output sample rates to 24 kHz and supply mono PCM16. Downstream
+`InputAudio` and `UserAudio` share PCM validation and bounded audio append; the
+original frame, including a `UserAudio` speaker ID, is forwarded unchanged.
+The append protocol carries PCM only: input speaker IDs do not change transcription
+identity, which remains the configured `with_user_id` value (empty by default).
+Upstream audio is forwarded without appending. Resampling and capture pause/mute
+belong upstream; the shared input transport can resample into the required format.
+An empty direct append retains the client’s asynchronous rejection, while the shared
+input transport drops empty audio before this adapter. The processor maps
 input audio, input text, local end-of-turn, context/message updates, session/tool
 settings, tool results, interruption, and shutdown. Unhandled frames are forwarded
 in their original direction. Socket I/O and response processing run outside
@@ -92,7 +100,9 @@ through a processor's sender with its shared-context reconciliation.
 
 Queues, serialized request size, WS frame/message size, decoded audio chunk size,
 function-call state, response history, context imports, and partial PCM state are
-bounded. Connect, readiness, write, response, and shutdown have deadlines. Queue
+bounded. Both input-audio frame classes reuse the client's raw-chunk and
+serialized-message checks without adding another budget or changing either limit.
+Connect, readiness, write, response, and shutdown have deadlines. Queue
 saturation fails explicitly instead of silently dropping audio. Cancellation and
 close use a separate control lane, independent of the audio queue. Dropping a
 session closes its socket even if a sender remains alive. `finish` is ordered after

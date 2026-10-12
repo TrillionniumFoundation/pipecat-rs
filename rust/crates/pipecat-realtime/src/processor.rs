@@ -809,7 +809,8 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                 | FrameData::LlmContextSummaryRequest(_) => {
                     return Err(ProcessorError::new("this realtime adapter does not support image, output-mode, prompt-cache or summarization controls"));
                 }
-                FrameData::InputAudio(audio) => {
+                FrameData::InputAudio(audio)
+                | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
                     audio
                         .validate()
                         .map_err(|_| ProcessorError::new("invalid realtime PCM"))?;
