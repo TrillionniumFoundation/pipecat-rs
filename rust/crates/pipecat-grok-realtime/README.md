@@ -19,6 +19,19 @@ Root-level voice/turn detection, nested audio/transcription settings, supported
 PCM sample rates (8/11.025/16/22.05/24/32/44.1/48 kHz), and G.711 wire formats are
 represented separately from OpenAI GA settings. The frame adapter supports mono
 PCM16 with independently configured input/output rates. It does not resample.
+Downstream `InputAudio` and `UserAudio` share the same bounded PCM append path,
+including configured input-rate validation and live-conversation binding. The
+original frame, speaker ID, metadata, routing fields, and local provenance pass
+through unchanged. Upstream, output, and TTS audio do not append input PCM.
+The audio pause gate forwards either input class before validation or wire
+admission; resuming accepts only newly received frames. Input speaker IDs do not
+change transcription identity: transcripts use the fixed `with_user_id` value,
+which defaults to empty. Shared input transports can resample upstream.
+Both input variants share the unusable-processor predicate. Since audio has
+system priority, the sender's health-generation check rejects retired-session
+appends for unpaused downstream audio, including after local health restoration.
+Paused or upstream audio still follows its earlier forwarding path.
+
 Manual VAD sends explicit `turn_detection:null`, rather than Python's omitted
 null field. Response options use `modalities`, including both text and audio.
 

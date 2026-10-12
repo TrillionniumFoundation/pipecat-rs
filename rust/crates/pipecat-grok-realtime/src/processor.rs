@@ -523,6 +523,7 @@ impl FrameProcessor for GrokRealtimeProcessor {
         !matches!(
             frame.data,
             FrameData::InputAudio(_)
+                | FrameData::UserAudio(_)
                 | FrameData::InputText(_)
                 | FrameData::LlmRun
                 | FrameData::LlmContext(_)
@@ -906,7 +907,8 @@ impl FrameProcessor for GrokRealtimeProcessor {
         if direction == Direction::Downstream {
             self.tool_result_relay().relay(&mut frame)?;
             match &frame.data {
-                FrameData::InputAudio(audio) => {
+                FrameData::InputAudio(audio)
+                | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
                     if self
                         .audio_input_paused
                         .load(std::sync::atomic::Ordering::Acquire)
