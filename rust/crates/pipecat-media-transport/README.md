@@ -76,6 +76,30 @@ bundled native PCM16 tones. Urgent keypad frames enter ahead of waiting media,
 after the currently in-flight operation; ordinary keypad frames preserve queue
 order. Both paths are interruption-aware and do not claim the bot spoke.
 
+### Image output
+
+`OutputImage`, `OutputImageDetailed`, `UrlImage`, and `AssistantImage` use the
+selected destination's owned output worker. `write_image` receives the complete
+typed frame; successful completion forwards that same frame downstream, including
+assistant original bytes/MIME, routing, metadata and local observation identity.
+Image writes share the existing interruption, cancellation, PTS and write-timeout
+rules. They do not enter the audio filter, mixer, gain or speaking-event path.
+
+Queued image admission counts retained pixel and format allocations, URL or
+assistant original-data/MIME allocations, and the frame envelope and metadata,
+including spare capacity. Nested metadata uses the existing bounded-depth walker.
+This is retained queue accounting, not an RSS limit or a bound on a backend's
+working allocation. Fixed image scalars are count-bounded. The backend owns
+image decoding and format support; shared output does not decode assistant
+original bytes or validate image geometry. A successful `write_image` is the
+backend's completion boundary, not an independently verified physical display.
+
+The pinned Python implementation schedules image output and separately queues
+assistant images for aggregation. Native shared output retains its explicit
+backend-success-before-forward boundary; these are not identical video-task
+scheduling models. Tests use synthetic bytes and recording backends, not real
+cameras, displays, image codecs or provider services.
+
 ## Flow playback fences
 
 A downstream `Flush` or `FlushDetailed` with `origin = "pipecat.flows"` and

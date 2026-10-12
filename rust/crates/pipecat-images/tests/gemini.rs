@@ -954,59 +954,254 @@ async fn interruption_cancel_health_and_drop_fence_second_response() {
         );
     }
 }
+struct ImageAdmissionPeer {
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    task: tokio::task::JoinHandle<std::result::Result<Vec<Request>, String>>,
+}
+impl Drop for ImageAdmissionPeer {
+    fn drop(&mut self) {
+        self.shutdown.take();
+        self.task.abort();
+    }
+}
+impl ImageAdmissionPeer {
+    async fn finish(&mut self) -> std::result::Result<Vec<Request>, String> {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        match tokio::time::timeout(Duration::from_secs(5), &mut self.task).await {
+            Ok(result) => result.map_err(|error| format!("image peer join: {error}"))?,
+            Err(_) => {
+                self.task.abort();
+                let cleanup = tokio::time::timeout(Duration::from_secs(5), &mut self.task).await;
+                Err(format!("image peer join timed out; abort/join={cleanup:?}"))
+            }
+        }
+    }
+}
+fn image_admission_peer(
+    listener: TcpListener,
+    mut held: Option<(
+        tokio::sync::oneshot::Sender<()>,
+        tokio::sync::oneshot::Receiver<()>,
+    )>,
+) -> ImageAdmissionPeer {
+    let (shutdown, mut shutdown_rx) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        let mut requests = Vec::new();
+        loop {
+            let (mut socket, _) = tokio::select! { biased;
+                accepted = listener.accept() => accepted.map_err(|error| error.to_string())?,
+                _ = &mut shutdown_rx => return Ok(requests),
+            };
+            let request = tokio::time::timeout(Duration::from_secs(5), read_request(&mut socket))
+                .await
+                .map_err(|_| "image peer request read timed out".to_string())?;
+            requests.push(request);
+            if let Some((received, release)) = held.take() {
+                received
+                    .send(())
+                    .map_err(|_| "request receipt receiver dropped".to_string())?;
+                tokio::time::timeout(Duration::from_secs(5), release)
+                    .await
+                    .map_err(|_| "image peer release timed out".to_string())?
+                    .map_err(|_| "image peer release sender dropped".to_string())?;
+            }
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                write_reply(&mut socket, inline(&png(png::ColorType::Rgb)), false),
+            )
+            .await
+            .map_err(|_| "image peer response write timed out".to_string())?;
+        }
+    });
+    ImageAdmissionPeer {
+        shutdown: Some(shutdown),
+        task,
+    }
+}
+async fn finish_image_admission_pipeline(
+    pipeline: PipelineWorker,
+    cancel: bool,
+) -> std::result::Result<(Vec<DirectedFrame>, WorkerReport), String> {
+    let sender = pipeline.sender();
+    let completion = async move {
+        let terminal = if cancel {
+            pipeline.cancel("image fixture operation failed").await
+        } else {
+            pipeline.end().await
+        };
+        let collected = pipeline.collect().await;
+        terminal?;
+        collected
+    };
+    tokio::pin!(completion);
+    match tokio::time::timeout(Duration::from_secs(5), &mut completion).await {
+        Ok(result) => result.map_err(|error| format!("image pipeline completion: {error}")),
+        Err(_) => {
+            let cancellation = tokio::time::timeout(
+                Duration::from_secs(5),
+                sender.cancel("image fixture completion timed out"),
+            )
+            .await;
+            let cleanup = tokio::time::timeout(Duration::from_secs(5), &mut completion).await;
+            Err(format!(
+                "image pipeline completion timed out; cancel={cancellation:?}, collect={cleanup:?}"
+            ))
+        }
+    }
+}
+
 #[tokio::test]
-async fn processor_backpressure_and_source_text_inheritance() {
-    let (url, mut requests, task) = server(vec![Reply {
-        delay: Duration::from_millis(80),
-        ..inline(&png(png::ColorType::Rgb))
-    }])
-    .await;
-    let mut c = config(url);
+async fn processor_backpressure_rejects_overflow_while_input_text_is_active() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut c = config(format!("http://{}", listener.local_addr().unwrap()));
     c.limits.image.max_pending = 1;
     let service = Arc::new(GeminiImageGenProcessor::new(
         GeminiImageClient::new(c).unwrap(),
     ));
-    let pipeline = Pipeline::new(vec![service])
-        .start(PipelineConfig::default())
-        .await
-        .unwrap();
-    pipeline
-        .queue(Frame::new(FrameData::InputText(TextFrame::new("typed"))))
-        .await
-        .unwrap();
-    requests.recv().await.unwrap();
-    pipeline.queue(Frame::text("overflow")).await.unwrap();
-    tokio::time::timeout(Duration::from_secs(1), async {
-        while pipeline.total_errors() == 0 {
-            tokio::task::yield_now().await;
-        }
-    })
+    let pipeline = tokio::time::timeout(
+        Duration::from_secs(5),
+        Pipeline::new(vec![service]).start(PipelineConfig::default()),
+    )
     .await
+    .unwrap()
     .unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    pipeline
-        .queue(Frame::new(FrameData::LlmThoughtText(TextFrame::new(
-            "private thought",
-        ))))
+    let (received_tx, received_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+    let mut peer = image_admission_peer(listener, Some((received_tx, release_rx)));
+    let input = Frame::new(FrameData::InputText(TextFrame::new("typed")));
+    let expected_input = DirectedFrame::new(input.clone(), Direction::Downstream);
+    let overflow = Frame::text("overflow");
+    let overflow_id = overflow.id;
+    let exercised = tokio::time::timeout(Duration::from_secs(5), async {
+        pipeline
+            .queue(input)
+            .await
+            .map_err(|error| error.to_string())?;
+        received_rx
+            .await
+            .map_err(|_| "request receipt sender dropped".to_string())?;
+        pipeline
+            .queue(overflow)
+            .await
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !pipeline
+                .errors()
+                .iter()
+                .any(|error| error.error.contains("queue is full"))
+            {
+                tokio::task::yield_now().await;
+            }
+        })
         .await
-        .unwrap();
-    pipeline.end().await.unwrap();
-    let (frames, report) = pipeline.collect().await.unwrap();
-    assert!(report
-        .errors
-        .iter()
-        .any(|e| e.error.contains("queue is full")));
+        .map_err(|_| "queue-full error receipt timed out".to_string())?;
+        Ok::<(), String>(())
+    })
+    .await;
+    // The response remains held until the overflow error is observed. Always
+    // release it before cleanup, including operation failures and timeouts.
+    let released = release_tx.send(());
+    let result = finish_image_admission_pipeline(
+        pipeline,
+        !matches!(&exercised, Ok(Ok(()))) || released.is_err(),
+    )
+    .await;
+    let requests = peer.finish().await;
+
+    exercised.unwrap().unwrap();
+    released.unwrap();
+    let (frames, report) = result.unwrap();
+    let requests = requests.unwrap();
+    assert_eq!(report.state, WorkerState::Ended, "{report:#?}");
+    assert_eq!(report.total_errors, 1, "{report:#?}");
+    assert_eq!(report.evicted_errors, 0, "{report:#?}");
+    assert_eq!(report.errors.len(), 1, "{report:#?}");
+    assert!(
+        report.errors[0].error.contains("queue is full"),
+        "{report:#?}"
+    );
+    assert_eq!(requests.len(), 1, "{requests:#?}");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&requests[0].body).unwrap()["contents"][0]["parts"][0]
+            ["text"],
+        "typed"
+    );
     assert_eq!(
         frames
             .iter()
-            .filter(|f| matches!(f.frame.data, FrameData::UrlImage(_)))
-            .count(),
-        1
+            .filter(|frame| frame.frame.id == expected_input.frame.id)
+            .collect::<Vec<_>>(),
+        vec![&expected_input]
     );
-    assert!(frames
+    assert!(
+        !frames.iter().any(|frame| frame.frame.id == overflow_id),
+        "{frames:#?}"
+    );
+    let images: Vec<_> = frames
         .iter()
-        .any(|f| matches!(f.frame.data, FrameData::LlmThoughtText(_))));
-    task.await.unwrap();
+        .filter(|frame| matches!(frame.frame.data, FrameData::UrlImage(_)))
+        .collect();
+    assert_eq!(images.len(), 1, "{frames:#?}");
+    assert_eq!(
+        images[0].frame.metadata["image_generation.source_frame_id"],
+        json!(expected_input.frame.id)
+    );
+}
+
+#[tokio::test]
+async fn processor_thought_text_passes_through_without_image_generation() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut c = config(format!("http://{}", listener.local_addr().unwrap()));
+    c.limits.image.max_pending = 1;
+    let service = Arc::new(GeminiImageGenProcessor::new(
+        GeminiImageClient::new(c).unwrap(),
+    ));
+    let pipeline = tokio::time::timeout(
+        Duration::from_secs(5),
+        Pipeline::new(vec![service]).start(PipelineConfig::default()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let mut peer = image_admission_peer(listener, None);
+    let thought = Frame::new(FrameData::LlmThoughtText(TextFrame::new("private thought")));
+    let expected = DirectedFrame::new(thought.clone(), Direction::Downstream);
+    let queued = tokio::time::timeout(Duration::from_secs(5), pipeline.queue(thought)).await;
+    let result = finish_image_admission_pipeline(pipeline, !matches!(&queued, Ok(Ok(())))).await;
+    // End/collect joins all image-service work before the peer stops recording.
+    let requests = peer.finish().await;
+
+    queued.unwrap().unwrap();
+    let (frames, report) = result.unwrap();
+    let requests = requests.unwrap();
+    assert_eq!(report.state, WorkerState::Ended, "{report:#?}");
+    assert!(report.errors.is_empty(), "{report:#?}");
+    assert_eq!(report.total_errors, 0, "{report:#?}");
+    assert_eq!(report.evicted_errors, 0, "{report:#?}");
+    assert_eq!(report.dropped_frames, 0, "{report:#?}");
+    assert!(
+        requests.is_empty(),
+        "thought generated provider requests: {requests:#?}"
+    );
+    assert!(
+        !frames.iter().any(|frame| matches!(
+            frame.frame.data,
+            FrameData::UrlImage(_)
+                | FrameData::OutputImage(_)
+                | FrameData::OutputImageDetailed(_)
+                | FrameData::AssistantImage(_)
+        )),
+        "{frames:#?}"
+    );
+    assert_eq!(
+        frames
+            .iter()
+            .filter(|frame| matches!(frame.frame.data, FrameData::LlmThoughtText(_)))
+            .collect::<Vec<_>>(),
+        vec![&expected]
+    );
 }
 
 #[tokio::test]

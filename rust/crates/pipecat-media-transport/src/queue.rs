@@ -601,12 +601,28 @@ pub(crate) fn frame_bytes(frame: &Frame) -> usize {
         });
     }
     let output_image = match &frame.data {
-        FrameData::OutputImage(image) => Some((image, None)),
-        FrameData::OutputImageDetailed(image) => Some((&image.image, None)),
-        FrameData::UrlImage(image) => Some((&image.image.image, image.url.as_ref())),
+        FrameData::OutputImage(image) => Some((image, 0)),
+        FrameData::OutputImageDetailed(image) => Some((&image.image, 0)),
+        FrameData::UrlImage(image) => Some((
+            &image.image.image,
+            image.url.as_ref().map_or(0, String::capacity),
+        )),
+        FrameData::AssistantImage(image) => Some((
+            &image.image.image,
+            image
+                .original_data
+                .as_ref()
+                .map_or(0, Vec::capacity)
+                .saturating_add(
+                    image
+                        .original_mime_type
+                        .as_ref()
+                        .map_or(0, String::capacity),
+                ),
+        )),
         _ => None,
     };
-    if let Some((image, url)) = output_image {
+    if let Some((image, extra_bytes)) = output_image {
         // Count retained allocations, including spare capacity and nested metadata.
         // The bounded-depth walker allocates no temporary metadata work queue.
         let entry = 12
@@ -615,7 +631,7 @@ pub(crate) fn frame_bytes(frame: &Frame) -> usize {
             .image
             .capacity()
             .saturating_add(image.format.as_ref().map_or(0, String::capacity))
-            .saturating_add(url.map_or(0, String::capacity))
+            .saturating_add(extra_bytes)
             .saturating_add(frame.name.capacity())
             .saturating_add(frame.transport_source.as_ref().map_or(0, String::capacity))
             .saturating_add(
@@ -1221,5 +1237,110 @@ mod image_queue_tests {
         }
         frame.metadata.insert("deep".into(), metadata);
         assert_eq!(frame_bytes(&frame), usize::MAX);
+    }
+}
+
+#[cfg(test)]
+mod assistant_image_queue_tests {
+    use super::*;
+    use pipecat_core::{AssistantImageRawFrame, ImageRawFrame, OutputImageRawFrame};
+
+    fn assistant() -> Frame {
+        let mut frame = Frame::new(FrameData::AssistantImage(AssistantImageRawFrame {
+            image: OutputImageRawFrame {
+                image: ImageRawFrame {
+                    image: vec![1, 2, 3],
+                    size: (1, 1),
+                    format: Some("RGB".into()),
+                },
+                sync_with_audio: true,
+            },
+            original_data: None,
+            original_mime_type: None,
+        }));
+        frame.name = "assistant-image".into();
+        frame
+    }
+
+    #[test]
+    fn original_allocations_add_their_exact_retained_capacity() {
+        let mut frame = assistant();
+        let baseline = frame_bytes(&frame);
+        let mut original = Vec::with_capacity(4096);
+        original.push(9);
+        let original_capacity = original.capacity();
+        let mut mime = String::with_capacity(2048);
+        mime.push_str("image/png");
+        let mime_capacity = mime.capacity();
+        if let FrameData::AssistantImage(image) = &mut frame.data {
+            image.original_data = Some(original);
+            image.original_mime_type = Some(mime);
+        }
+        assert_eq!(
+            frame_bytes(&frame),
+            baseline + original_capacity + mime_capacity
+        );
+    }
+
+    #[test]
+    fn assistant_exact_byte_boundary_and_released_reservations() {
+        let bytes = frame_bytes(&assistant());
+        assert!(bytes > 3);
+        assert!(MediaQueue::new(2, bytes - 1).push(assistant()).is_err());
+        let queue = MediaQueue::new(2, bytes);
+        queue.push(assistant()).unwrap();
+        assert_eq!(queue.state.lock().unwrap().bytes, bytes);
+        assert!(queue.push(assistant()).is_err());
+        queue.pop().unwrap();
+        assert_eq!(queue.state.lock().unwrap().bytes, 0);
+        queue.push(assistant()).unwrap();
+        queue.interrupt();
+        assert_eq!(queue.state.lock().unwrap().bytes, 0);
+        queue.push(assistant()).unwrap();
+        queue.cancel();
+        assert_eq!(queue.state.lock().unwrap().bytes, 0);
+        assert!(queue.is_empty());
+    }
+
+    #[tokio::test]
+    async fn every_image_enqueue_path_uses_the_same_retained_budget() {
+        fn oversized() -> Frame {
+            let mut frame = assistant();
+            if let FrameData::AssistantImage(image) = &mut frame.data {
+                image.original_data = Some(Vec::with_capacity(4096));
+            }
+            frame
+        }
+        let queue = MediaQueue::new(4, 1024);
+        assert!(queue.push(oversized()).is_err());
+        assert!(queue.push_front(oversized()).is_err());
+        assert!(queue.push_timed(oversized(), Instant::now()).is_err());
+        let waited = tokio::time::timeout(
+            Duration::from_secs(1),
+            queue.push_wait(oversized(), None, Duration::from_secs(1)),
+        )
+        .await
+        .unwrap();
+        assert!(waited
+            .unwrap_err()
+            .message
+            .contains("frame exceeds destination capacity"));
+        assert_eq!(queue.state.lock().unwrap().bytes, 0);
+        assert!(queue.is_empty());
+        queue.push(assistant()).unwrap();
+        queue.pop().unwrap();
+        assert_eq!(queue.state.lock().unwrap().bytes, 0);
+    }
+
+    #[test]
+    fn assistant_nested_metadata_uses_the_existing_depth_cap() {
+        let mut frame = assistant();
+        let mut value = serde_json::Value::Null;
+        for _ in 0..=pipecat_core::NativeLlmContinuation::MAX_ARGUMENT_DEPTH {
+            value = serde_json::json!([value]);
+        }
+        frame.metadata.insert("nested".into(), value);
+        assert_eq!(frame_bytes(&frame), usize::MAX);
+        assert!(MediaQueue::new(1, 1024).push(frame).is_err());
     }
 }

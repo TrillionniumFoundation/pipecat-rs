@@ -941,7 +941,8 @@ impl Sender {
                     }
                     FrameData::OutputImage(_)
                     | FrameData::OutputImageDetailed(_)
-                    | FrameData::UrlImage(_) => {
+                    | FrameData::UrlImage(_)
+                    | FrameData::AssistantImage(_) => {
                         let Some(result) = operation(
                             &self.destination.queue,
                             epoch,
