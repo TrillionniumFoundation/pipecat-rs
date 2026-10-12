@@ -89,23 +89,52 @@ text overrides only the template text field. Templates may use an empty text fie
 
 - Downstream `TtsSpeak`, `AggregatedText` and typed `TtsTextInput` become sequential
   synthesis requests
-- Skipped inputs stay ordered behind preceding synthesis without provider requests;
-  existing skipped aggregates retain their identity and typed skipped inputs become
+- Skipped aggregates and typed provenance inputs stay ordered behind preceding
+  synthesis without provider requests; existing skipped aggregates retain their
+  identity and typed skipped inputs become
   display aggregates with their original source intact
-- Incremental `Text`/`LlmText` pass through; place a text aggregator before this
-  processor when using incremental LLM output
+- Incremental `Text`/`LlmText` pass through without synthesis; place a text
+  aggregator before this processor when using incremental LLM output. Unless
+  explicitly marked `skip_tts`, they retain the same downstream FIFO as other
+  normal frames. Explicitly skipped incremental text keeps its immediate bypass
 - Upstream frames preserve their direction and do not trigger synthesis
 - Requests use owned core background tasks; frame processing never awaits HTTP
 - Pending utterances and ordering fences each have the configured count limit
-- `LlmResponseEnd` and downstream `FlushDetailed` probes wait behind accepted
-  synthesis; an uninterruptible flush retains its ordering across interruption
+- All other normal downstream frames, including response starts/ends and flush
+  probes, join the same FIFO behind accepted synthesis. Original envelopes and
+  local capabilities are forwarded intact. System and upstream frames retain
+  their immediate routes; terminal drain remains owned by the core runtime
+- Generic frames route synchronously when no live predecessor remains, without
+  consuming a pending slot or background task. Thought/control bursts therefore
+  do not depend on task scheduling to make progress. With live predecessors they
+  retain the same bounded FIFO; response ends, flush probes and skipped aggregates
+  keep their existing owned-task paths even when idle
+- Uninterruptible forwarding fences retain every prior surviving dependency
+  across interruption, even if an intervening interruptible task is canceled.
+  Each dependency snapshot contains at most the two bounded pending pools.
+  Outstanding snapshots, including cancellation in progress, remain bounded by
+  the core background-task limit (quadratic worst-case dependency references).
+  These are count/reference limits, not a new byte or RSS limit for arbitrary
+  forwarded payloads and metadata
 - End drains accepted work; interruption cancels active/waiting utterances and
   drops stale audio; Cancel and cleanup cancel all owned work
 - Output sample rate must match the pipeline's configured rate at setup
 - Emits `TtsStarted`, `TtsAudio`, `TtsStopped`, optional TTFB and usage metrics,
-  and nonfatal upstream typed errors. Failed responses mark `LlmResponseEnd`
+  and nonfatal upstream typed errors. Failed responses mark `LlmResponseEnd`;
+  canceled, rejected or failed queued work marks its captured response generation
+  before releasing completion fences, without changing a later response's status.
+  Idle forwarding errors also mark the captured response before returning; output
+  backpressure remains fatal and does not imply worker recovery
 - Audio carries context and source-frame IDs. Synthesis completion does not mean
   that the output transport has played the audio
+
+This is a narrow native passthrough-order repair, not complete source
+`TTSService.process_frame` equivalence. In the pinned Python source,
+`skip_tts=true` bypasses serialization for the Text family, including aggregated
+text. Native skipped aggregates and `TtsTextInput` retain their existing ordered
+provenance/alignment behavior; only incremental `Text`/`LlmText` retain the
+explicit immediate skip bypass here. Native incremental text is not implicitly
+aggregated or synthesized by this processor.
 
 ### Provenance and completion evidence
 

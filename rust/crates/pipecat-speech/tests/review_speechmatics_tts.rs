@@ -528,7 +528,9 @@ async fn send(worker: &PipelineWorker, data: FrameData) {
         .unwrap();
 }
 async fn marker(worker: &mut PipelineWorker) -> Vec<DirectedFrame> {
-    let marker = Frame::text("review-admission-marker");
+    let mut text = TextFrame::new("review-admission-marker");
+    text.skip_tts = Some(true);
+    let marker = Frame::new(FrameData::Text(text));
     let id = marker.id;
     worker
         .sender()

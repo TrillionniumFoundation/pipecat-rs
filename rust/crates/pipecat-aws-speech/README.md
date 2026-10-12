@@ -62,6 +62,13 @@ a new client.
   admitted to a failed session is never replayed. Exhausted recovery reports
   unsent buffered audio and makes the provider unusable. An effective settings
   update can restore usability. Initial setup failure is returned to the caller.
+  Both `InputAudio` and `UserAudio` use this path. By default, the latest consumed
+  user-audio command supplies the current speaker ID for interim/final results;
+  plain input clears it. `with_user_id(...)` remains an explicit fixed override,
+  including an empty string. Muted/unusable and upstream audio do not adopt
+  the frame's speaker; upstream forwarding retains the existing native behavior.
+  Health retirement can still clear the previous dynamic speaker generation.
+  Audio passthrough preserves the original frame and applies to both input kinds.
 
 `TtsSettings.base.extra` carries `engine`, `pitch`, `rate`, `volume`, and
 `lexicon_names`; optional values can explicitly be null. Required voice and
@@ -95,6 +102,20 @@ are processed; first alternatives and original result objects are retained.
 Transcript finality comes from `IsPartial`, not a locally guessed VAD boundary.
 Provider exception bodies and unknown error details are intentionally redacted.
 
+Dynamic speaker UTF-8 bytes and PCM share the processor's existing
+`max_audio_chunk_bytes` admission budget, checked before retaining an owned ID.
+The constructor's fixed override and ignored frame IDs do not reduce the PCM
+budget; the fixed override has no new length restriction. This is a byte-length
+admission bound, not an allocator-capacity or process-memory ceiling. It excludes
+the original frame envelope and pre-existing audio context. Valid large PCM still uses the low-level sender's EventStream chunking;
+`max_message_bytes` is a separate encoded-wire limit. In default dynamic mode,
+empty usable input updates identity through the bounded command FIFO but sends no
+PCM and records no usage; it retains the prior bypass of empty-input geometry
+validation. With an explicit fixed override, empty input bypasses the command queue
+(including when full) and retains the configured audio passthrough behavior.
+In dynamic mode, without an active input generation it only seeds the next
+session, without a connection. Health retirement and cleanup discard that idle seed.
+
 ## Scope and verification limits
 
 This crate implements the pinned Polly and Transcribe speech adapters. It does
@@ -117,3 +138,16 @@ vocabulary/speaker/channel signing options are not exposed by `TranscribeConfig`
 the pinned service itself hardcodes those off. The eventstream decoder's 128
 header/128 KiB header-region caps intentionally bound the AWS speech use case
 rather than claiming an unrestricted general Smithy codec.
+
+Current-speaker labeling follows native supervisor consumption, including output
+while submitting audio, old-settings drain, and socket recovery within that
+running supervisor. A new supervisor starts from its idle seed, fixed override,
+or empty default. It is not a per-PCM identity association, diarization, or user-isolated resampling: the same
+streaming sinc converter and its Finish tail continue across speaker changes.
+The native ordering, upstream bypass, health-generation reset and retry/drain
+behavior remain distinct from Python's callback scheduling. In particular, this
+slice does not reproduce Python's final-callback identity read after awaiting
+usage emission. Identity tests use independently CRC-framed loopback events and
+verify the upgrade request's SigV4 MAC; EventStream payloads are not chunk-MACed.
+No live-provider latency, recognition quality, or full asynchronous equivalence
+is claimed.

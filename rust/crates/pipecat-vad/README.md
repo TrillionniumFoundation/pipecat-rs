@@ -58,12 +58,23 @@ let vad = Arc::new(SileroVadProcessor::new(analyzer, ProcessorOptions::default()
 # Ok::<(), pipecat_vad::VadError>(())
 ```
 
-`SileroVadProcessor` forwards input audio before asynchronously broadcasting
+`SileroVadProcessor` analyzes `InputAudio` and `UserAudio` in either direction,
+forwarding each original frame with its direction, PCM, user/context IDs,
+envelope, and local identity unchanged before asynchronously broadcasting
 `VadUserStartedSpeaking`, `VadUserStoppedSpeaking`, and periodic `UserSpeaking`
-frames upstream and downstream. Start and parameter updates broadcast
-`SpeechControlParams`. Input must be mono, signed PCM16 little-endian, at the
-analyzer's configured rate; Start must specify that same rate. Wrong rates,
-stereo, malformed PCM, oversized frames, and invalid parameters fail explicitly.
+frames upstream and downstream. Output audio families and other raw frame types
+are forwarded without VAD analysis. Downstream Start and parameter updates
+broadcast `SpeechControlParams`; upstream control frames remain passthrough.
+
+Input must be mono, signed PCM16 little-endian, at the analyzer's configured
+rate; Start must specify that same rate. The processor does not resample audio.
+Both input families share one analyzer stream; user IDs do not select separate
+VAD state. Wrong rates, stereo, malformed PCM, oversized frames, and invalid
+parameters fail explicitly. Both input families
+share these native bounds in both directions. Native input validation precedes
+forwarding, unlike the Python processor's unconditional forward-first behavior;
+invalid input is rejected without forwarding. Empty valid input is forwarded
+and refreshes the audio-idle timer before analysis.
 
 One owned native thread runs inference serially. Bounded input and result queues
 (default 32 frames) prevent unbounded per-frame task spawning. Incoming frames
@@ -139,6 +150,11 @@ one of 192,000 feature values at `2e-6` and model probabilities at `1e-5`. Exist
 fixtures require no Python to test. The tests also cover validation, chunk
 alignment, state transitions, five-second resets, volume preservation, real
 pipeline speech/idle events, End draining, Cancel cleanup, and setup failure.
+The input-family suite uses actual model inference and tracked speech PCM for
+both input variants in both directions. It checks exact frame preservation,
+output-family exclusions, shared validation with same-session recovery, empty
+input passthrough, and native cleanup. Per-frame receipts acknowledge completed
+processor calls; End provides the separate inference-drain barrier.
 
 Development-only fixture regeneration uses NumPy, `onnxruntime==1.21.0`, and
 `loudness==0.2.0` in an isolated Python environment:

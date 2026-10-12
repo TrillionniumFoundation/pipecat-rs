@@ -275,7 +275,9 @@ async fn interruption_closes_active_http_discards_waiting_utterance_and_allows_n
     send(&worker, FrameData::TtsSpeak(TtsSpeakFrame::new("old"))).await;
     assert_eq!(capture.await.unwrap(), "old");
     send(&worker, FrameData::TtsSpeak(TtsSpeakFrame::new("queued"))).await;
-    send(&worker, FrameData::Text(TextFrame::new("accepted"))).await;
+    let mut accepted = TextFrame::new("accepted");
+    accepted.skip_tts = Some(true);
+    send(&worker, FrameData::Text(accepted)).await;
     tokio::time::timeout(Duration::from_secs(2), async {
         while let Some(frame) = worker.recv().await {
             if matches!(frame.frame.data, FrameData::Text(_)) {
@@ -414,7 +416,9 @@ async fn uninterruptible_flush_waits_for_synthesis_and_survives_interruption() {
         .send(flush, Direction::Downstream)
         .await
         .unwrap();
-    send(&worker, FrameData::Text(TextFrame::new("accepted"))).await;
+    let mut accepted = TextFrame::new("accepted");
+    accepted.skip_tts = Some(true);
+    send(&worker, FrameData::Text(accepted)).await;
     tokio::time::timeout(Duration::from_secs(2), async {
         while let Some(frame) = worker.recv().await {
             if matches!(frame.frame.data, FrameData::Text(_)) {
@@ -587,7 +591,9 @@ async fn voice_and_retry_updates_are_atomic_and_only_affect_new_admissions() {
     send(&worker, FrameData::TtsSpeak(TtsSpeakFrame::new("old"))).await;
     ready.await.unwrap();
     send(&worker, FrameData::TtsSpeak(TtsSpeakFrame::new("queued"))).await;
-    send(&worker, FrameData::Text(TextFrame::new("admission marker"))).await;
+    let mut accepted = TextFrame::new("admission marker");
+    accepted.skip_tts = Some(true);
+    send(&worker, FrameData::Text(accepted)).await;
     while !matches!(
         tokio::time::timeout(Duration::from_secs(2), worker.recv())
             .await

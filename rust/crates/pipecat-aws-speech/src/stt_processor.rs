@@ -39,7 +39,10 @@ impl Default for ReconnectPolicy {
     }
 }
 enum Command {
-    Audio(AudioRawFrame),
+    Audio {
+        audio: AudioRawFrame,
+        user_id: Option<String>,
+    },
     Update(Box<TranscribeClient>),
     Speaking(bool),
     Finish,
@@ -48,11 +51,12 @@ struct State {
     client: TranscribeClient,
     input: Option<Input<Command>>,
     health_revision: u64,
+    idle_user_id: String,
 }
 pub struct TranscribeSttProcessor {
     state: Mutex<State>,
     health: ProcessorHealth,
-    user_id: String,
+    user_id: Option<String>,
     mute: AtomicBool,
     audio_passthrough: bool,
     reconnect: ReconnectPolicy,
@@ -64,16 +68,19 @@ impl TranscribeSttProcessor {
                 client,
                 input: None,
                 health_revision: 0,
+                idle_user_id: String::new(),
             }),
             health: ProcessorHealth::default(),
-            user_id: String::new(),
+            user_id: None,
             mute: AtomicBool::new(false),
             audio_passthrough: true,
             reconnect: ReconnectPolicy::default(),
         }
     }
+    /// Fix the speaker on all results, including an explicitly empty ID.
+    /// Without this override, accepted input audio supplies the current speaker.
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
-        self.user_id = user_id.into();
+        self.user_id = Some(user_id.into());
         self
     }
     pub fn with_audio_passthrough(mut self, enabled: bool) -> Self {
@@ -113,6 +120,7 @@ impl TranscribeSttProcessor {
             if let Some(input) = state.input.take() {
                 input.cancel.cancel();
             }
+            state.idle_user_id.clear();
         }
         if let Some(input) = &state.input {
             input.try_send(Command::Update(Box::new(candidate.clone())), false)?;
@@ -132,6 +140,7 @@ impl TranscribeSttProcessor {
             if let Some(input) = state.input.take() {
                 input.cancel.cancel();
             }
+            state.idle_user_id.clear();
             state.health_revision = snapshot.revision;
         }
         Ok(())
@@ -171,7 +180,10 @@ impl TranscribeSttProcessor {
             finished: Arc::new(Mutex::new(false)),
         });
         let output = ctx.clone();
-        let user_id = self.user_id.clone();
+        let user_id = self
+            .user_id
+            .clone()
+            .unwrap_or_else(|| std::mem::take(&mut state.idle_user_id));
         let revision = self.health.snapshot().revision;
         let mut health = self.health.watch();
         let policy = self.reconnect.clone();
@@ -189,7 +201,7 @@ impl TranscribeSttProcessor {
                         }
                     }
                 };
-                supervise(client, session, rx, &output, &user_id, policy, revision).await
+                supervise(client, session, rx, &output, user_id, policy, revision).await
             };
             tokio::select! { biased; _ = cancel.cancelled() => Ok(()), result = operation => result }
         })?;
@@ -308,35 +320,88 @@ impl FrameProcessor for TranscribeSttProcessor {
         if direction == Direction::Upstream {
             return ctx.push(frame, direction).await;
         }
-        if let FrameData::InputAudio(audio) = &frame.data {
-            if ctx.is_usable() && !self.mute.load(Ordering::Acquire) && !audio.audio.is_empty() {
+        let input_audio = match &frame.data {
+            FrameData::InputAudio(audio) => Some((audio, "")),
+            FrameData::UserAudio(user) => Some((&user.audio, user.user_id.as_str())),
+            _ => None,
+        };
+        if let Some((audio, speaker)) = input_audio {
+            if ctx.is_usable()
+                && !self.mute.load(Ordering::Acquire)
+                && (!audio.audio.is_empty() || self.user_id.is_none())
+            {
                 let config = self.config_snapshot().map_err(processor_error)?;
-                audio.validate().map_err(|_| {
-                    processor_error(StreamingError::Invalid(
-                        "PCM must contain complete signed 16-bit samples",
-                    ))
-                })?;
-                if audio.sample_rate != config.sample_rate || audio.num_channels != 1 {
-                    return Err(processor_error(StreamingError::Invalid(
-                        "PCM format differs from Transcribe configuration",
-                    )));
+                // Empty input retains the prior geometry-bypass contract. It
+                // still advances speaker identity, without sending PCM bytes.
+                if !audio.audio.is_empty() {
+                    audio.validate().map_err(|_| {
+                        processor_error(StreamingError::Invalid(
+                            "PCM must contain complete signed 16-bit samples",
+                        ))
+                    })?;
+                    if audio.sample_rate != config.sample_rate || audio.num_channels != 1 {
+                        return Err(processor_error(StreamingError::Invalid(
+                            "PCM format differs from Transcribe configuration",
+                        )));
+                    }
                 }
-                if audio.audio.len() > config.max_audio_chunk_bytes {
+                let dynamic_speaker = self.user_id.is_none().then_some(speaker);
+                // This budget covers PCM and newly retained speaker bytes, not
+                // pre-existing context IDs or the forwarded frame's envelope.
+                if audio
+                    .audio
+                    .len()
+                    .checked_add(dynamic_speaker.map_or(0, str::len))
+                    .is_none_or(|bytes| bytes > config.max_audio_chunk_bytes)
+                {
                     return Err(processor_error(StreamingError::TooLarge));
                 }
-                self.start_session(ctx)?;
-                self.input()?
-                    .try_send(Command::Audio(audio.clone()), false)
-                    .map_err(processor_error)?;
-                if ctx.configuration().enable_usage_metrics {
-                    ctx.push(
-                        Frame::new(FrameData::Metrics(vec![Metric::SttUsage {
-                            processor: self.name().into(),
-                            audio_seconds: audio.duration_seconds(),
-                        }])),
-                        direction,
-                    )
-                    .await?;
+                let user_id = dynamic_speaker.map(str::to_owned);
+                if audio.audio.is_empty() {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?;
+                    if let Some(input) = state
+                        .input
+                        .as_ref()
+                        .filter(|input| !input.tx.is_closed() && !input.cancel.is_cancelled())
+                    {
+                        input
+                            .try_send(
+                                Command::Audio {
+                                    audio: audio.clone(),
+                                    user_id,
+                                },
+                                false,
+                            )
+                            .map_err(processor_error)?;
+                    } else if let Some(user_id) = user_id {
+                        // Identity-only input must not create a socket. Seed
+                        // the next session if a later control/audio starts it.
+                        state.idle_user_id = user_id;
+                    }
+                } else {
+                    self.start_session(ctx)?;
+                    self.input()?
+                        .try_send(
+                            Command::Audio {
+                                audio: audio.clone(),
+                                user_id,
+                            },
+                            false,
+                        )
+                        .map_err(processor_error)?;
+                    if ctx.configuration().enable_usage_metrics {
+                        ctx.push(
+                            Frame::new(FrameData::Metrics(vec![Metric::SttUsage {
+                                processor: self.name().into(),
+                                audio_seconds: audio.duration_seconds(),
+                            }])),
+                            direction,
+                        )
+                        .await?;
+                    }
                 }
             }
             if !self.audio_passthrough {
@@ -359,15 +424,14 @@ impl FrameProcessor for TranscribeSttProcessor {
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
-        if let Some(input) = self
+        let mut state = self
             .state
             .lock()
-            .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?
-            .input
-            .take()
-        {
+            .map_err(|_| ProcessorError::fatal("STT state lock poisoned"))?;
+        if let Some(input) = state.input.take() {
             input.cancel.cancel();
         }
+        state.idle_user_id.clear();
         Ok(())
     }
 }
@@ -377,7 +441,7 @@ async fn supervise(
     mut session: TranscribeSession,
     mut commands: mpsc::Receiver<Command>,
     ctx: &ProcessorContext,
-    user_id: &str,
+    mut user_id: String,
     policy: ReconnectPolicy,
     revision: u64,
 ) -> Result<(), ProcessorError> {
@@ -395,7 +459,7 @@ async fn supervise(
             biased;
             _ = health.changed() => return Ok(()),
             event = session.next() => match event {
-                Some(Ok(event)) => emit(event, ctx, user_id, revision).await?,
+                Some(Ok(event)) => emit(event, ctx, &user_id, revision).await?,
                 Some(Err(StreamingError::Cancelled)) => return Ok(()),
                 event => {
                     let error = match event { Some(Err(error)) => error, None if closing => return Ok(()), _ => StreamingError::Closed };
@@ -411,9 +475,14 @@ async fn supervise(
             },
             command = commands.recv(), if !closing => {
                 let rotate = match command {
-                    Some(command @ Command::Audio(_)) => {
+                    Some(mut command @ Command::Audio { .. }) => {
+                        // Commit on supervisor consumption, before provider
+                        // admission. Send failure does not restore an older ID.
+                        if let Command::Audio { user_id: speaker, .. } = &mut command {
+                            if let Some(speaker) = speaker.take() { user_id = speaker; }
+                        }
                         loop {
-                            match submit(&mut session, &command, ctx, user_id, revision).await? {
+                            match submit(&mut session, &command, ctx, &user_id, revision).await? {
                                 Ok(()) => break,
                                 Err(error) => {
                                     if !same_generation(ctx, revision) { return Ok(()); }
@@ -423,7 +492,7 @@ async fn supervise(
                                     match replacement {
                                         Some(replacement) => { session = replacement; connected_at = tokio::time::Instant::now(); pending = false; },
                                         None => {
-                                            if let Command::Audio(audio) = &command { report_unsent(audio.audio.len(), ctx).await?; }
+                                            if let Command::Audio { audio, .. } = &command { report_unsent(audio.audio.len(), ctx).await?; }
                                             return rejected_buffer(&mut commands, ctx).await;
                                         },
                                     }
@@ -435,7 +504,7 @@ async fn supervise(
                     Some(Command::Update(updated)) => { client = *updated; pending = true; !speaking },
                     Some(Command::Speaking(value)) => { speaking = value; !speaking && pending },
                     Some(Command::Finish) | None => {
-                        if let Err(error) = submit(&mut session, &Command::Finish, ctx, user_id, revision).await? {
+                        if let Err(error) = submit(&mut session, &Command::Finish, ctx, &user_id, revision).await? {
                             if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?;
                             return rejected_buffer(&mut commands, ctx).await;
                         }
@@ -446,12 +515,12 @@ async fn supervise(
                 if rotate {
                     // Preserve final transcripts from the old settings before opening
                     // the next socket. Only commands still in this bounded queue wait.
-                    if let Err(error) = submit(&mut session, &Command::Finish, ctx, user_id, revision).await? { if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?; }
+                    if let Err(error) = submit(&mut session, &Command::Finish, ctx, &user_id, revision).await? { if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?; }
                     loop {
                         if !same_generation(ctx, revision) { return Ok(()); }
                         let event = tokio::select! { biased; _ = health.changed() => return Ok(()), event = session.next() => event };
                         let Some(event) = event else { break; };
-                        match event { Ok(event) => emit(event, ctx, user_id, revision).await?, Err(error) => { if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?; break; } }
+                        match event { Ok(event) => emit(event, ctx, &user_id, revision).await?, Err(error) => { if !same_generation(ctx, revision) { return Ok(()); } ctx.push_error(error_frame(error)).await?; break; } }
                     }
                     if !same_generation(ctx, revision) { return Ok(()); }
                     let replacement = tokio::select! { biased; _ = health.changed() => return Ok(()), result = client.connect() => result };
@@ -489,7 +558,8 @@ async fn submit(
     let sender = session.sender();
     let send = async {
         match command {
-            Command::Audio(audio) => sender.send_audio(audio.clone()).await,
+            Command::Audio { audio, .. } if audio.audio.is_empty() => Ok(()),
+            Command::Audio { audio, .. } => sender.send_audio(audio.clone()).await,
             Command::Finish => sender.finish().await,
             _ => unreachable!(),
         }
@@ -575,7 +645,7 @@ async fn rejected_buffer(
     commands.close();
     let mut bytes = 0usize;
     while let Some(command) = commands.recv().await {
-        if let Command::Audio(audio) = command {
+        if let Command::Audio { audio, .. } = command {
             bytes = bytes.saturating_add(audio.audio.len());
         }
     }

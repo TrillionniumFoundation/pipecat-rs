@@ -53,7 +53,9 @@ struct State {
     response_failed: Arc<AtomicBool>,
     turns: Vec<CancellationToken>,
     fences: Vec<CancellationToken>,
-    tail: Option<CancellationToken>,
+    // Completion dependencies remain until the owned task actually drops. A
+    // cancelled middle task must not release a successor past a live survivor.
+    completions: Vec<CancellationToken>,
     health_revision: u64,
     timeline: Arc<AtomicU64>,
 }
@@ -73,7 +75,7 @@ impl CartesiaTtsProcessor {
                 response_failed: Arc::default(),
                 turns: vec![],
                 fences: vec![],
-                tail: None,
+                completions: vec![],
                 health_revision: 0,
                 timeline: Arc::default(),
             }),
@@ -128,12 +130,12 @@ impl CartesiaTtsProcessor {
             .map_err(|_| ProcessorError::fatal("TTS context identity exhausted"))?;
         let context_id = format!("pipecat-tts-{serial}");
         let completed = CancellationToken::new();
-        let predecessor = state.tail.replace(completed.clone());
+        state.completions.retain(|done| !done.is_cancelled());
+        let predecessors = state.completions.clone();
         // Capture guards before spawning so even an unpolled aborted task
         // releases its successor and counts as no longer live.
-        let completion_guard = CancelOnDrop(completed);
+        let completion_guard = CancelOnDrop(completed.clone());
         let cancel_guard = CancelOnDrop(worker_cancel.clone());
-        state.turns.push(cancel.clone());
         let worker_failed = response_failed.clone();
         let mode = self.aggregation_mode;
         let generation = ctx.health().generation();
@@ -145,11 +147,15 @@ impl CartesiaTtsProcessor {
                 biased;
                 _ = worker_cancel.cancelled() => Ok(()),
                 result = async {
-                    if let Some(predecessor) = predecessor { predecessor.cancelled().await; }
+                    for predecessor in predecessors { predecessor.cancelled().await; }
                     run_turn(client, context_id, start, rx, finish_rx, worker_failed, mode, generation, timeline, audio_watchdog, output).await
                 } => result,
             }
         })?;
+        if !completed.is_cancelled() {
+            state.turns.push(cancel.clone());
+            state.completions.push(completed);
+        }
         Ok(Turn {
             tx,
             finish,
@@ -287,29 +293,58 @@ impl CartesiaTtsProcessor {
         Ok(Self::finish_locked(&mut state, frame).is_some())
     }
     fn fence(&self, frame: Frame, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        self.enqueue_frame(frame, true, ctx)
+    }
+    /// Queue normal frames behind owned synthesis without finalizing the active
+    /// provider context. Subsequent text may still enter that same context.
+    fn enqueue_frame(
+        &self,
+        frame: Frame,
+        finish_context: bool,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
         let mut state = self
             .state
             .lock()
             .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
         state.fences.retain(|done| !done.is_cancelled());
         if state.fences.len() >= state.client.config().limits.queue_capacity {
+            state.response_failed.store(true, Ordering::Release);
             return Err(processor_error(StreamingError::Backpressure));
         }
-        Self::finish_locked(&mut state, None);
+        if finish_context {
+            Self::finish_locked(&mut state, None);
+        }
+        state.completions.retain(|done| !done.is_cancelled());
+        let predecessors = state.completions.clone();
         let done = CancellationToken::new();
-        let predecessor = state.tail.replace(done.clone());
-        state.fences.push(done.clone());
-        let completion_guard = CancelOnDrop(done);
+        let completion_guard = CancelOnDrop(done.clone());
         let output = ctx.clone();
-        // Interruption cancels synthesis, but its completion guard still
-        // releases the fence. This acknowledges synthesis, never playout.
-        ctx.spawn("cartesia-fence", false, async move {
+        let failed = state.response_failed.clone();
+        // The existing flows fence survives interruption. An ordinary frame
+        // instead retains its own interruption policy and opaque envelope.
+        let interruptible = !finish_context && frame.interruptible;
+        let admitted = ctx.spawn("cartesia-fence", interruptible, async move {
             let _completion_guard = completion_guard;
-            if let Some(predecessor) = predecessor {
+            for predecessor in predecessors {
                 predecessor.cancelled().await;
             }
-            output.push(frame, Direction::Downstream).await
-        })?;
+            let result = output.push(frame, Direction::Downstream).await;
+            if result.is_err() {
+                // This cannot rewrite a response end already emitted by the
+                // preceding context; the runtime still records the push error.
+                failed.store(true, Ordering::Release);
+            }
+            result
+        });
+        if let Err(error) = admitted {
+            state.response_failed.store(true, Ordering::Release);
+            return Err(error);
+        }
+        if !done.is_cancelled() {
+            state.fences.push(done.clone());
+            state.completions.push(done);
+        }
         Ok(())
     }
     // Every health revision retires the previous generation, even when a
@@ -338,7 +373,7 @@ impl CartesiaTtsProcessor {
         }
         state.active = None;
         state.response_failed = Arc::default();
-        state.tail = None;
+        state.completions.retain(|done| !done.is_cancelled());
         state.timeline = Arc::default();
         Ok(())
     }
@@ -510,7 +545,7 @@ impl FrameProcessor for CartesiaTtsProcessor {
                 }
                 // A fence or standalone speak may have closed the context.
                 // Retain the response's failure flag across its empty barrier.
-                if state.tail.as_ref().is_some_and(|tail| !tail.is_cancelled()) {
+                if state.completions.iter().any(|done| !done.is_cancelled()) {
                     let failed = state.response_failed.clone();
                     state.active = Some(self.start_turn(&mut state, None, failed, ctx)?);
                     Self::finish_locked(&mut state, Some(frame));
@@ -523,6 +558,13 @@ impl FrameProcessor for CartesiaTtsProcessor {
                 state.response_failed = Arc::default();
             }
             _ => {}
+        }
+        let skip_tts = matches!(
+            &frame.data,
+            FrameData::Text(text) | FrameData::LlmText(text) if text.skip_tts == Some(true)
+        );
+        if !frame.is_system() && !frame.is_terminal() && !skip_tts {
+            return self.enqueue_frame(frame, false, ctx);
         }
         ctx.push(frame, direction).await
     }
@@ -1084,5 +1126,543 @@ mod tests {
             iso_timestamp(std::time::Duration::from_micros(951827696123456)),
             "2000-02-29T12:34:56.123456+00:00"
         );
+    }
+}
+
+#[cfg(test)]
+mod ordering_survivor_tests {
+    use super::*;
+    use pipecat_core::{
+        DirectedFrame, Pipeline, PipelineConfig, PipelineError, PipelineWorker, WorkerState,
+    };
+    use std::time::Duration;
+
+    const DEADLINE: Duration = Duration::from_secs(3);
+    const HELD_WINDOW: Duration = Duration::from_millis(50);
+
+    // Candidate-only internal controls, not public-API baseline regressions.
+    // An ordinary push is nonblocking, so install one real owned task and its
+    // matching completion/fence records to hold A. All subsequent turn/fence
+    // admission, interruption, terminal draining and task reaping are real.
+    struct HeldPredecessor {
+        tts: Arc<CartesiaTtsProcessor>,
+        held_id: u64,
+        forward_held: bool,
+        release: Mutex<Option<oneshot::Receiver<()>>>,
+        observed: mpsc::Sender<Admission>,
+    }
+
+    #[derive(Debug)]
+    struct Admission {
+        id: u64,
+        result: Result<(), ProcessorError>,
+        fences: usize,
+        completions: usize,
+        active: bool,
+        response_failed: bool,
+    }
+
+    impl HeldPredecessor {
+        fn hold(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            assert!(!frame.interruptible);
+            let release = self.release.lock().unwrap().take().unwrap();
+            let done = CancellationToken::new();
+            let guard = CancelOnDrop(done.clone());
+            let output = ctx.clone();
+            let forward_held = self.forward_held;
+            ctx.spawn("held-noninterruptible-predecessor", false, async move {
+                let _guard = guard;
+                release.await.unwrap();
+                if forward_held {
+                    output.push(frame, direction).await
+                } else {
+                    Ok(())
+                }
+            })?;
+            let mut state = self.tts.state.lock().unwrap();
+            state.fences.push(done.clone());
+            state.completions.push(done);
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl FrameProcessor for HeldPredecessor {
+        fn name(&self) -> &str {
+            self.tts.name()
+        }
+        async fn setup(
+            &self,
+            config: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            self.tts.setup(config, ctx).await
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            let id = frame.id;
+            let result = if id == self.held_id {
+                self.hold(frame, direction, ctx)
+            } else {
+                self.tts.process(frame, direction, ctx).await
+            };
+            let state = self.tts.state.lock().unwrap();
+            self.observed
+                .try_send(Admission {
+                    id,
+                    result: result.clone(),
+                    fences: state.fences.len(),
+                    completions: state.completions.len(),
+                    active: state.active.is_some(),
+                    response_failed: state.response_failed.load(Ordering::Acquire),
+                })
+                .unwrap();
+            result
+        }
+        async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+            self.tts.prepare_end(ctx).await
+        }
+        async fn cleanup(&self) -> Result<(), ProcessorError> {
+            self.tts.cleanup().await
+        }
+    }
+
+    struct Fixture {
+        worker: PipelineWorker,
+        observed: mpsc::Receiver<Admission>,
+        release: oneshot::Sender<()>,
+        tts: Arc<CartesiaTtsProcessor>,
+        first: Frame,
+    }
+
+    async fn fixture(queue_capacity: usize, max_background_tasks: usize) -> Fixture {
+        fixture_with_output(queue_capacity, max_background_tasks, 1024, true).await
+    }
+
+    async fn fixture_with_output(
+        queue_capacity: usize,
+        max_background_tasks: usize,
+        output_capacity: usize,
+        forward_held: bool,
+    ) -> Fixture {
+        let mut config = CartesiaConfig::new("synthetic-key", "voice");
+        // These tests admit only empty turns and opaque Data frames. No provider
+        // connection or synthesis request is needed or expected.
+        config.endpoint = "ws://127.0.0.1:1/tts".into();
+        config.limits.queue_capacity = queue_capacity;
+        let tts = Arc::new(CartesiaTtsProcessor::new(
+            CartesiaClient::new(config).unwrap(),
+        ));
+        let first = marker(false);
+        let (release, receiver) = oneshot::channel();
+        let (observed, receiver_observed) = mpsc::channel(32);
+        let processor = HeldPredecessor {
+            tts: tts.clone(),
+            held_id: first.id,
+            forward_held,
+            release: Mutex::new(Some(receiver)),
+            observed,
+        };
+        let worker = Pipeline::new(vec![Arc::new(processor)])
+            .start(PipelineConfig {
+                max_background_tasks,
+                output_capacity,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        Fixture {
+            worker,
+            observed: receiver_observed,
+            release,
+            tts,
+            first,
+        }
+    }
+
+    fn marker(interruptible: bool) -> Frame {
+        Frame::new(FrameData::Data).with_interruptible(interruptible)
+    }
+
+    async fn attempt(
+        worker: &PipelineWorker,
+        observed: &mut mpsc::Receiver<Admission>,
+        frame: Frame,
+    ) -> Admission {
+        let id = frame.id;
+        worker
+            .sender()
+            .send(frame, Direction::Downstream)
+            .await
+            .unwrap();
+        tokio::time::timeout(DEADLINE, async {
+            loop {
+                let admission = observed.recv().await.unwrap();
+                if admission.id == id {
+                    return admission;
+                }
+            }
+        })
+        .await
+        .expect("processor did not report the frame attempt")
+    }
+
+    async fn admit(
+        worker: &PipelineWorker,
+        observed: &mut mpsc::Receiver<Admission>,
+        frame: Frame,
+    ) -> Admission {
+        let admission = attempt(worker, observed, frame).await;
+        assert!(admission.result.is_ok(), "{:?}", admission.result);
+        admission
+    }
+
+    fn completion_tokens(tts: &CartesiaTtsProcessor) -> Vec<CancellationToken> {
+        tts.state.lock().unwrap().completions.clone()
+    }
+
+    async fn collect_held_window(worker: &mut PipelineWorker) -> Vec<DirectedFrame> {
+        let mut frames = vec![];
+        let result = tokio::time::timeout(HELD_WINDOW, async {
+            while let Some(frame) = worker.recv().await {
+                frames.push(frame);
+            }
+        })
+        .await;
+        assert!(result.is_err(), "pipeline terminated while A was held");
+        frames
+    }
+
+    fn assert_no_synthesis(frames: &[DirectedFrame]) {
+        assert!(!frames.iter().any(|f| matches!(
+            f.frame.data,
+            FrameData::TtsStarted(_) | FrameData::TtsAudio(_) | FrameData::TtsStopped(_)
+        )));
+    }
+
+    async fn interrupted_middle_preserves_survivor(middle_is_turn: bool) {
+        let Fixture {
+            mut worker,
+            mut observed,
+            release,
+            tts,
+            first,
+        } = fixture(8, 8).await;
+        let middle = if middle_is_turn {
+            Frame::new(FrameData::LlmResponseStart)
+        } else {
+            marker(true)
+        };
+        let last = marker(false);
+        admit(&worker, &mut observed, first.clone()).await;
+        admit(&worker, &mut observed, middle.clone()).await;
+        let admission = admit(&worker, &mut observed, last.clone()).await;
+        assert_eq!(
+            admission.active, middle_is_turn,
+            "normal enqueue must leave an active provider context open"
+        );
+        assert_eq!(admission.completions, 3);
+        let completions = completion_tokens(&tts);
+        admit(&worker, &mut observed, Frame::interruption()).await;
+        // Wait for B's actual task drop, not merely interruption admission.
+        tokio::time::timeout(DEADLINE, completions[1].cancelled())
+            .await
+            .unwrap();
+        assert!(!completions[0].is_cancelled());
+        worker.end().await.unwrap();
+        let mut frames = collect_held_window(&mut worker).await;
+        let overtook = frames.iter().any(|f| f.frame.id == last.id);
+        let premature_end = frames
+            .iter()
+            .any(|f| matches!(f.frame.data, FrameData::End(_)));
+        release.send(()).unwrap();
+        let (rest, report) = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        frames.extend(rest);
+        assert_eq!(report.state, WorkerState::Ended);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(
+            !overtook,
+            "cancelled B released C while uninterruptible A was held"
+        );
+        assert!(
+            !premature_end,
+            "End escaped before surviving owned work drained"
+        );
+        let ids: Vec<_> = frames
+            .iter()
+            .filter_map(|f| {
+                [first.id, middle.id, last.id]
+                    .contains(&f.frame.id)
+                    .then_some(f.frame.id)
+            })
+            .collect();
+        assert_eq!(ids, [first.id, last.id]);
+        let last_index = frames.iter().position(|f| f.frame.id == last.id).unwrap();
+        let end_index = frames
+            .iter()
+            .position(|f| matches!(f.frame.data, FrameData::End(_)))
+            .unwrap();
+        assert!(last_index < end_index);
+        assert!(completions.iter().all(CancellationToken::is_cancelled));
+        assert_no_synthesis(&frames);
+    }
+
+    #[tokio::test]
+    async fn interrupted_middle_turn_cannot_release_fence_past_held_survivor() {
+        interrupted_middle_preserves_survivor(true).await;
+    }
+
+    #[tokio::test]
+    async fn interrupted_middle_normal_frame_cannot_release_fence_past_held_survivor() {
+        interrupted_middle_preserves_survivor(false).await;
+    }
+
+    #[tokio::test]
+    async fn cancel_reaps_all_held_surviving_dependencies_without_release() {
+        let Fixture {
+            worker,
+            mut observed,
+            release,
+            tts,
+            first,
+        } = fixture(8, 8).await;
+        let middle = Frame::new(FrameData::LlmResponseStart);
+        let last = marker(false);
+        admit(&worker, &mut observed, first.clone()).await;
+        admit(&worker, &mut observed, middle.clone()).await;
+        let admission = admit(&worker, &mut observed, last.clone()).await;
+        assert!(
+            admission.active,
+            "normal enqueue finalized the open context"
+        );
+        assert_eq!(admission.completions, 3);
+        let completions = completion_tokens(&tts);
+        worker.cancel("cancel all dependency owners").await.unwrap();
+        let (frames, report) = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.state, WorkerState::Cancelled);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(
+            release.send(()).is_err(),
+            "owned held predecessor was not reaped"
+        );
+        assert!(completions.iter().all(CancellationToken::is_cancelled));
+        assert!(!frames
+            .iter()
+            .any(|f| [first.id, middle.id, last.id].contains(&f.frame.id)));
+        assert!(!frames
+            .iter()
+            .any(|f| matches!(f.frame.data, FrameData::End(_))));
+        assert_no_synthesis(&frames);
+    }
+
+    #[tokio::test]
+    async fn exact_fence_queue_cap_rejects_only_overflow_and_preserves_failure_barrier() {
+        let Fixture {
+            worker,
+            mut observed,
+            release,
+            tts,
+            first,
+        } = fixture(2, 8).await;
+        let second = marker(false);
+        let rejected = marker(false);
+        let end = Frame::new(FrameData::LlmResponseEnd);
+        let first_admission = admit(&worker, &mut observed, first.clone()).await;
+        assert_eq!(
+            (first_admission.fences, first_admission.completions),
+            (1, 1)
+        );
+        let second_admission = admit(&worker, &mut observed, second.clone()).await;
+        assert_eq!(
+            (second_admission.fences, second_admission.completions),
+            (2, 2)
+        );
+        let overflow = attempt(&worker, &mut observed, rejected.clone()).await;
+        assert_eq!(
+            overflow.result,
+            Err(processor_error(StreamingError::Backpressure))
+        );
+        assert_eq!((overflow.fences, overflow.completions), (2, 2));
+        assert!(overflow.response_failed);
+        assert!(!overflow.active);
+        // The failure barrier is a turn, so its separate admission cap permits
+        // it at the exact fence limit, while the core's total task cap still applies.
+        let barrier = admit(&worker, &mut observed, end.clone()).await;
+        assert_eq!((barrier.fences, barrier.completions), (2, 3));
+        assert!(!barrier.active);
+        let completions = completion_tokens(&tts);
+        release.send(()).unwrap();
+        worker.end().await.unwrap();
+        let (frames, report) = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.state, WorkerState::Ended);
+        assert_eq!(report.total_errors, 1);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        let error = &report.errors[0];
+        assert_eq!(error.error, "streaming speech queue is full");
+        assert_eq!(error.category, ErrorCategory::Application);
+        assert!(!error.fatal);
+        assert_eq!(error.processor.as_deref(), Some("CartesiaTtsService"));
+        let ids: Vec<_> = frames
+            .iter()
+            .filter_map(|f| {
+                [first.id, second.id, rejected.id, end.id]
+                    .contains(&f.frame.id)
+                    .then_some(f.frame.id)
+            })
+            .collect();
+        assert_eq!(ids, [first.id, second.id, end.id]);
+        let response_end = frames.iter().find(|f| f.frame.id == end.id).unwrap();
+        assert_eq!(
+            response_end.frame.metadata.get("failed"),
+            Some(&serde_json::json!(true))
+        );
+        assert!(completions.iter().all(CancellationToken::is_cancelled));
+        assert_no_synthesis(&frames);
+    }
+
+    #[tokio::test]
+    async fn exact_core_task_budget_fails_explicitly_and_reaps_without_release() {
+        let Fixture {
+            mut worker,
+            mut observed,
+            release,
+            tts,
+            first,
+        } = fixture(8, 2).await;
+        let second = marker(false);
+        let rejected = marker(false);
+        admit(&worker, &mut observed, first.clone()).await;
+        let second_admission = admit(&worker, &mut observed, second.clone()).await;
+        assert_eq!(
+            (second_admission.fences, second_admission.completions),
+            (2, 2)
+        );
+        let completions = completion_tokens(&tts);
+        let overflow = attempt(&worker, &mut observed, rejected.clone()).await;
+        assert_eq!(
+            overflow.result,
+            Err(ProcessorError::fatal("background task limit reached"))
+        );
+        assert_eq!((overflow.fences, overflow.completions), (2, 2));
+        assert!(overflow.response_failed);
+        let frames = tokio::time::timeout(DEADLINE, async {
+            let mut frames = vec![];
+            while let Some(frame) = worker.recv().await {
+                frames.push(frame);
+            }
+            frames
+        })
+        .await
+        .unwrap();
+        let error = tokio::time::timeout(DEADLINE, worker.join())
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PipelineError::Execution("background task limit reached".into())
+        );
+        assert_eq!(worker.state(), WorkerState::Failed);
+        let errors = worker.errors();
+        assert_eq!(worker.total_errors(), 1);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].error, "background task limit reached");
+        assert_eq!(errors[0].category, ErrorCategory::Unknown);
+        assert!(errors[0].fatal);
+        assert_eq!(errors[0].processor.as_deref(), Some("CartesiaTtsService"));
+        assert_eq!(frames.iter().filter(|f| matches!(&f.frame.data,
+            FrameData::Error(error) if error.fatal && error.error == "background task limit reached"
+        ) && f.direction == Direction::Upstream).count(), 1);
+        assert!(
+            release.send(()).is_err(),
+            "fatal admission did not reap held A"
+        );
+        assert!(completions.iter().all(CancellationToken::is_cancelled));
+        assert!(!frames
+            .iter()
+            .any(|f| [first.id, second.id, rejected.id].contains(&f.frame.id)));
+        assert!(!frames
+            .iter()
+            .any(|f| matches!(f.frame.data, FrameData::End(_))));
+        assert_no_synthesis(&frames);
+    }
+
+    #[tokio::test]
+    async fn full_output_fence_push_fails_explicitly_without_successful_end() {
+        // Here A only holds a completion dependency. Its release must not do
+        // the failing push: that push belongs to the real queued fence B.
+        let Fixture {
+            mut worker,
+            mut observed,
+            release,
+            tts,
+            first,
+        } = fixture_with_output(8, 8, 1, false).await;
+        let start = tokio::time::timeout(DEADLINE, worker.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(start.frame.data, FrameData::Start(_)));
+        let marker = marker(false);
+        let bypass = Frame::new(FrameData::System);
+        admit(&worker, &mut observed, first.clone()).await;
+        let admission = admit(&worker, &mut observed, marker.clone()).await;
+        assert_eq!((admission.fences, admission.completions), (2, 2));
+        let completions = completion_tokens(&tts);
+        let failed = tts.state.lock().unwrap().response_failed.clone();
+        // System frames bypass the ordinary FIFO and fill the sole output slot.
+        // Do not consume it until the real queued push has failed.
+        admit(&worker, &mut observed, bypass.clone()).await;
+        worker.end().await.unwrap();
+        release.send(()).unwrap();
+        let error = tokio::time::timeout(DEADLINE, worker.join())
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            error,
+            PipelineError::Backpressure(
+                "worker output queue is full; consume output concurrently".into()
+            )
+        );
+        assert_eq!(worker.state(), WorkerState::Failed);
+        assert!(
+            failed.load(Ordering::Acquire),
+            "fence push failure was not recorded"
+        );
+        assert!(completions.iter().all(CancellationToken::is_cancelled));
+        let mut frames = vec![start];
+        while let Some(frame) = tokio::time::timeout(DEADLINE, worker.recv()).await.unwrap() {
+            frames.push(frame);
+        }
+        assert_eq!(frames.iter().filter(|f| f.frame.id == bypass.id).count(), 1);
+        assert!(!frames
+            .iter()
+            .any(|f| [first.id, marker.id].contains(&f.frame.id)));
+        assert!(!frames
+            .iter()
+            .any(|f| matches!(f.frame.data, FrameData::End(_))));
+        assert_no_synthesis(&frames);
+        // The authoritative fatal result is join's Backpressure error. A full
+        // output lane cannot promise delivery of an additional ErrorFrame, nor
+        // can this failure rewrite a response end already emitted upstream.
     }
 }

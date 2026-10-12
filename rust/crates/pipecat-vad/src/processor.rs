@@ -264,35 +264,40 @@ impl FrameProcessor for SileroVadProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> std::result::Result<(), ProcessorError> {
+        let audio = match &frame.data {
+            FrameData::InputAudio(audio) => Some(audio),
+            FrameData::UserAudio(user) => Some(&user.audio),
+            _ => None,
+        };
+        if let Some(audio) = audio {
+            audio
+                .validate()
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
+            if audio.sample_rate != self.sample_rate || audio.num_channels != 1 {
+                return Err(ProcessorError::new(
+                    "VAD input requires mono PCM at its configured sample rate",
+                ));
+            }
+            let max_samples = (self.options.max_frame_duration.as_secs_f64()
+                * f64::from(self.sample_rate))
+            .floor() as usize;
+            if audio.audio.len() / 2 > max_samples {
+                return Err(ProcessorError::new(
+                    "VAD input frame exceeds configured duration limit",
+                ));
+            }
+            let bytes = audio.audio.clone();
+            *self
+                .last_audio
+                .lock()
+                .map_err(|_| ProcessorError::fatal("VAD idle lock poisoned"))? = Instant::now();
+            ctx.push(frame, direction).await?;
+            return self.enqueue(Command::Audio { bytes });
+        }
         if direction != Direction::Downstream {
             return ctx.push(frame, direction).await;
         }
         match &frame.data {
-            FrameData::InputAudio(audio) => {
-                audio
-                    .validate()
-                    .map_err(|error| ProcessorError::new(error.to_string()))?;
-                if audio.sample_rate != self.sample_rate || audio.num_channels != 1 {
-                    return Err(ProcessorError::new(
-                        "VAD input requires mono PCM at its configured sample rate",
-                    ));
-                }
-                let max_samples = (self.options.max_frame_duration.as_secs_f64()
-                    * f64::from(self.sample_rate))
-                .floor() as usize;
-                if audio.audio.len() / 2 > max_samples {
-                    return Err(ProcessorError::new(
-                        "VAD input frame exceeds configured duration limit",
-                    ));
-                }
-                let bytes = audio.audio.clone();
-                *self
-                    .last_audio
-                    .lock()
-                    .map_err(|_| ProcessorError::fatal("VAD idle lock poisoned"))? = Instant::now();
-                ctx.push(frame, direction).await?;
-                self.enqueue(Command::Audio { bytes })
-            }
             FrameData::VadParamsUpdate(params) => {
                 validate_params(params).map_err(|error| ProcessorError::new(error.to_string()))?;
                 let params = params.clone();

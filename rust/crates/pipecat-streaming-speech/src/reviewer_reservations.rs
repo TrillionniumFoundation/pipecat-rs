@@ -52,10 +52,7 @@ async fn reviewer_reservation_peer(
             .unwrap();
         match peer.next().await {
             Some(Ok(ReviewerReservationMessage::Pong(bytes)))
-                if bytes.as_ref() == marker.as_slice() =>
-            {
-                ()
-            }
+                if bytes.as_ref() == marker.as_slice() => {}
             other => panic!("expected readiness-loop Pong, received {other:?}"),
         }
     }

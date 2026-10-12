@@ -49,7 +49,9 @@ async fn coalesced_http_retirement_drops_inflight_audio_and_queued_utterance() {
     let old_start_id = old_start.id;
     let old_end = Frame::new(FrameData::LlmResponseEnd);
     let old_end_id = old_end.id;
-    let marker = Frame::text("accepted queue marker");
+    let mut text = TextFrame::new("accepted queue marker");
+    text.skip_tts = Some(true);
+    let marker = Frame::new(FrameData::Text(text));
     let marker_id = marker.id;
     for frame in [
         old_start,

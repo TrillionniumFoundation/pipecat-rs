@@ -43,7 +43,49 @@ configuration Debug output exclude credentials and upstream response bodies.
 interim transcription frames, preserving provider results, language, user ID,
 and UTC ISO-8601 timestamps. It honors STT mute, finalizes on VAD stop in either
 direction, survives conversational interruptions, and closes/drains on End.
-`with_audio_passthrough(false)` consumes input PCM instead of forwarding it.
+`with_audio_passthrough(false)` consumes both `InputAudio` and `UserAudio`
+instead of forwarding them. Both input variants submit their unchanged PCM;
+output/TTS audio is excluded. Upstream audio keeps the existing native bypass.
+Forwarding preserves the original frame, including its envelope and local tags.
+
+By default, transcription `user_id` is the latest speaker consumed by the
+supervisor: `UserAudio` supplies its ID, and plain `InputAudio` clears it.
+`with_user_id(id)` remains a fixed override, including an explicitly empty ID.
+This is current-speaker labeling; Deepgram results do not associate a result
+with an individual input frame or provide multi-user audio isolation.
+
+Accepted empty input in default dynamic mode updates identity in FIFO order,
+with no PCM message or usage metric, retaining the existing empty-audio geometry
+bypass. With an explicit fixed override, empty input bypasses the command queue
+(including when full) and retains the configured audio passthrough behavior.
+In dynamic mode, if no live input queue exists, a bounded identity seed waits for
+a later audio/control to start a session; empty input itself opens no connection. Muted, unusable,
+rejected, upstream, and output audio do not adopt a new speaker. Invalid
+nonempty PCM is also not admitted; its existing `InvalidRequest` handling can
+retire the health generation and discard the prior identity.
+A speaker becomes current before provider queue admission; send failure does
+not roll it back. Transient recovery and settings rotation inside one running
+supervisor retain its current speaker. A replacement supervisor starts from a
+newly accepted idle seed or the fixed/default ID; health-generation retirement
+clears the seed. Cancellation discards queued identity changes.
+
+At admission, dynamic PCM byte length plus newly retained speaker UTF-8 byte
+length must fit `limits.max_message_bytes` (checked together), and commands
+remain bounded by `limits.queue_capacity`. Active/idle dynamic speaker values
+come from those bounded admissions. This does not promise to resize retained
+allocations after a settings change, or bound pre-existing context IDs,
+forwarded frame envelopes/metadata, or total process memory. A fixed
+`with_user_id` override keeps its previous builder behavior and does not copy
+or charge ignored frame speaker IDs against the dynamic budget.
+
+These are native admission/scheduling refinements, not exact Python scheduling
+parity. The pinned Python service updates a service-wide ID at audio ingress
+and callbacks read it at emission; a later empty input can change it while an
+earlier `send_media` is suspended. The native supervisor consumes owned audio
+and identity together, and drains a settings socket before consuming queued
+successor audio. Health-generation identity reset is also a native boundary,
+not a claim that Python clears its service-wide ID on every reconnect.
+
 Typed `SttUpdateSettings` and generic `ServiceUpdateSettings` frames validate
 their complete prospective delta before changing the configuration. Named and
 local processor targets are respected; untargeted settings are consumed. The
@@ -274,3 +316,29 @@ Cartesia Turns is not included. Existing `CartesiaClient` remains the TTS API.
 Cartesia v2 committed-turn STT is available through `CartesiaTurnsClient` and
 `CartesiaTurnsProcessor`. See [CARTESIA_TURNS.md](CARTESIA_TURNS.md) for readiness,
 watchdog budgets, External strategy integration and explicit native narrowings.
+
+## Native downstream serialization
+
+Ordinary downstream, non-System frames are queued behind previously admitted TTS
+contexts and ordinary frames, retaining the original frame envelope, local tags,
+and observation identity. Queuing a marker does not finish an open context: later
+text can enter that same context, while a subsequent context waits for the marker.
+Upstream/System frames and explicit skip-TTS plain Text/LLM text keep their bypass
+paths. The existing native skipped AggregatedText/alignment path remains ordered;
+Python instead immediately forwards skip-TTS across that entire text family. End/Cancel/Interruption and the explicit flows fence keep their existing
+native lifecycle behavior. The existing Text/LLM text aggregation and synthesis
+path is retained.
+
+Context and marker admissions retain separate `queue_capacity` count limits and
+share the pipeline's background-task limit. Each new task records every still-live
+predecessor, so dropping an interrupted middle task cannot release a later
+surviving frame past a still-live predecessor. Including tasks being retired, the
+worst-case number of retained dependency references is O(B²), where B is the core
+background-task cap. This is a task/reference-count bound, not a new byte limit
+on arbitrary frame payloads or metadata.
+
+Marker task-admission errors mark the current response failure state. A marker's
+later output failure is reported by the core runtime; it cannot retroactively
+change a response-end frame already emitted by the preceding context. Loopback
+ordering and cancellation tests are scoped to this native adapter, not complete
+Python service parity, live-provider behavior or physical playout.

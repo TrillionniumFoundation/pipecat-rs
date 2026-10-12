@@ -234,8 +234,9 @@ struct State {
     failure: Arc<AtomicBool>,
 }
 /// Synthesizes downstream complete utterances, including three-channel `TtsTextInput`.
-/// All other frames pass through; `LlmResponseEnd` and downstream flush probes
-/// wait behind accepted utterances. Requests are sequential, bounded and owned by
+/// Normal downstream frames wait behind accepted utterances; explicit skipped
+/// incremental text, system and upstream frames bypass synthesis. Requests are
+/// sequential, bounded and owned by
 /// the core runtime. End drains requests; interruption/Cancel discard stale audio.
 /// Emits lifecycle, PCM, source anchors and completion diagnostics, never spoken text.
 /// Character-alignment events remain available through the ElevenLabs client API.
@@ -305,6 +306,18 @@ impl HttpTtsProcessor {
             .lock()
             .map_err(|_| ProcessorError::fatal("HTTP TTS state lock poisoned"))?;
         state.pending.retain(|p| !p.done.is_cancelled());
+        if state.pending.is_empty() {
+            if let Command::Generic(frame) = command {
+                // Serialize idle routing with admission/cancellation. try_push
+                // is nonblocking; its clock/wakers must obey core's contract
+                // against reentering or waiting for locks held by the caller.
+                let result = ctx.try_push(*frame, Direction::Downstream);
+                if result.is_err() {
+                    state.failure.store(true, Ordering::Release);
+                }
+                return result;
+            }
+        }
         if let Command::Speak(input) = &command {
             let max_text = TtsAlignmentLimits::default()
                 .sequencer
@@ -347,10 +360,17 @@ impl HttpTtsProcessor {
                     .with_category(ErrorCategory::Application),
             );
         }
-        let previous = state.pending.last().map(|p| p.done.clone());
+        // Waiting only for the last task is insufficient: interruption can drop
+        // that task while an earlier uninterruptible fence is still pending.
+        // At most two bounded pending pools contribute these dependencies.
+        let previous: Vec<_> = state.pending.iter().map(|p| p.done.clone()).collect();
         let done = CancellationToken::new();
         let stop = CancellationToken::new();
-        let guard = DoneOnDrop(done.clone());
+        let guard = DoneOnDrop {
+            done: done.clone(),
+            failure: state.failure.clone(),
+            completed: false,
+        };
         let cancel = stop.clone();
         let backend = state.backend.clone();
         let generation = ctx.health().generation();
@@ -358,32 +378,61 @@ impl HttpTtsProcessor {
         let timeline = self.timeline.clone();
         let ctx_output = ctx.clone();
         let failure = state.failure.clone();
-        let interruptible = !matches!(&command, Command::Fence(frame) if !frame.interruptible);
+        let interruptible = !matches!(
+            &command,
+            Command::Fence(frame) | Command::Generic(frame) if !frame.interruptible
+        );
         ctx.spawn("http-tts-utterance", interruptible, async move {
-            let _guard = guard;
+            let mut guard = guard;
             let operation = async {
-                if let Some(previous) = previous { previous.cancelled().await; }
+                for previous in previous {
+                    previous.cancelled().await;
+                }
                 match command {
                     Command::Speak(input) => {
-                        synthesize(backend, *input, ctx_output, failure, generation, timeline, audio_watchdog).await
+                        synthesize(
+                            backend,
+                            *input,
+                            ctx_output,
+                            failure.clone(),
+                            generation,
+                            timeline,
+                            audio_watchdog,
+                        )
+                        .await
                     }
-                    Command::Fence(mut frame) => {
+                    Command::Fence(mut frame) | Command::Generic(mut frame) => {
                         if matches!(frame.data, FrameData::LlmResponseEnd) {
-                            if failure.load(Ordering::Acquire) { frame.metadata.insert("failed".into(), true.into()); }
+                            if failure.load(Ordering::Acquire) {
+                                frame.metadata.insert("failed".into(), true.into());
+                            }
                             frame.set_pipeline_pts(timeline.load(Ordering::Acquire));
                         }
                         ctx_output.push(*frame, Direction::Downstream).await
                     }
                 }
             };
-            tokio::select! { biased; _ = cancel.cancelled() => Ok(()), result = operation => result }
+            let result = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => {
+                    failure.store(true, Ordering::Release);
+                    Ok(())
+                },
+                result = operation => result,
+            };
+            guard.completed = result.is_ok();
+            result
         })?;
-        state.pending.push(Pending {
-            done,
-            stop,
-            interruptible,
-            speech,
-        });
+        // A stale invocation can be accepted as a no-op by the core. Do not
+        // publish a dependency for a future already dropped at admission.
+        if !done.is_cancelled() {
+            state.pending.push(Pending {
+                done,
+                stop,
+                interruptible,
+                speech,
+            });
+        }
         Ok(())
     }
 }
@@ -399,11 +448,22 @@ struct SpeechInput {
 enum Command {
     Speak(Box<SpeechInput>),
     Fence(Box<Frame>),
+    Generic(Box<Frame>),
 }
-struct DoneOnDrop(CancellationToken);
+struct DoneOnDrop {
+    done: CancellationToken,
+    failure: Arc<AtomicBool>,
+    completed: bool,
+}
 impl Drop for DoneOnDrop {
     fn drop(&mut self) {
-        self.0.cancel();
+        // Publish failure before releasing later completion fences. This also
+        // covers rejected task admission, panics and cancellation by the core.
+        // The captured response generation cannot poison a later response.
+        if !self.completed {
+            self.failure.store(true, Ordering::Release);
+        }
+        self.done.cancel();
     }
 }
 #[async_trait]
@@ -534,6 +594,9 @@ impl FrameProcessor for HttpTtsProcessor {
                 )?;
                 return Ok(());
             }
+            FrameData::Text(text) | FrameData::LlmText(text) if text.skip_tts == Some(true) => {
+                return ctx.push(frame, direction).await;
+            }
             FrameData::LlmResponseStart => {
                 self.state
                     .lock()
@@ -549,6 +612,10 @@ impl FrameProcessor for HttpTtsProcessor {
                 return Ok(());
             }
             _ => {}
+        }
+        if !frame.is_system() && !frame.is_terminal() {
+            self.enqueue(Command::Generic(Box::new(frame)), ctx)?;
+            return Ok(());
         }
         ctx.push(frame, direction).await
     }
@@ -884,4 +951,356 @@ fn settings_error(error: SpeechError) -> ProcessorError {
     ProcessorError::new(error.error)
         .with_category(error.category)
         .with_permanence_override(false)
+}
+
+#[cfg(test)]
+mod ordering_survivor_tests {
+    use super::*;
+    use pipecat_core::{DirectedFrame, Pipeline, PipelineConfig, PipelineWorker};
+    use std::time::Duration;
+    use tokio::sync::{mpsc, oneshot};
+
+    const DEADLINE: Duration = Duration::from_secs(3);
+
+    // The public HTTP backend can hold speech, but its passthrough ctx.push is
+    // intentionally nonblocking. Install one real owned noninterruptible task
+    // and its matching pending record to hold predecessor A before admission.
+    // No private runtime state or production hooks are changed by this fixture.
+    struct HeldPredecessor {
+        tts: Arc<HttpTtsProcessor>,
+        release: Mutex<Option<oneshot::Receiver<()>>>,
+        accepted: mpsc::Sender<u64>,
+    }
+    struct TestDone(CancellationToken);
+    impl Drop for TestDone {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+    #[async_trait]
+    impl FrameProcessor for HeldPredecessor {
+        fn name(&self) -> &str {
+            self.tts.name()
+        }
+        fn health(&self) -> Option<ProcessorHealth> {
+            self.tts.health()
+        }
+        async fn setup(
+            &self,
+            config: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            self.tts.setup(config, ctx).await
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            let id = frame.id;
+            if matches!(frame.data, FrameData::Data) {
+                assert!(!frame.interruptible);
+                let release = self.release.lock().unwrap().take().unwrap();
+                let done = CancellationToken::new();
+                let stop = CancellationToken::new();
+                let guard = TestDone(done.clone());
+                let output = ctx.clone();
+                ctx.spawn("held-noninterruptible-predecessor", false, async move {
+                    let _guard = guard;
+                    release.await.unwrap();
+                    output.push(frame, direction).await
+                })?;
+                self.tts.state.lock().unwrap().pending.push(Pending {
+                    done,
+                    stop,
+                    interruptible: false,
+                    speech: false,
+                });
+            } else {
+                self.tts.process(frame, direction, ctx).await?;
+            }
+            self.accepted.try_send(id).unwrap();
+            Ok(())
+        }
+        async fn cleanup(&self) -> Result<(), ProcessorError> {
+            self.tts.cleanup().await
+        }
+    }
+    async fn admit(worker: &PipelineWorker, accepted: &mut mpsc::Receiver<u64>, frame: Frame) {
+        let id = frame.id;
+        worker
+            .sender()
+            .send(frame, Direction::Downstream)
+            .await
+            .unwrap();
+        tokio::time::timeout(DEADLINE, async {
+            while accepted.recv().await.unwrap() != id {}
+        })
+        .await
+        .unwrap();
+    }
+    async fn fixture() -> (
+        PipelineWorker,
+        mpsc::Receiver<u64>,
+        oneshot::Sender<()>,
+        tokio::net::TcpListener,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = crate::SpeechConfig::cartesia("synthetic-key");
+        config.base_url = format!("http://{}", listener.local_addr().unwrap());
+        let tts = Arc::new(
+            HttpTtsProcessor::new(
+                HttpTtsBackend::Cartesia {
+                    client: CartesiaHttpClient::new(config).unwrap(),
+                    request: CartesiaSynthesisRequest::new("", "voice"),
+                },
+                8,
+            )
+            .unwrap(),
+        );
+        let (release, receiver) = oneshot::channel();
+        let (accepted, admitted) = mpsc::channel(16);
+        let processor = HeldPredecessor {
+            tts,
+            release: Mutex::new(Some(receiver)),
+            accepted,
+        };
+        let worker = Pipeline::new(vec![Arc::new(processor)])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        (worker, admitted, release, listener)
+    }
+    fn final_marker() -> Frame {
+        let mut text = TextFrame::new("surviving last fence");
+        text.skip_tts = Some(true);
+        Frame::new(FrameData::AggregatedText(AggregatedTextFrame {
+            text,
+            aggregated_by: "sentence".into(),
+            raw_text: None,
+            context_id: None,
+            will_be_spoken: false,
+        }))
+        .with_interruptible(false)
+    }
+    #[tokio::test]
+    async fn cancelled_middle_task_does_not_release_a_later_fence_before_held_survivor() {
+        let (mut worker, mut accepted, release, _listener) = fixture().await;
+        let first = Frame::new(FrameData::Data).with_interruptible(false);
+        let last = final_marker();
+        admit(&worker, &mut accepted, first.clone()).await;
+        admit(
+            &worker,
+            &mut accepted,
+            Frame::new(FrameData::TtsSpeak(pipecat_core::TtsSpeakFrame::new(
+                "cancelled middle",
+            ))),
+        )
+        .await;
+        admit(&worker, &mut accepted, last.clone()).await;
+        admit(&worker, &mut accepted, Frame::interruption()).await;
+        let mut prefix: Vec<DirectedFrame> = vec![];
+        let overtook = tokio::time::timeout(Duration::from_millis(50), async {
+            loop {
+                let frame = worker.recv().await.unwrap();
+                let done = frame.frame.id == last.id;
+                prefix.push(frame);
+                if done {
+                    return;
+                }
+            }
+        })
+        .await
+        .is_ok();
+        // Release and join even on the baseline regression.
+        release.send(()).unwrap();
+        worker.end().await.unwrap();
+        let (frames, report) = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        prefix.extend(frames);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(
+            !overtook,
+            "cancelled B released C while uninterruptible A was held"
+        );
+        let first_index = prefix.iter().position(|f| f.frame.id == first.id).unwrap();
+        let last_index = prefix.iter().position(|f| f.frame.id == last.id).unwrap();
+        assert!(first_index < last_index);
+        assert!(!prefix.iter().any(|f| matches!(
+            f.frame.data,
+            FrameData::TtsStarted(_) | FrameData::TtsAudio(_)
+        )));
+    }
+    #[tokio::test]
+    async fn cancel_reaps_all_held_surviving_dependencies_without_release() {
+        let (worker, mut accepted, release, _listener) = fixture().await;
+        let first = Frame::new(FrameData::Data).with_interruptible(false);
+        let last = final_marker();
+        admit(&worker, &mut accepted, first.clone()).await;
+        admit(
+            &worker,
+            &mut accepted,
+            Frame::new(FrameData::TtsSpeak(pipecat_core::TtsSpeakFrame::new(
+                "cancelled middle",
+            ))),
+        )
+        .await;
+        admit(&worker, &mut accepted, last.clone()).await;
+        worker.cancel("cancel all dependency owners").await.unwrap();
+        let (frames, report) = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.state, pipecat_core::WorkerState::Cancelled);
+        assert!(
+            release.send(()).is_err(),
+            "owned predecessor was not reaped"
+        );
+        assert!(!frames
+            .iter()
+            .any(|f| [first.id, last.id].contains(&f.frame.id)));
+        assert!(!frames.iter().any(|f| matches!(
+            f.frame.data,
+            FrameData::TtsStarted(_) | FrameData::TtsAudio(_) | FrameData::End(_)
+        )));
+    }
+}
+
+#[cfg(test)]
+mod idle_forwarding_tests {
+    use super::*;
+    use pipecat_core::{Pipeline, PipelineConfig, PipelineError};
+    use std::time::Duration;
+    use tokio::sync::mpsc;
+
+    const DEADLINE: Duration = Duration::from_secs(3);
+
+    struct ObserveIdleFailure {
+        tts: HttpTtsProcessor,
+        observed: mpsc::Sender<(Result<(), ProcessorError>, bool)>,
+    }
+    #[async_trait]
+    impl FrameProcessor for ObserveIdleFailure {
+        fn name(&self) -> &str {
+            self.tts.name()
+        }
+        fn health(&self) -> Option<ProcessorHealth> {
+            self.tts.health()
+        }
+        async fn setup(
+            &self,
+            config: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            self.tts.setup(config, ctx).await
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(frame.data, FrameData::Data) {
+                let failure = self.tts.state.lock().unwrap().failure.clone();
+                let result = self.tts.process(frame, direction, ctx).await;
+                // Observe before cleanup can replace the current response and
+                // before a current-thread background task can poll.
+                self.observed
+                    .try_send((result.clone(), failure.load(Ordering::Acquire)))
+                    .unwrap();
+                result
+            } else {
+                self.tts.process(frame, direction, ctx).await
+            }
+        }
+        async fn cleanup(&self) -> Result<(), ProcessorError> {
+            self.tts.cleanup().await
+        }
+    }
+
+    #[tokio::test]
+    async fn idle_output_failure_marks_captured_response_before_returning() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = crate::SpeechConfig::cartesia("synthetic-key");
+        config.base_url = format!("http://{}", listener.local_addr().unwrap());
+        let backend = HttpTtsBackend::Cartesia {
+            client: CartesiaHttpClient::new(config).unwrap(),
+            request: CartesiaSynthesisRequest::new("", "voice"),
+        };
+        let (observed, mut receiver) = mpsc::channel(1);
+        let processor = ObserveIdleFailure {
+            tts: HttpTtsProcessor::new(backend.clone(), 4).unwrap(),
+            observed,
+        };
+        let worker = Pipeline::new(vec![Arc::new(processor)])
+            .start(PipelineConfig {
+                output_capacity: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        // Start owns the sole output slot until after the real idle push fails.
+        let mut state = worker.sender().watch();
+        worker
+            .sender()
+            .send(Frame::new(FrameData::Data), Direction::Downstream)
+            .await
+            .unwrap();
+        let (admission, captured_failure) = tokio::time::timeout(DEADLINE, receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(DEADLINE, async {
+            while !state.borrow_and_update().is_finished() {
+                state.changed().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        let result = tokio::time::timeout(DEADLINE, worker.collect())
+            .await
+            .unwrap();
+        assert!(
+            matches!(result, Err(PipelineError::Backpressure(ref message))
+            if message == "worker output queue is full; consume output concurrently")
+        );
+
+        // Output overflow is terminal. This is an independent new worker, not
+        // a claim that the failed worker can recover or accept another End.
+        let fresh = Pipeline::new(vec![Arc::new(HttpTtsProcessor::new(backend, 4).unwrap())])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        let end = Frame::new(FrameData::LlmResponseEnd);
+        fresh
+            .sender()
+            .send(end.clone(), Direction::Downstream)
+            .await
+            .unwrap();
+        fresh.end().await.unwrap();
+        let (frames, report) = tokio::time::timeout(DEADLINE, fresh.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let completion = frames
+            .iter()
+            .find(|frame| frame.frame.id == end.id)
+            .unwrap();
+        assert!(!completion.frame.metadata.contains_key("failed"));
+
+        let error = admission.expect_err("idle output admission must fail synchronously");
+        assert!(error.fatal);
+        assert_eq!(
+            error.message,
+            "backpressure: worker output queue is full; consume output concurrently"
+        );
+        assert!(
+            captured_failure,
+            "idle output error did not mark its captured response"
+        );
+    }
 }
