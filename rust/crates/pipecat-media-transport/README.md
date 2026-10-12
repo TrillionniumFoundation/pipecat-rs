@@ -199,8 +199,14 @@ participant departure with `remove_video_participant`, and connection loss with
 `disconnect_video`. Returning from the owned capture task also disconnects video.
 
 Feed native `InputImage` frames through `push_video_frame(key, frame)` for
-sampling and request correlation. Legacy `push(InputImage)` remains a bounded,
-uncorrelated image path. Correlated output is `UserImage`, preserving image
+sampling and request correlation. `push(InputImage)` and `push(UserImage)` with
+`request=None` provide bounded, uncorrelated capture: when ready, video-enabled
+and unpaused, they forward the original frame downstream without sampling or
+reconstructing its identity, payload, metadata or routing. Disabled or paused
+capture drops these images. Request-bearing `UserImage` frames are rejected by
+unpaused generic ingress; use the keyed raw-image path for owned requests.
+Ordinary pipeline `UserImage` processing remains direction-preserving passthrough.
+Correlated keyed output is `UserImage`, preserving image
 bytes and envelope metadata, identifying the participant and transport source,
 and carrying the request's text, append-to-context flag and tool identifiers.
 No extra copy is emitted for a scheduled frame that also answers a request.

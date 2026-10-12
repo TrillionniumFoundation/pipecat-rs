@@ -493,6 +493,66 @@ async fn provider_failure_and_continue_are_honestly_distinct_and_not_retried() {
     assert_eq!(result.failures[0].kind, "judge_continue");
     assert_eq!(p.count.load(Ordering::SeqCst), 1);
 }
+type ObservedJudgeDeadlines = Arc<std::sync::Mutex<Vec<Option<Instant>>>>;
+
+struct RecordRealClassifierDeadlines {
+    inner: JevClassifier,
+    deadlines: ObservedJudgeDeadlines,
+}
+impl pipecat_classifiers::Classifier for RecordRealClassifierDeadlines {
+    fn ask<'a, 'b, 'c, 'f>(
+        &'a self,
+        state: &'b Value,
+        questions: &'c pipecat_classifiers::Questions,
+        options: CallOptions,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = pipecat_classifiers::Result<pipecat_classifiers::ClassificationBatch>,
+                > + Send
+                + 'f,
+        >,
+    >
+    where
+        'a: 'f,
+        'b: 'f,
+        'c: 'f,
+        Self: 'f,
+    {
+        Box::pin(async move {
+            // Record only an actually polled invocation. Never hold this guard
+            // across the real classifier's await or alter its CallOptions.
+            {
+                let mut deadlines = self.deadlines.lock().unwrap();
+                assert!(
+                    deadlines.len() < 2,
+                    "unexpected third classifier invocation"
+                );
+                deadlines.push(options.deadline);
+            }
+            pipecat_classifiers::Classifier::ask(&self.inner, state, questions, options).await
+        })
+    }
+}
+fn judge_recording_deadlines(peer: &HttpPeer, deadlines: ObservedJudgeDeadlines) -> EvalJudge {
+    let mut config = JevConfig::new("review-synthetic-key");
+    config.base_url = peer.url.clone();
+    config.max_retries = 0;
+    config.timeout = Duration::from_secs(2);
+    EvalJudge::new(
+        Arc::new(RecordRealClassifierDeadlines {
+            inner: JevClassifier::owned(config).unwrap(),
+            deadlines,
+        }),
+        JudgeOptions {
+            timeout: Duration::from_secs(2),
+            no_grace: Duration::from_millis(30),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
 #[tokio::test]
 async fn absolute_turn_deadline_includes_all_judgments() {
     let p = http(vec![
@@ -507,26 +567,67 @@ async fn absolute_turn_deadline_includes_all_judgments() {
             json!({"function_name":"lookup","arguments":{}}),
         ),
     )];
+    steps.push((0, wire("review-wait-for-http-admission", json!({}))));
     steps.extend(reply("answer"));
-    let b = bot(vec![steps]).await;
+    let b = bot_with_admission(vec![steps], Some(p.received.clone())).await;
+    let deadlines = Arc::new(std::sync::Mutex::new(Vec::with_capacity(2)));
     let started = Instant::now();
-    let result = run(
+    let result = EvalSession::with_judge(
         scenario(json!([{"user":"question","expect":[
             {"event":"function_call","name":"lookup","eval":"criterion","within_ms":140},
             {"event":"response","eval":"criterion","within_ms":140}
         ]}])),
-        &b,
-        &p,
+        &b.url,
+        options(),
+        judge_recording_deadlines(&p, deadlines.clone()),
     )
+    .unwrap()
+    .run(Cancellation::new())
     .await;
-    assert!(!result.passed);
-    assert_eq!(result.failures[0].kind, "judge_timeout");
-    assert_eq!(result.failures[0].expectation_index, 1);
-    assert_eq!(p.count.load(Ordering::SeqCst), 2);
-    assert!(started.elapsed() < Duration::from_millis(240));
+    // Format completed-run evidence only when an existing assertion fails.
+    let failure_details = || {
+        format!(
+            "result={result:#?}\nhttp_requests={}\nelapsed={:?}\nclassifier_deadlines={:?}",
+            p.count.load(Ordering::SeqCst),
+            started.elapsed(),
+            deadlines.lock().unwrap(),
+        )
+    };
+    assert!(!result.passed, "{}", failure_details());
+    assert_eq!(
+        result.failures[0].kind,
+        "judge_timeout",
+        "{}",
+        failure_details()
+    );
+    assert_eq!(
+        result.failures[0].expectation_index,
+        1,
+        "{}",
+        failure_details()
+    );
+    assert_eq!(p.count.load(Ordering::SeqCst), 2, "{}", failure_details());
+    assert!(
+        started.elapsed() < Duration::from_millis(240),
+        "{}",
+        failure_details()
+    );
     tokio::time::timeout(Duration::from_millis(500), p.closed.notified())
         .await
-        .unwrap();
+        .unwrap_or_else(|error| {
+            panic!(
+                "classifier socket did not close: {error}; {}",
+                failure_details()
+            )
+        });
+    // Admission above orders first-call matching/HTTP before the reply. It does
+    // not exclude initial event admission from the original 140 ms turn budget.
+    // Check actual HTTP admissions after the original socket cleanup assertion.
+    assert_eq!(p.count.load(Ordering::SeqCst), 2, "{}", failure_details());
+    let observed = deadlines.lock().unwrap().clone();
+    assert_eq!(observed.len(), 2, "{}", failure_details());
+    assert!(observed[0].is_some(), "{}", failure_details());
+    assert_eq!(observed[0], observed[1], "{}", failure_details());
 }
 
 #[tokio::test]

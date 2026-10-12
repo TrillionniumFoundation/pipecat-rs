@@ -155,8 +155,13 @@ impl InputIngress {
             data if input_audio(data).is_some() && self.audio_enabled => {
                 input_audio(data).unwrap().validate().map_err(error)?;
             }
-            FrameData::InputImage(_) if self.video_enabled => {}
-            FrameData::InputAudio(_) | FrameData::UserAudio(_) | FrameData::InputImage(_) => {
+            FrameData::InputImage(_)
+            | FrameData::UserImage(UserImageRawFrame { request: None, .. })
+                if self.video_enabled => {}
+            FrameData::InputAudio(_)
+            | FrameData::UserAudio(_)
+            | FrameData::InputImage(_)
+            | FrameData::UserImage(UserImageRawFrame { request: None, .. }) => {
                 return Ok(());
             }
             _ => {
