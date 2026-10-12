@@ -180,8 +180,19 @@ impl RtviObserver {
         if state.seen.contains(&frame.id) {
             return Ok(vec![]);
         }
-        // Validate before retaining either the payload or its identity.
-        bounded_size(&frame.data, state.params.max_message_bytes)?;
+        // Raw images have no RTVI projection. Keep their seen-cache behavior
+        // without charging media payloads to the message budget.
+        if !matches!(
+            frame.data,
+            FrameData::InputImage(_)
+                | FrameData::UserImage(_)
+                | FrameData::OutputImage(_)
+                | FrameData::OutputImageDetailed(_)
+                | FrameData::UrlImage(_)
+                | FrameData::AssistantImage(_)
+        ) {
+            bounded_size(&frame.data, state.params.max_message_bytes)?;
+        }
         state.seen.insert(frame.id);
         state.order.push_back(frame.id);
         if state.order.len() > state.params.dedup_capacity {

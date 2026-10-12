@@ -72,6 +72,20 @@ Media validation and queue budgets remain the transport's responsibility.
 The native observer keeps first-push gating before this exemption; the pinned
 Python observer checks raw audio first.
 
+Raw `InputImage`, `UserImage`, `OutputImage`, `OutputImageDetailed`, `UrlImage`,
+and `AssistantImage` frames have no RTVI event projection. Their payloads bypass
+only the pre-projection message-size check. Eligible observations still occupy
+the bounded numeric-ID seen cache; a hit does not refresh FIFO order. Taps forward
+the original frame on every traversal, including repeated IDs. Projection dedup
+does not suppress media delivery. `Sprite` and nonimage payloads keep their
+existing size checks, and projected events retain their envelope limits.
+
+Wire limits and applicable media-queue budgets remain separate. Shared output
+passes `InputImage` and `UserImage` through its system lane without image writes.
+Its four output-image variants require an application `OutputBackend` implementing
+`write_image`; the default hook reports unsupported image output. This hook does
+not provide a built-in display backend or decode compressed image files.
+
 Ordinary taps report speaking/mute/interruption states, transcription, LLM/TTS
 lifecycle, raw LLM text and sentence transcriptions, last-user context text,
 markers, internal/external function-call lifecycle, metrics, custom server
@@ -93,6 +107,9 @@ Pending segments, their text, the sentence buffer, message size, and recent fram
 identity history are bounded. Identity deduplication is limited to that recent
 window; a global hook should pass accurate `first_push` information. Output
 progress is separately gated by actual output-transport provenance.
+Native source/direction/first-push filters run before seen-cache insertion.
+Python's global weak first-push cache precedes RTVI filtering and has a different
+lifetime; the native numeric-ID FIFO is an explicit bounded adaptation.
 
 ## Explicit compatibility gaps
 
