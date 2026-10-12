@@ -65,6 +65,13 @@ native RTVI envelopes. `Arc<RtviObserver>::tap(source)` creates a frame-preservi
 recent-frame identity cache to prevent repeated reports. Names in
 `ignored_sources` must match the source names used by the host.
 
+Raw `InputAudio`, `UserAudio`, `OutputAudio`, `TtsAudio`, and `SpeechOutputAudio`
+frames bypass RTVI event-size accounting and the event identity cache. Taps
+forward their original PCM and frame identity without creating audio events.
+Media validation and queue budgets remain the transport's responsibility.
+The native observer keeps first-push gating before this exemption; the pinned
+Python observer checks raw audio first.
+
 Ordinary taps report speaking/mute/interruption states, transcription, LLM/TTS
 lifecycle, raw LLM text and sentence transcriptions, last-user context text,
 markers, internal/external function-call lifecycle, metrics, custom server

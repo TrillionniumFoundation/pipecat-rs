@@ -169,7 +169,11 @@ impl RtviObserver {
         }
         if matches!(
             frame.data,
-            FrameData::InputAudio(_) | FrameData::TtsAudio(_) | FrameData::OutputAudio(_)
+            FrameData::InputAudio(_)
+                | FrameData::UserAudio(_)
+                | FrameData::TtsAudio(_)
+                | FrameData::OutputAudio(_)
+                | FrameData::SpeechOutputAudio(_)
         ) {
             return Ok(vec![]);
         }
