@@ -197,9 +197,14 @@ retains it. Enabled input images share bounded admission and forwarding.
 These are native streaming semantics. The pinned Python shared input loop has no
 resampler or VAD; it filters even empty input, uses an unbounded audio queue, and
 cancels pending audio at End. Native input retains its End drain and serial queued
-filter controls. Python directly invokes only `FilterUpdateSettings` on the
-configured filter, while native queues its filter-control family in audio order.
-No pipeline-global flush barrier or arbitrary stateful-filter user isolation is
+filter controls. With an input filter, `FilterUpdateSettings` flushes preceding
+input PCM, invokes the bounded filter callback, and is consumed locally in either
+direction. Without an input filter, settings retain their original frame and
+direction through ordinary passthrough, without an input-tail flush. The native
+`FilterControl` and `FilterEnable` extensions remain queued and forwarded after
+flushing preceding input PCM. Python directly invokes only settings on its input
+filter; native application filters support the broader control family. No
+pipeline-global flush barrier or arbitrary stateful-filter user isolation is
 implied by shared input dispatch.
 
 Graceful End stops accepting capture, cancels and joins the capture task, drains

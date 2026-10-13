@@ -333,6 +333,9 @@ impl FrameProcessor for InputTransport {
             {
                 self.ingress.request_image(frame)
             }
+            FrameData::FilterUpdateSettings(_) if self.filter.is_none() => {
+                ctx.push(frame, direction).await
+            }
             FrameData::FilterEnable(_)
             | FrameData::FilterControl
             | FrameData::FilterUpdateSettings(_) => self.ingress.queue.push(frame),
@@ -450,6 +453,9 @@ async fn input_worker(
             ) {
                 if let Some(filter) = &filter {
                     bounded(config.operation_timeout, filter.control(&frame.data)).await?;
+                    if matches!(frame.data, FrameData::FilterUpdateSettings(_)) {
+                        return Ok(());
+                    }
                 }
             }
             video.forward(frame, &ctx).await
