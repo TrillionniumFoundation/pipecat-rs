@@ -144,7 +144,8 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         respond(&mut socket, 204, "application/json", "", "").await;
         return;
     }
-    if mode == "llm" || mode == "llm-slow" || mode == "llm-live-tools" {
+    if mode == "llm" || mode == "llm-slow" || mode == "llm-live-tools" || mode == "llm-force-other"
+    {
         let saw_tool = message["messages"]
             .as_array()
             .unwrap()
@@ -154,6 +155,9 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
             json!({"content":"tool completed"})
         } else if mode == "llm-slow" {
             json!({"tool_calls":[{"index":0,"id":"agent-call","type":"function","function":{"name":"slow","arguments":"{}"}}]})
+        } else if mode == "llm-force-other" {
+            let sequence = shared.lock().unwrap().completions.len();
+            json!({"tool_calls":[{"index":0,"id":format!("forced-call-{sequence}"),"type":"function","function":{"name":"other","arguments":"{}"}}]})
         } else if mode == "llm-live-tools" {
             let name = message["tools"][0]["function"]["name"].as_str().unwrap();
             let sequence = shared.lock().unwrap().completions.len();

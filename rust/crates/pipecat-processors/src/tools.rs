@@ -63,6 +63,24 @@ impl CancellableRegisteredTool {
 /// owned by the executor that processes a batch with this snapshot.
 #[derive(Clone)]
 pub struct ToolRegistrationSnapshot(Arc<BTreeMap<String, CancellableRegisteredTool>>);
+impl ToolRegistrationSnapshot {
+    /// Select only these validated registrations, preserving their callbacks
+    /// and options. Unknown names reject the selection without changing either
+    /// snapshot or any executor's admission state and outcome history.
+    pub fn select_names(&self, names: &BTreeSet<String>) -> Result<Self, ProcessorError> {
+        let selected = names
+            .iter()
+            .map(|name| {
+                self.0
+                    .get(name)
+                    .cloned()
+                    .map(|tool| (name.clone(), tool))
+                    .ok_or_else(|| ProcessorError::new("selected tool is not registered"))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        Ok(Self(Arc::new(selected)))
+    }
+}
 impl std::fmt::Debug for ToolRegistrationSnapshot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolRegistrationSnapshot")

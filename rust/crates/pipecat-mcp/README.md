@@ -116,6 +116,31 @@ MCP inventory; it does not implement automatic server notification handling,
 general advertised-handler synchronization, arbitrary resources, or LLM switchers.
 The same sealed/speculative and custom/grouped restrictions apply.
 
+Use `tools.bind_llm_auto(llm)?` when the advertised schema should select the
+executable handlers. This opt-in binding starts with no selected handlers and
+synchronizes on each ordinary detailed context or `LlmSetTools` frame. Only exact
+bound `Direct` handlers are selected; omitted names, empty/`NotGiven` tool sets
+and handler-free declarations prune automatic selections. A handler-free function
+with the same name stays advertisement-only. Preconfigured native function
+declarations provide no executable handler fallback.
+
+The complete cached inventory remains available, so advertising the original
+handlers again restores them without discovery. A same-client `update` replaces
+the inventory and clears the selection until a new valid schema frame arrives.
+Validation and publication are atomic; a late foreign handler, custom/grouped
+schema or sealed/speculative context cannot partially change authority. Automatic
+sync rejects sealed/speculative frames even when their tool set is empty, since
+pruning itself changes execution authority. The incoming projection bookend alone
+selects handlers; the opposite bookend forwards the plain projected declaration
+without clearing the selection.
+
+Already admitted callbacks retain their options and duplicate history. The binding
+keeps its MCP cleanup owner when every automatic handler has been pruned and closes
+at pipeline teardown. Explicit `bind_llm`, fixed `llm_stages` and `register_into`
+remain inventory-based and do not prune omitted names. This mode is limited to
+ordinary schema handlers from one bound MCP inventory, without arbitrary callback
+registration, server notification handling or LLM-switcher support.
+
 ## Agent-worker registry
 
 ```rust,no_run

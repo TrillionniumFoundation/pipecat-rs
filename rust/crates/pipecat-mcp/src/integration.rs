@@ -99,10 +99,26 @@ impl McpTools {
         &self,
         llm: Arc<pipecat_services::LlmProcessor>,
     ) -> Result<McpLlmBinding, ProcessorError> {
+        self.bind_llm_mode(llm, false)
+    }
+    /// Automatically select this snapshot's advertised schema handlers on each
+    /// ordinary context/tool update. Explicit bindings remain inventory-based.
+    pub fn bind_llm_auto(
+        &self,
+        llm: Arc<pipecat_services::LlmProcessor>,
+    ) -> Result<McpLlmBinding, ProcessorError> {
+        self.bind_llm_mode(llm, true)
+    }
+    fn bind_llm_mode(
+        &self,
+        llm: Arc<pipecat_services::LlmProcessor>,
+        auto: bool,
+    ) -> Result<McpLlmBinding, ProcessorError> {
         let mut executor = self.executor()?;
         let state = Arc::new(RwLock::new(McpBindingState {
-            current: Arc::new(self.binding_snapshot(&executor.executor)),
+            current: Arc::new(self.binding_snapshot(&executor.executor, auto)?),
             closed: false,
+            auto,
         }));
         executor.binding = Some(state.clone());
         Ok(McpLlmBinding {
@@ -110,16 +126,28 @@ impl McpTools {
             state,
             llm,
             executor: Arc::new(executor),
+            auto,
         })
     }
-    fn binding_snapshot(&self, executor: &ToolExecutor) -> McpBindingSnapshot {
-        McpBindingSnapshot {
+    fn binding_snapshot(
+        &self,
+        executor: &ToolExecutor,
+        auto: bool,
+    ) -> Result<McpBindingSnapshot, ProcessorError> {
+        let all_registrations = executor.registrations_snapshot();
+        let registrations = if auto {
+            all_registrations.select_names(&BTreeSet::new())?
+        } else {
+            all_registrations.clone()
+        };
+        Ok(McpBindingSnapshot {
             projection: McpContextProjection::new(
                 &self.cached_schema,
                 self.client.inner.config.limits.max_tools,
             ),
-            registrations: executor.registrations_snapshot(),
-        }
+            registrations,
+            all_registrations,
+        })
     }
     /// Install native agent-worker callbacks atomically; duplicate registration
     /// leaves the caller's registry unchanged. Add the returned lifecycle
@@ -190,7 +218,7 @@ impl McpTools {
     }
 }
 
-/// Explicit live inventory selection for one owning native LLM pipeline. Each
+/// Live inventory selection for one owning native LLM pipeline. Each
 /// update publishes its schema identities and executable registrations together.
 /// Calls are bound when admitted by the executor: an already admitted batch
 /// retains its callbacks/options, while later calls use the current inventory.
@@ -201,24 +229,29 @@ pub struct McpLlmBinding {
     state: Arc<RwLock<McpBindingState>>,
     llm: Arc<pipecat_services::LlmProcessor>,
     executor: Arc<McpToolExecutor>,
+    auto: bool,
 }
 impl McpLlmBinding {
     /// Input projection, native inference, owned execution, upstream projection.
     /// Keep these stages in order in a single owning pipeline.
     pub fn stages(&self) -> Vec<Arc<dyn FrameProcessor>> {
-        let projection = Arc::new(McpLiveContextProjection {
-            state: self.state.clone(),
-        });
         vec![
-            projection.clone(),
+            Arc::new(McpLiveContextProjection {
+                state: self.state.clone(),
+                entry_direction: Direction::Downstream,
+            }),
             self.llm.clone(),
             self.executor.clone(),
-            projection,
+            Arc::new(McpLiveContextProjection {
+                state: self.state.clone(),
+                entry_direction: Direction::Upstream,
+            }),
         ]
     }
     /// Select a discovered snapshot from this same client without replacing the
     /// executor, active leases, duplicate history, or cleanup owner. The caller
     /// must also supply this snapshot's schema in subsequent context/tool frames.
+    /// Automatic mode selects no callbacks until a valid new schema frame arrives.
     /// Cleanup permanently closes this binding, even if the client is reopened.
     pub fn update(&self, tools: &McpTools) -> Result<(), ProcessorError> {
         if !Arc::ptr_eq(&self.client.inner, &tools.client.inner) {
@@ -227,7 +260,7 @@ impl McpLlmBinding {
             ));
         }
         let registered = tools.executor()?;
-        let current = Arc::new(tools.binding_snapshot(&registered.executor));
+        let current = Arc::new(tools.binding_snapshot(&registered.executor, self.auto)?);
         let mut state = self
             .state
             .write()
@@ -239,13 +272,16 @@ impl McpLlmBinding {
         Ok(())
     }
 }
+#[derive(Clone)]
 struct McpBindingSnapshot {
     projection: McpContextProjection,
     registrations: ToolRegistrationSnapshot,
+    all_registrations: ToolRegistrationSnapshot,
 }
 struct McpBindingState {
     current: Arc<McpBindingSnapshot>,
     closed: bool,
+    auto: bool,
 }
 fn binding_snapshot(
     state: &RwLock<McpBindingState>,
@@ -260,6 +296,69 @@ fn binding_snapshot(
 }
 struct McpLiveContextProjection {
     state: Arc<RwLock<McpBindingState>>,
+    entry_direction: Direction,
+}
+impl McpLiveContextProjection {
+    fn auto_project(&self, frame: &mut Frame) -> Result<(), ProcessorError> {
+        let tools = match &frame.data {
+            FrameData::LlmContextDetailed(context) => &context.context.tools,
+            FrameData::LlmSetTools(tools) => tools,
+            _ => return Ok(()),
+        };
+        // Pruning changes execution authority even when no projection is needed.
+        if frame.native_speculation().is_some()
+            || frame.native_realtime_context_cause()?.is_some()
+            || matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
+        {
+            return Err(ProcessorError::new(
+                "automatic MCP handler sync cannot accept sealed or speculative context",
+            ));
+        }
+        let mut state = self
+            .state
+            .write()
+            .map_err(|_| ProcessorError::fatal("MCP binding state poisoned"))?;
+        if state.closed {
+            return Err(ProcessorError::new("MCP binding is closed"));
+        }
+        let projected = state.current.projection.projection(frame)?;
+        // Preserve native Unsupported errors before selecting any callbacks.
+        let converted = pipecat_services::frame_context::tools(projected.as_ref().unwrap_or(tools))
+            .map_err(|error| ProcessorError::new(error.to_string()))?;
+        pipecat_services::Context {
+            tools: converted,
+            ..Default::default()
+        }
+        .validate()
+        .map_err(|error| ProcessorError::new(error.to_string()))?;
+        let names = match tools {
+            ToolSet::Direct(functions) => functions
+                .iter()
+                .map(|function| function.schema.name.clone())
+                .collect(),
+            ToolSet::Schema(schema) => schema
+                .standard_tools
+                .iter()
+                .filter_map(|tool| match tool {
+                    StandardTool::Direct(function) => Some(function.schema.name.clone()),
+                    StandardTool::Function(_) => None,
+                })
+                .collect(),
+            _ => BTreeSet::new(),
+        };
+        let registrations = state.current.all_registrations.select_names(&names)?;
+        let mut next = state.current.as_ref().clone();
+        next.registrations = registrations;
+        state.current = Arc::new(next);
+        if let Some(projected) = projected {
+            match &mut frame.data {
+                FrameData::LlmContextDetailed(context) => context.context.tools = projected,
+                FrameData::LlmSetTools(tools) => *tools = projected,
+                _ => unreachable!("automatic MCP sync accepts only contexts and tool updates"),
+            }
+        }
+        Ok(())
+    }
 }
 #[async_trait]
 impl FrameProcessor for McpLiveContextProjection {
@@ -268,12 +367,31 @@ impl FrameProcessor for McpLiveContextProjection {
     }
     async fn process(
         &self,
-        frame: Frame,
+        mut frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        let snapshot = binding_snapshot(&self.state)?;
-        snapshot.projection.process(frame, direction, ctx).await
+        let auto = {
+            let state = self
+                .state
+                .read()
+                .map_err(|_| ProcessorError::fatal("MCP binding state poisoned"))?;
+            if state.closed {
+                return Err(ProcessorError::new("MCP binding is closed"));
+            }
+            state.auto
+        };
+        if auto {
+            // Only the incoming bookend sees attached handlers. The opposite
+            // bookend must not treat the forwarded plain projection as removal.
+            if direction == self.entry_direction {
+                self.auto_project(&mut frame)?;
+            }
+            ctx.push(frame, direction).await
+        } else {
+            let snapshot = binding_snapshot(&self.state)?;
+            snapshot.projection.process(frame, direction, ctx).await
+        }
     }
 }
 #[derive(Clone, Debug)]
