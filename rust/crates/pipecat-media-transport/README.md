@@ -145,8 +145,9 @@ live provider sessions or physical devices.
 
 ### Image output
 
-`OutputImage`, `OutputImageDetailed`, `UrlImage`, and `AssistantImage` use the
-selected destination's owned output worker. `write_image` receives the complete
+By default, `OutputImage`, `OutputImageDetailed`, `UrlImage`, and `AssistantImage`
+use the selected destination's serial owned media worker, regardless of the
+`sync_with_audio` field. `write_image` receives the complete
 typed frame; successful completion forwards that same frame downstream, including
 assistant original bytes/MIME, routing, metadata and local observation identity.
 Image writes share the existing interruption, cancellation, PTS and write-timeout
@@ -167,11 +168,131 @@ backend-success-before-forward boundary; these are not identical video-task
 scheduling models. Tests use synthetic bytes and recording backends, not real
 cameras, displays, image codecs or provider services.
 
+### Opt-in independent live images
+
+`OutputTransport::with_live_video(LiveVideoOutputConfig { queue_capacity,
+queue_byte_capacity, framerate })` adds exactly one bounded live-image queue and
+one pipeline-owned worker per registered destination. There is no default live
+budget and no new dependency, thread, per-frame task or hidden relay queue. The
+unchanged constructor remains serial. The consuming builder rejects repeated or
+post-start configuration, zero budgets, aggregate arithmetic overflow, zero FPS
+and FPS above nanosecond resolution (1,000,000,000).
+
+The backend must explicitly return true from `supports_independent_video`.
+This promises that one image callback per destination can safely overlap PCM,
+DTMF and ordinary control operations. Dropping `write_image` must cancel all its
+unfinished work without detached writes, delayed replay or effects that outlive
+the future. The media-owned `interrupt(destination)` may overlap images and must
+preserve unrelated, new-generation and uninterruptible image work. A backend
+with a global video flush must coordinate safely itself before opting in. This
+capability declaration is not a physical device or provider qualification.
+
+Compact output images are implicitly false; detailed, URL and assistant images
+use their nested `sync_with_audio` flag. False images enter the live FIFO. True
+images remain in the media FIFO after preceding PCM and its resampler tail.
+Upstream images remain passthrough; sprites remain unsupported. Live images do
+not flush or transform audio, change gain, or emit speech events. There is no
+total ordering across the two lanes: false images can overtake PCM and controls,
+and plain PCM can progress while a live image callback is held. This includes
+successful `AssistantImage` forwarding relative to LLM/TTS and other normal
+markers: callers needing strict downstream semantic/context order must use
+`sync_with_audio: true` or an explicit Flow fence. Opt-in does not establish
+arbitrary downstream aggregators' cross-lane semantic order.
+
+One per-destination image mutex serializes both true and false callbacks,
+including successful original-frame downstream forwarding. It never locks PCM.
+A held live image can therefore delay a true image at the media head and audio
+behind that synchronous-image barrier. Waiting for PTS/FPS or initial pause does
+not own the mutex or consume `write_timeout`. Once competing for the mutex,
+gate acquisition, any pause discovered after acquisition and the callback share
+one absolute `write_timeout`. Notifications do not extend it. Cancel/appropriate
+interruption revokes a gate waiter without a later callback or success-forward.
+Successful downstream admission is irreversible; cancellation cannot retract an
+image or marker already forwarded. Backend completion is still hook completion,
+not an independently verified display or remote receipt.
+
+Live admission uses the exact existing retained-allocation accounting, including
+pixel/format spare capacity, URL, assistant original bytes/MIME and envelope
+metadata. The budgets are explicitly additive. For N destinations, media limits
+Cm/Bm and live limits Cv/Bv, charged queues hold at most N×(Cm+Cv) frames and
+N×(Bm+Bv) bytes. Each destination can also own one popped media and one popped
+live item; the shared normal invocation can retain one additional pending
+admission. Each individual live item fits Bv, each media item Bm. These bounds
+exclude existing PCM/resampler/filter/mixer staging, clones, the fence's shared
+original marker, core queues, allocator overhead and backend allocations; they
+are not total heap/RSS bounds.
+
+Both lanes use `OutputAdmissionPolicy`. Wait has one absolute admission deadline
+and can block later normal PCM admission while the live queue is full; it does
+not guarantee independent ingress. FailFast reports overload. Oversized items
+fail against their selected lane before waiting. Neither mode replaces or drops
+queued images to maintain FPS. All-lane fences reserve a charged participant in
+every media and live queue atomically, or admit none.
+
+Both workers share the destination's exact startup observer/Instant origin.
+Pipeline PTS is fixed at admission and rebased before backend/forward access;
+pre-origin PTS becomes zero. Legacy PTS stays destination-relative. Existing
+checked overflow and `max_future_pts` admission checks apply. Live PTS remains
+FIFO, so a future head blocks later live images. `framerate: None` is unpaced.
+For Some(f), the first eligible callback is immediate, and later live callback
+starts are at least ceil(1,000,000,000/f) nanoseconds apart and no earlier than
+PTS. Errors count as callback attempts. Scheduling uses monotonic Tokio time
+and the actual last start: there is no catch-up burst, frame drop, still-image
+repeat or timer task. Interruption resets the live pacing schedule. True images
+retain media timing and are outside this live-only FPS cap.
+
+Controls obtained before the builder remain connected. Live publication and
+pause/resume are synchronized locally, including pause-before-builder and
+concurrent control calls. `OutputControl::pause` affects both worker queues;
+End/Stop reaching `prepare_end` closes admission, resumes both and drains their
+owned tasks. Late control pauses cannot re-pause an opted-in ending queue.
+Addressed ordinary **and urgent** processor pause frames also pause the core
+normal lane: callers must issue the supported addressed Resume before a queued
+End/Stop can reach `prepare_end`. There is no terminal bypass. Stop drains the
+tasks but, under the existing core contract, skips automatic processor cleanup;
+the retained owner explicitly calls cleanup to invoke backend.stop. End and
+Cancel retain automatic cleanup. Ordinary pause is not a cross-lane image fence.
+
+Named interruption affects that destination's two lanes; unnamed interruption
+affects all. Interruptible queued/in-flight images are revoked; uninterruptible
+images survive ordinary interruption. Only the media worker calls interrupt.
+Actual Cancel/cleanup revokes every image, PTS/FPS/gate wait and both queues.
+Each worker's normal Drop closes only its own queue: graceful media exit must
+not cancel draining video or admitted urgent protocol messages, and graceful
+video exit must not cancel media. No independent video work survives cleanup.
+
+Flow fences wait for both lanes on every destination, including image
+success-forward and media receipts/tails; only the last participant forwards the
+original marker once and then releases later work. Final downstream admission
+uses the existing synchronous `ProcessorContext::try_push` contract: observer
+clocks and synchronously invoked wakers must not reenter runtime admission or wait
+on caller-held locks, including via output controls. Expected interruptible-fence
+revocation keeps both workers alive for successors. Uninterruptible fences
+survive ordinary interruption; Cancel, worker failure or incomplete delivery
+aborts without success. The rendezvous itself is not a backend operation and is
+not bounded by one `write_timeout`; pipeline shutdown supplies its overall bound.
+An image error/timeout has no retry or success-forward and makes a later fence
+fail, without silently changing the audio-specific unusable-destination policy.
+
+Images never attest speech or join the spoken readiness/source-end gate. Valid
+Played audio and source-end can commit spoken history while a live image is
+held; use a Flow fence when both lanes must complete. Live handle/write/forward
+errors invalidate still-pending history before reporting, matching the existing
+media delivery-failure policy, but cannot roll back an already committed context.
+
+The `live_video_scheduling` target keeps the frozen public held-PCM baseline's
+measurement and cleanup, with explicit candidate builder/capability changes and
+a separate unchanged-constructor serialization control. Supplemental public and
+crate-local tests use synthetic cancel-safe backends, semaphores and controlled
+Tokio time; they are ordering/budget/lifecycle witnesses, not a latency benchmark,
+Python output-runtime execution, live provider session or physical-device test.
+
 ## Flow playback fences
 
 A downstream `Flush` or `FlushDetailed` with `origin = "pipecat.flows"` and
 `returning = false` is an all-destination playback fence. Admission reserves one
-bounded queue slot in every destination atomically. Full destinations wait under
+bounded queue slot in every destination atomically, and in both lanes when
+independent live images are enabled. Full destinations wait under
 the normal admission policy; closed queues or expired admission deadlines reject
 the whole fence. `FailFast` rejects a full destination immediately.
 Existing destination workers flush preceding resampler
@@ -610,3 +731,11 @@ Backend failure retains the existing one-error peer-disable behavior: the
 sender drains and discards remaining audio, releasing queue capacity without
 fabricating playback receipts. Only explicit `PlaybackReceipt::Played`
 acknowledgements can emit played-audio events or attest spoken history.
+
+The opted-in image success-forward boundary is serialized with its lane's
+interruption and Cancel cutoff under the queue's short synchronous lock. A cutoff
+that wins suppresses forwarding; successful prior downstream admission cannot be
+retracted. No backend call or await occurs under that lock. As with the existing
+core `try_push` contract, synchronous observer clocks and wakers must not reenter
+admission or wait for a lock held by their caller. Backend effects completed before
+cancellation remain irreversible even if their original frame is not forwarded.

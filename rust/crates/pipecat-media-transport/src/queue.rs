@@ -1,4 +1,4 @@
-use crate::fence::FenceParticipant;
+use crate::fence::{FenceCancellation, FenceParticipant};
 use pipecat_core::{Frame, FrameData, ProcessorError};
 use std::collections::{BTreeMap, VecDeque};
 use std::future::{poll_fn, Future};
@@ -26,6 +26,9 @@ struct State {
     frames: VecDeque<Item>,
     bytes: usize,
     signal: Signal,
+    // Opt-in serial workers register their one popped participant atomically
+    // with pop. No strong frame/group retention; default pop is unchanged.
+    current_fence: Option<(u64, bool, FenceCancellation)>,
 }
 pub(crate) struct MediaQueue {
     state: Mutex<State>,
@@ -59,6 +62,7 @@ impl MediaQueue {
                 frames: VecDeque::new(),
                 bytes: 0,
                 signal,
+                current_fence: None,
             }),
             count_limit,
             byte_limit,
@@ -301,6 +305,14 @@ impl MediaQueue {
     /// Deferred metadata remains in the same bounded admission queue. PCM may
     /// pass future metadata; every other frame, including a fence, is a barrier.
     pub fn pop_ready(&self, now: Instant) -> Option<Item> {
+        self.pop_ready_inner(now, false)
+    }
+    /// Register the current fence in the same locked pop that removes it.
+    /// Each opted-in queue has exactly one serial owned worker.
+    pub fn pop_ready_independent(&self, now: Instant) -> Option<Item> {
+        self.pop_ready_inner(now, true)
+    }
+    fn pop_ready_inner(&self, now: Instant, track_fence: bool) -> Option<Item> {
         let mut state = self.state.lock().unwrap();
         let first = state.frames.front()?;
         let index = if first.deadline.is_none_or(|deadline| deadline <= now) {
@@ -329,6 +341,12 @@ impl MediaQueue {
             selected?
         };
         let item = state.frames.remove(index)?;
+        if track_fence {
+            state.current_fence = item
+                .fence
+                .as_ref()
+                .map(|fence| (item.epoch, item.frame.interruptible, fence.cancellation()));
+        }
         state.bytes -= item.charged_bytes;
         self.capacity_available.notify_waiters();
         Some(item)
@@ -347,10 +365,39 @@ impl MediaQueue {
     pub fn signal(&self) -> Signal {
         self.state.lock().unwrap().signal
     }
+    /// Serialize an opted-in image's final downstream admission with its
+    /// queue's interruption/Cancel cutoff. The completion must be synchronous
+    /// and nonblocking; try_push clocks/wakers must obey their non-reentry rule.
+    pub fn forward_if_current_image(
+        &self,
+        epoch: u64,
+        interruptible: bool,
+        forward: impl FnOnce() -> Result<(), ProcessorError>,
+    ) -> Result<(), ProcessorError> {
+        let state = self.state.lock().unwrap();
+        if state.signal.cancelled || (interruptible && state.signal.epoch > epoch) {
+            return Ok(());
+        }
+        forward()
+    }
     pub fn interrupt(&self) {
         let mut state = self.state.lock().unwrap();
         state.signal.epoch += 1;
-        state.frames.retain(|item| !item.frame.interruptible);
+        if let Some((epoch, interruptible, fence)) = &state.current_fence {
+            if *interruptible && *epoch < state.signal.epoch {
+                fence.revoke();
+            }
+        }
+        state.frames.retain(|item| {
+            if item.frame.interruptible {
+                if let Some(fence) = &item.fence {
+                    fence.revoke();
+                }
+                false
+            } else {
+                true
+            }
+        });
         state.bytes = state.frames.iter().map(|item| item.charged_bytes).sum();
         self.changed.send_replace(state.signal);
         self.available.notify_one();
@@ -373,6 +420,9 @@ impl MediaQueue {
     pub fn cancel(&self) {
         let mut state = self.state.lock().unwrap();
         state.signal.cancelled = true;
+        if let Some((_, _, fence)) = state.current_fence.take() {
+            fence.abort();
+        }
         state.frames.clear();
         state.bytes = 0;
         self.changed.send_replace(state.signal);
@@ -1342,5 +1392,88 @@ mod assistant_image_queue_tests {
         frame.metadata.insert("nested".into(), value);
         assert_eq!(frame_bytes(&frame), usize::MAX);
         assert!(MediaQueue::new(1, 1024).push(frame).is_err());
+    }
+}
+
+#[cfg(test)]
+mod independent_image_cutoff_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn cancel_and_interrupt_cutoffs_precede_image_forward_but_uninterruptible_survives_epoch() {
+        for cancelled in [false, true] {
+            for interruptible in [false, true] {
+                let queue = MediaQueue::new(1, 4096);
+                let epoch = queue.signal().epoch;
+                if cancelled {
+                    queue.cancel();
+                } else {
+                    queue.interrupt();
+                }
+                let forwarded = AtomicUsize::new(0);
+                queue
+                    .forward_if_current_image(epoch, interruptible, || {
+                        assert!(
+                            queue.state.try_lock().is_err(),
+                            "forward escaped its cutoff lock"
+                        );
+                        forwarded.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    })
+                    .unwrap();
+                assert_eq!(
+                    forwarded.load(Ordering::SeqCst),
+                    usize::from(!cancelled && !interruptible)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn admitted_image_forward_wins_concurrent_cancel_without_retraction() {
+        let queue = MediaQueue::new(1, 4096);
+        let contender = queue.clone();
+        let (start_tx, start_rx) = std::sync::mpsc::channel();
+        let (attempt_tx, attempt_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            start_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+            attempt_tx.send(()).unwrap();
+            contender.cancel();
+            done_tx.send(()).unwrap();
+        });
+        let mut forwarded = false;
+        queue
+            .forward_if_current_image(0, true, || {
+                assert!(
+                    queue.state.try_lock().is_err(),
+                    "forward escaped its cutoff lock"
+                );
+                start_tx.send(()).unwrap();
+                attempt_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+                assert!(matches!(
+                    done_rx.try_recv(),
+                    Err(std::sync::mpsc::TryRecvError::Empty)
+                ));
+                forwarded = true;
+                Ok(())
+            })
+            .unwrap();
+        done_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        thread.join().unwrap();
+        assert!(queue.signal().cancelled);
+        assert!(forwarded, "later Cancel retracted admitted image");
+        let mut stale_forwarded = false;
+        queue
+            .forward_if_current_image(0, false, || {
+                stale_forwarded = true;
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            !stale_forwarded,
+            "Cancel permitted later uninterruptible image"
+        );
     }
 }

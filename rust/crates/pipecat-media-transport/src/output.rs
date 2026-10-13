@@ -1,3 +1,6 @@
+#[path = "output_video.rs"]
+mod video;
+
 use crate::queue::{Item, MediaQueue};
 use crate::{error, AudioFilter, AudioMixer, SpokenHistory};
 use async_trait::async_trait;
@@ -47,6 +50,17 @@ pub trait OutputBackend: Send + Sync {
         Err(ProcessorError::new(
             "backend does not support transport messages",
         ))
+    }
+    /// Explicit opt-in contract for independent live-image output. Returning
+    /// true promises that one image write per destination may overlap audio,
+    /// DTMF and ordinary controls on this backend. Dropping `write_image` must
+    /// cancel all unfinished image work, without detached writes or replay.
+    /// `interrupt` may overlap images and must not invalidate unrelated,
+    /// new-generation or uninterruptible image work. Backends with a global
+    /// video flush must provide their own safe coordination before opting in.
+    /// Successful image completion attests this hook, not physical display.
+    fn supports_independent_video(&self) -> bool {
+        false
     }
     async fn write_image(&self, _frame: &Frame) -> Result<(), ProcessorError> {
         Err(ProcessorError::new("backend does not support image output"))
@@ -113,12 +127,62 @@ impl Default for OutputTransportConfig {
         }
     }
 }
+/// Explicit additive queue budget for independently scheduled false images.
+/// There is no default: applications must choose both retained queue bounds.
+#[derive(Debug, Clone, Copy)]
+pub struct LiveVideoOutputConfig {
+    pub queue_capacity: usize,
+    pub queue_byte_capacity: usize,
+    /// None writes each eligible image immediately. Some(1..=1_000_000_000)
+    /// caps live callback starts; synchronous images are not rate-limited.
+    pub framerate: Option<u32>,
+}
+
 struct Destination {
     name: Option<String>,
     queue: Arc<MediaQueue>,
     usable: AtomicBool,
     started_at: Mutex<Option<Instant>>,
     mixer: Option<Arc<dyn AudioMixer>>,
+    // This narrow lock also serializes publication with old control clones.
+    // Never hold it over an await or while completing a fence.
+    live: Mutex<Option<Arc<video::LiveVideo>>>,
+}
+impl Destination {
+    fn live(&self) -> Option<Arc<video::LiveVideo>> {
+        self.live.lock().unwrap().clone()
+    }
+    fn pause(&self, paused: bool) {
+        let live = self.live.lock().unwrap();
+        // Once opted-in drain closes admission, late controls cannot close its
+        // runnable gate again. Preserve the legacy constructor's old behavior.
+        let paused = paused && !(live.is_some() && self.queue.signal().ending);
+        self.queue.pause(paused);
+        if let Some(live) = live.as_ref() {
+            live.queue.pause(paused);
+        }
+    }
+    fn interrupt(&self) {
+        let live = self.live.lock().unwrap();
+        self.queue.interrupt();
+        if let Some(live) = live.as_ref() {
+            live.queue.interrupt();
+        }
+    }
+    fn end(&self) {
+        let live = self.live.lock().unwrap();
+        self.queue.end();
+        if let Some(live) = live.as_ref() {
+            live.queue.end();
+        }
+    }
+    fn cancel(&self) {
+        let live = self.live.lock().unwrap();
+        self.queue.cancel();
+        if let Some(live) = live.as_ref() {
+            live.queue.cancel();
+        }
+    }
 }
 #[derive(Clone)]
 pub struct OutputControl {
@@ -134,11 +198,11 @@ impl OutputControl {
     }
     /// Pause between writes, retaining queued PCM and resampler history.
     pub fn pause(&self, destination: Option<&str>) -> Result<(), ProcessorError> {
-        self.destination(destination)?.queue.pause(true);
+        self.destination(destination)?.pause(true);
         Ok(())
     }
     pub fn resume(&self, destination: Option<&str>) -> Result<(), ProcessorError> {
-        self.destination(destination)?.queue.pause(false);
+        self.destination(destination)?.pause(false);
         Ok(())
     }
     fn destination(&self, destination: Option<&str>) -> Result<&Arc<Destination>, ProcessorError> {
@@ -156,6 +220,7 @@ pub struct OutputTransport {
     control: OutputControl,
     format: Mutex<Option<PcmFormat>>,
     started: AtomicBool,
+    workers_started: AtomicBool,
     cleaned: AtomicBool,
     urgent_cancelled: tokio::sync::watch::Sender<bool>,
     spoken_history: Option<SpokenHistory>,
@@ -195,6 +260,7 @@ impl OutputTransport {
                     usable: AtomicBool::new(true),
                     started_at: Mutex::new(None),
                     mixer: mixers.get(&name).cloned(),
+                    live: Mutex::new(None),
                 }),
             );
         }
@@ -214,10 +280,68 @@ impl OutputTransport {
             },
             format: Mutex::new(None),
             started: AtomicBool::new(false),
+            workers_started: AtomicBool::new(false),
             cleaned: AtomicBool::new(false),
             urgent_cancelled: tokio::sync::watch::channel(false).0,
             spoken_history: None,
         })
+    }
+    /// Add one bounded, pipeline-owned live-image worker per destination.
+    /// False images may overtake media; true images retain audio ordering.
+    /// Existing control handles remain attached. No I/O occurs in this builder.
+    pub fn with_live_video(self, config: LiveVideoOutputConfig) -> Result<Self, ProcessorError> {
+        if self.started.load(Ordering::SeqCst)
+            || self.cleaned.load(Ordering::SeqCst)
+            || self
+                .control
+                .destinations
+                .values()
+                .any(|d| d.live().is_some())
+        {
+            return Err(ProcessorError::new(
+                "live video must be configured once before output starts",
+            ));
+        }
+        if config.queue_capacity == 0
+            || config.queue_byte_capacity == 0
+            || config
+                .framerate
+                .is_some_and(|fps| fps == 0 || fps > 1_000_000_000)
+        {
+            return Err(ProcessorError::new("invalid live video configuration"));
+        }
+        let destinations = self.control.destinations.len();
+        // Queued media+video, one current item per worker and one pending
+        // normal admission. These are logical bounds, not total heap/RSS.
+        let counts = self
+            .config
+            .queue_capacity
+            .checked_add(config.queue_capacity)
+            .and_then(|n| n.checked_add(2))
+            .and_then(|n| n.checked_mul(destinations))
+            .and_then(|n| n.checked_add(1));
+        let bytes = self
+            .config
+            .queue_byte_capacity
+            .checked_add(config.queue_byte_capacity)
+            .and_then(|n| n.checked_mul(destinations));
+        if counts.is_none() || bytes.is_none() {
+            return Err(ProcessorError::new(
+                "aggregate live video queue budget overflow",
+            ));
+        }
+        if !self.backend.supports_independent_video() {
+            return Err(ProcessorError::new(
+                "backend does not support independent video",
+            ));
+        }
+        for destination in self.control.destinations.values() {
+            let mut slot = destination.live.lock().unwrap();
+            let live = Arc::new(video::LiveVideo::new(config));
+            live.queue.pause(destination.queue.signal().paused);
+            *slot = Some(live);
+        }
+        Ok(self)
     }
     /// Opt in to whole-context spoken history through an atomic application sink.
     /// Only the default destination and the built-in resampler/chunker/gain are
@@ -318,6 +442,18 @@ impl FrameProcessor for OutputTransport {
                         "output backend did not become ready during setup",
                     ));
                 }
+                if self
+                    .control
+                    .destinations
+                    .values()
+                    .any(|d| d.live().is_some())
+                    && (self.cleaned.load(Ordering::SeqCst)
+                        || self.workers_started.swap(true, Ordering::SeqCst))
+                {
+                    return Err(ProcessorError::new(
+                        "output workers already started or closed",
+                    ));
+                }
                 ctx.push(frame, direction).await?;
                 let format = self.format.lock().unwrap().expect("setup precedes start");
                 for destination in self.control.destinations.values() {
@@ -334,11 +470,31 @@ impl FrameProcessor for OutputTransport {
                         ctx.clone(),
                         self.spoken_history.clone(),
                     );
+                    // Sender establishes the one destination clock before
+                    // either owned task starts or readiness is published.
+                    let video_worker = destination.live().map(|live| {
+                        video::VideoSender::new(
+                            destination.clone(),
+                            live,
+                            self.backend.clone(),
+                            self.config.clone(),
+                            ctx.clone(),
+                            (worker.started_at, worker.clock_origin_ns),
+                            self.spoken_history.clone(),
+                        )
+                    });
                     ctx.spawn(
                         format!("{}-media-{:?}", self.name, destination.name),
                         false,
                         worker.run(),
                     )?;
+                    if let Some(worker) = video_worker {
+                        ctx.spawn(
+                            format!("{}-video-{:?}", self.name, destination.name),
+                            false,
+                            worker.run(),
+                        )?;
+                    }
                 }
                 self.control.ready.store(true, Ordering::SeqCst);
                 ctx.push(
@@ -360,7 +516,10 @@ impl FrameProcessor for OutputTransport {
                     .control
                     .destinations
                     .values()
-                    .map(|destination| destination.queue.clone())
+                    .flat_map(|destination| {
+                        std::iter::once(destination.queue.clone())
+                            .chain(destination.live().map(|live| live.queue.clone()))
+                    })
                     .collect::<Vec<_>>();
                 match self.config.admission_policy {
                     OutputAdmissionPolicy::Wait { timeout } if !frame.is_system() => {
@@ -373,11 +532,10 @@ impl FrameProcessor for OutputTransport {
                 if frame.transport_destination.is_some() {
                     self.control
                         .destination(frame.transport_destination.as_deref())?
-                        .queue
                         .interrupt();
                 } else {
                     for destination in self.control.destinations.values() {
-                        destination.queue.interrupt();
+                        destination.interrupt();
                     }
                 }
                 ctx.push(frame, direction).await
@@ -385,26 +543,26 @@ impl FrameProcessor for OutputTransport {
             FrameData::Cancel(_) | FrameData::CancelDetailed(_) => {
                 self.urgent_cancelled.send_replace(true);
                 for destination in self.control.destinations.values() {
-                    destination.queue.cancel();
+                    destination.cancel();
                 }
                 self.control.ready.store(false, Ordering::SeqCst);
                 ctx.push(frame, direction).await
             }
             FrameData::ProcessorPauseUrgent { processor } if processor == &self.name => {
                 for destination in self.control.destinations.values() {
-                    destination.queue.pause(true);
+                    destination.pause(true);
                 }
                 ctx.push(frame, direction).await
             }
             FrameData::ProcessorPauseUrgentTarget(processor) if processor.name() == self.name => {
                 for destination in self.control.destinations.values() {
-                    destination.queue.pause(true);
+                    destination.pause(true);
                 }
                 ctx.push(frame, direction).await
             }
             FrameData::ProcessorResumeTarget(processor) if processor.name() == self.name => {
                 for destination in self.control.destinations.values() {
-                    destination.queue.pause(false);
+                    destination.pause(false);
                 }
                 ctx.push(frame, direction).await
             }
@@ -413,7 +571,7 @@ impl FrameProcessor for OutputTransport {
                 if processor == &self.name =>
             {
                 for destination in self.control.destinations.values() {
-                    destination.queue.pause(false);
+                    destination.pause(false);
                 }
                 ctx.push(frame, direction).await
             }
@@ -511,13 +669,19 @@ impl FrameProcessor for OutputTransport {
                         }
                         None
                     };
+                    let queue = if video::is_live_image(&frame) {
+                        destination.live().map(|live| live.queue.clone())
+                    } else {
+                        None
+                    }
+                    .unwrap_or_else(|| destination.queue.clone());
                     match self.config.admission_policy {
                         OutputAdmissionPolicy::Wait { timeout } => {
-                            destination.queue.push_wait(frame, deadline, timeout).await
+                            queue.push_wait(frame, deadline, timeout).await
                         }
                         OutputAdmissionPolicy::FailFast => match deadline {
-                            Some(deadline) => destination.queue.push_timed(frame, deadline),
-                            None => destination.queue.push(frame),
+                            Some(deadline) => queue.push_timed(frame, deadline),
+                            None => queue.push(frame),
                         },
                     }
                 }
@@ -533,7 +697,7 @@ impl FrameProcessor for OutputTransport {
     }
     async fn prepare_end(&self, _: &ProcessorContext) -> Result<(), ProcessorError> {
         for destination in self.control.destinations.values() {
-            destination.queue.end();
+            destination.end();
         }
         Ok(())
     }
@@ -548,7 +712,7 @@ impl FrameProcessor for OutputTransport {
         }
         let mut failure = None;
         for destination in self.control.destinations.values() {
-            destination.queue.cancel();
+            destination.cancel();
             if self.started.load(Ordering::SeqCst) {
                 if let Err(e) = bounded(
                     self.config.write_timeout,
@@ -669,11 +833,57 @@ impl Sender {
                 changed.changed().await.map_err(error)?;
                 continue;
             }
-            if let Some(mut item) = self.destination.queue.pop_ready(Instant::now()) {
+            let item = if self.destination.live().is_some() {
+                self.destination.queue.pop_ready_independent(Instant::now())
+            } else {
+                self.destination.queue.pop_ready(Instant::now())
+            };
+            if let Some(mut item) = item {
                 if item.frame.interruptible && item.epoch < self.epoch {
+                    if let Some(fence) = &item.fence {
+                        fence.revoke();
+                    }
                     continue;
                 }
                 if let Some(mut fence) = item.fence.take() {
+                    if self.destination.live().is_some() {
+                        let result = async {
+                            self.flush_resampler()?;
+                            self.flush_chunks(true).await?;
+                            let signal = self.destination.queue.signal();
+                            if signal.cancelled {
+                                return Ok(crate::fence::FenceOutcome::Aborted);
+                            }
+                            if item.frame.interruptible && signal.epoch > item.epoch {
+                                fence.revoke();
+                                return Ok(crate::fence::FenceOutcome::Revoked);
+                            }
+                            if let Some(outcome) = fence.check_delivery(
+                                self.incomplete_media || !self.destination.usable.load(Ordering::SeqCst),
+                                "preceding media lacks a completed playback or discard acknowledgement",
+                            )? {
+                                return Ok(outcome);
+                            }
+                            video::complete_fence(&self.destination.queue, item.epoch,
+                                item.frame.interruptible, &mut fence, &self.ctx).await
+                        }.await;
+                        match result {
+                            Ok(
+                                crate::fence::FenceOutcome::Completed
+                                | crate::fence::FenceOutcome::Revoked,
+                            ) => {}
+                            Ok(crate::fence::FenceOutcome::Aborted) => return Ok(()),
+                            Err(_) => {
+                                self.report(fence.error(
+                                    "could not complete preceding media on every output lane",
+                                ))
+                                .await?;
+                                return Ok(());
+                            }
+                        }
+                        next_idle = Instant::now() + self.config.chunk_duration;
+                        continue;
+                    }
                     let result = async {
                         self.flush_resampler()?;
                         self.flush_chunks(true).await?;
@@ -932,13 +1142,13 @@ impl Sender {
             FrameData::ProcessorPause { processor } if processor == self.ctx.name() => {
                 self.flush_resampler()?;
                 self.flush_chunks(true).await?;
-                self.destination.queue.pause(true);
+                self.destination.pause(true);
                 self.forward(frame, epoch).await
             }
             FrameData::ProcessorPauseTarget(processor) if processor.name() == self.ctx.name() => {
                 self.flush_resampler()?;
                 self.flush_chunks(true).await?;
-                self.destination.queue.pause(true);
+                self.destination.pause(true);
                 self.forward(frame, epoch).await
             }
             _ => {
@@ -996,6 +1206,18 @@ impl Sender {
                     | FrameData::OutputImageDetailed(_)
                     | FrameData::UrlImage(_)
                     | FrameData::AssistantImage(_) => {
+                        if let Some(live) = self.destination.live() {
+                            return video::write_image(
+                                &live,
+                                &self.destination.queue,
+                                &self.backend,
+                                &self.ctx,
+                                (frame, epoch),
+                                self.config.write_timeout,
+                                None,
+                            )
+                            .await;
+                        }
                         let Some(result) = operation(
                             &self.destination.queue,
                             epoch,
@@ -1479,6 +1701,12 @@ mod urgent_control_lifecycle_tests {
         dropped: AtomicUsize,
         active: AtomicUsize,
         stopped: AtomicUsize,
+        image_entered: Semaphore,
+        image_release: Semaphore,
+        image_written: AtomicUsize,
+        hold_audio: AtomicBool,
+        audio_entered: Semaphore,
+        audio_release: Semaphore,
     }
     impl Backend {
         fn new() -> Self {
@@ -1490,6 +1718,12 @@ mod urgent_control_lifecycle_tests {
                 dropped: AtomicUsize::new(0),
                 active: AtomicUsize::new(0),
                 stopped: AtomicUsize::new(0),
+                image_entered: Semaphore::new(0),
+                image_release: Semaphore::new(0),
+                image_written: AtomicUsize::new(0),
+                hold_audio: AtomicBool::new(false),
+                audio_entered: Semaphore::new(0),
+                audio_release: Semaphore::new(0),
             }
         }
     }
@@ -1507,11 +1741,37 @@ mod urgent_control_lifecycle_tests {
     }
     #[async_trait]
     impl OutputBackend for Backend {
+        fn supports_independent_video(&self) -> bool {
+            true
+        }
         async fn start(&self, _: PcmFormat, _: &[Option<String>]) -> Result<(), ProcessorError> {
             Ok(())
         }
         async fn play_audio(&self, _: &Frame) -> Result<PlaybackReceipt, ProcessorError> {
-            Ok(PlaybackReceipt::Discarded)
+            if !self.hold_audio.load(Ordering::SeqCst) {
+                return Ok(PlaybackReceipt::Discarded);
+            }
+            self.active.fetch_add(1, Ordering::SeqCst);
+            let mut active = Active {
+                backend: self,
+                completed: false,
+            };
+            self.audio_entered.add_permits(1);
+            self.audio_release.acquire().await.map_err(error)?.forget();
+            active.completed = true;
+            Ok(PlaybackReceipt::Played)
+        }
+        async fn write_image(&self, _: &Frame) -> Result<(), ProcessorError> {
+            self.active.fetch_add(1, Ordering::SeqCst);
+            let mut active = Active {
+                backend: self,
+                completed: false,
+            };
+            self.image_entered.add_permits(1);
+            self.image_release.acquire().await.map_err(error)?.forget();
+            self.image_written.fetch_add(1, Ordering::SeqCst);
+            active.completed = true;
+            Ok(())
         }
         async fn interrupt(&self, _: Option<&str>) -> Result<(), ProcessorError> {
             Ok(())
@@ -1569,22 +1829,38 @@ mod urgent_control_lifecycle_tests {
     async fn start(
         backend: Arc<Backend>,
     ) -> (PipelineWorker, Arc<OutputTransport>, ProcessorContext) {
-        let output = Arc::new(
-            OutputTransport::new(
-                "urgent-lifecycle-output",
-                OutputTransportConfig {
-                    sample_rate: Some(8000),
-                    auto_silence: false,
-                    end_silence: Duration::ZERO,
-                    write_timeout: Duration::from_secs(2),
-                    ..Default::default()
-                },
-                backend,
-                None,
-                BTreeMap::new(),
-            )
-            .unwrap(),
-        );
+        start_mode(backend, false).await
+    }
+    async fn start_mode(
+        backend: Arc<Backend>,
+        independent: bool,
+    ) -> (PipelineWorker, Arc<OutputTransport>, ProcessorContext) {
+        let output = OutputTransport::new(
+            "urgent-lifecycle-output",
+            OutputTransportConfig {
+                sample_rate: Some(8000),
+                auto_silence: false,
+                end_silence: Duration::ZERO,
+                write_timeout: Duration::from_secs(2),
+                ..Default::default()
+            },
+            backend,
+            None,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let output = if independent {
+            output
+                .with_live_video(LiveVideoOutputConfig {
+                    queue_capacity: 8,
+                    queue_byte_capacity: 8192,
+                    framerate: None,
+                })
+                .unwrap()
+        } else {
+            output
+        };
+        let output = Arc::new(output);
         let processor = Arc::new(ContextOutput {
             output: output.clone(),
             context: Mutex::new(None),
@@ -1776,5 +2052,188 @@ mod urgent_control_lifecycle_tests {
                 "released permit must not resurrect a cancelled write"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn opted_in_lane_drop_does_not_cancel_other_lane_or_admitted_urgent() {
+        for media_exits_first in [true, false] {
+            let backend = Arc::new(Backend::new());
+            backend
+                .hold_audio
+                .store(!media_exits_first, Ordering::SeqCst);
+            let (worker, output, ctx) = start_mode(backend.clone(), true).await;
+            let held = if media_exits_first {
+                Frame::new(FrameData::OutputImage(ImageRawFrame {
+                    image: vec![1, 2, 3],
+                    size: (1, 1),
+                    format: Some("RGB".into()),
+                }))
+            } else {
+                Frame::new(FrameData::OutputAudio(
+                    AudioRawFrame::new(vec![1; 640], 8000, 1).unwrap(),
+                ))
+            };
+            let admitted = bounded_test(
+                "held lane admission",
+                output.process(held, Direction::Downstream, &ctx),
+            )
+            .await;
+            let held_entered = if media_exits_first {
+                bounded_test("held live image", backend.image_entered.acquire())
+                    .await
+                    .map(|p| p.forget())
+            } else {
+                bounded_test("held PCM", backend.audio_entered.acquire())
+                    .await
+                    .map(|p| p.forget())
+            };
+            let expected = urgent();
+            let mut sending =
+                Box::pin(output.process(expected.clone(), Direction::Downstream, &ctx));
+            let entered = enter(&mut sending, &backend).await;
+            let destination = output.control.destination(None).unwrap();
+            let live = destination.live().unwrap();
+            let (exiting, surviving) = if media_exits_first {
+                (destination.queue.clone(), live.queue.clone())
+            } else {
+                (live.queue.clone(), destination.queue.clone())
+            };
+            let mut changed = exiting.changed.subscribe();
+            let prepared = bounded_test("prepare both lanes", output.prepare_end(&ctx)).await;
+            let observed_drop = bounded_test("actual independent lane Drop", async {
+                changed
+                    .wait_for(|signal| signal.ending && signal.cancelled)
+                    .await
+                    .map(|_| ())
+                    .map_err(error)
+            })
+            .await;
+            let other_still_live = !surviving.signal().cancelled;
+            let active_before_release = backend.active.load(Ordering::SeqCst);
+            backend.image_release.add_permits(8);
+            backend.audio_release.add_permits(8);
+            backend.release.add_permits(1);
+            let sent = bounded_test("finish admitted urgent", &mut sending).await;
+            drop(sending);
+            let finished = finish(worker, false).await;
+            admitted.unwrap();
+            held_entered.unwrap();
+            entered.unwrap();
+            prepared.unwrap();
+            observed_drop.unwrap();
+            sent.unwrap();
+            let report = finished.unwrap();
+            assert_eq!(report.state, WorkerState::Ended);
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert!(
+                other_still_live,
+                "graceful one-lane Drop must not cancel its sibling"
+            );
+            assert_eq!(
+                active_before_release, 2,
+                "held media/image plus admitted urgent remain active"
+            );
+            assert_eq!(backend.active.load(Ordering::SeqCst), 0);
+            assert_eq!(backend.dropped.load(Ordering::SeqCst), 0);
+            assert_eq!(backend.stopped.load(Ordering::SeqCst), 1);
+            assert_eq!(backend.completed.lock().unwrap().as_slice(), &[expected]);
+            assert_eq!(
+                backend.image_written.load(Ordering::SeqCst),
+                usize::from(media_exits_first)
+            );
+        }
+    }
+
+    #[test]
+    fn live_publication_and_old_control_transitions_share_one_local_lock() {
+        // Bounded, joined test threads exercise actual concurrent construction;
+        // production adds no thread or per-frame task. Both possible lock orders
+        // must leave the real media and live queue flags at the control's value.
+        for paused in [false, true] {
+            for _ in 0..32 {
+                let backend = Arc::new(Backend::new());
+                let output = OutputTransport::new(
+                    "publication-control",
+                    OutputTransportConfig::default(),
+                    backend.clone(),
+                    None,
+                    BTreeMap::new(),
+                )
+                .unwrap();
+                let control = output.control();
+                if !paused {
+                    control.pause(None).unwrap();
+                }
+                let barrier = Arc::new(std::sync::Barrier::new(2));
+                let output = std::thread::scope(|scope| {
+                    let builder_barrier = barrier.clone();
+                    let builder = scope.spawn(move || {
+                        builder_barrier.wait();
+                        output.with_live_video(LiveVideoOutputConfig {
+                            queue_capacity: 1,
+                            queue_byte_capacity: 1024,
+                            framerate: None,
+                        })
+                    });
+                    let transition = scope.spawn(move || {
+                        barrier.wait();
+                        if paused {
+                            control.pause(None)
+                        } else {
+                            control.resume(None)
+                        }
+                    });
+                    let output = builder.join().unwrap().unwrap();
+                    transition.join().unwrap().unwrap();
+                    output
+                });
+                let destination = output.control.destination(None).unwrap();
+                let live = destination.live().unwrap();
+                assert_eq!(destination.queue.signal().paused, paused);
+                assert_eq!(live.queue.signal().paused, paused);
+                assert_eq!(backend.stopped.load(Ordering::SeqCst), 0);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn live_builder_rejects_after_real_backend_setup_before_worker_start() {
+        let (worker, _, ctx) = start(Arc::new(Backend::new())).await;
+        let backend = Arc::new(Backend::new());
+        let output = OutputTransport::new(
+            "late-live-builder",
+            OutputTransportConfig {
+                sample_rate: Some(8000),
+                auto_silence: false,
+                end_silence: Duration::ZERO,
+                ..Default::default()
+            },
+            backend.clone(),
+            None,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let setup = bounded_test(
+            "actual output setup",
+            output.setup(&StartFrame::default(), &ctx),
+        )
+        .await;
+        let rejected = output
+            .with_live_video(LiveVideoOutputConfig {
+                queue_capacity: 1,
+                queue_byte_capacity: 8192,
+                framerate: None,
+            })
+            .is_err();
+        // The consuming rejected builder no longer returns the transport. This
+        // test's recording backend owns no device; explicitly close its hook.
+        let stopped = backend.stop().await;
+        let finished = finish(worker, false).await;
+        setup.unwrap();
+        stopped.unwrap();
+        finished.unwrap();
+        assert!(rejected);
+        assert_eq!(backend.stopped.load(Ordering::SeqCst), 1);
+        assert_eq!(backend.active.load(Ordering::SeqCst), 0);
     }
 }
