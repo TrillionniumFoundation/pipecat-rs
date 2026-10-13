@@ -280,6 +280,11 @@ validation. The public source adapter still returns its original field names
 and notes. Other Schema aliases and general SDK validation remain outside this
 limited mapping; it does not establish complete request or cloud-provider parity.
 
+The typed values in a root Schema `defs` map receive the same native Schema
+conversion and alias collision checks. Definition names, `ref` strings and
+arbitrary `default` dictionaries are retained. This does not resolve references
+or introduce support for `$defs`, `$ref` or general SDK validation.
+
 The additive `GeminiToolDeclarations` and `GeminiDeclaredRequest` types and client
 `request_body_gemini_declared`, `stream_gemini_declared` and
 `stream_gemini_declared_with_cancel` methods retain declarations separately from

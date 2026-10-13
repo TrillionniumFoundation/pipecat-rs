@@ -775,6 +775,11 @@ fn gemini_native_wire_schema(schema: &Value) -> Result<Value, ServiceError> {
                 canonicalize(property)?;
             }
         }
+        if let Some(Value::Object(definitions)) = object.get_mut("defs") {
+            for definition in definitions.values_mut() {
+                canonicalize(definition)?;
+            }
+        }
         if let Some(items) = object.get_mut("items") {
             canonicalize(items)?;
         }
