@@ -319,10 +319,10 @@ fn gemini_tools_follow_source_recursive_schema_adaptations_without_erasing_param
         body["tools"][0]["functionDeclarations"][0]["parameters"],
         json!({"type":"OBJECT",
         "properties": {
-            "x-request-id": {"anyOf":[{"type":"STRING"},{"type":"NULL"}], "enum":["one","two"]},
+            "x-request-id": {"any_of":[{"type":"STRING"},{"type":"NULL"}], "enum":["one","two"]},
             "additionalProperties": {"type":"INTEGER"},
             "nested": {"type":"ARRAY", "items":{"type":"OBJECT", "properties":{"flag":{"type":"BOOLEAN"}}, "required":["flag"]}},
-            "choice": {"anyOf":[{"type":"STRING"},{"type":"NUMBER"}]}
+            "choice": {"any_of":[{"type":"STRING"},{"type":"NUMBER"}]}
         }, "required":["x-request-id"], "description":"retain"})
     );
     assert_eq!(

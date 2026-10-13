@@ -261,12 +261,22 @@ tools and arbitrary dictionary forwarding remain unsupported.
 Gemini native standard-function declarations also canonicalize recognized
 Schema `type` enums to their locked SDK representation, such as `OBJECT`,
 `ARRAY` and `STRING`. This runs only at Schema nodes and their `properties`,
-`items` and `anyOf` descendants, including adapted union members. Property names,
+`items` and union descendants, including adapted union members. Property names,
 enum values, default data and other text are retained. The public
 `adapt_gemini_tool_schema` helper still returns the source adapter's SDK-input
 schema and notes; universal input, other providers and unknown type strings keep
 their existing behavior. This mapping does not establish server acceptance or
 extend search configuration, built-ins, Vertex or managed-tool response support.
+
+At those Schema nodes, `anyOf` and `propertyOrdering` use the locked SDK's native
+field names `any_of` and `property_ordering`. Existing snake-case fields are
+accepted, and their union members also receive type canonicalization. Parameter
+names, ordering-list contents and default dictionaries retain their original
+keys and values. Supplying both spellings of either mapped field at one node is
+an error before HTTP or state publication, matching the SDK's dictionary-input
+validation. The public source adapter still returns its original field names
+and notes. Other Schema aliases and general SDK validation remain outside this
+limited mapping; it does not establish complete request or cloud-provider parity.
 
 The additive `GeminiToolDeclarations` and `GeminiDeclaredRequest` types and client
 `request_body_gemini_declared`, `stream_gemini_declared` and

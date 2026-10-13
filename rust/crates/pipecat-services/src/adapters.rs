@@ -624,7 +624,17 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
         body["tools"] = if tools.is_empty() {
             json!([])
         } else {
-            json!([{"functionDeclarations":tools.iter().map(|t|json!({"name":t.name,"description":t.description,"parameters":gemini_native_wire_schema(&t.parameters)})).collect::<Vec<_>>()}])
+            let declarations = tools
+                .iter()
+                .map(|tool| {
+                    Ok(json!({
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": gemini_native_wire_schema(&tool.parameters)?,
+                    }))
+                })
+                .collect::<Result<Vec<_>, ServiceError>>()?;
+            json!([{"functionDeclarations":declarations}])
         };
     }
     if let Some(choice) = &request.context.tool_choice {
@@ -725,11 +735,24 @@ pub(crate) fn gemini_requires_tool_signature(model: &str) -> bool {
         .starts_with("gemini-3")
 }
 
-fn gemini_native_wire_schema(schema: &Value) -> Value {
-    fn canonicalize(schema: &mut Value) {
+fn gemini_native_wire_schema(schema: &Value) -> Result<Value, ServiceError> {
+    fn canonicalize(schema: &mut Value) -> Result<(), ServiceError> {
         let Some(object) = schema.as_object_mut() else {
-            return;
+            return Ok(());
         };
+        for (alias, field) in [
+            ("anyOf", "any_of"),
+            ("propertyOrdering", "property_ordering"),
+        ] {
+            if object.contains_key(alias) && object.contains_key(field) {
+                return Err(ServiceError::InvalidRequest(
+                    "conflicting Gemini schema aliases".into(),
+                ));
+            }
+            if let Some(value) = object.remove(alias) {
+                object.insert(field.into(), value);
+            }
+        }
         if let Some(Value::String(kind)) = object.get_mut("type") {
             if let Some(canonical) = [
                 "TYPE_UNSPECIFIED",
@@ -749,21 +772,22 @@ fn gemini_native_wire_schema(schema: &Value) -> Value {
         }
         if let Some(Value::Object(properties)) = object.get_mut("properties") {
             for property in properties.values_mut() {
-                canonicalize(property);
+                canonicalize(property)?;
             }
         }
         if let Some(items) = object.get_mut("items") {
-            canonicalize(items);
+            canonicalize(items)?;
         }
-        if let Some(Value::Array(members)) = object.get_mut("anyOf") {
+        if let Some(Value::Array(members)) = object.get_mut("any_of") {
             for member in members {
-                canonicalize(member);
+                canonicalize(member)?;
             }
         }
+        Ok(())
     }
     let (mut schema, _) = adapt_gemini_tool_schema(schema);
-    canonicalize(&mut schema);
-    schema
+    canonicalize(&mut schema)?;
+    Ok(schema)
 }
 
 /// Adapt the source adapter's known JSON Schema incompatibilities and report

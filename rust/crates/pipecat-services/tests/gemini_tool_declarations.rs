@@ -199,7 +199,7 @@ async fn gemini_function_schema_types_match_locked_sdk_native_serialization() {
             "default":{"type":"object","marker":"string"},
             "properties":{
                 "type":{"type":"STRING","enum":["object","array","null"]},
-                "names":{"type":"ARRAY","items":{"anyOf":[{"type":"STRING"},{"type":"NULL"}]}},
+            "names":{"type":"ARRAY","items":{"any_of":[{"type":"STRING"},{"type":"NULL"}]}},
                 "nested":{"type":"OBJECT","properties":{
                     "flag":{"type":"BOOLEAN"},"number":{"type":"NUMBER"},"integer":{"type":"INTEGER"}
                 }}
@@ -293,6 +293,123 @@ fn gemini_schema_native_type_normalization_preserves_source_and_other_providers(
             "dropped unsupported key 'x-note'"
         ]
     );
+}
+
+#[tokio::test]
+async fn gemini_schema_aliases_match_locked_sdk_native_serialization() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let mut schema = owning_schema();
+    let parameters = json!({"type":"object","properties":{
+        "ordered":{"type":"object","properties":{"b":{"type":"string"},"a":{"type":"number"}},"propertyOrdering":["b","a"]},
+        "choice":{"anyOf":[{"type":"string"},{"type":"null"}]},
+        "snake":{"any_of":[{"type":"boolean"},{"type":"null"}]},
+        "anyOf":{"type":"string"},"propertyOrdering":{"type":"string"},
+        "literal":{"type":"object","default":{"anyOf":[{"type":"object"}],"propertyOrdering":["raw"]}}
+    }});
+    let core::StandardTool::Function(function) = &mut schema.standard_tools[0] else {
+        unreachable!()
+    };
+    function.parameters = parameters.clone();
+    assert_eq!(
+        pipecat_services::adapters::adapt_gemini_tool_schema(&parameters),
+        (parameters.clone(), vec![])
+    );
+    let input = context(schema);
+    assert_eq!(
+        processor
+            .run_inference(input.clone(), InferenceOptions::default())
+            .await
+            .unwrap(),
+        Some("declared".into())
+    );
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["tools"][0], json!({"googleSearch":{}}));
+    assert_eq!(requests[0]["tools"][1]["functionDeclarations"][0]["parameters"],json!({"type":"OBJECT","properties":{
+        "ordered":{"type":"OBJECT","properties":{"b":{"type":"STRING"},"a":{"type":"NUMBER"}},"property_ordering":["b","a"]},
+        "choice":{"any_of":[{"type":"STRING"},{"type":"NULL"}]},
+        "snake":{"any_of":[{"type":"BOOLEAN"},{"type":"NULL"}]},
+        "anyOf":{"type":"STRING"},"propertyOrdering":{"type":"STRING"},
+        "literal":{"type":"OBJECT","default":{"anyOf":[{"type":"object"}],"propertyOrdering":["raw"]}}
+    }}),"typed Schema fields use exact SDK native spelling; property names and default data remain literal");
+    let core::ToolSet::Schema(retained) = input.tools else {
+        unreachable!()
+    };
+    let core::StandardTool::Function(retained) = &retained.standard_tools[0] else {
+        unreachable!()
+    };
+    assert_eq!(retained.parameters, parameters);
+    assert!(processor
+        .request_snapshot()
+        .unwrap()
+        .context
+        .tools
+        .is_none());
+}
+
+#[tokio::test]
+async fn gemini_schema_alias_conflicts_reject_before_io_without_changing_state() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let before = processor.gemini_declared_request_snapshot().unwrap();
+    for (camel, snake, first, second) in [
+        (
+            "anyOf",
+            "any_of",
+            json!([{"type":"string"}]),
+            json!([{"type":"number"}]),
+        ),
+        (
+            "propertyOrdering",
+            "property_ordering",
+            json!(["b", "a"]),
+            json!(["a", "b"]),
+        ),
+    ] {
+        for equal in [false, true] {
+            let mut invalid = owning_schema();
+            let core::StandardTool::Function(function) = &mut invalid.standard_tools[0] else {
+                unreachable!()
+            };
+            function.parameters = json!({"type":"object","properties":{"nested":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"number"}}}}});
+            let node = function.parameters["properties"]["nested"]
+                .as_object_mut()
+                .unwrap();
+            node.insert(camel.into(), first.clone());
+            node.insert(
+                snake.into(),
+                if equal { first.clone() } else { second.clone() },
+            );
+            let input = context(invalid);
+            let error = processor
+                .run_inference(input.clone(), InferenceOptions::default())
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(error,ServiceError::InvalidRequest(ref message) if message.contains("conflicting") && message.contains("aliases")),
+                "mapped alias collisions must reject before HTTP: {error:?}"
+            );
+            assert!(matches!(
+                processor.preflight_context(&input),
+                Err(ServiceError::InvalidRequest(_))
+            ));
+            assert!(matches!(
+                processor.preflight_tools(&input.tools),
+                Err(ServiceError::InvalidRequest(_))
+            ));
+            let after = processor.gemini_declared_request_snapshot().unwrap();
+            assert_eq!(
+                serde_json::to_value(before.request()).unwrap(),
+                serde_json::to_value(after.request()).unwrap()
+            );
+            assert_eq!(
+                before.gemini_tools().as_slice(),
+                after.gemini_tools().as_slice()
+            );
+        }
+    }
+    assert!(server.requests.lock().unwrap().is_empty());
 }
 fn owning_schema() -> core::ToolsSchema {
     let mut schema = schema();
