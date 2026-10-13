@@ -271,10 +271,13 @@ their existing behavior. This mapping does not establish server acceptance or
 extend search configuration, built-ins, Vertex or managed-tool response support.
 
 At those Schema nodes, `anyOf` and `propertyOrdering` use the locked SDK's native
-field names `any_of` and `property_ordering`. Existing snake-case fields are
+field names `any_of` and `property_ordering`. The integer constraint names
+`minLength`, `maxLength`, `minItems`, `maxItems`, `minProperties` and
+`maxProperties` likewise use their snake-case field names. Their values are
+retained; this mapping adds no coercion or numeric validation. Existing snake-case fields are
 accepted, and their union members also receive type canonicalization. Parameter
 names, ordering-list contents and default dictionaries retain their original
-keys and values. Supplying both spellings of either mapped field at one node is
+keys and values. Supplying both spellings of a mapped field at one node is
 an error before HTTP or state publication, matching the SDK's dictionary-input
 validation. The public source adapter still returns its original field names
 and notes. Other Schema aliases and general SDK validation remain outside this

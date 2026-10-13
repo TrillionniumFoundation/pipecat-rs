@@ -359,23 +359,34 @@ async fn gemini_defs_alias_conflicts_reject_before_io_without_changing_state() {
 }
 
 async fn schema_alias_conflicts(node_map: &str) {
+    schema_alias_conflicts_with_fields(
+        node_map,
+        vec![
+            (
+                "anyOf",
+                "any_of",
+                json!([{"type":"string"}]),
+                json!([{"type":"number"}]),
+            ),
+            (
+                "propertyOrdering",
+                "property_ordering",
+                json!(["b", "a"]),
+                json!(["a", "b"]),
+            ),
+        ],
+    )
+    .await;
+}
+
+async fn schema_alias_conflicts_with_fields(
+    node_map: &str,
+    fields: Vec<(&str, &str, Value, Value)>,
+) {
     let server = Server::start().await;
     let processor = processor(&server, Provider::Gemini);
     let before = processor.gemini_declared_request_snapshot().unwrap();
-    for (camel, snake, first, second) in [
-        (
-            "anyOf",
-            "any_of",
-            json!([{"type":"string"}]),
-            json!([{"type":"number"}]),
-        ),
-        (
-            "propertyOrdering",
-            "property_ordering",
-            json!(["b", "a"]),
-            json!(["a", "b"]),
-        ),
-    ] {
+    for (camel, snake, first, second) in fields {
         for equal in [false, true] {
             let mut invalid = owning_schema();
             let core::StandardTool::Function(function) = &mut invalid.standard_tools[0] else {
@@ -420,6 +431,89 @@ async fn schema_alias_conflicts(node_map: &str) {
         }
     }
     assert!(server.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn gemini_schema_integer_constraint_alias_conflicts_reject_before_io() {
+    for node_map in ["properties", "defs"] {
+        let fields = [
+            ("minLength", "min_length"),
+            ("maxLength", "max_length"),
+            ("minItems", "min_items"),
+            ("maxItems", "max_items"),
+            ("minProperties", "min_properties"),
+            ("maxProperties", "max_properties"),
+        ]
+        .into_iter()
+        .map(|(camel, snake)| (camel, snake, json!(1), json!(2)))
+        .collect();
+        schema_alias_conflicts_with_fields(node_map, fields).await;
+    }
+}
+
+#[tokio::test]
+async fn gemini_schema_integer_constraint_aliases_match_locked_sdk_native_http() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let parameters = json!({
+        "type":"object", "minProperties":1, "maxProperties":6,
+        "defs":{"Label":{"type":"string","min_length":1,"max_length":12}},
+        "properties":{
+            "tags":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string","minLength":2,"maxLength":8}},
+            "maxItems":{"type":"object","properties":{"minLength":{"type":"string","minLength":3,"maxLength":5}}},
+            "choice":{"anyOf":[{"type":"string","minLength":1,"maxLength":8},{"type":"null"}]},
+            "label":{"ref":"#/defs/Label"}
+        },
+        "default":{"minProperties":999,"maxLength":3},
+        "example":{"minItems":7,"maxProperties":8}
+    });
+    let (adapted, notes) = pipecat_services::adapters::adapt_gemini_tool_schema(&parameters);
+    assert_eq!(adapted, parameters);
+    assert!(notes.is_empty());
+    let mut schema = owning_schema();
+    let core::StandardTool::Function(function) = &mut schema.standard_tools[0] else {
+        unreachable!()
+    };
+    function.parameters = parameters.clone();
+    let input = context(schema);
+    let before = processor.gemini_declared_request_snapshot().unwrap();
+    assert_eq!(
+        processor
+            .run_inference(input.clone(), InferenceOptions::default())
+            .await
+            .unwrap(),
+        Some("declared".into())
+    );
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["tools"][1]["functionDeclarations"][0]["parameters"], json!({
+        "type":"OBJECT", "min_properties":1, "max_properties":6,
+        "defs":{"Label":{"type":"STRING","min_length":1,"max_length":12}},
+        "properties":{
+            "tags":{"type":"ARRAY","min_items":1,"max_items":4,"items":{"type":"STRING","min_length":2,"max_length":8}},
+            "maxItems":{"type":"OBJECT","properties":{"minLength":{"type":"STRING","min_length":3,"max_length":5}}},
+            "choice":{"any_of":[{"type":"STRING","min_length":1,"max_length":8},{"type":"NULL"}]},
+            "label":{"ref":"#/defs/Label"}
+        },
+        "default":{"minProperties":999,"maxLength":3},
+        "example":{"minItems":7,"maxProperties":8}
+    }), "SDK Schema integer constraints use native field names; parameter names and default/example data stay literal");
+    let core::ToolSet::Schema(retained) = input.tools else {
+        unreachable!()
+    };
+    let core::StandardTool::Function(retained) = &retained.standard_tools[0] else {
+        unreachable!()
+    };
+    assert_eq!(retained.parameters, parameters);
+    let after = processor.gemini_declared_request_snapshot().unwrap();
+    assert_eq!(
+        serde_json::to_value(before.request()).unwrap(),
+        serde_json::to_value(after.request()).unwrap()
+    );
+    assert_eq!(
+        before.gemini_tools().as_slice(),
+        after.gemini_tools().as_slice()
+    );
 }
 
 #[tokio::test]

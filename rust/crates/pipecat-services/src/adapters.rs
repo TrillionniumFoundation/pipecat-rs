@@ -743,6 +743,12 @@ fn gemini_native_wire_schema(schema: &Value) -> Result<Value, ServiceError> {
         for (alias, field) in [
             ("anyOf", "any_of"),
             ("propertyOrdering", "property_ordering"),
+            ("minLength", "min_length"),
+            ("maxLength", "max_length"),
+            ("minItems", "min_items"),
+            ("maxItems", "max_items"),
+            ("minProperties", "min_properties"),
+            ("maxProperties", "max_properties"),
         ] {
             if object.contains_key(alias) && object.contains_key(field) {
                 return Err(ServiceError::InvalidRequest(
