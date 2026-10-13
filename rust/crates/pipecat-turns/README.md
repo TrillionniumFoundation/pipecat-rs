@@ -184,41 +184,59 @@ aggregator's active signed continuation or protect against concurrent external
 context edits. Signed-image bookmark production and continuation redesign are
 outside this scope.
 
-`UserImage` has a separate, append-only encoded upload path: `request=None`,
-`append_to_context=Some(true)`, and `run_llm=Some(false)` must all be explicit.
-Its `image.image` bytes and `image.format` MIME use the same PNG/JPEG signature,
-8 MiB encoded-byte and checked data-URL limits above; dimensions are ignored.
-Nonempty accompanying text comes first (whitespace is retained), followed by
-one image part in a user-role message. User IDs and frame metadata do not become
-message names, tool results or provider authority. The public RTVI `send-file`
-producer supplies this shape when `run_immediately=false`; its default true-run
-upload remains outside this native slice. No new decoder or dependency is used.
+`UserImage` has a separate encoded upload path: `request=None` and
+`append_to_context=Some(true)` are required. Its `image.image` bytes and
+`image.format` MIME use the same PNG/JPEG signature, 8 MiB encoded-byte and checked
+data-URL limits above; dimensions are ignored. Nonempty accompanying text comes
+first (whitespace is retained), followed by one image part in a user-role message.
+User IDs and frame metadata do not become message names, tool results or provider
+authority. The public RTVI `send-file` producer supplies this shape both with
+`run_immediately=false` and with options omitted (the default is true). No new
+decoder or dependency is used.
 
 This upload requires an idle non-realtime assistant, with no local signed owner,
 active assistant/LLM response, buffered text/thought, user/bot speech, pending
 playback/tool calls, or owed/awaited inference. It never flushes buffered text,
-closes a turn, invokes a capture callback, or schedules inference. None/true run,
-false/None append, every non-null request, raw camera pixels and user files remain
-unsupported. This is intentionally narrower than Python, which can flush partial
-assistant text, accepts arbitrary `image/*`, converts raw pixels, and runs the
-LLM unless run is explicitly false. It is not full Python image-handler parity.
+closes a turn or invokes a capture callback. False/None append, every non-null
+request, raw camera pixels and user files remain unsupported. This is narrower
+than Python's partial-text flush, arbitrary `image/*` and raw-pixel conversion;
+it is not full Python image-handler parity.
 
-Accepted uploads are consumed in either direction with no actions/events.
-Validation precedes context mutation and replay lookup; only a committed append
-records its ID in the same 512-ID cache, so a failed upload can be corrected and
-retried. Equal bytes with different IDs remain distinct. This is bounded native
-frame replay suppression, not lifetime or RTVI-command exactly-once delivery.
-Ordinary uploads after End/Cancel/Stop are ignored, retaining existing private
-carrier validation order. Completed signed prefixes are preserved; the same
-one-serialized-writer limitation stated above applies.
+Accepted uploads are consumed in either direction without aggregation events.
+Explicit `run_llm=Some(false)` is append-only and produces no actions. True or
+None commits the same message and prepares exactly one non-speculative context
+action upstream, using the existing append-and-frame transaction. This image-
+specific None behavior does not change detailed message append/update semantics.
+The assistant adds no interruption or output-configuration action; RTVI owns its
+existing interruption/audio envelope. Nondefault audio-option timing through a
+provider chain is not qualified by this slice.
 
-Because explicit run=false requires no output context frame, appending an upload
-does not project existing history. A preexisting native `InlineData` message may
-still make `snapshot_rich()`/`frame_data()` unsupported independently of this
-successful append; `snapshot()` preserves that native prefix. Fresh projectable
-history maps the upload to Gemini user-role `inlineData` with exact MIME/base64
-and text order through the existing request builder. This establishes neither
-live-provider acceptance nor a native provider visual-output round trip.
+Encoded payload validation precedes context mutation and replay lookup; only a
+committed append records its ID in the same 512-ID cache. Failed validation or context projection
+leaves the ID retryable. An accepted false-run upload retyped as true with the
+same ID emits no inference action. Equal bytes with different IDs remain distinct.
+This is bounded native frame replay suppression, not lifetime or RTVI-command
+exactly-once delivery. Ordinary uploads after End/Cancel/Stop are ignored,
+retaining existing private-carrier validation order. Completed signed prefixes
+are preserved; the same one-serialized-writer limitation stated above applies.
+
+Explicit run=false does not project existing history: a native `InlineData`
+prefix may independently make `snapshot_rich()`/`frame_data()` unsupported while
+an append succeeds and `snapshot()` preserves that prefix. True/None requires a
+lossless projection before admitting the message; a projection failure leaves
+context unchanged, consumes no replay ID, and creates no inference scheduling
+debt. The same input ID may be retried after the caller repairs history, or in
+false-run append-only mode. No new context helper or deferred scheduling path is
+introduced.
+
+A successful reducer return establishes a committed append and a prepared
+upstream action. Actual pipeline emission happens afterward. A later push or
+provider failure does not roll back the append or replay identity; replaying an
+accepted ID is not delivery recovery. The real default RTVI pipeline fixture
+observes one upstream context and projects that emitted context through the
+Gemini request builder, preserving exact user text/MIME/base64 order. These
+checks establish routing and request formation, not provider receipt, completed
+inference, live-provider acceptance or a native visual-output round trip.
 
 Detailed message append/update and local transforms honor optional `run_llm`;
 `None` does not request a run. Tool-set and tool-choice changes update the actual

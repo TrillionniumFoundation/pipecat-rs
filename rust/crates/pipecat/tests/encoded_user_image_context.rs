@@ -320,7 +320,7 @@ async fn upload_text_presence_and_jpeg_preserve_exact_user_contents_upstream() {
 async fn nonselected_upload_flags_reject_and_leave_same_id_retryable() {
     for append in [None, Some(false), Some(true)] {
         for run in [None, Some(false), Some(true)] {
-            if append == Some(true) && run == Some(false) {
+            if append == Some(true) {
                 continue;
             }
             let context = SharedContext::default();
@@ -864,5 +864,443 @@ async fn private_carriers_reject_before_replay_and_terminal_order_stays_unchange
         silent(continuation_ignored.unwrap());
         assert!(tool_rejected.is_err());
         assert!(after.unwrap().messages.is_empty());
+    }
+}
+
+// Frozen automatic-inference counterexamples. These exercise public APIs only.
+fn inference_upload(run: Option<bool>) -> Frame {
+    let mut frame = png_upload();
+    if let FrameData::UserImage(image) = &mut frame.data {
+        image.run_llm = run;
+    }
+    frame
+}
+
+fn inference_context(output: AggregationOutput) -> DetailedLlmContextFrame {
+    use pipecat::turns::AggregationAction;
+    assert!(output.events.is_empty());
+    assert_eq!(output.actions.len(), 1, "one prepared context action only");
+    let AggregationAction::Push(directed) = &output.actions[0] else {
+        panic!("expected a context push")
+    };
+    assert_eq!(directed.direction, Direction::Upstream);
+    let FrameData::LlmContextDetailed(context) = &directed.frame.data else {
+        panic!("expected a detailed context, not a forwarded upload")
+    };
+    assert!(!context.speculation);
+    context.clone()
+}
+
+fn inference_png_message() -> ContextMessage {
+    ContextMessage {
+        role: ChatRole::User,
+        content: MessageContent::Parts(vec![
+            MessagePart::Text {
+                text: "inspect".into(),
+            },
+            MessagePart::Image {
+                url: format!("data:image/png;base64,{PNG_BASE64}"),
+                detail: None,
+            },
+        ]),
+        name: None,
+        tool_call_id: None,
+        tool_calls: vec![],
+        extra: Default::default(),
+    }
+}
+
+#[tokio::test]
+async fn inference_baseline_idle_true_and_none_prepare_one_upstream_context() {
+    for run in [Some(true), None] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let result = consume(&assistant, inference_upload(run));
+        let snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        let projected = inference_context(
+            result.expect("idle request-free true/None encoded upload must be admitted"),
+        );
+        assert_eq!(projected.context, snapshot.unwrap());
+        assert_eq!(projected.context.messages, vec![inference_png_message()]);
+    }
+}
+
+async fn inference_default_rtvi_pipeline(
+    context: SharedContext,
+) -> Result<(Vec<DirectedFrame>, WorkerReport), String> {
+    const WAIT: Duration = Duration::from_secs(5);
+    const MARKER: &str = "after-default-image";
+    let rtvi = RtviProcessor::new(RtviConfig::default()).map_err(|e| e.to_string())?;
+    let assistant = LLMAssistantAggregator::new(context, Default::default());
+    let mut worker = Pipeline::new(vec![Arc::new(rtvi), Arc::new(assistant)])
+        .start(PipelineConfig {
+            startup_timeout: WAIT,
+            shutdown_timeout: Duration::from_secs(3),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut frames = Vec::new();
+    let operation = async {
+        // The second command is a FIFO marker in the same real RTVI command loop.
+        // It permits a bounded old-failure run without waiting for a missing image/context.
+        for value in [
+            json!({
+                "label": "rtvi-ai", "id": "default-image", "type": "send-file",
+                "data": {
+                    "content": "inspect",
+                    "file": {"format": "image/png", "source": {"type": "bytes", "bytes": PNG_BASE64}}
+                }
+            }),
+            json!({
+                "label": "rtvi-ai", "id": MARKER, "type": "client-message",
+                "data": {"t": "test-fence", "d": null}
+            }),
+        ] {
+            tokio::time::timeout(
+                WAIT,
+                worker.sender().send(
+                    Frame::new(FrameData::InputTransportMessage(value)),
+                    Direction::Downstream,
+                ),
+            )
+            .await
+            .map_err(|_| "default upload send deadline".to_string())?
+            .map_err(|e| e.to_string())?;
+        }
+        tokio::time::timeout(WAIT, async {
+            while let Some(directed) = worker.recv().await {
+                let marked = matches!(&directed.frame.data, FrameData::RtviClientMessage(message)
+                    if message.msg_id == MARKER);
+                frames.push(directed);
+                if marked {
+                    return Ok(());
+                }
+            }
+            Err("pipeline closed before the RTVI FIFO marker".to_string())
+        })
+        .await
+        .map_err(|_| "default upload FIFO marker deadline".to_string())?
+    }
+    .await;
+    // End, drain and join before any behavioral assertion, even on an old failure.
+    let end = tokio::time::timeout(WAIT, worker.end()).await;
+    if !matches!(&end, Ok(Ok(()))) {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload end failed")).await;
+    }
+    let drain = tokio::time::timeout(WAIT, async {
+        while let Some(directed) = worker.recv().await {
+            frames.push(directed);
+        }
+    })
+    .await;
+    if drain.is_err() {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload drain failed")).await;
+    }
+    let join = tokio::time::timeout(WAIT, worker.join()).await;
+    if !matches!(&join, Ok(Ok(_))) {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload join failed")).await;
+        let _ = tokio::time::timeout(WAIT, worker.join()).await;
+    }
+    let report = join
+        .map_err(|_| "default upload join deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    end.map_err(|_| "default upload end deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    drain.map_err(|_| "default upload drain deadline".to_string())?;
+    operation?;
+    Ok((frames, report))
+}
+
+#[tokio::test]
+async fn inference_baseline_rtvi_default_emits_one_exact_gemini_context() {
+    let context = SharedContext::default();
+    let (frames, report) = inference_default_rtvi_pipeline(context.clone())
+        .await
+        .expect("default RTVI fixture failed after cleanup");
+    let contexts: Vec<_> = frames
+        .iter()
+        .filter(|directed| {
+            matches!(
+                directed.frame.data,
+                FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+            )
+        })
+        .collect();
+    assert_eq!(
+        contexts.len(),
+        1,
+        "one actual pipeline context; report={report:?}"
+    );
+    assert_eq!(contexts[0].direction, Direction::Upstream);
+    let FrameData::LlmContextDetailed(projected) = &contexts[0].frame.data else {
+        panic!("default upload must emit a detailed context")
+    };
+    assert!(!projected.speculation);
+    assert_eq!(projected.context, context.snapshot_rich().unwrap());
+    assert_eq!(projected.context.messages, vec![inference_png_message()]);
+    assert!(!frames
+        .iter()
+        .any(|directed| matches!(directed.frame.data, FrameData::UserImage(_))));
+    for direction in [Direction::Downstream, Direction::Upstream] {
+        assert_eq!(
+            frames
+                .iter()
+                .filter(|directed| directed.direction == direction
+                    && matches!(directed.frame.data, FrameData::Interruption))
+                .count(),
+            1
+        );
+    }
+    assert_eq!(report.state, WorkerState::Ended);
+    assert!(report.errors.is_empty(), "{report:?}");
+    let native = pipecat::services::frame_context::context(&projected.context).unwrap();
+    assert_eq!(native, context.snapshot().unwrap());
+    let body = request_body(
+        Provider::Gemini,
+        &CompletionRequest::new("wire-fixture", native),
+    )
+    .unwrap();
+    assert_eq!(
+        body["contents"],
+        json!([
+            {"role": "user", "parts": [
+                {"text": "inspect"},
+                {"inlineData": {"mimeType": "image/png", "data": PNG_BASE64}}
+            ]}
+        ])
+    );
+}
+
+// Candidate-only controls. The two inference baselines and their helpers above
+// remain exact bytes; the old flag-rejection matrix now excludes all append=true.
+fn inference_no_context(output: AggregationOutput) {
+    use pipecat::turns::AggregationAction;
+    assert!(output.events.is_empty());
+    assert_eq!(output.actions.len(), 1);
+    let AggregationAction::Push(directed) = &output.actions[0] else {
+        panic!("expected only the ordinary speaking-state frame")
+    };
+    assert!(matches!(directed.frame.data, FrameData::BotStoppedSpeaking));
+}
+
+fn inference_unprojectable_prefix() -> pipecat::services::Message {
+    use pipecat::services::{Content, ContentPart, Message, Role};
+    Message {
+        role: Role::User,
+        content: Some(Content::Parts(vec![ContentPart::InlineData {
+            mime_type: "application/pdf".into(),
+            data: "JVBERg==".into(),
+        }])),
+        name: None,
+        tool_calls: vec![],
+        tool_call_id: None,
+    }
+}
+
+#[tokio::test]
+async fn inference_replay_and_distinct_ids_keep_one_action_per_admitted_image() {
+    let jpeg = include_bytes!("../../pipecat-images/tests/fixtures/source-cat.jpg");
+    for (run, direction, bytes, mime) in [
+        (Some(true), Direction::Downstream, PNG, "image/png"),
+        (None, Direction::Upstream, PNG, "image/png"),
+        (
+            Some(true),
+            Direction::Upstream,
+            jpeg.as_slice(),
+            "image/jpeg",
+        ),
+        (None, Direction::Downstream, jpeg.as_slice(), "image/jpeg"),
+    ] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut frame = upload(bytes.to_vec(), Some(mime), Some("inspect"));
+        if let FrameData::UserImage(image) = &mut frame.data {
+            image.run_llm = run;
+        }
+        let first = assistant.process_at(frame.clone(), direction, Duration::ZERO);
+        let first_snapshot = context.snapshot_rich();
+        let replay = assistant.process_at(frame.clone(), direction, Duration::ZERO);
+        let mut malformed = frame.clone();
+        if let FrameData::UserImage(image) = &mut malformed.data {
+            image.image.image.clear();
+        }
+        let invalid_replay = assistant.process_at(malformed, direction, Duration::ZERO);
+        let after_replays = context.snapshot_rich();
+        let next = assistant.process_at(Frame::new(frame.data), direction, Duration::ZERO);
+        let final_snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        let first = inference_context(first.unwrap());
+        assert_eq!(first.context, first_snapshot.unwrap());
+        assert_eq!(first.context.messages.len(), 1);
+        silent(replay.unwrap());
+        assert!(
+            invalid_replay.is_err(),
+            "validation must precede successful-ID replay"
+        );
+        assert_eq!(first.context, after_replays.unwrap());
+        let next = inference_context(next.unwrap());
+        assert_eq!(next.context, final_snapshot.unwrap());
+        assert_eq!(
+            next.context.messages,
+            vec![first.context.messages[0].clone(); 2]
+        );
+        let native = pipecat::services::frame_context::context(&next.context).unwrap();
+        let body = request_body(
+            Provider::Gemini,
+            &CompletionRequest::new("wire-fixture", native),
+        )
+        .unwrap();
+        let part = &body["contents"][0]["parts"][1]["inlineData"];
+        assert_eq!(part["mimeType"], mime);
+        assert!(!part["data"].as_str().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn inference_projection_failure_is_atomic_and_same_id_recovers_after_repair() {
+    use pipecat::services::{Context, Message, Role};
+    for run in [Some(true), None] {
+        let prefix = inference_unprojectable_prefix();
+        let context = SharedContext::new(Context::new(vec![prefix.clone()]));
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let frame = inference_upload(run);
+        let rejected = consume(&assistant, frame.clone());
+        let after_rejection = context.snapshot();
+        let projection_still_fails = context.frame_data();
+        let repaired = context.replace(Context::new(vec![Message::text(Role::User, "repaired")]));
+        let no_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+        let retried = consume(&assistant, frame.clone());
+        let after_retry = context.snapshot_rich();
+        let replay = consume(&assistant, frame);
+        let later_run = consume(&assistant, Frame::new(FrameData::LlmRun));
+        let no_later_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+        let final_snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        assert!(rejected.unwrap_err().message.contains("InlineData"));
+        assert_eq!(after_rejection.unwrap(), Context::new(vec![prefix]));
+        assert!(projection_still_fails.is_err());
+        repaired.unwrap();
+        inference_no_context(no_debt.unwrap());
+        let retried = inference_context(retried.unwrap());
+        assert_eq!(retried.context, after_retry.unwrap());
+        assert_eq!(retried.context.messages.len(), 2);
+        assert_eq!(
+            retried.context.messages[0].content,
+            MessageContent::Text("repaired".into())
+        );
+        assert_eq!(retried.context.messages[1], inference_png_message());
+        silent(replay.unwrap());
+        assert_eq!(
+            inference_context(later_run.unwrap()).context,
+            retried.context
+        );
+        inference_no_context(no_later_debt.unwrap());
+        assert_eq!(final_snapshot.unwrap(), retried.context);
+    }
+}
+
+#[tokio::test]
+async fn inference_failed_run_can_retry_false_and_accepted_false_cannot_be_rearmed() {
+    use pipecat::services::Context;
+    for run in [Some(true), None] {
+        let prefix = inference_unprojectable_prefix();
+        let context = SharedContext::new(Context::new(vec![prefix.clone()]));
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let frame = inference_upload(run);
+        let rejected = consume(&assistant, frame.clone());
+        let after_rejection = context.snapshot();
+        let mut append_only = frame.clone();
+        if let FrameData::UserImage(image) = &mut append_only.data {
+            image.run_llm = Some(false);
+        }
+        let recovered = consume(&assistant, append_only);
+        let after_append = context.snapshot();
+        // This must hit successful replay before requiring a frame projection.
+        let rearmed = consume(&assistant, frame);
+        let after_rearm = context.snapshot();
+        let unprojectable = context.frame_data();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        assert!(rejected.unwrap_err().message.contains("InlineData"));
+        assert_eq!(after_rejection.unwrap(), Context::new(vec![prefix.clone()]));
+        silent(recovered.unwrap());
+        silent(rearmed.unwrap());
+        let after_append = after_append.unwrap();
+        assert_eq!(after_append.messages.len(), 2);
+        assert_eq!(after_append.messages[0], prefix);
+        assert_eq!(after_append, after_rearm.unwrap());
+        assert!(unprojectable.is_err());
+    }
+    // The same false -> true/None replay rule also holds in projectable history.
+    for run in [Some(true), None] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut frame = png_upload();
+        let accepted = consume(&assistant, frame.clone());
+        if let FrameData::UserImage(image) = &mut frame.data {
+            image.run_llm = run;
+        }
+        let rearmed = consume(&assistant, frame);
+        let snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        silent(accepted.unwrap());
+        silent(rearmed.unwrap());
+        assert_eq!(snapshot.unwrap().messages, vec![inference_png_message()]);
+    }
+}
+
+#[tokio::test]
+async fn inference_emitted_context_preserves_completed_gemini_signature_prefix() {
+    use pipecat::services::{Content, ContentPart, Context, Message, Role};
+    for run in [Some(true), None] {
+        let prefix = Message {
+            role: Role::Assistant,
+            content: Some(Content::Parts(vec![ContentPart::GeminiText {
+                text: "signed answer".into(),
+                thought: false,
+                signature: Some("opaque-signature".into()),
+                incomplete: false,
+            }])),
+            name: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+        };
+        let context = SharedContext::new(Context::new(vec![prefix.clone()]));
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let result = consume(&assistant, inference_upload(run));
+        let native_snapshot = context.snapshot();
+        let rich_snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        let emitted = inference_context(result.unwrap());
+        assert_eq!(emitted.context, rich_snapshot.unwrap());
+        let native = pipecat::services::frame_context::context(&emitted.context).unwrap();
+        assert_eq!(native, native_snapshot.unwrap());
+        assert_eq!(native.messages[0], prefix);
+        assert_eq!(native.messages.len(), 2);
+        let body = request_body(
+            Provider::Gemini,
+            &CompletionRequest::new("wire-fixture", native),
+        )
+        .unwrap();
+        assert_eq!(
+            body["contents"],
+            json!([
+                {"role": "model", "parts": [{"text": "signed answer", "thoughtSignature": "opaque-signature"}]},
+                {"role": "user", "parts": [{"text": "inspect"}, {"inlineData": {"mimeType": "image/png", "data": PNG_BASE64}}]}
+            ])
+        );
     }
 }

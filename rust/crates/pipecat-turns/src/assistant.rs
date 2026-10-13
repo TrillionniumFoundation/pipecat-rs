@@ -373,7 +373,6 @@ impl LLMAssistantAggregator {
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
             if image.request.is_some()
                 || image.append_to_context != Some(true)
-                || image.run_llm != Some(false)
                 || !matches!(
                     image.image.format.as_deref(),
                     Some("image/png" | "image/jpeg")
@@ -410,9 +409,18 @@ impl LLMAssistantAggregator {
             if state.seen.contains(frame.id) {
                 return Ok(output);
             }
-            // Explicit run=false is append-only. Existing independently
-            // unprojectable history must not turn a committed append into error.
-            self.context.append_rich(message)?;
+            if image.run_llm == Some(false) {
+                // Append-only admission does not require existing history to project.
+                self.context.append_rich(message)?;
+            } else {
+                // Convert only this known user Text/Image message before mutation.
+                // The existing transaction checks history and prepares one frame;
+                // failed projection leaves both context and the replay ID retryable.
+                let message = pipecat_services::frame_context::message(&message)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+                let context = self.context.append_with_frame(message)?;
+                output.context_frame(context, Direction::Upstream);
+            }
             state.seen.insert(frame.id);
             return Ok(output);
         }
