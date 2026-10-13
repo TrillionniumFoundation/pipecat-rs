@@ -1,4 +1,4 @@
-//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/YCbCr/L image encoding.
+//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/YCbCr/L/CMYK image encoding.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pipecat_core::{
     AssistantImageRawFrame, ChatRole, ContextMessage, ImageRawFrame, MessageContent, MessagePart,
@@ -30,7 +30,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
         _ => {
             if matches!(
                 image.image.image.format.as_deref(),
-                Some("RGB" | "RGBX" | "YCbCr" | "L")
+                Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK")
             ) {
                 let jpeg = raw_jpeg(&image.image.image, "assistant image")?;
                 data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
@@ -58,7 +58,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
     let url = if matches!(
         image.image.format.as_deref(),
-        Some("RGB" | "RGBX" | "YCbCr" | "L")
+        Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK")
     ) {
         let jpeg = raw_jpeg(&image.image, "user image")?;
         data_url(&jpeg, Some("image/jpeg"), "user image", "image")?
@@ -122,8 +122,9 @@ fn data_url(
     Ok(url)
 }
 
-// RGB, RGBX, YCbCr and L are packed top-down RGB24, RGB+ignored-byte,
-// full-range Y/Cb/Cr triplets and L8. YCbCr is already in the JPEG color domain.
+// RGB, RGBX, YCbCr, L and CMYK are packed top-down RGB24, RGB+ignored-byte,
+// full-range Y/Cb/Cr triplets, L8 and ordinary C/M/Y/K quads.
+// YCbCr is already in the JPEG color domain; Cmyk inverts all four channels.
 // No row padding. Input length and required prefix have independent caps;
 // bounded surplus matches Image.frombytes.
 // Owner labels are fixed at the two call sites, never copied from frame metadata.
@@ -134,9 +135,10 @@ fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, Proce
         Some("RGBX") => ("RGBX", 4, jpeg_encoder::ColorType::Rgba),
         Some("YCbCr") => ("YCbCr", 3, jpeg_encoder::ColorType::Ycbcr),
         Some("L") => ("L", 1, jpeg_encoder::ColorType::Luma),
+        Some("CMYK") => ("CMYK", 4, jpeg_encoder::ColorType::Cmyk),
         _ => {
             return Err(ProcessorError::new(format!(
-                "{owner} raw pixels require exact RGB, RGBX, YCbCr or L"
+                "{owner} raw pixels require exact RGB, RGBX, YCbCr, L or CMYK"
             )))
         }
     };
@@ -168,7 +170,13 @@ fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, Proce
     }
     let mut output = CappedJpegWriter::default();
     let mut encoder = jpeg_encoder::Encoder::new(&mut output, 75);
-    encoder.set_sampling_factor(jpeg_encoder::SamplingFactor::F_2_2);
+    // For CMYK the encoder applies this factor to K, with C/M/Y fixed at 1x1.
+    // All four must be 1x1; preserve the existing factor for every other mode.
+    encoder.set_sampling_factor(if mode == "CMYK" {
+        jpeg_encoder::SamplingFactor::F_1_1
+    } else {
+        jpeg_encoder::SamplingFactor::F_2_2
+    });
     encoder.set_progressive(false);
     encoder.set_optimized_huffman_tables(false);
     // Dimensions fit u16 by the stricter compatibility bound above. Prevalidation
