@@ -218,13 +218,14 @@ Unsupported features are not labeled as implemented integrations:
 Ordinary native `Provider::OpenAi` context frames, tool setters and out-of-band
 inference select only the OpenAI entry in a `ToolsSchema` custom map, matching
 the Python OpenAI adapter. Other adapters' declarations are ignored while the
-standard function definitions and tool choice remain intact. A nonempty OpenAI
-custom entry still returns `Unsupported`; this does not add opaque tool request
+standard function definitions and tool choice remain intact. Ordinary Gemini
+paths likewise select only the Gemini entry and ignore OpenAI declarations.
+A nonempty owning OpenAI or Gemini custom entry still returns `Unsupported`; this does not add opaque tool request
 or response support. Ordinary Direct handlers still require an executor, while
 inference only advertises their definitions. Ordinary Anthropic paths ignore the
 custom map entirely, matching the source adapter's standard-function-only
-conversion; this forwards no opaque declarations. Public provider-agnostic conversion,
-Gemini and speculative/confirmed-owner context paths keep their existing
+conversion; this forwards no opaque declarations. Public provider-agnostic conversion
+and speculative/confirmed-owner context paths keep their existing
 strict behavior. Message and image conversion are unchanged.
 
 Primary wire references:
