@@ -244,8 +244,9 @@ async fn direct_schema_round_trip_refresh_prune_and_teardown_owns_one_mcp_cleanu
     );
     let limits = config(&server, &["echo", "other"]).limits;
     let expected_deadline = limits
-        .request_timeout
-        .checked_add(limits.close_timeout)
+        .connect_timeout
+        .checked_add(limits.request_timeout)
+        .and_then(|timeout| timeout.checked_add(limits.close_timeout))
         .unwrap();
     assert_eq!(
         handler(&schema, "echo").options().timeout,
@@ -361,8 +362,9 @@ async fn direct_schema_deadline_overrides_short_generic_default_and_retains_clea
     config.limits.close_timeout = Duration::from_millis(500);
     let expected_deadline = config
         .limits
-        .request_timeout
-        .checked_add(config.limits.close_timeout)
+        .connect_timeout
+        .checked_add(config.limits.request_timeout)
+        .and_then(|timeout| timeout.checked_add(config.limits.close_timeout))
         .unwrap();
     let client = McpClient::new(config).unwrap();
     let tools = client.tools().await.unwrap();

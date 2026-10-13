@@ -29,4 +29,23 @@ fn individually_finite_deadlines_reject_an_unrepresentable_combined_guard() {
         McpClient::new(config).unwrap_err(),
         McpError::Config("combined tool timeout must be finite")
     );
+
+    // Two stages fit together, but adding the connection budget must still be
+    // checked before any callback can construct its outer timer.
+    let third = Duration::from_secs(low / 3 + 1);
+    let pair = third.checked_add(third).unwrap();
+    assert!(now.checked_add(pair).is_some());
+    assert!(pair
+        .checked_add(third)
+        .is_none_or(|timeout| now.checked_add(timeout).is_none()));
+    let mut config = McpConfig::new(ServerConfig::StreamableHttp(HttpConfig::new(
+        "http://127.0.0.1:1/mcp",
+    )));
+    config.limits.connect_timeout = third;
+    config.limits.request_timeout = third;
+    config.limits.close_timeout = third;
+    assert_eq!(
+        McpClient::new(config).unwrap_err(),
+        McpError::Config("combined tool timeout must be finite")
+    );
 }

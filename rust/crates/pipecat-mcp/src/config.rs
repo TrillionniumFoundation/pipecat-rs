@@ -100,9 +100,13 @@ impl Default for Limits {
     }
 }
 impl Limits {
+    fn checked_tool_timeout(&self) -> Option<Duration> {
+        self.connect_timeout
+            .checked_add(self.request_timeout)
+            .and_then(|timeout| timeout.checked_add(self.close_timeout))
+    }
     pub(crate) fn tool_timeout(&self) -> Duration {
-        self.request_timeout
-            .checked_add(self.close_timeout)
+        self.checked_tool_timeout()
             .expect("MCP client construction validated the combined tool deadline")
     }
 }
@@ -135,8 +139,7 @@ impl McpConfig {
     }
     pub(crate) fn validate(&self) -> Result<(), McpError> {
         let l = &self.limits;
-        if l.request_timeout
-            .checked_add(l.close_timeout)
+        if l.checked_tool_timeout()
             .is_none_or(|timeout| std::time::Instant::now().checked_add(timeout).is_none())
         {
             return Err(McpError::Config("combined tool timeout must be finite"));

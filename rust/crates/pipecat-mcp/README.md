@@ -32,15 +32,18 @@ assert!(report.errors.is_empty()); // The executor closes its MCP connection.
 
 `tools.schema()` returns a native `ToolsSchema` whose `StandardTool::Direct`
 entries carry `LocalToolFunction` handlers with typed cancellation, interruption
-cancellation enabled, and a guard deadline equal to the MCP request plus close
-budgets. Each handler carries the same cleanup callback for its client, including
+cancellation enabled, and a guard deadline covering one connection, request and
+close budget. Each handler carries the same cleanup callback for its client, including
 handlers from later discoveries; distinct clients have distinct cleanup identities.
 
 The ordinary `pipecat_pipeline::DirectToolBinding` consumes these executable
 schemas, honors their options, and records the shared cleanup hook. It retains
 cleanup after refresh or pruning and awaits MCP close at pipeline teardown. The
 hook keeps the resource alive without an ownership cycle. Its deadline overrides
-the general binding's default so the MCP transport can settle its own timeout.
+the general binding's default so a retained callback can reconnect after an
+invalidated session, then let the MCP transport settle its own request timeout.
+The failed call itself is never replayed. Lifecycle-lock contention remains
+subject to the finite guard.
 The MCP-specific bindings below also check discovered schema/handler identity.
 
 Manual callback owners that do not record cleanup metadata still need

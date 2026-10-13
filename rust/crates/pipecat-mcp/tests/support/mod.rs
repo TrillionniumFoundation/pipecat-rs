@@ -180,6 +180,28 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         return;
     }
     let operation = message["method"].as_str().unwrap_or_default();
+    if operation == "initialize"
+        && mode == "slow-second-initialize"
+        && shared.lock().unwrap().initializes == 2
+    {
+        // Valid JSON whitespace keeps HTTP body reads active during a bounded
+        // reconnect. The native call must allow its separate connect budget.
+        let headers = "HTTP/1.1 200 Fixture\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nMcp-Session-Id: native-session\r\nConnection: close\r\n\r\n";
+        if socket.write_all(headers.as_bytes()).await.is_err() {
+            return;
+        }
+        for _ in 0..4 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            if socket.write_all(b"1\r\n \r\n").await.is_err() {
+                return;
+            }
+        }
+        let response =
+            json!({"jsonrpc":"2.0","id":message["id"],"result":fixture::initialize()}).to_string();
+        let tail = format!("{:x}\r\n{response}\r\n0\r\n\r\n", response.len());
+        let _ = socket.write_all(tail.as_bytes()).await;
+        return;
+    }
     if operation == "initialize" && mode == "slow-initialize" {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
