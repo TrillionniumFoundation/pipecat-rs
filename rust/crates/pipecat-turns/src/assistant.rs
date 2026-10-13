@@ -371,8 +371,14 @@ impl LLMAssistantAggregator {
             frame
                 .require_no_native_llm_continuation()
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
-            if image.request.is_some()
-                || image.append_to_context != Some(true)
+            // A plain request associates content without granting tool/callback
+            // authority. InputTransport alone owns its private capture ledger;
+            // this consumer uses the image frame's own content and run flags.
+            if image.request.as_ref().is_some_and(|request| {
+                request.function_name.is_some()
+                    || request.tool_call_id.is_some()
+                    || request.result_callback.is_some()
+            }) || image.append_to_context != Some(true)
                 || !matches!(
                     image.image.format.as_deref(),
                     Some("image/png" | "image/jpeg")

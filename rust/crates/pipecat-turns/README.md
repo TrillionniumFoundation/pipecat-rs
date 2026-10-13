@@ -258,9 +258,11 @@ MIME types, false/None append, custom options and busy uploads outside this
 explicit-false Text case remain unsupported. No changes to image admission are
 implied.
 
-`UserImage` has a separate encoded upload path: `request=None` and
-`append_to_context=Some(true)` are required. Its `image.image` bytes and
-`image.format` MIME use the same PNG/JPEG signature, 8 MiB encoded-byte and checked
+`UserImage` has a separate encoded upload path: `append_to_context=Some(true)`
+is required. `request` may be absent or a plain association whose
+`function_name`, `tool_call_id` and `result_callback` are all None. Its
+`image.image` bytes and `image.format` MIME use the same PNG/JPEG signature,
+8 MiB encoded-byte and checked
 data-URL limits above; dimensions are ignored. Nonempty accompanying text comes
 first (whitespace is retained), followed by one image part in a user-role message.
 User IDs and frame metadata do not become message names, tool results or provider
@@ -284,10 +286,36 @@ pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
 busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
 service responses acquire a private continuation owner even before a signature
 arrives, so this does not admit their in-progress responses. False/None append,
-every non-null request and raw camera pixels remain unsupported. User files
-use the separate PDF path described above.
-No capture callback is invoked. Arbitrary `image/*`, raw-pixel conversion and
-requested/tool-image handling remain outside this bounded Python parity slice.
+requests with any function/tool/callback field present and raw camera pixels
+remain unsupported. User files use the separate PDF path described above.
+The assistant invokes no capture callback or tool settlement. Arbitrary
+`image/*`, raw-pixel conversion and tool-associated image handling remain
+outside this bounded Python parity slice.
+
+For a plain association, content and policy come exclusively from the UserImage
+frame: `image.image`, `image.format`, `text`, `append_to_context` and `run_llm`.
+A differing request text or append flag does not override them. The aggregator
+has no InputTransport ledger token and does not verify capture provenance.
+Directly constructed plain request-bearing frames prove only this content
+contract; public fields or IDs do not confer capture ownership.
+
+The public `InputIngress::request_image` plus keyed `push_video_frame(InputImage)`
+path can produce this shape from application-supplied encoded PNG/JPEG bytes.
+The source must already be registered and ready; the existing sampler and
+private-tag/Queued ledger checks remain in force. Input preserves the request
+association, strips its callback from the derived UserImage, and sets
+`run_llm=None`, so a real owned image still requires the ordinary idle inference
+path. Explicit false-run direct content tests do not imply Input emits false.
+Generic capture `push` still rejects request-bearing UserImage, keyed capture
+still accepts only InputImage, and the Python JSON codec still rejects nested
+request identity. None of these checks is relaxed by content admission here.
+
+An original request callback may be owned and completed once by InputTransport.
+Its Null result acknowledges downstream queue admission only; it may precede an
+assistant rejection and does not attest context consumption or provider receipt.
+The assistant rejects a residual received callback without invoking it. Context
+commit, upstream context emission and provider I/O remain distinct stages;
+request-body conversion alone is not a provider-receipt test.
 
 Accepted uploads are consumed in either direction without aggregation events.
 Explicit `run_llm=Some(false)` is append-only and produces no actions. True or

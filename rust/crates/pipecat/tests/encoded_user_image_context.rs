@@ -349,7 +349,9 @@ async fn nonselected_upload_flags_reject_and_leave_same_id_retryable() {
 }
 
 #[tokio::test]
-async fn every_owned_request_rejects_without_callback_or_tool_settlement() {
+async fn function_bearing_requests_reject_without_callback_or_tool_settlement() {
+    // Every row sets function_name=Some("capture"), including tool_id=None.
+    // These are authority-bearing requests, not plain content associations.
     use std::sync::atomic::{AtomicUsize, Ordering};
     for (tool_id, pending, callback) in [
         (None, false, false),
