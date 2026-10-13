@@ -195,6 +195,20 @@ impl UserTurnStopStrategies {
             .iter()
             .any(|(s, _)| matches!(s.kind, StopKind::External { .. }))
     }
+    // This control path deliberately excludes OR lists and deferred detectors.
+    pub(crate) fn is_plain_speech_timeout(&self) -> bool {
+        matches!(self.entries.as_slice(), [(strategy, _)]
+            if !strategy.deferred && matches!(strategy.kind, StopKind::SpeechTimeout { .. }))
+    }
+    pub(crate) fn finalize_empty_transcript(&mut self) {
+        if self.active && self.is_plain_speech_timeout() {
+            let (_, state) = &mut self.entries[0];
+            if state.has_text {
+                state.finalized = true;
+                state.interim = false;
+            }
+        }
+    }
     pub fn uses_turn_analyzer(&self) -> bool {
         self.entries
             .iter()

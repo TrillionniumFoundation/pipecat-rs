@@ -89,9 +89,10 @@ interruption before submitting an immediate next-turn context.
 - Bounded replay detection by frame identity and optional stable
   `metadata["transcript_id"]`; identical text with a fresh identity remains valid
   in a later turn. Repeated provider events need a stable provider segment ID
-- Explicit mute/unmute suppression; empty/whitespace transcripts do not create
-  messages or inference calls. A mute boundary preserves previously accepted
-  final text without running inference and discards interim previews
+- Explicit mute/unmute suppression; empty/whitespace transcripts do not append
+  context text. A qualified finalized control may release already-buffered text
+  as described below. A mute boundary preserves previously accepted final text
+  without running inference and discards interim previews
 - Session-end flush, cancellation cleanup, and one managed per-session
   turn/wake supervisor that remains dormant between deadlines. `prepare_end`
   cancels the supervisor before the runtime drains tasks
@@ -115,6 +116,43 @@ interruption before submitting an immediate next-turn context.
   on interruption; the execution layer remains responsible for stopping them
 - System-priority tool-start declarations cannot cause a fast result to rerun
   the LLM before normal-priority response-start/end markers arrive
+
+### Empty finalized speech transcripts
+
+An admitted empty or whitespace-only finalized transcript can complete the STT
+wait for an active turn that already accepted non-whitespace text and observed
+VAD. A VAD start is enough to observe VAD: finalization while still speaking
+cannot stop the turn, and finalization after VAD stop cannot cross the speech
+floor. With a 100 ms floor, 800 ms STT P99, and a VAD stop at 20 ms carrying
+200 ms of observed silence, an empty final at 200 ms releases the original
+620 ms safety wait and commits the existing text once.
+
+This bounded path supports the scalar SpeechTimeout configuration or exactly
+one non-deferred explicit SpeechTimeout detector, with no custom start list
+and with `require_model_completion=false` in both cases. The explicit detector
+normally has its own priority over the scalar model gate; this new control
+path does not broaden that configuration and requires the global flag to be
+false. It neither starts a turn nor invents transcript text. In the user
+aggregator it additionally requires nonempty buffered context text, eager
+configuration disabled and cascade aggregation. Legacy and Detailed finals
+are supported; `append_to_context=false` does not suppress this completion.
+
+The control still passes private/source, mute, terminal and frame/transcript-ID
+admission. It bypasses text append, raw empty-frame retention, custom start
+policies and eager matching, then uses the existing locked stop/context commit
+route. An accepted completion also clears the public interim preview immediately,
+even before the speech floor; rejected duplicates and excluded configurations
+keep their prior preview handling. Repeated finals and later advances do not
+emit duplicate boundaries or context. Existing nonempty transcript handling is unchanged.
+
+No-text or inactive turns, pending adopted/proposed external stops,
+custom-start combinations (including MinWords), eager/realtime aggregation,
+mixed or deferred stop lists, model-gated
+configurations and no-VAD fallback retain their prior paths. This is not a
+blank-transcript parity claim: Python's whitespace-only first-turn behavior
+and its empty-interim finality handling differ and remain separate decisions.
+The deterministic `speech_timeout_empty_final` target covers the bounded path
+and its guards; Python af9f9da9 behavior is source-derived, not a runtime oracle.
 
 ## Rich frame and context contracts
 

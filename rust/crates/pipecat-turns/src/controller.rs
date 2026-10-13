@@ -273,9 +273,41 @@ impl UserTurnController {
         };
         [policy, self.watchdog_deadline].into_iter().flatten().min()
     }
+    // Empty finals carry only STT completion. Keep them away from start policies,
+    // model/inference ownership, no-VAD fallback, and mixed/deferred stop lists.
+    pub(crate) fn accepts_empty_final(&self) -> bool {
+        self.active
+            && self.has_text
+            && self.vad_observed
+            && self.external_stop.is_none()
+            && !self.config.require_model_completion
+            && self.start_strategies.is_none()
+            && self.pending_inference_request.is_none()
+            && self
+                .stop_strategies
+                .as_ref()
+                .is_none_or(UserTurnStopStrategies::is_plain_speech_timeout)
+    }
     pub fn process(&mut self, data: &FrameData, now: Duration) -> Vec<UserTurnEvent> {
         self.now = self.now.max(now);
         let now = self.now;
+        if matches!(
+            data,
+            FrameData::Transcription(_) | FrameData::TranscriptionDetailed(_)
+        ) && transcription(data)
+            .is_some_and(|(text, finalized)| finalized && text.trim().is_empty())
+            && self.accepts_empty_final()
+        {
+            self.finalized = true;
+            self.interim_pending = false;
+            self.stt_deadline = Some(now);
+            if let Some(strategies) = &mut self.stop_strategies {
+                strategies.finalize_empty_transcript();
+            }
+            // VAD may still be speaking, or the silence floor may still be due.
+            // Neither guard is bypassed by the completion-only control.
+            return self.advance(now);
+        }
         let mut events = Vec::new();
         let custom = self.start_strategies.is_some();
         if matches!(

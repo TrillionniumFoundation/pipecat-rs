@@ -741,7 +741,19 @@ impl LLMUserAggregator {
                     ),
                     _ => unreachable!(),
                 };
+                let completion_only = text.trim().is_empty()
+                    && match &frame.data {
+                        FrameData::Transcription(text) => text.finalized,
+                        FrameData::TranscriptionDetailed(text) => text.finalized,
+                        _ => false,
+                    }
+                    && source.is_none()
+                    && state.eager.is_none()
+                    && !state.aggregation.enabled()?
+                    && !state.aggregation.text()?.trim().is_empty()
+                    && state.controller.accepts_empty_final();
                 if text.trim().is_empty()
+                    && !completion_only
                     && !state
                         .controller
                         .config()
@@ -773,6 +785,15 @@ impl LLMUserAggregator {
                     if state.transcript_ids.len() > 512 {
                         state.transcript_ids.pop_front();
                     }
+                }
+                if completion_only {
+                    // Private/source, mute, terminal, Frame.id and transcript_id
+                    // admission already ran under this lock. Do not expose this
+                    // control to eager text matching or ordinary transcript starts.
+                    state.interim.clear();
+                    let events = state.controller.process(&frame.data, now);
+                    Self::apply_events(&mut state, &self.context, events, true, &mut output)?;
+                    return Ok(output);
                 }
                 if source.is_none() {
                     if let Some(eager) = &mut state.eager {
