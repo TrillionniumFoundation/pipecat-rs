@@ -119,7 +119,10 @@ interruption before submitting an immediate next-turn context.
 ## Rich frame and context contracts
 
 Both legacy and detailed transcription, VAD, and LLM-response families drive the
-same state machines. Detailed transcripts retain whitespace/append flags, and
+same state machines. On VAD stop frames, legacy `VadSpeakingFrame.duration_secs` and
+detailed `VadUserStoppedSpeakingFrame.stop_secs` supply the actual VAD stop delay when
+computing the remaining STT wait; the speech policy floor still applies.
+Detailed transcripts retain whitespace/append flags, and
 `transcript_frames()` returns the latest 512 accepted final/interim originals,
 including identities, metadata, user IDs, timestamps, language, and provider
 results. Rich transcription frames are consumed just like source transcripts;

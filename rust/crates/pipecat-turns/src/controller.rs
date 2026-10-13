@@ -326,10 +326,13 @@ impl UserTurnController {
                 self.touch(now);
             }
             FrameData::VadUserStoppedSpeaking(_) | FrameData::VadUserStoppedSpeakingDetailed(_) => {
-                if let FrameData::VadUserStoppedSpeakingDetailed(stop) = data {
-                    if let Some(duration) = valid_duration(stop.stop_secs) {
-                        self.config.vad_stop_duration = duration;
-                    }
+                let stop_secs = match data {
+                    FrameData::VadUserStoppedSpeaking(stop) => stop.duration_secs,
+                    FrameData::VadUserStoppedSpeakingDetailed(stop) => stop.stop_secs,
+                    _ => unreachable!(),
+                };
+                if let Some(duration) = valid_duration(stop_secs) {
+                    self.config.vad_stop_duration = duration;
                 }
                 self.vad_observed = true;
                 self.speaking = false;
