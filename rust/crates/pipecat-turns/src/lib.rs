@@ -15,6 +15,7 @@ mod context;
 mod controller;
 mod eager;
 mod empty;
+mod encoded_file;
 mod encoded_image;
 mod tool_history;
 pub use eager::{EagerEndOfTurn, EagerMatchPolicy, EagerUserTurnConfig};

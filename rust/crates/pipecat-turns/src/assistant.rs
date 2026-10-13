@@ -443,6 +443,55 @@ impl LLMAssistantAggregator {
             state.seen.insert(frame.id);
             return Ok(output);
         }
+        if let FrameData::UserFileDetailed(file) = &frame.data {
+            if state.ended {
+                return Ok(output);
+            }
+            // Preserve image ingress ordering: tool carriers were revalidated
+            // above, and remaining private authority is rejected before replay.
+            frame
+                .require_no_native_llm_continuation()
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
+            if file.append_to_context != Some(true)
+                || file.run_llm != Some(false)
+                || file.custom_options.is_some()
+            {
+                return Err(ProcessorError::new(
+                    "raw image/file context conversion is not supported; submit encoded rich context messages",
+                ));
+            }
+            if self.realtime.enabled()? || state.signed_history.is_some() {
+                return Err(ProcessorError::new(
+                    "encoded user file context is unsupported during realtime or signed continuation",
+                ));
+            }
+            if state.active
+                || state.llm_active
+                || !state.aggregation.text.is_empty()
+                || !state.thought.text.is_empty()
+                || state.thought_append
+                || state.user_speaking
+                || state.bot_speaking
+                || state.awaiting_user_inference
+                || !state.pending_playback.is_empty()
+                || !state.pending.is_empty()
+                || state.run_owed
+                || state.tool_run_owed
+            {
+                return Err(ProcessorError::new(
+                    "encoded user file context requires an idle assistant without pending text, playback, tools or inference",
+                ));
+            }
+            // Validate before replay lookup; bad input never consumes its ID.
+            let message = crate::encoded_file::user_message(file)?;
+            if state.seen.contains(frame.id) {
+                return Ok(output);
+            }
+            // Do not project or rebuild unrelated existing context history.
+            self.context.append_rich(message)?;
+            state.seen.insert(frame.id);
+            return Ok(output);
+        }
         if matches!(
             frame.data,
             FrameData::LlmText(_)
@@ -995,7 +1044,7 @@ impl LLMAssistantAggregator {
             FrameData::LlmSetToolChoice(choice) => self.context.lock()?.tool_choice = Some(choice.clone()),
             FrameData::ProposedUserStartedSpeaking if self.realtime.resolves(true)? => {}
             FrameData::ProposedUserStoppedSpeaking if self.realtime.resolves(false)? => {}
-            FrameData::UserFileDetailed(_) | FrameData::UserFile(_) => return Err(ProcessorError::new("raw image/file context conversion is not supported; submit encoded rich context messages")),
+            FrameData::UserFile(_) => return Err(ProcessorError::new("raw image/file context conversion is not supported; submit encoded rich context messages")),
             _ => output.push(frame, direction),
         }
         Ok(output)
