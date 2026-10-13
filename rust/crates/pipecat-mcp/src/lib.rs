@@ -13,7 +13,7 @@ mod schema;
 mod stdio;
 pub use config::{HttpConfig, Limits, McpConfig, OutputFilter, ServerConfig, StdioConfig};
 pub use error::McpError;
-pub use integration::{McpLifecycle, McpToolExecutor, McpTools};
+pub use integration::{McpLifecycle, McpLlmBinding, McpToolExecutor, McpTools};
 use pipecat_core::ToolDefinition;
 pub use rmcp::model::ContentBlock;
 use rmcp::{

@@ -63,7 +63,7 @@ both directions. They project executable definitions only when their schema and
 callback identity match the bound MCP snapshot; same-name foreign callbacks,
 modified definitions, duplicates and excessive tool counts fail before inference.
 `tools.schema()` and snapshot clones preserve callback identity. A new `tools()`
-discovery creates a distinct snapshot and needs a new binding.
+discovery creates a distinct snapshot; this fixed convenience needs a new binding.
 
 The original native LLM performs provider inference, the existing MCP executor
 owns tool execution and cancellation, and the assistant aggregator schedules the
@@ -80,6 +80,41 @@ executable contexts are explicitly rejected when projection is needed: their cap
 stripped or resealed. Custom/grouped provider schemas retain the native LLM's
 unsupported behavior. The binding does not provide LLM-switcher propagation or
 successful live-provider qualification.
+
+For explicit runtime refresh, retain the handle returned by `tools.bind_llm(llm)`:
+
+```rust,no_run
+# use pipecat_mcp::{McpClient, McpTools};
+# use pipecat_services::LlmProcessor;
+# use std::sync::Arc;
+# async fn refresh(tools: &McpTools, client: &McpClient, llm: Arc<LlmProcessor>) -> Result<(), Box<dyn std::error::Error>> {
+let binding = tools.bind_llm(llm)?;
+let pipeline = pipecat_core::Pipeline::new(binding.stages());
+let next = client.tools().await?;
+binding.update(&next)?;
+let next_schema = next.schema(); // Supply this in subsequent context/tool frames.
+# let _ = (pipeline, next_schema);
+# Ok(())
+# }
+```
+
+`update` accepts only snapshots from the same client and atomically publishes the
+schema identities and executable registrations together. The caller updates its
+own shared context; old executable context identities fail closed after the
+update. Both projection bookends select the current snapshot when processing a
+frame. The executor independently selects its current snapshot at batch admission
+and retains that batch's callbacks, timeouts and interruption policy. Provider
+requests spanning an update therefore use the current inventory when their calls
+are admitted; they are not pinned to an earlier request's schemas. Removed names
+produce native `NotRegistered` outcomes without MCP dispatch. Duplicate history,
+active leases, admission limits and the cleanup owner stay in the same executor.
+No publication lock is held across an await.
+
+Cleanup permanently closes this binding before awaiting MCP teardown. An explicit
+client reopen cannot reactivate it. This API provides caller-driven refresh of one
+MCP inventory; it does not implement automatic server notification handling,
+general advertised-handler synchronization, arbitrary resources, or LLM switchers.
+The same sealed/speculative and custom/grouped restrictions apply.
 
 ## Agent-worker registry
 

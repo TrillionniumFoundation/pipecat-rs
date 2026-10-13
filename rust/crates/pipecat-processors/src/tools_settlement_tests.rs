@@ -37,13 +37,25 @@ async fn complete_batch_reservation_failure_has_no_partial_identity_and_releases
     let ctx = captured.lock().unwrap().as_ref().unwrap().clone();
     let executor = ToolExecutor::new(2, 8, 128).unwrap();
     let first = executor
-        .reserve(&[call("a"), call("b")], None, "fixture-batch", &ctx)
+        .reserve(
+            &[call("a"), call("b")],
+            None,
+            "fixture-batch",
+            &ctx,
+            &executor.tools,
+        )
         .unwrap();
     let second = executor
-        .reserve(&[call("c")], None, "fixture-batch", &ctx)
+        .reserve(&[call("c")], None, "fixture-batch", &ctx, &executor.tools)
         .unwrap();
     assert!(executor
-        .reserve(&[call("d"), call("e")], None, "fixture-batch", &ctx)
+        .reserve(
+            &[call("d"), call("e")],
+            None,
+            "fixture-batch",
+            &ctx,
+            &executor.tools,
+        )
         .is_err());
     {
         let seen = executor.seen.lock().unwrap();
@@ -60,7 +72,13 @@ async fn complete_batch_reservation_failure_has_no_partial_identity_and_releases
     drop(first);
     assert_eq!(executor.settlement_slots.available_permits(), 3);
     let retried = executor
-        .reserve(&[call("d"), call("e")], None, "fixture-batch", &ctx)
+        .reserve(
+            &[call("d"), call("e")],
+            None,
+            "fixture-batch",
+            &ctx,
+            &executor.tools,
+        )
         .unwrap();
     drop(second);
     drop(retried);

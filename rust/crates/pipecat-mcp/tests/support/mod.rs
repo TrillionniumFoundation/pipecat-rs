@@ -144,7 +144,7 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         respond(&mut socket, 204, "application/json", "", "").await;
         return;
     }
-    if mode == "llm" || mode == "llm-slow" {
+    if mode == "llm" || mode == "llm-slow" || mode == "llm-live-tools" {
         let saw_tool = message["messages"]
             .as_array()
             .unwrap()
@@ -154,6 +154,15 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
             json!({"content":"tool completed"})
         } else if mode == "llm-slow" {
             json!({"tool_calls":[{"index":0,"id":"agent-call","type":"function","function":{"name":"slow","arguments":"{}"}}]})
+        } else if mode == "llm-live-tools" {
+            let name = message["tools"][0]["function"]["name"].as_str().unwrap();
+            let sequence = shared.lock().unwrap().completions.len();
+            let arguments = if name == "echo" {
+                "{\"value\":\"agent\"}"
+            } else {
+                "{}"
+            };
+            json!({"tool_calls":[{"index":0,"id":format!("live-call-{sequence}"),"type":"function","function":{"name":name,"arguments":arguments}}]})
         } else {
             json!({"tool_calls":[{"index":0,"id":"agent-call","type":"function","function":{"name":"echo","arguments":"{\"value\":\"agent\"}"}}]})
         };
@@ -234,6 +243,16 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         }
     }
     if operation == "tools/list" {
+        if mode == "live-echo" || mode == "live-other" {
+            let name = if mode == "live-echo" { "echo" } else { "other" };
+            result["tools"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|tool| tool["name"] == name);
+            if mode == "live-other" {
+                result["tools"][0]["description"] = "refreshed other".into();
+            }
+        }
         if mode == "without-echo" {
             result["tools"]
                 .as_array_mut()

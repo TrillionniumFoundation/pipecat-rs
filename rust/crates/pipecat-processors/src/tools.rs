@@ -58,6 +58,18 @@ impl CancellableRegisteredTool {
         }
     }
 }
+/// An immutable callback inventory captured from validated registrations.
+/// It retains callback/options only; admission limits and outcome history remain
+/// owned by the executor that processes a batch with this snapshot.
+#[derive(Clone)]
+pub struct ToolRegistrationSnapshot(Arc<BTreeMap<String, CancellableRegisteredTool>>);
+impl std::fmt::Debug for ToolRegistrationSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolRegistrationSnapshot")
+            .field("tool_count", &self.0.len())
+            .finish_non_exhaustive()
+    }
+}
 /// Active settlements cannot be evicted. Terminal receipts retain the latest
 /// `duplicate_window` entries; counters include entries no longer retained.
 #[derive(Debug, Clone)]
@@ -182,12 +194,30 @@ impl ToolExecutor {
         self.tools.insert(name, tool);
         Ok(())
     }
+    /// Capture the current validated inventory without copying executor history.
+    pub fn registrations_snapshot(&self) -> ToolRegistrationSnapshot {
+        ToolRegistrationSnapshot(Arc::new(self.tools.clone()))
+    }
+    /// Admit this batch through one immutable inventory. The same callback and
+    /// interruption policy are used for reservation, progress and dispatch even
+    /// if the caller publishes a different snapshot while this call is pending.
+    pub async fn process_with_registrations(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+        registrations: &ToolRegistrationSnapshot,
+    ) -> Result<(), ProcessorError> {
+        self.process_registered(frame, direction, ctx, &registrations.0)
+            .await
+    }
     fn reserve(
         &self,
         calls: &[FunctionCall],
         signed: Option<Arc<NativeLlmContinuation>>,
         group_id: &str,
         ctx: &ProcessorContext,
+        registrations: &BTreeMap<String, CancellableRegisteredTool>,
     ) -> Result<Vec<ActiveLease>, ProcessorError> {
         let mut seen = self
             .seen
@@ -248,7 +278,7 @@ impl ToolExecutor {
             .map(|call| {
                 (
                     *call,
-                    self.tools
+                    registrations
                         .get(&call.function_name)
                         .is_none_or(|tool| tool.cancel_on_interruption),
                 )
@@ -344,8 +374,9 @@ impl ToolExecutor {
         mut lease: ActiveLease,
         ctx: &ProcessorContext,
         admission: Option<pipecat_core::NativeSpeculation>,
+        registrations: &BTreeMap<String, CancellableRegisteredTool>,
     ) -> Result<(), ProcessorError> {
-        let Some(tool) = self.tools.get(&lease.call.function_name).cloned() else {
+        let Some(tool) = registrations.get(&lease.call.function_name).cloned() else {
             lease.complete(
                 Err("tool is not registered".into()),
                 ToolCallEndReason::NotRegistered,
@@ -437,9 +468,21 @@ impl FrameProcessor for ToolExecutor {
     }
     async fn process(
         &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        self.process_registered(frame, direction, ctx, &self.tools)
+            .await
+    }
+}
+impl ToolExecutor {
+    async fn process_registered(
+        &self,
         mut frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
+        registrations: &BTreeMap<String, CancellableRegisteredTool>,
     ) -> Result<(), ProcessorError> {
         if frame.native_tool_batch()?.is_some() {
             return ctx.push(frame, direction).await;
@@ -520,7 +563,7 @@ impl FrameProcessor for ToolExecutor {
         }
         let signed_duplicate = signed.is_some();
         let group_id = format!("tool-batch-{}", Frame::new(FrameData::LlmRun).id);
-        let leases = self.reserve(calls, signed, &group_id, ctx)?;
+        let leases = self.reserve(calls, signed, &group_id, ctx, registrations)?;
         frame.take_native_speculation();
         if leases.is_empty() {
             return if signed_duplicate {
@@ -549,8 +592,7 @@ impl FrameProcessor for ToolExecutor {
                     function_name: lease.call.function_name.clone(),
                     tool_call_id: lease.call.tool_call_id.clone(),
                     arguments: lease.call.arguments.clone(),
-                    cancel_on_interruption: self
-                        .tools
+                    cancel_on_interruption: registrations
                         .get(&lease.call.function_name)
                         .is_none_or(|tool| tool.cancel_on_interruption),
                     group_id: Some(group_id.clone()),
@@ -560,7 +602,7 @@ impl FrameProcessor for ToolExecutor {
             ctx.push(frame, Direction::Downstream).await?;
         }
         for lease in leases {
-            self.dispatch(lease, ctx, admission.clone())?;
+            self.dispatch(lease, ctx, admission.clone(), registrations)?;
         }
         Ok(())
     }
