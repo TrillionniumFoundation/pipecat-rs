@@ -28,13 +28,17 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
             data_url(original, Some(mime), "assistant image", "original_data")?
         }
         _ => {
-            if image.image.image.format.as_deref() != Some("RGB") {
-                return Err(ProcessorError::new(
-                    "assistant image fallback requires exact RGB display format",
-                ));
+            if image.image.image.format.as_deref() == Some("RGB") {
+                let jpeg = rgb_jpeg(&image.image.image, "assistant image")?;
+                data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
+            } else {
+                data_url(
+                    &image.image.image.image,
+                    image.image.image.format.as_deref(),
+                    "assistant image",
+                    "image",
+                )?
             }
-            let jpeg = rgb_jpeg(&image.image.image, "assistant image")?;
-            data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
         }
     };
     Ok(ContextMessage {

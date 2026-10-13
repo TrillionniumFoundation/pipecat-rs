@@ -172,7 +172,7 @@ context before that text's normal end-of-response commit. Successful admission
 shares the existing last-512-frame-ID replay cache; failed validation leaves an
 ID retryable. This native bounded replay policy is deliberately stricter than
 Python's repeated-image append behavior. Ordinary images after End/Cancel/Stop
-are ignored. Exact-RGB fallback is restricted below. `UserImage` and PDF
+are ignored. Display fallback is restricted below. `UserImage` and PDF
 `UserFileDetailed` support have separate admission policies.
 
 Image admission rejects enabled realtime mode and any signed-continuation
@@ -310,14 +310,26 @@ The assistant invokes no capture callback or tool settlement. Arbitrary
 `image/*`, other raw-pixel modes and tool-associated image handling remain
 outside this bounded Python parity slice.
 
-### Bounded RGB assistant-image fallback
+### Bounded assistant-image display fallback
 
 For ordinary application/public-codec `AssistantImage`, either original field
-being absent or empty selects display pixels; the other original field is ignored.
-Only exact display `format=Some("RGB")` is accepted. Both nonempty originals keep
-the encoded-original path even if the display is invalid; invalid originals are
-never rescued by RGB. Whitespace MIME is nonempty and fails original validation.
-No encoded-display fallback, RGBA, mode aliases or new provider producer is added.
+being absent or empty selects display bytes; the other original field is ignored.
+Exact display `format=Some("RGB")` uses the existing bounded JPEG conversion.
+Exact `image/png` or `image/jpeg` uses the existing encoded-byte validator: a
+matching PNG/JPEG signature and 1..=8,388,608 selected bytes are required. Encoded
+display bytes pass through unchanged; display dimensions are ignored and no
+pixels are decoded. Signature checks are not complete image validation.
+Both nonempty originals keep the encoded-original path even if the display is
+invalid; invalid originals are never rescued by a valid display. Whitespace MIME
+is nonempty and fails original validation. Unselected original storage is ignored;
+conversely, truthy originals ignore display storage.
+
+Pinned Python treats every case-sensitive `image/*` format as encoded pass-through
+at this layer, including formats, empty data and signature mismatches the native
+path rejects. Native exact PNG/JPEG MIME, signature and selected-byte caps are an
+intentionally narrower admission policy. MIME aliases, case changes, parameters,
+RGBA and other raw modes are not added. There is no new provider image producer
+or live-provider capability claim.
 
 The shared RGB encoder below preserves the same dimensions, selected raw-buffer,
 required-prefix, output, JPEG settings and checked data-URL limits. Ignored
@@ -338,10 +350,15 @@ same single serialized context-writer assumption.
 
 The `raw_rgb_assistant_image_context` facade target uses direct application and
 actual `PythonJsonCodec` frames, independent JPEG decoding/orientation samples,
-and exact Gemini model-role `inlineData` request construction. This is not
-Python/native JPEG byte equivalence, native provider image production or live
-provider acceptance. Existing UserImage/helper tests retain common encoder bounds
-and capped-writer coverage; no new dependency or worker lifecycle is introduced.
+and exact Gemini model-role `inlineData` request construction. The
+`encoded_display_assistant_image_context` target adds complete PNG/JPEG fixtures,
+public-codec falsey-original selection, exact encoded-byte preservation, selected
+caps, atomic repair/replay and existing guard-order checks. Both retain silent
+image admission and ordinary buffered-text completion. These are context/request
+body tests, not Python/native JPEG byte equivalence, native provider image
+production or live-provider acceptance. Existing UserImage/helper tests retain
+common encoder bounds and capped-writer coverage; no new dependency or worker
+lifecycle is introduced.
 
 ### Bounded RGB user-image conversion
 
