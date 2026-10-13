@@ -893,8 +893,25 @@ remain caller-owned.
 ## Composable stop policies
 
 `UserTurnConfig::stop_strategies` accepts an ordered `UserTurnStopStrategies`
-list. `None` keeps the existing native default timing and frame behavior. An
-empty list leaves the inactivity watchdog and terminal/mute boundaries enabled.
+list. `None` selects the native scalar controller. An empty list leaves the
+inactivity watchdog and terminal/mute boundaries enabled.
+
+For scalar non-model speech timeout, `wait_for_transcript=false` removes the
+nonempty-text prerequisite, while the speech-silence floor and remaining STT
+safety budget both apply. This is a deliberate timing alignment with native
+`speech_timeout(duration, false)` and the executable Python explicit
+`SpeechTimeoutUserTurnStopStrategy` at `af9f9da9`. For example, an 800 ms STT
+budget minus 200 ms of observed VAD silence requires 600 ms after VAD stop,
+even with a 100 ms speech policy and no transcript. Zero or exhausted STT budget
+keeps the speech-policy fast path; finalized text short-circuits only STT.
+
+The pinned Python default selects a turn analyzer, not SpeechTimeout; this does
+not equate the two libraries' default strategy selection. Python's
+transcript-optional prose omits the nonzero-STT distinction; this compatibility
+choice follows its explicit speech-timeout implementation. Native model-gated
+`wait_for_transcript=false` still releases immediately on COMPLETE, and external
+stop, watchdog, resumed-speech, mute, and terminal boundaries retain their
+existing behavior.
 Explicit lists support:
 
 - `speech_timeout(duration, wait_for_transcript)`: independent speech-silence

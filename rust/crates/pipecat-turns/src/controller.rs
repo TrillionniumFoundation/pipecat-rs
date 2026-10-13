@@ -260,7 +260,9 @@ impl UserTurnController {
         }
         let policy = if self.model_ready() && (self.has_text || !self.config.wait_for_transcript) {
             self.speech_deadline.map(|speech| {
-                if self.config.wait_for_transcript {
+                // Transcript-optional speech timeouts still honor STT safety.
+                // Only the model gate may release immediately without text.
+                if self.config.wait_for_transcript || !self.config.require_model_completion {
                     speech.max(self.stt_deadline.unwrap_or(speech))
                 } else {
                     speech
@@ -500,7 +502,7 @@ impl UserTurnController {
             }
             if self.model_ready()
                 && self.speech_deadline.is_some_and(|deadline| now >= deadline)
-                && (!self.config.wait_for_transcript
+                && ((self.config.require_model_completion && !self.config.wait_for_transcript)
                     || self.stt_deadline.is_some_and(|deadline| now >= deadline))
             {
                 return self.finish(

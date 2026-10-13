@@ -21,8 +21,11 @@ opaque local plugins, eager, and LLM-completion descriptors are not dynamically
 instantiated. External recommendations use the source's 500 ms transcript wait.
 An explicit scalar `enable_interruptions=false` also remains a veto.
 
-Enabling realtime removes transcription-only starts and clears transcript waits
-on the active default/custom stop policies. Every realtime metadata broadcast
+Enabling realtime removes transcription-only starts and disables the requirement
+for text on the active default/custom stop policies. A non-model speech-timeout
+policy still honors its independent remaining STT safety budget; zero or exhausted
+budget keeps the speech-policy fast path. A transcript-optional model gate still
+releases immediately on COMPLETE. Every realtime metadata broadcast
 reapplies the mutation after recommendation adoption. Non-realtime metadata may
 adopt a new recommendation without this mutation, matching the source dispatch.
 Empty-turn recovery is disabled: a missing transcript is not missing model audio.
