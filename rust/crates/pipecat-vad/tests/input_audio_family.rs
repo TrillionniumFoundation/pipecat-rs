@@ -309,18 +309,6 @@ async fn output_audio_and_other_raw_frames_are_only_forwarded() {
         );
         harness.send(frame.clone(), direction).await.unwrap();
         sent.push(frame);
-        if direction == Direction::Upstream {
-            let frame = marked(
-                Frame::new(FrameData::VadParamsUpdate(VadParams {
-                    confidence: -1.0,
-                    ..Default::default()
-                })),
-                sent.len(),
-                &tag,
-            );
-            harness.send(frame.clone(), direction).await.unwrap();
-            sent.push(frame);
-        }
         let (output, report) = harness.finish(false).await;
         assert!(report.errors.is_empty());
         assert_passthrough(&output, &sent, direction, &tag);

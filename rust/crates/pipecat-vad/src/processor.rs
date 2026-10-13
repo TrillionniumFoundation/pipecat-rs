@@ -294,16 +294,16 @@ impl FrameProcessor for SileroVadProcessor {
             ctx.push(frame, direction).await?;
             return self.enqueue(Command::Audio { bytes });
         }
+        if let FrameData::VadParamsUpdate(params) = &frame.data {
+            validate_params(params).map_err(|error| ProcessorError::new(error.to_string()))?;
+            let params = params.clone();
+            ctx.push(frame, direction).await?;
+            return self.enqueue(Command::Params(params));
+        }
         if direction != Direction::Downstream {
             return ctx.push(frame, direction).await;
         }
         match &frame.data {
-            FrameData::VadParamsUpdate(params) => {
-                validate_params(params).map_err(|error| ProcessorError::new(error.to_string()))?;
-                let params = params.clone();
-                ctx.push(frame, direction).await?;
-                self.enqueue(Command::Params(params))
-            }
             FrameData::Start(_) | FrameData::StartDetailed(_) => {
                 ctx.push(frame, direction).await?;
                 ctx.broadcast(control_params(self.initial_params.clone()))

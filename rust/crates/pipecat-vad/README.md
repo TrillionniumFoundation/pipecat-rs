@@ -63,8 +63,12 @@ forwarding each original frame with its direction, PCM, user/context IDs,
 envelope, and local identity unchanged before asynchronously broadcasting
 `VadUserStartedSpeaking`, `VadUserStoppedSpeaking`, and periodic `UserSpeaking`
 frames upstream and downstream. Output audio families and other raw frame types
-are forwarded without VAD analysis. Downstream Start and parameter updates
-broadcast `SpeechControlParams`; upstream control frames remain passthrough.
+are forwarded without VAD analysis. Downstream Start broadcasts initial
+`SpeechControlParams`. Valid `VadParamsUpdate` frames in either direction are
+forwarded unchanged and enqueue a parameter update on the same native thread;
+once applied, the settings are broadcast upstream and downstream. Other upstream
+control frames remain passthrough. Start, End, Stop, and Cancel lifecycle handling
+remains downstream-only.
 
 Input must be mono, signed PCM16 little-endian, at the analyzer's configured
 rate; Start must specify that same rate. The processor does not resample audio.
@@ -76,13 +80,24 @@ forwarding, unlike the Python processor's unconditional forward-first behavior;
 invalid input is rejected without forwarding. Empty valid input is forwarded
 and refreshes the audio-idle timer before analysis.
 
+Parameter updates in both directions retain native validation: confidence and
+min_volume must be finite and in [0, 1]; start_secs and stop_secs must be finite
+and in [0, 3600]. Invalid updates report a nonfatal error without forwarding,
+changing analyzer settings, or broadcasting applied settings. These bounds and
+validate-before-forward behavior intentionally differ from Python's unbounded
+float parameters and forward-first behavior. For valid updates, forwarding
+precedes bounded queue admission; a full queue can therefore report an error
+after the original update has been forwarded. Only an applied-settings broadcast
+confirms that the native analyzer accepted the update.
+
 One owned native thread runs inference serially. Bounded input and result queues
 (default 32 frames) prevent unbounded per-frame task spawning. Incoming frames
 are limited to one second by default. A full inference queue emits an explicit
 processor error; applications should monitor errors and pace transport input.
-`End`/`Stop` drain accepted audio before forwarding terminal frames. `Cancel`
-aborts queued inference; cleanup waits for the current fixed-size inference and
-joins the thread. Interruption does not discard the user's ongoing VAD stream.
+`End`/`Stop` drain accepted audio and parameter updates before forwarding terminal
+frames. `Cancel` aborts pending work; already-applied parameter updates may have
+broadcast their settings before cancellation. Cleanup waits for the current
+fixed-size inference and joins the thread. Interruption does not discard the user's ongoing VAD stream.
 The idle timer forces a stopped event after one second without input while
 speaking; set `audio_idle_timeout` to zero to disable it.
 
