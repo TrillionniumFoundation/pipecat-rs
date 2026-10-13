@@ -533,7 +533,7 @@ async fn rgbx_mode_is_exact_and_rejections_do_not_mutate_history() {
             Some("RGBa"),
             Some("BGRX"),
             Some("RGB24X"),
-            Some("YCbCr"),
+            Some("YCbCrX"),
             Some("CMYK"),
             Some("L8"),
             Some("LA"),

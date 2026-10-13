@@ -1,4 +1,4 @@
-//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/L image encoding.
+//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/YCbCr/L image encoding.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pipecat_core::{
     AssistantImageRawFrame, ChatRole, ContextMessage, ImageRawFrame, MessageContent, MessagePart,
@@ -30,7 +30,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
         _ => {
             if matches!(
                 image.image.image.format.as_deref(),
-                Some("RGB" | "RGBX" | "L")
+                Some("RGB" | "RGBX" | "YCbCr" | "L")
             ) {
                 let jpeg = raw_jpeg(&image.image.image, "assistant image")?;
                 data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
@@ -56,7 +56,10 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
 
 /// Flags, ownership and state admission are checked by the assistant first.
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
-    let url = if matches!(image.image.format.as_deref(), Some("RGB" | "RGBX" | "L")) {
+    let url = if matches!(
+        image.image.format.as_deref(),
+        Some("RGB" | "RGBX" | "YCbCr" | "L")
+    ) {
         let jpeg = raw_jpeg(&image.image, "user image")?;
         data_url(&jpeg, Some("image/jpeg"), "user image", "image")?
     } else {
@@ -119,7 +122,8 @@ fn data_url(
     Ok(url)
 }
 
-// RGB, RGBX and L are packed top-down RGB24, RGB+ignored-byte and L8.
+// RGB, RGBX, YCbCr and L are packed top-down RGB24, RGB+ignored-byte,
+// full-range Y/Cb/Cr triplets and L8. YCbCr is already in the JPEG color domain.
 // No row padding. Input length and required prefix have independent caps;
 // bounded surplus matches Image.frombytes.
 // Owner labels are fixed at the two call sites, never copied from frame metadata.
@@ -128,10 +132,11 @@ fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, Proce
         Some("RGB") => ("RGB", 3, jpeg_encoder::ColorType::Rgb),
         // Rgba is only the encoder layout: exact public RGBA is still rejected.
         Some("RGBX") => ("RGBX", 4, jpeg_encoder::ColorType::Rgba),
+        Some("YCbCr") => ("YCbCr", 3, jpeg_encoder::ColorType::Ycbcr),
         Some("L") => ("L", 1, jpeg_encoder::ColorType::Luma),
         _ => {
             return Err(ProcessorError::new(format!(
-                "{owner} raw pixels require exact RGB, RGBX or L"
+                "{owner} raw pixels require exact RGB, RGBX, YCbCr or L"
             )))
         }
     };
