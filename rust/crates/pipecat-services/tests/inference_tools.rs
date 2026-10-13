@@ -68,7 +68,7 @@ async fn inference_schema_projection_preserves_message_validation() {
 }
 
 #[tokio::test]
-async fn inference_rejects_gemini_owned_and_grouped_tool_schemas() {
+async fn inference_rejects_unimplemented_gemini_owned_and_grouped_tool_schemas() {
     for (provider, tools) in [
         (
             Provider::Gemini,
@@ -77,7 +77,7 @@ async fn inference_rejects_gemini_owned_and_grouped_tool_schemas() {
                 custom_tools: Some(
                     [(
                         core::AdapterType::Gemini,
-                        vec![[("google_search".into(), json!({}))].into_iter().collect()],
+                        vec![[("code_execution".into(), json!({}))].into_iter().collect()],
                     )]
                     .into_iter()
                     .collect(),

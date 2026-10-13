@@ -726,7 +726,7 @@ fn direct(executed: Arc<AtomicUsize>) -> core::DirectFunction {
 }
 
 #[tokio::test]
-async fn invalid_openai_declarations_and_gemini_owned_tools_reject_before_io() {
+async fn invalid_openai_declarations_and_unimplemented_gemini_tools_reject_before_io() {
     let server = Server::start().await;
     let mut invalid = own_custom();
     invalid
@@ -736,7 +736,15 @@ async fn invalid_openai_declarations_and_gemini_owned_tools_reject_before_io() {
         .get_mut(&core::AdapterType::Openai)
         .unwrap()[0]
         .insert("type".into(), json!(7));
-    for (provider, schema) in [(Provider::OpenAi, invalid), (Provider::Gemini, schema())] {
+    let mut unimplemented = schema();
+    unimplemented.custom_tools = Some(BTreeMap::from([(
+        core::AdapterType::Gemini,
+        vec![BTreeMap::from([("code_execution".into(), json!({}))])],
+    )]));
+    for (provider, schema) in [
+        (Provider::OpenAi, invalid),
+        (Provider::Gemini, unimplemented),
+    ] {
         let processor = processor(&server, provider);
         let error = processor
             .run_inference(context(schema), InferenceOptions::default())
@@ -754,8 +762,8 @@ async fn invalid_openai_declarations_and_gemini_owned_tools_reject_before_io() {
             .is_none());
     }
     assert!(server.requests.lock().unwrap().is_empty());
-    // Provider-agnostic callers include MCP and Direct owner admission; they
-    // still reject custom declarations before publishing executable authority.
+    // Public provider-agnostic function-only conversion keeps its strict
+    // custom-declaration contract; fixed owners use actual-client preflight.
     assert!(matches!(
         frame_context::context(&context(schema())),
         Err(ServiceError::Unsupported(_))

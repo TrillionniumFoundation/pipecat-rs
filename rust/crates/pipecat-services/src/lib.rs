@@ -25,7 +25,10 @@ pub use tts_health::TtsAudioWatchdog;
 
 pub use client::{ClientConfig, LlmClient, LlmStream, RetryPolicy};
 pub use context::{Content, ContentPart, Context, Message, Role, ToolChoice, ToolDefinition};
-pub use provider_tools::{DeclaredRequest, OpenAiToolDeclarations};
+pub(crate) use provider_tools::NativeToolDeclarations;
+pub use provider_tools::{
+    DeclaredRequest, GeminiDeclaredRequest, GeminiToolDeclarations, OpenAiToolDeclarations,
+};
 pub use types::{
     CancellationToken, CompletionRequest, FinishReason, Provider, ServiceError, StreamEvent,
     ToolCall, Usage,

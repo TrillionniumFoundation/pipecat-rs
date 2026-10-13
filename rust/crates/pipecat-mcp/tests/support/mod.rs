@@ -113,7 +113,7 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
     let mode = {
         let mut state = shared.lock().unwrap();
         state.requests.push((method.clone(), headers));
-        if message.get("messages").is_some() {
+        if message.get("messages").is_some() || message.get("contents").is_some() {
             state.completions.push(message.clone());
         }
         if method == "DELETE" {
@@ -142,6 +142,26 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         }
         shared.lock().unwrap().completed_deletes += 1;
         respond(&mut socket, 204, "application/json", "", "").await;
+        return;
+    }
+    if mode == "gemini-llm" {
+        let saw_tool = message["contents"].as_array().unwrap().iter().any(|m| {
+            m["parts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p.get("functionResponse").is_some())
+        });
+        let part = if saw_tool {
+            json!({"text":"tool completed"})
+        } else {
+            json!({"functionCall":{"id":"agent-call","name":"echo","args":{"value":"agent"}}})
+        };
+        let body = format!(
+            "data: {}\n\n",
+            json!({"candidates":[{"index":0,"content":{"role":"model","parts":[part]},"finishReason":"STOP"}]})
+        );
+        respond(&mut socket, 200, "text/event-stream", &body, "").await;
         return;
     }
     if mode == "llm" || mode == "llm-slow" || mode == "llm-live-tools" || mode == "llm-force-other"

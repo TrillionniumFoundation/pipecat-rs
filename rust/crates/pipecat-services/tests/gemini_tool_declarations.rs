@@ -133,26 +133,41 @@ fn processor(server: &Server, provider: Provider) -> Arc<LlmProcessor> {
         ),
     ))
 }
-fn assert_wire(request: &Value) {
-    assert_eq!(
-        request["tools"],
-        json!([{"functionDeclarations":[{"name":"echo","description":"Echo value","parameters":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}}]}])
-    );
+fn assert_wire(request: &Value, owning: bool) {
+    let mut tools = json!([{"functionDeclarations":[{"name":"echo","description":"Echo value","parameters":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}}]}]);
+    if owning {
+        // The locked SDK normalizes tools by moving the merged function group
+        // after the built-in declarations, then maps google_search to googleSearch.
+        tools
+            .as_array_mut()
+            .unwrap()
+            .insert(0, json!({"googleSearch":{}}));
+    }
+    assert_eq!(request["tools"], tools);
     assert_eq!(
         request["toolConfig"],
         json!({"functionCallingConfig":{"mode":"ANY","allowedFunctionNames":["echo"]}})
     );
     assert!(!request.to_string().contains("tool_search"));
+    assert!(!request.to_string().contains("google_search"));
     assert!(request.get("tool_choice").is_none());
 }
-async fn pipeline_round_trip(setter: bool) {
+fn owning_schema() -> core::ToolsSchema {
+    let mut schema = schema();
+    schema.custom_tools.as_mut().unwrap().insert(
+        core::AdapterType::Gemini,
+        vec![BTreeMap::from([("google_search".into(), json!({}))])],
+    );
+    schema
+}
+async fn pipeline_round_trip(setter: bool, owning: bool) {
     let server = Server::start().await;
     let processor = processor(&server, Provider::Gemini);
     let mut worker = Pipeline::new(vec![processor])
         .start(PipelineConfig::default())
         .await
         .unwrap();
-    let schema = schema();
+    let schema = if owning { owning_schema() } else { schema() };
     let input = context(schema.clone());
     if setter {
         worker
@@ -212,7 +227,7 @@ async fn pipeline_round_trip(setter: bool) {
     worker.end().await.unwrap();
     let (_, report) = worker.collect().await.unwrap();
     let requests = server.requests.lock().unwrap().clone();
-    assert_eq!(requests.len(), 1, "foreign adapter declarations must allow a real Gemini request; failure={failure:?}, report={:?}", report.errors);
+    assert_eq!(requests.len(), 1, "Gemini declaration selection must allow a real request; owning={owning}, failure={failure:?}, report={:?}", report.errors);
     assert_eq!(
         calls,
         vec![core::FunctionCall {
@@ -223,17 +238,403 @@ async fn pipeline_round_trip(setter: bool) {
     );
     assert!(failure.is_none());
     assert!(report.errors.is_empty());
-    assert_wire(&requests[0]);
+    assert_wire(&requests[0], owning);
     assert_eq!(input.tools, core::ToolSet::Schema(schema));
 }
 
 #[tokio::test]
 async fn gemini_context_ignores_openai_tools_and_returns_a_real_native_function_call() {
-    pipeline_round_trip(false).await;
+    pipeline_round_trip(false, false).await;
 }
 #[tokio::test]
 async fn gemini_setter_ignores_openai_tools_and_returns_a_real_native_function_call() {
-    pipeline_round_trip(true).await;
+    pipeline_round_trip(true, false).await;
+}
+#[tokio::test]
+async fn gemini_owning_context_matches_locked_sdk_wire_order() {
+    pipeline_round_trip(false, true).await;
+}
+#[tokio::test]
+async fn gemini_owning_setter_matches_locked_sdk_wire_order() {
+    pipeline_round_trip(true, true).await;
+}
+#[tokio::test]
+async fn gemini_owning_inference_keeps_sdk_declaration_order_without_mutating_input() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let input = context(owning_schema());
+    let before = processor.request_snapshot().unwrap().context;
+    let result = processor
+        .run_inference(input.clone(), InferenceOptions::default())
+        .await;
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(
+        requests.len(),
+        1,
+        "owning Gemini declarations must reach native HTTP; result={result:?}"
+    );
+    assert_eq!(result.unwrap(), Some("declared".into()));
+    assert_wire(&requests[0], true);
+    assert_eq!(input, context(owning_schema()));
+    assert_eq!(processor.request_snapshot().unwrap().context, before);
+}
+
+#[test]
+fn gemini_declaration_wrapper_keeps_legacy_bodies_and_exact_supported_shape() {
+    use pipecat_services::{GeminiDeclaredRequest, GeminiToolDeclarations, ToolDefinition};
+    let search = BTreeMap::from([("google_search".into(), json!({}))]);
+    let own = GeminiToolDeclarations::from_slice(std::slice::from_ref(&search)).unwrap();
+    assert_eq!(own.as_slice(), std::slice::from_ref(&search));
+    for provider in [Provider::OpenAi, Provider::Anthropic, Provider::Gemini] {
+        let mut config = ClientConfig::new(provider, "fixture");
+        config.api_key = None;
+        let client = LlmClient::new(config).unwrap();
+        let mut request = CompletionRequest::new("fixture", Context::default());
+        request.context.tools = Some(
+            (0..129)
+                .map(|i| ToolDefinition {
+                    name: format!("echo-{i}"),
+                    description: "fixture".into(),
+                    parameters: json!({"type":"object"}),
+                })
+                .collect(),
+        );
+        assert_eq!(
+            client
+                .request_body_gemini_declared(&request.clone().into())
+                .unwrap(),
+            client.request_body(&request).unwrap(),
+            "empty wrapper retains existing provider contracts and tool limits"
+        );
+        assert!(matches!(
+            client.request_body_gemini_declared(&GeminiDeclaredRequest::new(request, own.clone())),
+            Err(ServiceError::InvalidRequest(_)) | Err(ServiceError::Unsupported(_))
+        ));
+    }
+    assert!(matches!(
+        GeminiToolDeclarations::from_slice(&vec![search; 129]),
+        Err(ServiceError::InvalidRequest(_))
+    ));
+    for unsupported in [
+        BTreeMap::new(),
+        BTreeMap::from([("googleSearch".into(), json!({}))]),
+        BTreeMap::from([("code_execution".into(), json!({}))]),
+        BTreeMap::from([("google_search".into(), Value::Null)]),
+        BTreeMap::from([(
+            "google_search".into(),
+            json!({"exclude_domains":["example.com"]}),
+        )]),
+        BTreeMap::from([
+            ("google_search".into(), json!({})),
+            ("marker".into(), json!("do not retain")),
+        ]),
+    ] {
+        assert!(matches!(
+            GeminiToolDeclarations::new(vec![unsupported]),
+            Err(ServiceError::Unsupported(_))
+        ));
+    }
+    let mut config = ClientConfig::new(Provider::Gemini, "fixture");
+    config.api_key = None;
+    let client = LlmClient::new(config).unwrap();
+    let request = CompletionRequest::new("fixture", Context::default());
+    let declared = GeminiDeclaredRequest::new(request.clone(), own.clone());
+    assert_eq!(
+        client.request_body_gemini_declared(&declared).unwrap()["tools"],
+        json!([{"googleSearch":{}}])
+    );
+    let (base, retained) = declared.into_parts();
+    assert_eq!(
+        serde_json::to_value(base).unwrap(),
+        serde_json::to_value(&request).unwrap()
+    );
+    assert_eq!(retained.as_slice(), own.as_slice());
+    let mut reserved = request;
+    reserved.extra.insert("tools".into(), json!([]));
+    assert!(matches!(
+        client.request_body_gemini_declared(&GeminiDeclaredRequest::new(reserved, own)),
+        Err(ServiceError::InvalidRequest(_))
+    ));
+}
+
+#[tokio::test]
+async fn gemini_declaration_stream_precancel_and_foreign_provider_make_no_request() {
+    use pipecat_services::{
+        CancellationToken, GeminiDeclaredRequest, GeminiToolDeclarations, StreamEvent,
+    };
+    let server = Server::start().await;
+    let own =
+        GeminiToolDeclarations::new(vec![BTreeMap::from([("google_search".into(), json!({}))])])
+            .unwrap();
+    let request = CompletionRequest::new("fixture", Context::default());
+    let mut config = ClientConfig::new(Provider::OpenAi, "fixture");
+    config.endpoint = server.url.clone();
+    config.api_key = None;
+    let foreign = LlmClient::new(config.clone()).unwrap();
+    assert!(matches!(
+        foreign.stream_gemini_declared(GeminiDeclaredRequest::new(request.clone(), own.clone())),
+        Err(ServiceError::Unsupported(_))
+    ));
+    config.provider = Provider::Gemini;
+    let native = LlmClient::new(config).unwrap();
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let mut stream = native
+        .stream_gemini_declared_with_cancel(GeminiDeclaredRequest::new(request, own), cancel)
+        .unwrap();
+    let mut cancelled = false;
+    while let Some(event) = stream.next().await {
+        match event {
+            Err(ServiceError::Cancelled) => cancelled = true,
+            Ok(StreamEvent::Started | StreamEvent::Finished { .. }) => {}
+            other => panic!("unexpected pre-cancelled event: {other:?}"),
+        }
+    }
+    assert!(cancelled);
+    assert!(server.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn gemini_owning_inference_advertises_direct_without_callback_execution() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let executed = Arc::new(AtomicUsize::new(0));
+    let counter = executed.clone();
+    let mut schema = owning_schema();
+    schema.standard_tools = vec![core::StandardTool::Direct(core::DirectFunction {
+        schema: definition(),
+        handler: core::LocalToolFunction::new(move |_| {
+            let counter = counter.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Ok(json!("unexpected"))
+            }
+        }),
+    })];
+    let input = context(schema);
+    assert_eq!(
+        processor
+            .run_inference(input.clone(), InferenceOptions::default())
+            .await
+            .unwrap(),
+        Some("declared".into())
+    );
+    assert_eq!(executed.load(Ordering::SeqCst), 0);
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    assert_wire(&requests[0], true);
+    assert!(processor
+        .gemini_declared_request_snapshot()
+        .unwrap()
+        .gemini_tools()
+        .is_empty());
+    assert!(
+        matches!(
+            processor.preflight_context(&input),
+            Err(ServiceError::Unsupported(_))
+        ),
+        "ordinary contexts still require an execution owner for Direct entries"
+    );
+}
+
+async fn gemini_setter_applied(
+    worker: &core::PipelineWorker,
+    processor: &LlmProcessor,
+    schema: core::ToolsSchema,
+) {
+    let expected = schema
+        .custom_tools
+        .as_ref()
+        .and_then(|m| m.get(&core::AdapterType::Gemini))
+        .cloned()
+        .unwrap_or_default();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(core::ToolSet::Schema(schema))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if processor
+                .gemini_declared_request_snapshot()
+                .unwrap()
+                .gemini_tools()
+                .as_slice()
+                == expected
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("Gemini declaration setter stalled");
+}
+
+#[tokio::test]
+async fn gemini_owning_state_retains_metadata_and_rejects_before_publication() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let mut worker = Pipeline::new(vec![processor.clone()])
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    gemini_setter_applied(&worker, &processor, owning_schema()).await;
+    assert!(
+        matches!(
+            processor.declared_request_snapshot(),
+            Err(ServiceError::Unsupported(_))
+        ),
+        "OpenAI-specific snapshots must not silently drop Gemini metadata"
+    );
+    let mut delta = core::LlmSettings::default();
+    delta.base.model = core::Setting::Value("updated-model".into());
+    processor.update_settings(&delta).unwrap();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmMessagesUpdateDetailed(
+                core::DetailedMessagesFrame {
+                    messages: vec![
+                        core::ChatMessage::new(core::ChatRole::User, "keep search").into()
+                    ],
+                    run_llm: Some(false),
+                },
+            )),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if processor.request_snapshot().unwrap().context.messages[0].content
+                == Some(pipecat_services::Content::Text("keep search".into()))
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let before = processor.gemini_declared_request_snapshot().unwrap();
+    assert_eq!(before.gemini_tools().len(), 1);
+    processor
+        .preflight_context(&context(owning_schema()))
+        .unwrap();
+    processor
+        .preflight_tools(&core::ToolSet::Schema(owning_schema()))
+        .unwrap();
+    let preflight_after = processor.gemini_declared_request_snapshot().unwrap();
+    assert_eq!(
+        serde_json::to_value(before.request()).unwrap(),
+        serde_json::to_value(preflight_after.request()).unwrap()
+    );
+    assert_eq!(
+        before.gemini_tools().as_slice(),
+        preflight_after.gemini_tools().as_slice()
+    );
+    assert!(server.requests.lock().unwrap().is_empty());
+    let mut invalid = owning_schema();
+    invalid.standard_tools = (0..128)
+        .map(|i| {
+            let mut tool = definition();
+            tool.name = format!("echo-{i}");
+            core::StandardTool::Function(tool)
+        })
+        .collect();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(core::ToolSet::Schema(invalid))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while let Some(frame) = worker.recv().await {
+            if let FrameData::Error(error) = frame.frame.data {
+                assert!(error.error.contains("tool count limit"));
+                return;
+            }
+        }
+        panic!("invalid combined count produced no error");
+    })
+    .await
+    .unwrap();
+    let after = processor.gemini_declared_request_snapshot().unwrap();
+    assert_eq!(
+        serde_json::to_value(before.request()).unwrap(),
+        serde_json::to_value(after.request()).unwrap()
+    );
+    assert_eq!(
+        before.gemini_tools().as_slice(),
+        after.gemini_tools().as_slice()
+    );
+    gemini_setter_applied(&worker, &processor, schema()).await;
+    assert!(processor
+        .gemini_declared_request_snapshot()
+        .unwrap()
+        .gemini_tools()
+        .is_empty());
+    assert!(processor
+        .declared_request_snapshot()
+        .unwrap()
+        .openai_tools()
+        .is_empty());
+    assert!(server.requests.lock().unwrap().is_empty());
+    worker.end().await.unwrap();
+    let (_, report) = worker.collect().await.unwrap();
+    assert_eq!(report.errors.len(), 1);
+}
+
+#[tokio::test]
+async fn gemini_snapshot_rejects_nonempty_openai_metadata_without_losing_it() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::OpenAi);
+    let worker = Pipeline::new(vec![processor.clone()])
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(core::ToolSet::Schema(schema()))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while processor
+            .declared_request_snapshot()
+            .unwrap()
+            .openai_tools()
+            .is_empty()
+        {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(matches!(
+        processor.gemini_declared_request_snapshot(),
+        Err(ServiceError::Unsupported(_))
+    ));
+    assert_eq!(
+        processor
+            .declared_request_snapshot()
+            .unwrap()
+            .openai_tools()
+            .as_slice(),
+        schema().custom_tools.unwrap()[&core::AdapterType::Openai]
+    );
+    assert!(server.requests.lock().unwrap().is_empty());
+    worker.end().await.unwrap();
+    let (_, report) = worker.collect().await.unwrap();
+    assert!(report.errors.is_empty());
 }
 #[tokio::test]
 async fn gemini_out_of_band_inference_ignores_openai_tools_without_mutating_input() {
@@ -250,7 +651,7 @@ async fn gemini_out_of_band_inference_ignores_openai_tools_without_mutating_inpu
         "foreign adapter declarations must allow real inference; result={result:?}"
     );
     assert_eq!(result.unwrap(), Some("declared".into()));
-    assert_wire(&requests[0]);
+    assert_wire(&requests[0], false);
     assert_eq!(input, context(schema()));
     assert!(processor
         .request_snapshot()
@@ -268,7 +669,7 @@ async fn gemini_selection_keeps_owned_opaque_validation_and_direct_execution_bou
     let mut owned = schema();
     owned.custom_tools.as_mut().unwrap().insert(
         core::AdapterType::Gemini,
-        vec![BTreeMap::from([("google_search".into(), json!({}))])],
+        vec![BTreeMap::from([("code_execution".into(), json!({}))])],
     );
     assert!(matches!(
         processor
@@ -322,7 +723,7 @@ async fn gemini_selection_keeps_owned_opaque_validation_and_direct_execution_bou
     assert_eq!(executed.load(Ordering::SeqCst), 0);
     let requests = server.requests.lock().unwrap().clone();
     assert_eq!(requests.len(), 1);
-    assert_wire(&requests[0]);
+    assert_wire(&requests[0], false);
     assert_eq!(processor.request_snapshot().unwrap().context, before);
 
     let mut worker = Pipeline::new(vec![processor.clone()])

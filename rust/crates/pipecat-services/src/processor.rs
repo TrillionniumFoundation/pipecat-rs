@@ -1,8 +1,8 @@
 //! Bridges native completion streams into interruption-aware core pipelines.
 use crate::{frame_context, settings};
 use crate::{
-    CompletionRequest, DeclaredRequest, LlmClient, OpenAiToolDeclarations, ServiceError,
-    StreamEvent,
+    CompletionRequest, DeclaredRequest, GeminiDeclaredRequest, GeminiToolDeclarations, LlmClient,
+    NativeToolDeclarations, OpenAiToolDeclarations, ServiceError, StreamEvent,
 };
 use pipecat_core::{
     async_trait, Direction, ErrorCategory, ErrorFrame, Frame, FrameData, FrameProcessor,
@@ -57,13 +57,43 @@ pub struct LlmProcessor {
 #[derive(Clone)]
 struct State {
     request: CompletionRequest,
-    openai_tools: OpenAiToolDeclarations,
+    declarations: NativeToolDeclarations,
     skip_tts: Option<bool>,
     speculation: Option<pipecat_core::NativeSpeculation>,
 }
 impl State {
-    fn declared_request(&self) -> DeclaredRequest {
-        DeclaredRequest::new(self.request.clone(), self.openai_tools.clone())
+    fn declared_request(&self) -> Result<DeclaredRequest, ServiceError> {
+        let declarations = match &self.declarations {
+            NativeToolDeclarations::None => OpenAiToolDeclarations::default(),
+            NativeToolDeclarations::OpenAi(declarations) => declarations.clone(),
+            NativeToolDeclarations::Gemini(declarations) if declarations.is_empty() => {
+                OpenAiToolDeclarations::default()
+            }
+            NativeToolDeclarations::Gemini(_) => {
+                return Err(ServiceError::Unsupported(
+                    "Gemini declarations require gemini_declared_request_snapshot".into(),
+                ));
+            }
+        };
+        Ok(DeclaredRequest::new(self.request.clone(), declarations))
+    }
+    fn gemini_declared_request(&self) -> Result<GeminiDeclaredRequest, ServiceError> {
+        let declarations = match &self.declarations {
+            NativeToolDeclarations::None => GeminiToolDeclarations::default(),
+            NativeToolDeclarations::Gemini(declarations) => declarations.clone(),
+            NativeToolDeclarations::OpenAi(declarations) if declarations.is_empty() => {
+                GeminiToolDeclarations::default()
+            }
+            NativeToolDeclarations::OpenAi(_) => {
+                return Err(ServiceError::Unsupported(
+                    "OpenAI declarations require declared_request_snapshot".into(),
+                ));
+            }
+        };
+        Ok(GeminiDeclaredRequest::new(
+            self.request.clone(),
+            declarations,
+        ))
     }
 }
 fn request_with_context(request: &CompletionRequest, context: crate::Context) -> CompletionRequest {
@@ -90,7 +120,7 @@ impl LlmProcessor {
             client,
             state: Mutex::new(State {
                 request,
-                openai_tools: OpenAiToolDeclarations::default(),
+                declarations: NativeToolDeclarations::None,
                 skip_tts: None,
                 speculation: None,
             }),
@@ -115,21 +145,31 @@ impl LlmProcessor {
         self
     }
     /// The base request, excluding opaque declarations. A clone is independent
-    /// from pending and future frame updates; use `declared_request_snapshot`
-    /// when the complete declaration-aware request is needed.
+    /// from pending and future frame updates; use the selected provider's
+    /// declaration-aware snapshot when the complete request is needed.
     pub fn request_snapshot(&self) -> Result<CompletionRequest, ServiceError> {
         self.state
             .lock()
             .map(|state| state.request.clone())
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
     }
-    /// The complete request, including validated opaque declarations. The clone
-    /// is independent from pending and future frame updates.
+    /// The complete OpenAI-declared request, independent from future updates.
+    /// Nonempty Gemini declarations return an error; use the Gemini snapshot
+    /// instead so this OpenAI-specific wrapper never loses declarations.
     pub fn declared_request_snapshot(&self) -> Result<DeclaredRequest, ServiceError> {
         self.state
             .lock()
-            .map(|state| state.declared_request())
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
+            .and_then(|state| state.declared_request())
+    }
+    /// The complete Gemini-declared request, independent from future updates.
+    /// Nonempty OpenAI declarations return an error; use the OpenAI snapshot
+    /// instead so this Gemini-specific wrapper never loses declarations.
+    pub fn gemini_declared_request_snapshot(&self) -> Result<GeminiDeclaredRequest, ServiceError> {
+        self.state
+            .lock()
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
+            .and_then(|state| state.gemini_declared_request())
     }
     /// The immutable backend used by this native processor. Settings and model
     /// updates do not change its provider or perform discovery.
@@ -142,14 +182,14 @@ impl LlmProcessor {
     /// snapshot and does not create a transaction across pipeline stages.
     pub fn preflight_context(&self, context: &LlmContextData) -> Result<(), ServiceError> {
         let (context, declarations) =
-            frame_context::declared_context_for_provider(context, self.client.provider())?;
+            frame_context::native_declared_context_for_provider(context, self.client.provider())?;
         let state = self
             .state
             .lock()
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
         let request = request_with_context(&state.request, context);
         self.client
-            .request_body_with_declarations(&request, &declarations)
+            .request_body_native_declarations(&request, &declarations)
             .map(|_| ())
     }
     /// Validate ordinary handler-free tools with current messages, choice, and
@@ -158,7 +198,7 @@ impl LlmProcessor {
     /// a current snapshot and is not a transaction across pipeline stages.
     pub fn preflight_tools(&self, tools: &pipecat_core::ToolSet) -> Result<(), ServiceError> {
         let (tools, declarations) =
-            frame_context::declared_tools_for_provider(tools, self.client.provider())?;
+            frame_context::native_declared_tools_for_provider(tools, self.client.provider())?;
         let state = self
             .state
             .lock()
@@ -170,7 +210,7 @@ impl LlmProcessor {
         };
         let request = request_with_context(&state.request, context);
         self.client
-            .request_body_with_declarations(&request, &declarations)
+            .request_body_native_declarations(&request, &declarations)
             .map(|_| ())
     }
     /// Validate the entire prospective request before committing an atomic delta.
@@ -182,7 +222,7 @@ impl LlmProcessor {
         let mut candidate = state.clone();
         settings::merge_settings(&mut candidate.request.settings, delta);
         self.client
-            .request_body_with_declarations(&candidate.request, &candidate.openai_tools)?;
+            .request_body_native_declarations(&candidate.request, &candidate.declarations)?;
         *state = candidate;
         Ok(())
     }
@@ -252,7 +292,7 @@ impl LlmProcessor {
             let mut next = state.clone();
             next.request.context.messages = messages;
             self.client
-                .request_body_with_declarations(&next.request, &next.openai_tools)?;
+                .request_body_native_declarations(&next.request, &next.declarations)?;
             *state = next.clone();
             return Ok(if transform.run_llm.unwrap_or(false) {
                 Consumption::Run(Box::new(next))
@@ -273,7 +313,7 @@ impl LlmProcessor {
                     ));
                 }
                 next.request.context = frame_context::legacy_context(context);
-                next.openai_tools = OpenAiToolDeclarations::default();
+                next.declarations = NativeToolDeclarations::None;
                 true
             }
             FrameData::LlmContextDetailed(context) => {
@@ -307,14 +347,15 @@ impl LlmProcessor {
                 let native_context = committed.as_ref().unwrap_or(&context.context);
                 if context.speculation || committed.is_some() || sealed {
                     next.request.context = frame_context::context(native_context)?;
-                    next.openai_tools = OpenAiToolDeclarations::default();
+                    next.declarations = NativeToolDeclarations::None;
                 } else {
-                    let (context, declarations) = frame_context::declared_context_for_provider(
-                        native_context,
-                        self.client.provider(),
-                    )?;
+                    let (context, declarations) =
+                        frame_context::native_declared_context_for_provider(
+                            native_context,
+                            self.client.provider(),
+                        )?;
                     next.request.context = context;
-                    next.openai_tools = declarations;
+                    next.declarations = declarations;
                 }
                 true
             }
@@ -360,12 +401,14 @@ impl LlmProcessor {
                         .is_some()
                 {
                     next.request.context.tools = frame_context::tools(tools)?;
-                    next.openai_tools = OpenAiToolDeclarations::default();
+                    next.declarations = NativeToolDeclarations::None;
                 } else {
-                    let (tools, declarations) =
-                        frame_context::declared_tools_for_provider(tools, self.client.provider())?;
+                    let (tools, declarations) = frame_context::native_declared_tools_for_provider(
+                        tools,
+                        self.client.provider(),
+                    )?;
                     next.request.context.tools = tools;
-                    next.openai_tools = declarations;
+                    next.declarations = declarations;
                 }
                 false
             }
@@ -385,7 +428,7 @@ impl LlmProcessor {
             _ => return Ok(Consumption::Forward),
         };
         self.client
-            .request_body_with_declarations(&next.request, &next.openai_tools)?;
+            .request_body_native_declarations(&next.request, &next.declarations)?;
         if let Some(capability) = &next.speculation {
             if !capability.claim_inference() {
                 return Ok(Consumption::Consumed);
@@ -435,7 +478,7 @@ impl LlmProcessor {
                 process_completion(
                     client,
                     state.request,
-                    state.openai_tools,
+                    state.declarations,
                     state.skip_tts,
                     output.clone(),
                 )
@@ -582,9 +625,9 @@ impl FrameProcessor for LlmProcessor {
                     let mut next = state.clone();
                     next.request.context = frame_context::context(&context)
                         .map_err(|error| ProcessorError::new(error.to_string()))?;
-                    next.openai_tools = OpenAiToolDeclarations::default();
+                    next.declarations = NativeToolDeclarations::None;
                     self.client
-                        .request_body_with_declarations(&next.request, &next.openai_tools)
+                        .request_body_native_declarations(&next.request, &next.declarations)
                         .map_err(|error| ProcessorError::new(error.to_string()))?;
                     *state = next;
                 }
@@ -661,9 +704,7 @@ impl LlmInference for LlmProcessor {
             frame_context::inference_context_for_provider(&context, self.client.provider())?;
         request.context = context;
         settings::merge_settings(&mut request.settings, &options.settings);
-        let mut stream = self
-            .client
-            .stream_declared(DeclaredRequest::new(request, declarations))?;
+        let mut stream = self.client.stream_native_declared(request, declarations)?;
         let mut text = String::new();
         while let Some(event) = stream.next().await {
             if let StreamEvent::TextDelta(delta) = event? {
@@ -781,7 +822,7 @@ impl CompletionOutput {
 async fn process_completion(
     client: LlmClient,
     request: CompletionRequest,
-    declarations: OpenAiToolDeclarations,
+    declarations: NativeToolDeclarations,
     skip_tts: Option<bool>,
     ctx: CompletionOutput,
 ) -> Result<(), ProcessorError> {
@@ -821,7 +862,7 @@ async fn process_completion(
     if !ctx.admits_completion() {
         return Ok(());
     }
-    let mut stream = match client.stream_declared(DeclaredRequest::new(request, declarations)) {
+    let mut stream = match client.stream_native_declared(request, declarations) {
         Ok(stream) => stream,
         Err(error) => {
             ctx.push_error(error_frame(error)).await?;

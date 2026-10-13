@@ -19,6 +19,9 @@ use std::{
 use support::Server;
 
 async fn round_trip(mode: &str, owning: bool) {
+    provider_round_trip(mode, owning, Provider::OpenAi).await;
+}
+async fn provider_round_trip(mode: &str, owning: bool, native_provider: Provider) {
     let server = Server::start("").await;
     let mut config = McpConfig::new(ServerConfig::StreamableHttp(HttpConfig::new(&server.url)));
     config.tools_filter = Some(BTreeSet::from(["echo".into()]));
@@ -29,7 +32,12 @@ async fn round_trip(mode: &str, owning: bool) {
     let client = McpClient::new(config).unwrap();
     let tools = client.tools().await.unwrap();
     let mut schema = tools.schema();
-    let (adapter, declaration) = if owning {
+    let (adapter, declaration) = if native_provider == Provider::Gemini {
+        (
+            pipecat_core::AdapterType::Gemini,
+            BTreeMap::from([("google_search".into(), json!({}))]),
+        )
+    } else if owning {
         (
             pipecat_core::AdapterType::Openai,
             BTreeMap::from([
@@ -53,8 +61,13 @@ async fn round_trip(mode: &str, owning: bool) {
         Default::default(),
         Default::default(),
     );
-    let provider = Server::start("llm").await;
-    let mut config = ClientConfig::new(Provider::OpenAi, "owned-native-fixture");
+    let provider = Server::start(if native_provider == Provider::Gemini {
+        "gemini-llm"
+    } else {
+        "llm"
+    })
+    .await;
+    let mut config = ClientConfig::new(native_provider, "owned-native-fixture");
     config.endpoint = provider.url.clone();
     config.api_key = None;
     let native = Arc::new(LlmProcessor::new(
@@ -107,29 +120,54 @@ async fn round_trip(mode: &str, owning: bool) {
     assert_eq!(calls.len(), 1);
     assert!(failure.is_none());
     assert!(report.errors.is_empty(), "{:?}", report.errors);
-    let result = requests[1]["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|m| m["role"] == "tool")
-        .unwrap();
-    assert_eq!(result["tool_call_id"], "agent-call");
-    let text: Value = serde_json::from_str(result["content"].as_str().unwrap()).unwrap();
-    assert_eq!(
-        serde_json::from_str::<Value>(text.as_str().unwrap()).unwrap(),
-        json!({"value":"agent","hidden":"static-native"})
-    );
-    assert!(!requests[0].to_string().contains("google_search"));
-    for request in &requests {
-        assert_eq!(request["tools"][0]["function"]["name"], "echo");
-        if owning {
-            assert_eq!(request["tools"].as_array().unwrap().len(), 2);
+    if native_provider == Provider::Gemini {
+        let response = requests[1]["contents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|m| m["parts"].as_array().unwrap())
+            .find_map(|p| p.get("functionResponse"))
+            .unwrap();
+        assert_eq!(response["name"], "echo");
+        assert_eq!(response["id"], "agent-call");
+        assert_eq!(
+            serde_json::from_str::<Value>(response["response"]["value"].as_str().unwrap()).unwrap(),
+            json!({"value":"agent","hidden":"static-native"})
+        );
+        for request in &requests {
+            assert_eq!(request["tools"][0], json!({"googleSearch":{}}));
             assert_eq!(
-                request["tools"][1],
-                serde_json::to_value(&declaration).unwrap()
+                request["tools"][1]["functionDeclarations"][0]["name"],
+                "echo"
             );
-        } else {
-            assert_eq!(request["tools"].as_array().unwrap().len(), 1);
+            assert_eq!(request["tools"].as_array().unwrap().len(), 2);
+            assert!(!request.to_string().contains("google_search"));
+        }
+    } else {
+        let result = requests[1]["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["role"] == "tool")
+            .unwrap();
+        assert_eq!(result["tool_call_id"], "agent-call");
+        let text: Value = serde_json::from_str(result["content"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(text.as_str().unwrap()).unwrap(),
+            json!({"value":"agent","hidden":"static-native"})
+        );
+        assert!(!requests[0].to_string().contains("google_search"));
+        for request in &requests {
+            assert_eq!(request["tools"][0]["function"]["name"], "echo");
+            if owning {
+                assert_eq!(request["tools"].as_array().unwrap().len(), 2);
+                assert_eq!(
+                    request["tools"][1],
+                    serde_json::to_value(&declaration).unwrap()
+                );
+            } else {
+                assert_eq!(request["tools"].as_array().unwrap().len(), 1);
+            }
         }
     }
     assert_eq!(
@@ -139,6 +177,15 @@ async fn round_trip(mode: &str, owning: bool) {
     assert_eq!(server.state.lock().unwrap().deletes, 1);
     server.wait_for(|s| s.completed_deletes == 1).await;
     client.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn gemini_owning_static_auto_bridge_returns_real_mcp_result_and_cleanup() {
+    provider_round_trip("auto", true, Provider::Gemini).await;
+}
+#[tokio::test]
+async fn gemini_owning_static_direct_bridge_returns_real_mcp_result_and_cleanup() {
+    provider_round_trip("direct", true, Provider::Gemini).await;
 }
 
 #[tokio::test]

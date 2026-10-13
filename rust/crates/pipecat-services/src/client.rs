@@ -2,8 +2,9 @@ use crate::adapters::request_body;
 use crate::protocol::ProtocolDecoder;
 use crate::sse::SseDecoder;
 use crate::{
-    CancellationToken, CompletionRequest, DeclaredRequest, OpenAiToolDeclarations, Provider,
-    ServiceError, StreamEvent,
+    CancellationToken, CompletionRequest, DeclaredRequest, GeminiDeclaredRequest,
+    GeminiToolDeclarations, NativeToolDeclarations, OpenAiToolDeclarations, Provider, ServiceError,
+    StreamEvent,
 };
 use futures_util::StreamExt;
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
@@ -200,6 +201,29 @@ impl LlmClient {
     ) -> Result<serde_json::Value, ServiceError> {
         self.request_body_with_declarations(request.request(), request.openai_tools())
     }
+    /// Pure serialization with validated Gemini search advertisements. Nonempty
+    /// declarations require Gemini; empty wrappers keep the original client behavior.
+    pub fn request_body_gemini_declared(
+        &self,
+        request: &GeminiDeclaredRequest,
+    ) -> Result<serde_json::Value, ServiceError> {
+        self.request_body_with_gemini_declarations(request.request(), request.gemini_tools())
+    }
+    pub(crate) fn request_body_native_declarations(
+        &self,
+        request: &CompletionRequest,
+        declarations: &NativeToolDeclarations,
+    ) -> Result<serde_json::Value, ServiceError> {
+        match declarations {
+            NativeToolDeclarations::None => self.request_body(request),
+            NativeToolDeclarations::OpenAi(declarations) => {
+                self.request_body_with_declarations(request, declarations)
+            }
+            NativeToolDeclarations::Gemini(declarations) => {
+                self.request_body_with_gemini_declarations(request, declarations)
+            }
+        }
+    }
     pub(crate) fn request_body_with_declarations(
         &self,
         request: &CompletionRequest,
@@ -226,6 +250,30 @@ impl LlmClient {
         }
         let body = self.request_body(request)?;
         crate::adapters::append_openai_declarations(body, declarations)
+    }
+    fn request_body_with_gemini_declarations(
+        &self,
+        request: &CompletionRequest,
+        declarations: &GeminiToolDeclarations,
+    ) -> Result<serde_json::Value, ServiceError> {
+        if !declarations.is_empty() {
+            if self.config.provider != Provider::Gemini {
+                return Err(ServiceError::Unsupported(
+                    "Gemini declarations require a Gemini client".into(),
+                ));
+            }
+            let standard_count = request.context.tools.as_ref().map_or(0, Vec::len);
+            if standard_count
+                .checked_add(declarations.len())
+                .is_none_or(|count| count > GeminiToolDeclarations::MAX_TOOLS)
+            {
+                return Err(ServiceError::InvalidRequest(
+                    "Gemini standard tools and declarations exceed tool count limit".into(),
+                ));
+            }
+        }
+        let body = self.request_body(request)?;
+        crate::adapters::prepend_gemini_declarations(body, declarations)
     }
     fn request_body_inner(
         &self,
@@ -260,11 +308,49 @@ impl LlmClient {
         request: DeclaredRequest,
         cancel: CancellationToken,
     ) -> Result<LlmStream, ServiceError> {
+        let (request, declarations) = request.into_parts();
+        self.stream_native_declared_with_cancel(
+            request,
+            NativeToolDeclarations::OpenAi(declarations),
+            cancel,
+        )
+    }
+    pub fn stream_gemini_declared(
+        &self,
+        request: GeminiDeclaredRequest,
+    ) -> Result<LlmStream, ServiceError> {
+        self.stream_gemini_declared_with_cancel(request, CancellationToken::new())
+    }
+    pub fn stream_gemini_declared_with_cancel(
+        &self,
+        request: GeminiDeclaredRequest,
+        cancel: CancellationToken,
+    ) -> Result<LlmStream, ServiceError> {
+        let (request, declarations) = request.into_parts();
+        self.stream_native_declared_with_cancel(
+            request,
+            NativeToolDeclarations::Gemini(declarations),
+            cancel,
+        )
+    }
+    pub(crate) fn stream_native_declared(
+        &self,
+        request: CompletionRequest,
+        declarations: NativeToolDeclarations,
+    ) -> Result<LlmStream, ServiceError> {
+        self.stream_native_declared_with_cancel(request, declarations, CancellationToken::new())
+    }
+    fn stream_native_declared_with_cancel(
+        &self,
+        request: CompletionRequest,
+        declarations: NativeToolDeclarations,
+        cancel: CancellationToken,
+    ) -> Result<LlmStream, ServiceError> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|_| {
             ServiceError::InvalidRequest("stream requires an active Tokio runtime".into())
         })?;
-        let body = self.request_body_declared(&request)?;
-        let resolved = crate::settings::resolve(request.request())?;
+        let body = self.request_body_native_declarations(&request, &declarations)?;
+        let resolved = crate::settings::resolve(&request)?;
         let endpoint = self.endpoint(&resolved.model)?;
         let mut builder = self
             .http

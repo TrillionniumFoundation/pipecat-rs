@@ -114,6 +114,35 @@ pub(crate) fn append_openai_declarations(
     Ok(body)
 }
 
+/// Match the SDK tool order: search advertisements before the standard function
+/// group. Existing standard declarations are retained without conversion changes.
+pub(crate) fn prepend_gemini_declarations(
+    mut body: Value,
+    declarations: &crate::GeminiToolDeclarations,
+) -> Result<Value, ServiceError> {
+    if declarations.is_empty() {
+        return Ok(body);
+    }
+    let object = body.as_object_mut().ok_or_else(|| {
+        ServiceError::InvalidRequest("Gemini request body is not an object".into())
+    })?;
+    let standard = object
+        .entry("tools")
+        .or_insert_with(|| Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| ServiceError::InvalidRequest("Gemini tools are not an array".into()))?;
+    let mut tools = Vec::with_capacity(declarations.len() + standard.len());
+    tools.extend(
+        declarations
+            .as_slice()
+            .iter()
+            .map(|_| json!({"googleSearch": {}})),
+    );
+    tools.append(standard);
+    *standard = tools;
+    Ok(body)
+}
+
 /// A redacted copy for diagnostics; prompt and tool arguments remain visible.
 pub fn request_body_for_logging(
     provider: Provider,

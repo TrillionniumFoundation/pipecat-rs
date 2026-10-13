@@ -220,7 +220,8 @@ inference select only the OpenAI entry in a `ToolsSchema` custom map, matching
 the Python OpenAI adapter. Other adapters' declarations are ignored while the
 standard function definitions and tool choice remain intact. Ordinary Gemini
 paths likewise select only the Gemini entry and ignore OpenAI declarations.
-A nonempty owning Gemini custom entry still returns `Unsupported`.
+Owning Gemini entries support the empty Google Search declaration described
+below; other built-in tools and search configurations remain `Unsupported`.
 Ordinary Direct handlers still require an executor, while
 inference only advertises their definitions. Ordinary Anthropic paths ignore the
 custom map entirely, matching the source adapter's standard-function-only
@@ -245,8 +246,30 @@ fields retain their validation. Public function-only context helpers and
 sealed/speculative paths retain their strict custom-schema
 checks. Settings and message updates preserve admitted declarations; a complete
 context or tool setter replaces them only after full request validation.
-`declared_request_snapshot()` includes the full validated declarations, while
+`declared_request_snapshot()` includes the full validated OpenAI declarations, while
 the compatible `request_snapshot()` returns the base function context.
+
+Ordinary Gemini context frames, setters and inference accept exactly
+`{"google_search": {}}` as a custom declaration. The locked Python google-genai
+2.25.0 SDK maps it to `{"googleSearch": {}}` and moves the merged standard
+function group after built-in tools. Native requests follow that declaration
+mapping and order, preserving the existing standard-function conversion.
+This does not establish full SDK request equality or live model support for a
+search/function combination. Nonempty search options, other tool keys, Vertex
+tools and arbitrary dictionary forwarding remain unsupported.
+
+The additive `GeminiToolDeclarations` and `GeminiDeclaredRequest` types and client
+`request_body_gemini_declared`, `stream_gemini_declared` and
+`stream_gemini_declared_with_cancel` methods retain declarations separately from
+functions. Their private validated contents, count/JSON bounds and combined
+128-tool limit protect publication; empty wrappers preserve existing behavior.
+The original OpenAI wrapper constructor, accessors and two-part extraction are
+unchanged. `gemini_declared_request_snapshot()` returns the complete Gemini
+request; a provider-specific snapshot rejects the other provider's nonempty
+declarations explicitly. Message/settings updates retain metadata, and complete
+context/tool changes replace or clear it only after validation. Both wrappers
+share the original HTTP cancellation and decoder path. Search advertisement
+registers no callback and adds no grounding response decoding or execution.
 
 `preflight_context` and `preflight_tools` synchronously validate a projected
 ordinary update against the processor's current base settings and actual client.

@@ -1,7 +1,7 @@
 //! Loss-aware conversion from the core's universal context frames.
 use crate::{
-    Content, ContentPart, Context, Message, OpenAiToolDeclarations, Provider, Role, ServiceError,
-    ToolCall, ToolChoice, ToolDefinition,
+    Content, ContentPart, Context, GeminiToolDeclarations, Message, NativeToolDeclarations,
+    OpenAiToolDeclarations, Provider, Role, ServiceError, ToolCall, ToolChoice, ToolDefinition,
 };
 use pipecat_core::{
     AdapterType, ChatMessage, ChatRole, ContextMessage, LlmContextData, LlmContextFrame,
@@ -44,6 +44,47 @@ pub fn declared_tools_for_provider(
 ) -> Result<(Option<Vec<ToolDefinition>>, OpenAiToolDeclarations), ServiceError> {
     let (tools, declarations) = declared_tool_selection(tools, provider)?;
     Ok((convert_tools(&tools, false, Some(provider))?, declarations))
+}
+pub(crate) fn native_declared_tools_for_provider(
+    tools: &ToolSet,
+    provider: Provider,
+) -> Result<(Option<Vec<ToolDefinition>>, NativeToolDeclarations), ServiceError> {
+    let (tools, declarations) = native_tool_selection(tools, provider)?;
+    Ok((convert_tools(&tools, false, Some(provider))?, declarations))
+}
+fn native_tool_selection(
+    tools: &ToolSet,
+    provider: Provider,
+) -> Result<(Cow<'_, ToolSet>, NativeToolDeclarations), ServiceError> {
+    if provider == Provider::OpenAi {
+        let (tools, declarations) = declared_tool_selection(tools, provider)?;
+        let declarations = if declarations.is_empty() {
+            NativeToolDeclarations::None
+        } else {
+            NativeToolDeclarations::OpenAi(declarations)
+        };
+        return Ok((tools, declarations));
+    }
+    let (Provider::Gemini, ToolSet::Schema(schema)) = (provider, tools) else {
+        return Ok((Cow::Borrowed(tools), NativeToolDeclarations::None));
+    };
+    let Some(own) = schema
+        .custom_tools
+        .as_ref()
+        .and_then(|tools| tools.get(&AdapterType::Gemini))
+        .filter(|tools| !tools.is_empty())
+    else {
+        return Ok((Cow::Borrowed(tools), NativeToolDeclarations::None));
+    };
+    let declarations = GeminiToolDeclarations::from_slice(own)?;
+    let selected = pipecat_core::ToolsSchema {
+        standard_tools: schema.standard_tools.clone(),
+        custom_tools: None,
+    };
+    Ok((
+        Cow::Owned(ToolSet::Schema(selected)),
+        NativeToolDeclarations::Gemini(declarations),
+    ))
 }
 fn declared_tool_selection(
     tools: &ToolSet,
@@ -150,12 +191,22 @@ pub fn declared_context_for_provider(
         declarations,
     ))
 }
+pub(crate) fn native_declared_context_for_provider(
+    context: &LlmContextData,
+    provider: Provider,
+) -> Result<(Context, NativeToolDeclarations), ServiceError> {
+    let (tools, declarations) = native_tool_selection(&context.tools, provider)?;
+    Ok((
+        convert_context(context, false, Some(provider), &tools)?,
+        declarations,
+    ))
+}
 /// Out-of-band inference advertises tools but has no execution lifecycle.
 pub(crate) fn inference_context_for_provider(
     context: &LlmContextData,
     provider: Provider,
-) -> Result<(Context, OpenAiToolDeclarations), ServiceError> {
-    let (tools, declarations) = declared_tool_selection(&context.tools, provider)?;
+) -> Result<(Context, NativeToolDeclarations), ServiceError> {
+    let (tools, declarations) = native_tool_selection(&context.tools, provider)?;
     Ok((
         convert_context(context, true, Some(provider), &tools)?,
         declarations,

@@ -94,7 +94,8 @@ register arbitrary application functions. Realtime sealed and speculative
 executable contexts are explicitly rejected when projection is needed: their capabilities are never
 stripped or resealed. Fixed native LLM bindings preflight projected ordinary
 contexts and tool setters with the actual LLM's current settings and client,
-before changing handler authority. Supported owning OpenAI declarations remain
+before changing handler authority. Supported owning OpenAI declarations and
+empty Gemini Google Search declarations remain
 advertisement-only alongside the bound standard callbacks; foreign declarations
 follow native adapter selection. Client restrictions, reserved fields and grouped
 schemas retain their existing validation. Switcher bindings

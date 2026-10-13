@@ -286,7 +286,8 @@ after full native validation, without rewriting the frame. Full native context
 conversion and tool validation precede publication.
 Fixed native LLM bindings preflight projected ordinary contexts and tool setters
 with the actual LLM's current settings and client before altering handlers or
-recording cleanup hooks. Supported owning OpenAI declarations are advertisement
+recording cleanup hooks. Supported owning OpenAI declarations and empty Gemini
+Google Search declarations are advertisement
 alongside standard callbacks; custom metadata grants no registration authority.
 Client restrictions, reserved fields, grouped schemas and
 sealed/speculative authority changes reject before altering handlers or recording
