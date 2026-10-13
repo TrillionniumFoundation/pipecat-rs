@@ -94,6 +94,36 @@ ID-only; per-function `disabled`, `none`, `name`, `arguments`, and `full` levels
 control exposure. Runtime configuration is accepted only through a typed
 server-side `RtviConfigureObserver` frame. No client wire command raises access.
 
+### Google search projection
+
+Use `GoogleRtviObserver::new(params, session)` and its `observe` or shared `tap`
+for native Gemini grounding. Ordinary events delegate to `RtviObserver`;
+`LlmSearchResponse` additionally produces an urgent `bot-llm-search-response`
+envelope. The tap preserves the original search frame, including when projection
+validation fails, and sends derived messages through the current processor
+context. It does not start a separate sender or bypass pipeline cancellation.
+Calling `observe` returns envelopes; it does not itself deliver them to a client.
+
+The dedicated `pipecat_protocol::rtvi_google::GoogleSearchResponseData` codec
+builds and decodes these envelopes. The generic `ServerEvent` enum remains the
+base RTVI event set, so use the Google decoder for this service-specific type.
+Optional response and source strings are omitted when absent, and complete
+confidence vectors are retained. A nested result with absent text or confidence
+is rejected, matching validation of the pinned Python service's ordinary
+dictionary output. Hand-built invalid Python dataclass instances can bypass that
+validation; the native codec rejects them. Non-finite confidence values are also
+rejected rather than being serialized as JSON null.
+
+Search projection has a separate bounded recent-ID FIFO and applies native
+source, direction, and first-push filters. Filtered or invalid frames do not
+consume an ID; cache hits do not refresh FIFO order. `reset` clears ordinary
+state and search identities. Search reporting is independent of
+`bot_llm_enabled`, as in the Python Google observer. The Python Google override
+can report repeated hops after its base observer has filtered them, and its
+processor factory ignores observer parameters; these are explicit native API
+differences. Complete wire envelopes have the protocol's 1 MiB ceiling and the
+observer's configured limit. Source HTML and URIs remain literal data.
+
 Only call `observe` with `after_output_transport: true` for an actual push from
 an output transport after its timing/playback handling. It enables aggregated
 `bot-output`, `bot-tts-text`, and segment progress reports. Ordinary pipeline taps

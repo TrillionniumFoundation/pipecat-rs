@@ -23,8 +23,12 @@ jobs:
       - name: Install workspace Rust toolchain
         run: rustup toolchain install 1.99.0 --profile minimal --component clippy --component rustfmt && rustup default 1.99.0
       - name: Check affected package formatting
-        run: cargo fmt -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -- --check
+        run: cargo fmt -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat -- --check
       - name: Native MCP HTTP, stdio and affected package regressions
-        run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline --features pipecat-mcp/native-fixtures --locked
+        run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi --features pipecat-mcp/native-fixtures --locked
+      - name: Native Gemini grounding to RTVI search integration
+        run: cargo test -p pipecat --test gemini_rtvi_search --locked
       - name: Strict affected package checks
-        run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
+        run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
+      - name: Strict native Gemini RTVI integration checks
+        run: cargo clippy -p pipecat --test gemini_rtvi_search --locked -- -D warnings

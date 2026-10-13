@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod genesys;
 pub mod protobuf;
 pub mod rtvi;
+pub mod rtvi_google;
 pub mod telephony;
 
 use serde::{Deserialize, Serialize};

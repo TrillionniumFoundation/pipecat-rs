@@ -1,7 +1,9 @@
 //! Native RTVI 2.2 processor and explicit frame-observer taps.
 //! See the README for output-transport timing and observer integration contracts.
+mod google;
 mod observer;
 mod processor;
+pub use google::*;
 pub use observer::*;
 pub use pipecat_protocol::rtvi as wire;
 pub use processor::*;
