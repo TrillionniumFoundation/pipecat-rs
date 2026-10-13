@@ -5,9 +5,7 @@ use pipecat_core::{
     LocalToolOptions, ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolSet,
     ToolsSchema,
 };
-use pipecat_processors::tools::{
-    CancellableRegisteredTool, ToolExecutor, ToolRegistrationSnapshot,
-};
+use pipecat_processors::tools::{ToolExecutor, ToolRegistrationSnapshot};
 use pipecat_services::{frame_context, Context, LlmProcessor};
 use serde_json::Value;
 use std::{
@@ -221,21 +219,19 @@ impl McpTools {
         let limits = &self.client.inner.config.limits;
         let mut executor =
             ToolExecutor::new(limits.max_in_flight, 1024, limits.max_argument_bytes)?;
-        for (schema, snapshot_tool) in self.definitions.iter().zip(&self.snapshot_tools) {
-            let snapshot_tool = snapshot_tool.clone();
-            let mut tool = CancellableRegisteredTool::new(Arc::new(move |call| {
-                let snapshot_tool = snapshot_tool.clone();
-                Box::pin(async move {
-                    match snapshot_tool.call_text(call.arguments).await {
-                        Err(McpError::Cancelled) => None,
-                        result => {
-                            Some(result.map(Value::String).map_err(|error| error.to_string()))
-                        }
-                    }
-                })
-            }));
-            tool.timeout = limits.tool_timeout();
-            executor.register_cancellable(schema.name.clone(), tool)?;
+        for tool in &self.cached_schema.standard_tools {
+            let StandardTool::Direct(function) = tool else {
+                return Err(ProcessorError::fatal(
+                    "cached MCP tool lacks its executable handler",
+                ));
+            };
+            // Reuse the immutable schema handler's typed outcome, deadline and
+            // identity. The outer MCP lifecycle continues to own cleanup.
+            executor.register_direct(
+                function.schema.name.clone(),
+                function.handler.clone(),
+                None,
+            )?;
         }
         Ok(McpToolExecutor {
             executor,

@@ -37,6 +37,14 @@ cancellation enabled, and a guard deadline covering one connection, request and
 close budget. Each handler carries the same cleanup callback for its client, including
 handlers from later discoveries; distinct clients have distinct cleanup identities.
 
+`tools.executor()` and all MCP native LLM factories reuse these cached handlers,
+including their identities, typed outcomes and deadlines. Returned wrapper errors,
+such as invoking a cached handler after explicit client close, produce one admitted
+failed tool result and a bounded nonfatal `Application` diagnostic. Ordinary remote
+failures remain successful model-facing error text; typed cancellation and executor
+timeouts retain their existing outcome behavior. The outer MCP lifecycle still
+owns cleanup, and the existing model-facing wrapper error text is preserved.
+
 The ordinary `pipecat_pipeline::DirectToolBinding` consumes these executable
 schemas, honors their options, and records the shared cleanup hook. It retains
 cleanup after refresh or pruning and awaits MCP close at pipeline teardown. The

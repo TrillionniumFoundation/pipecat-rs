@@ -1244,7 +1244,13 @@ async fn retained_snapshot_handlers_dispatch_after_refresh_but_close_revokes_the
         .unwrap();
     worker.end().await.unwrap();
     let (frames, report) = worker.collect().await.unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert_eq!(
+        report.errors[0].category,
+        pipecat_core::ErrorCategory::Application
+    );
+    assert!(!report.errors[0].fatal);
+    assert!(report.errors[0].error.contains("MCP client is closed"));
     let results: Vec<_> = frames
         .iter()
         .filter_map(|frame| match &frame.frame.data {
