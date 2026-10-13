@@ -799,7 +799,7 @@ impl ActiveLease {
         }
         let weak = Arc::downgrade(&self.control);
         // Retaining an endpoint must not retain the call's runtime or publisher.
-        Ok(LocalToolReporter::new_sink(move |result| {
+        Ok(LocalToolReporter::new_completion_sink(move |completion| {
             let state = weak
                 .upgrade()
                 .ok_or_else(|| ProcessorError::new("tool reporter is no longer active"))?;
@@ -817,7 +817,11 @@ impl ActiveLease {
                 .progress
                 .as_ref()
                 .ok_or_else(|| ProcessorError::new("tool reporter is no longer active"))?
-                .publish_progress(result, sequence)?;
+                .publish_progress_with_context_updated(
+                    completion.result,
+                    sequence,
+                    completion.on_context_updated,
+                )?;
             if admission != ToolOutcomeAdmission::Admitted {
                 return Err(ProcessorError::new("tool progress was not admitted"));
             }

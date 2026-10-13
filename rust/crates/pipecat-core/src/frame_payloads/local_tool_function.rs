@@ -23,7 +23,7 @@ impl LocalToolResult {
     }
 }
 
-/// A final successful result and an optional callback for its context consumer.
+/// A successful result and an optional callback for its context consumer.
 /// Invoking a local handler alone never runs this callback.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalToolCompletion {
@@ -47,7 +47,7 @@ impl LocalToolCompletion {
 /// Clones share the same synchronous sink; this type carries no wire capability.
 #[derive(Clone)]
 pub struct LocalToolReporter(
-    Arc<dyn Fn(LocalToolResult) -> Result<(), ProcessorError> + Send + Sync>,
+    Arc<dyn Fn(LocalToolCompletion) -> Result<(), ProcessorError> + Send + Sync>,
 );
 impl LocalToolReporter {
     /// Construct a trusted local sink. The callback must perform bounded admission
@@ -57,12 +57,30 @@ impl LocalToolReporter {
     where
         F: Fn(LocalToolResult) -> Result<(), ProcessorError> + Send + Sync + 'static,
     {
+        Self::new_completion_sink(move |completion| sink(completion.result))
+    }
+    /// Construct a trusted local sink retaining a report's context-update hook.
+    /// As with `new_sink`, admission is synchronous and bounded. Compatibility
+    /// result sinks discard hooks without invoking them.
+    pub fn new_completion_sink<F>(sink: F) -> Self
+    where
+        F: Fn(LocalToolCompletion) -> Result<(), ProcessorError> + Send + Sync + 'static,
+    {
         Self(Arc::new(sink))
     }
     /// Acknowledge admission by the sink. Success does not mean that a context
     /// consumer has applied the report. This method adds no queue or background task.
     pub async fn report(&self, result: LocalToolResult) -> Result<(), ProcessorError> {
-        (self.0)(result)
+        self.report_with_context_updated(LocalToolCompletion::new(result))
+            .await
+    }
+    /// Acknowledge admission of a result and hook without executing that hook.
+    /// Only the successful context consumer owns context-update notification.
+    pub async fn report_with_context_updated(
+        &self,
+        completion: LocalToolCompletion,
+    ) -> Result<(), ProcessorError> {
+        (self.0)(completion)
     }
 }
 
@@ -307,6 +325,73 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Mutex,
     };
+
+    #[tokio::test]
+    async fn completion_sink_retains_report_hook_and_legacy_report_defaults_to_no_hook() {
+        let received = Arc::new(Mutex::new(Vec::new()));
+        let captured = received.clone();
+        let reporter = LocalToolReporter::new_completion_sink(move |completion| {
+            captured.lock().unwrap().push(completion);
+            Ok(())
+        });
+        let invoked = Arc::new(AtomicUsize::new(0));
+        let count = invoked.clone();
+        let callback = LocalAsyncCallback::new(move || {
+            let count = count.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        });
+        let result = LocalToolResult::new(Value::Null).with_run_llm(false);
+        reporter.report(result.clone()).await.unwrap();
+        reporter
+            .clone()
+            .report_with_context_updated(
+                LocalToolCompletion::new(result.clone()).with_context_updated(callback.clone()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            *received.lock().unwrap(),
+            vec![
+                LocalToolCompletion::new(result.clone()),
+                LocalToolCompletion::new(result).with_context_updated(callback),
+            ]
+        );
+        assert_eq!(invoked.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn result_sink_discards_report_hook_without_invoking_or_retaining_it() {
+        let received = Arc::new(Mutex::new(Vec::new()));
+        let captured = received.clone();
+        let reporter = LocalToolReporter::new_sink(move |result| {
+            captured.lock().unwrap().push(result);
+            Ok(())
+        });
+        let resource = Arc::new(());
+        let weak = Arc::downgrade(&resource);
+        let callback = LocalAsyncCallback::new(move || {
+            let resource = resource.clone();
+            async move {
+                drop(resource);
+                panic!("compatibility sink must not execute the hook");
+            }
+        });
+        let result = LocalToolResult::new(json!("progress")).with_run_llm(false);
+        reporter
+            .report_with_context_updated(
+                LocalToolCompletion::new(result.clone()).with_context_updated(callback),
+            )
+            .await
+            .unwrap();
+        assert_eq!(*received.lock().unwrap(), vec![result]);
+        assert!(
+            weak.upgrade().is_none(),
+            "legacy sink retained a discarded hook"
+        );
+    }
 
     #[tokio::test]
     async fn completion_retains_hook_but_compatibility_invocations_never_run_it() {

@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod tool_context_updated;
+mod tool_progress_context_updated;
 
 /// Semantic intent of a paired realtime trailing-history snapshot. This is
 /// not authorization or provider provenance. Explicit inference requests must
@@ -101,6 +102,8 @@ pub struct Frame {
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
     native_tool_progress: Option<Arc<crate::NativeToolCallProgress>>,
     native_tool_context_updated: Option<tool_context_updated::ContextUpdatedBinding>,
+    native_tool_progress_context_updated:
+        Option<tool_progress_context_updated::ProgressContextUpdatedBinding>,
     native_tool_timeout_projected: bool,
     native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
@@ -251,6 +254,7 @@ impl<'de> Deserialize<'de> for Frame {
             native_tool_outcome: None,
             native_tool_progress: None,
             native_tool_context_updated: None,
+            native_tool_progress_context_updated: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
             reported_runtimes,
@@ -274,6 +278,8 @@ impl PartialEq for Frame {
             && self.native_tool_outcome == other.native_tool_outcome
             && self.native_tool_progress == other.native_tool_progress
             && self.native_tool_context_updated == other.native_tool_context_updated
+            && self.native_tool_progress_context_updated
+                == other.native_tool_progress_context_updated
             && self.native_tool_timeout_projected == other.native_tool_timeout_projected
             && self.native_tool_batch == other.native_tool_batch
             && self.metadata == other.metadata
@@ -322,12 +328,19 @@ impl Frame {
         &self,
     ) -> Result<Option<&Arc<crate::NativeToolCallProgress>>, crate::ProcessorError> {
         if let Some(progress) = &self.native_tool_progress {
-            if self.native_tool_outcome.is_some() || self.native_tool_context_updated.is_some() {
+            if self.native_tool_outcome.is_some()
+                || self.native_tool_context_updated.is_some()
+                || self.native_tool_timeout_projected
+                || self.native_tool_batch.is_some()
+            {
                 return Err(crate::ProcessorError::new(
                     "frame cannot carry terminal and nonterminal tool receipts",
                 ));
             }
             progress.validate(&self.data)?;
+            if let Some(binding) = &self.native_tool_progress_context_updated {
+                binding.validate(progress, &self.data)?;
+            }
         }
         Ok(self.native_tool_progress.as_ref())
     }
@@ -346,8 +359,17 @@ impl Frame {
     pub fn native_tool_outcome(
         &self,
     ) -> Result<Option<&Arc<crate::NativeToolCallOutcome>>, crate::ProcessorError> {
+        if self.native_tool_context_updated.is_some()
+            && self.native_tool_progress_context_updated.is_some()
+        {
+            return Err(crate::ProcessorError::new(
+                "frame cannot carry terminal and progress context-update callbacks",
+            ));
+        }
         if let Some(outcome) = &self.native_tool_outcome {
-            if self.native_tool_progress.is_some() {
+            if self.native_tool_progress.is_some()
+                || self.native_tool_progress_context_updated.is_some()
+            {
                 return Err(crate::ProcessorError::new(
                     "frame cannot carry terminal and nonterminal tool receipts",
                 ));
@@ -519,6 +541,7 @@ impl Frame {
         if self.native_tool_outcome.is_some()
             || self.native_tool_progress.is_some()
             || self.native_tool_context_updated.is_some()
+            || self.native_tool_progress_context_updated.is_some()
         {
             return Err(crate::NativeLlmContinuationError::UnconsumedToolOutcome);
         }
@@ -602,6 +625,7 @@ impl Frame {
             native_tool_outcome: None,
             native_tool_progress: None,
             native_tool_context_updated: None,
+            native_tool_progress_context_updated: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
             reported_runtimes,

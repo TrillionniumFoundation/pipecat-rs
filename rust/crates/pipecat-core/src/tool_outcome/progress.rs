@@ -1,7 +1,7 @@
 use super::{encoded_bytes, NativeToolCallBatch, ToolOutcomeAdmission, ToolOutcomePublisher};
 use crate::{
-    Direction, Frame, FrameData, FunctionCall, FunctionCallResultFrame, LocalToolResult,
-    ProcessorContext, ProcessorError,
+    Direction, Frame, FrameData, FunctionCall, FunctionCallResultFrame, LocalAsyncCallback,
+    LocalToolResult, ProcessorContext, ProcessorError,
 };
 use std::sync::Arc;
 
@@ -98,6 +98,16 @@ impl ToolProgressPublisher {
         result: LocalToolResult,
         sequence: u64,
     ) -> Result<ToolOutcomeAdmission, ProcessorError> {
+        self.publish_progress_with_context_updated(result, sequence, None)
+    }
+    /// Carry an intermediate context-update hook without running it or settling
+    /// the call. Failed or closed first-hop publications discard the hook.
+    pub fn publish_progress_with_context_updated(
+        &self,
+        result: LocalToolResult,
+        sequence: u64,
+        on_context_updated: Option<LocalAsyncCallback>,
+    ) -> Result<ToolOutcomeAdmission, ProcessorError> {
         if sequence == 0 {
             return Err(ProcessorError::new(
                 "native tool progress sequence must be positive",
@@ -152,7 +162,10 @@ impl ToolProgressPublisher {
                 result,
                 bytes,
             });
-            frame.attach_tool_progress(progress);
+            frame.attach_tool_progress(progress.clone());
+            if let Some(callback) = on_context_updated {
+                frame.attach_tool_progress_context_updated(progress, callback);
+            }
             // Only fixed non-interruptible async policy reaches this path.
             // Runtime control revocation is checked by the owning executor.
             let admission =

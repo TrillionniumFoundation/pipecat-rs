@@ -330,6 +330,9 @@ impl LLMAssistantAggregator {
         let native_progress = frame.take_native_tool_progress()?;
         if let Some(progress) = native_progress {
             if state.ended {
+                let callback = frame.take_native_tool_progress_context_updated(&progress)?;
+                drop(state);
+                drop(callback);
                 return Ok(output);
             }
             if direction != Direction::Downstream {
@@ -342,9 +345,19 @@ impl LLMAssistantAggregator {
                     "native tool progress requires ordinary aggregation",
                 ));
             }
-            return self
-                .native_progress(&mut state, &frame.data, &progress, &mut output)
-                .map(|()| output);
+            let applied = self.native_progress(&mut state, &frame.data, &progress, &mut output)?;
+            let callback = frame.take_native_tool_progress_context_updated(&progress)?;
+            if applied {
+                if let Some(callback) = callback {
+                    output
+                        .actions
+                        .push(crate::AggregationAction::ContextUpdated(callback));
+                }
+            } else {
+                drop(state);
+                drop(callback);
+            }
+            return Ok(output);
         }
         if let Some(outcome) = native_outcome {
             if state.ended {
@@ -1302,7 +1315,7 @@ impl LLMAssistantAggregator {
         data: &FrameData,
         progress: &pipecat_core::NativeToolCallProgress,
         output: &mut AggregationOutput,
-    ) -> Result<(), ProcessorError> {
+    ) -> Result<bool, ProcessorError> {
         let id = &progress.call().tool_call_id;
         if state
             .native_tools
@@ -1311,14 +1324,31 @@ impl LLMAssistantAggregator {
             .is_none_or(|entry| entry.terminal.is_some())
             || !state.pending.get(id).is_some_and(Option::is_some)
         {
-            return Ok(());
+            return Ok(false);
         }
         let FrameData::FunctionCallResult(result) = data else {
             return Err(ProcessorError::new(
                 "native tool progress requires a nonterminal result",
             ));
         };
-        self.result(state, result, None, Some(progress), output)
+        let context = self.context.lock()?;
+        let running = state
+            .pending
+            .get(id)
+            .and_then(Option::as_ref)
+            .expect("checked running native progress");
+        if !state
+            .native_tools
+            .check_progress(progress, running, context.lineage)?
+        {
+            return Ok(false);
+        }
+        drop(context);
+        // The assistant state guard keeps the cursor stable between this check
+        // and result admission. The helper rechecks the context lineage and only
+        // advances the cursor after appending the intermediate message.
+        self.result(state, result, None, Some(progress), output)?;
+        Ok(true)
     }
     fn cancel_callbacks(&self) -> Result<(), ProcessorError> {
         self.lock()?.callbacks_closed = true;
@@ -2467,6 +2497,24 @@ mod native_progress_consumer_tests {
             );
             self.receipt().await
         }
+        async fn update_with_context_updated(
+            &mut self,
+            sequence: u64,
+            value: Value,
+            callback: LocalAsyncCallback,
+        ) -> Frame {
+            assert_eq!(
+                self.progress
+                    .publish_progress_with_context_updated(
+                        LocalToolResult::new(value).with_run_llm(false),
+                        sequence,
+                        Some(callback),
+                    )
+                    .unwrap(),
+                ToolOutcomeAdmission::Admitted
+            );
+            self.receipt().await
+        }
         async fn terminal(&mut self, cancelled: bool) -> Frame {
             let publisher = self.outcome.take().unwrap();
             let receipt = if cancelled {
@@ -2795,6 +2843,137 @@ mod native_progress_consumer_tests {
         );
         assert_eq!(
             alias.take_native_tool_context_updated(&outcome).unwrap(),
+            Some(callback)
+        );
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_progress_context_updated_transfers_once_without_finishing_call() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let called = Arc::new(AtomicUsize::new(0));
+        let callback = LocalAsyncCallback::new({
+            let context = context.clone();
+            let called = called.clone();
+            move || {
+                let context = context.clone();
+                let called = called.clone();
+                async move {
+                    let history = context.snapshot_rich()?;
+                    assert!(matches!(&history.messages.last().unwrap().content,
+                        MessageContent::Text(text) if text.contains("halfway")));
+                    called.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        });
+        let frame = source
+            .update_with_context_updated(1, json!({"progress":"halfway"}), callback)
+            .await;
+        let mut output = consume(&assistant, frame.clone());
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        let committed = context.snapshot_rich().unwrap();
+        let mut callbacks = output.actions.drain(..).filter_map(|action| match action {
+            AggregationAction::ContextUpdated(callback) => Some(callback),
+            _ => None,
+        });
+        let callback = callbacks.next().unwrap();
+        assert!(callbacks.next().is_none());
+        assert_eq!(called.load(Ordering::SeqCst), 0);
+        for replay in [frame.clone(), frame.duplicate()] {
+            let output = consume(&assistant, replay);
+            assert!(!output
+                .actions
+                .iter()
+                .any(|action| matches!(action, AggregationAction::ContextUpdated(_))));
+            assert_eq!(context.snapshot_rich().unwrap(), committed);
+        }
+        callback.call().await.unwrap();
+        assert_eq!(called.load(Ordering::SeqCst), 1);
+        consume(&assistant, source.terminal(false).await);
+        assert!(!assistant.has_function_calls_in_progress().unwrap());
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_progress_context_updated_stopped_consumer_releases_shared_callback() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let retained = Arc::new(());
+        let weak = Arc::downgrade(&retained);
+        let called = Arc::new(AtomicBool::new(false));
+        let callback = LocalAsyncCallback::new({
+            let called = called.clone();
+            move || {
+                let retained = retained.clone();
+                let called = called.clone();
+                async move {
+                    drop(retained);
+                    called.store(true, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        });
+        let frame = source
+            .update_with_context_updated(1, json!({"progress":"queued"}), callback)
+            .await;
+        let mut alias = frame.duplicate();
+        let progress = alias.native_tool_progress().unwrap().unwrap().clone();
+        assert!(weak.upgrade().is_some());
+        consume(&assistant, Frame::new(FrameData::Stop));
+        let before = context.snapshot_rich().unwrap();
+        let output = consume(&assistant, frame);
+        assert!(output.actions.is_empty());
+        assert!(!called.load(Ordering::SeqCst));
+        assert_eq!(context.snapshot_rich().unwrap(), before);
+        assert!(weak.upgrade().is_none());
+        assert!(alias
+            .take_native_tool_progress_context_updated(&progress)
+            .unwrap()
+            .is_none());
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_progress_context_updated_lineage_rejection_preserves_callback() {
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let callback = LocalAsyncCallback::new(|| async { Ok(()) });
+        let frame = source
+            .update_with_context_updated(1, json!({"progress":"not applied"}), callback.clone())
+            .await;
+        let mut alias = frame.duplicate();
+        let progress = alias.native_tool_progress().unwrap().unwrap().clone();
+        context
+            .replace_rich(context.snapshot_rich().unwrap())
+            .unwrap();
+        let before = context.snapshot_rich().unwrap();
+        let error = assistant
+            .process_frame(frame, Direction::Downstream)
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "native tool progress differs from its running identity or policy"
+        );
+        assert_eq!(context.snapshot_rich().unwrap(), before);
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        assert_eq!(
+            alias.native_tool_progress_context_updated().unwrap(),
+            Some(progress.id())
+        );
+        assert_eq!(
+            alias
+                .take_native_tool_progress_context_updated(&progress)
+                .unwrap(),
             Some(callback)
         );
         source.close().await;

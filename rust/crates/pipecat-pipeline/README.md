@@ -339,8 +339,23 @@ and task drop revoke the reporting endpoint before the single terminal receipt.
 An escaped reporter then rejects updates and cannot retain the owning runtime.
 Legacy handler APIs remain usable; invoking a reporting handler without an
 admitted endpoint fails before running user code. Native progress must be
-consumed explicitly before wire serialization. Reporting after handler return,
-intermediate context-updated hooks and realtime progress mapping remain separate work.
+consumed explicitly before wire serialization. Reporting after handler return
+and realtime progress mapping remain separate work.
+
+An intermediate update can carry a context callback through
+`reporter.report_with_context_updated(LocalToolCompletion::new(result)
+.with_context_updated(callback)).await?`. This remains a nonterminal report:
+the assistant first applies the update and commits its sequence, then schedules
+the hook through the same task owner used for final callbacks. Cloned or retired
+updates cannot run the hook again. Cancelling the tool revokes further reporting;
+it does not cancel a hook already scheduled by the assistant. End, Cancel and
+cleanup cancel those tasks. The callback is kept only in a shared frame slot
+sealed to that individual progress receipt, never in the progress capability or
+terminal journal. An unconsumed frame retains its captures; wire encoding rejects
+the slot even after its progress receipt has been taken. Failed context admission
+or inference routing does not acknowledge callback execution. Python parity here
+uses nonempty results: Python skips inserting falsy intermediate values but still
+schedules their hook, whereas the native consumer applies its existing value rules.
 
 Successful final results can use `LocalToolFunction::new_with_completion` and
 return `LocalToolCompletion::new(result).with_context_updated(callback)`, where
