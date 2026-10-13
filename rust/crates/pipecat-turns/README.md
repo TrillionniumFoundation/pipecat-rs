@@ -172,7 +172,7 @@ shares the existing last-512-frame-ID replay cache; failed validation leaves an
 ID retryable. This native bounded replay policy is deliberately stricter than
 Python's repeated-image append behavior. Ordinary images after End/Cancel/Stop
 are ignored. Raw-only assistant images remain explicitly unsupported. `UserImage` and
-append-only PDF `UserFileDetailed` support are restricted below.
+PDF `UserFileDetailed` support are restricted below.
 
 Image admission rejects enabled realtime mode and any signed-continuation
 tracker retained by this assistant instance, including a completed response
@@ -184,9 +184,10 @@ aggregator's active signed continuation or protect against concurrent external
 context edits. Signed-image bookmark production and continuation redesign are
 outside this scope.
 
-`UserFileDetailed` admits only an ordinary idle, append-only PDF upload:
-`source_type=Bytes`, exact `application/pdf`, `append_to_context=Some(true)`,
-`run_llm=Some(false)`, and `custom_options=None`. The file must start with exact
+`UserFileDetailed` admits only an ordinary idle PDF upload: `source_type=Bytes`,
+exact `application/pdf`, `append_to_context=Some(true)`, and `custom_options=None`.
+Explicit `run_llm=Some(false)` appends only; `Some(true)` or `None` also prepares
+one upstream context for inference. The file must start with exact
 `data:application/pdf;base64,` followed by nonempty canonical STANDARD base64.
 Decoded logical bytes must start with `%PDF-` and total at most 8,388,608 bytes.
 The encoded body is bounded to 11,184,812 bytes and the entire data URL to
@@ -203,25 +204,41 @@ Nonempty text is preserved verbatim before one rich `MessagePart::File` whose
 `data` is raw base64, not a data URL. Empty text is omitted; whitespace stays.
 Missing or empty filename normalizes to `Some("")` for Python/OpenAI parity.
 User ID, filename, and metadata are data, never message names or control authority.
-The real RTVI false-run `send-file` producer supports raw base64 and equivalent
-full data URLs; the consumer rejects a mismatched data-URL MIME header even
+The real RTVI `send-file` producer supports raw base64 and equivalent full data
+URLs, including omitted options (which request inference by default). The consumer
+rejects a mismatched data-URL MIME header even
 when the producer preserves it. The existing OpenAI request adapter reconstructs
 one exact PDF data URL and filename; this is wire parity, not a live-provider run.
 
-PDF admission consumes the frame in either direction with zero actions/events
-and appends via `append_rich`, preserving existing signed prefixes, native
-originals, rich extensions, tools, and their existing projection restrictions.
-It rejects active/LLM-active turns, buffered text/thought, thought-append state,
+PDF admission consumes the upload in either direction with no events. Explicit
+false uses `append_rich` with zero actions and no history projection, preserving
+signed prefixes, native originals, rich extensions, tools, and their existing
+projection restrictions. True/None converts only the new message, then uses
+`append_with_frame` to append and prepare exactly one non-speculative upstream
+context under one context lock. Construction or frame-projection failure leaves
+history unchanged and the same ID retryable. Native `InlineData` can prevent
+frame projection; rich extensions and direct tools can survive detailed framing
+but remain subject to later service-conversion rejection.
+
+Successful preparation commits history and records replay identity before emit;
+emit or provider failure does not roll back the PDF or create a retry debt. A
+same-ID replay, including false changed to true/None, never resends a context.
+A fatal emit error can still latch the existing session-failure state.
+This is bounded frame deduplication, not transport-command exactly-once delivery
+or proof of provider acceptance. Python OpenAI's later `remove_invalid_file_message`
+error cleanup is a separate, unimplemented provider-specific behavior.
+
+Every PDF run mode rejects active/LLM-active turns, buffered text/thought, thought-append state,
 user/bot speech, pending playback/tools, owed/awaited inference, enabled realtime,
 and any local signed-history tracker (including retained completed ownership).
 Private continuation/eager/speculation/realtime/tool carriers remain rejected;
 metadata never substitutes for that authority. The serialized-writer assumption
 for image admission applies here too. Validation precedes the shared 512-ID
-replay lookup; only successful append records the ID. Invalid input leaves
-history and the ID retryable. Ordinary frames after End/Cancel/Stop are ignored,
-with the same private-carrier validation order as image ingress. Legacy UserFile,
-URLs, other MIME types, true/None run, false/None append, custom options and busy
-file uploads remain unsupported. No changes to image admission are implied.
+replay lookup; only a successful append (and frame preparation when requested)
+records the ID. Ordinary frames after End/Cancel/Stop are ignored, with the same
+private-carrier validation order as image ingress. Legacy UserFile, URLs, other
+MIME types, false/None append, custom options and busy file uploads remain
+unsupported. No changes to image admission are implied.
 
 `UserImage` has a separate encoded upload path: `request=None` and
 `append_to_context=Some(true)` are required. Its `image.image` bytes and

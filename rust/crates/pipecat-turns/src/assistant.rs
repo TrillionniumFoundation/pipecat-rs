@@ -452,10 +452,7 @@ impl LLMAssistantAggregator {
             frame
                 .require_no_native_llm_continuation()
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
-            if file.append_to_context != Some(true)
-                || file.run_llm != Some(false)
-                || file.custom_options.is_some()
-            {
+            if file.append_to_context != Some(true) || file.custom_options.is_some() {
                 return Err(ProcessorError::new(
                     "raw image/file context conversion is not supported; submit encoded rich context messages",
                 ));
@@ -487,8 +484,17 @@ impl LLMAssistantAggregator {
             if state.seen.contains(frame.id) {
                 return Ok(output);
             }
-            // Do not project or rebuild unrelated existing context history.
-            self.context.append_rich(message)?;
+            if file.run_llm == Some(false) {
+                // Append-only uploads do not project unrelated existing history.
+                self.context.append_rich(message)?;
+            } else {
+                // Prepare one context atomically, as for an idle user image.
+                // Failed conversion/projection leaves history and the ID retryable.
+                let message = pipecat_services::frame_context::message(&message)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+                let context = self.context.append_with_frame(message)?;
+                output.context_frame(context, Direction::Upstream);
+            }
             state.seen.insert(frame.id);
             return Ok(output);
         }

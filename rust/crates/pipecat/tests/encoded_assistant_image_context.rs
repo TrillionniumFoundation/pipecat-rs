@@ -705,7 +705,7 @@ async fn terminal_retyped_carriers_keep_existing_validation_order() {
 }
 
 #[tokio::test]
-async fn user_file_families_remain_explicitly_unsupported() {
+async fn legacy_and_nonappending_user_files_remain_explicitly_unsupported() {
     let file = FileRawFrame {
         file: "data:application/pdf;base64,JVBERg==".into(),
         source_type: FileSourceType::Bytes,
@@ -721,7 +721,7 @@ async fn user_file_families_remain_explicitly_unsupported() {
             file,
             user_id: "user".into(),
             text: "read".into(),
-            append_to_context: Some(true),
+            append_to_context: Some(false),
             custom_options: None,
             run_llm: Some(true),
         }),

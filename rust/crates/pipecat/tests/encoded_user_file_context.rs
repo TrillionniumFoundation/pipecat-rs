@@ -400,7 +400,7 @@ async fn invalid_encoding_header_signature_and_nonselected_flags_preserve_retry(
     }));
     for append in [None, Some(false), Some(true)] {
         for run in [None, Some(false), Some(true)] {
-            if append == Some(true) && run == Some(false) {
+            if append == Some(true) {
                 continue;
             }
             cases.push(edit_upload(|file| {
@@ -1049,5 +1049,718 @@ async fn failed_context_projection_leaves_plain_and_tool_inference_debt_blocking
         assert!(!pending.unwrap(), "debt survives without a pending tool");
         assert!(rejected.unwrap_err().message.contains("idle assistant"));
         assert_eq!(before.unwrap(), after.unwrap());
+    }
+}
+
+// Frozen PDF inference baselines. Only the earlier append/run rejection matrix changes.
+fn pdf_inference_upload(run: Option<bool>) -> Frame {
+    edit_upload(|file| file.run_llm = run)
+}
+
+fn pdf_inference_context(output: AggregationOutput) -> DetailedLlmContextFrame {
+    use pipecat::turns::AggregationAction;
+    assert!(output.events.is_empty());
+    assert_eq!(output.actions.len(), 1, "one prepared context action only");
+    let AggregationAction::Push(directed) = &output.actions[0] else {
+        panic!("expected a context push")
+    };
+    assert_eq!(directed.direction, Direction::Upstream);
+    let FrameData::LlmContextDetailed(context) = &directed.frame.data else {
+        panic!("expected a detailed context, not a forwarded upload")
+    };
+    assert!(!context.speculation);
+    context.clone()
+}
+
+#[tokio::test]
+async fn pdf_inference_baseline_idle_true_and_none_prepare_one_upstream_context() {
+    for run in [Some(true), None] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let result = consume(&assistant, pdf_inference_upload(run));
+        let rich = context.snapshot_rich();
+        let native = context.snapshot();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        // The frozen old implementation fails on Some(true), before reaching None.
+        let projected = pdf_inference_context(
+            result.expect("idle true/None detailed PDF must prepare one upstream context"),
+        );
+        assert_eq!(projected.context, expected_rich());
+        assert_eq!(rich.unwrap(), expected_rich());
+        assert_eq!(native.as_ref().unwrap(), &expected_native());
+        assert_eq!(
+            pipecat::services::frame_context::context(&projected.context).unwrap(),
+            expected_native()
+        );
+        assert_eq!(
+            request_body(
+                Provider::OpenAi,
+                &CompletionRequest::new("wire-fixture", native.unwrap())
+            )
+            .unwrap(),
+            expected_openai()
+        );
+    }
+}
+async fn pdf_inference_default_rtvi_pipeline(
+    context: SharedContext,
+) -> Result<(Vec<DirectedFrame>, WorkerReport), String> {
+    const WAIT: Duration = Duration::from_secs(5);
+    const MARKER: &str = "after-default-pdf";
+    let rtvi = RtviProcessor::new(RtviConfig::default()).map_err(|e| e.to_string())?;
+    let assistant = LLMAssistantAggregator::new(context, Default::default());
+    let mut worker = Pipeline::new(vec![Arc::new(rtvi), Arc::new(assistant)])
+        .start(PipelineConfig {
+            startup_timeout: WAIT,
+            shutdown_timeout: Duration::from_secs(3),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut frames = Vec::new();
+    let operation = async {
+        // The second command is a FIFO marker in the same real RTVI command loop.
+        // It permits a bounded old-failure run without waiting for a missing file/context.
+        for value in [
+            json!({
+                "label": "rtvi-ai", "id": "default-pdf", "type": "send-file",
+                "data": {
+                    "content": "read",
+                    "file": {"format": "application/pdf", "name": "document.pdf", "source": {"type": "bytes", "bytes": PDF_BASE64}}
+                }
+            }),
+            json!({
+                "label": "rtvi-ai", "id": MARKER, "type": "client-message",
+                "data": {"t": "test-fence", "d": null}
+            }),
+        ] {
+            tokio::time::timeout(
+                WAIT,
+                worker.sender().send(
+                    Frame::new(FrameData::InputTransportMessage(value)),
+                    Direction::Downstream,
+                ),
+            )
+            .await
+            .map_err(|_| "default upload send deadline".to_string())?
+            .map_err(|e| e.to_string())?;
+        }
+        tokio::time::timeout(WAIT, async {
+            while let Some(directed) = worker.recv().await {
+                let marked = matches!(&directed.frame.data, FrameData::RtviClientMessage(message)
+                    if message.msg_id == MARKER);
+                frames.push(directed);
+                if marked {
+                    return Ok(());
+                }
+            }
+            Err("pipeline closed before the RTVI FIFO marker".to_string())
+        })
+        .await
+        .map_err(|_| "default upload FIFO marker deadline".to_string())?
+    }
+    .await;
+    // End, drain and join before any behavioral assertion, even on an old failure.
+    let end = tokio::time::timeout(WAIT, worker.end()).await;
+    if !matches!(&end, Ok(Ok(()))) {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload end failed")).await;
+    }
+    let drain = tokio::time::timeout(WAIT, async {
+        while let Some(directed) = worker.recv().await {
+            frames.push(directed);
+        }
+    })
+    .await;
+    if drain.is_err() {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload drain failed")).await;
+    }
+    let join = tokio::time::timeout(WAIT, worker.join()).await;
+    if !matches!(&join, Ok(Ok(_))) {
+        let _ = tokio::time::timeout(WAIT, worker.cancel("default upload join failed")).await;
+        let _ = tokio::time::timeout(WAIT, worker.join()).await;
+    }
+    let report = join
+        .map_err(|_| "default upload join deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    end.map_err(|_| "default upload end deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    drain.map_err(|_| "default upload drain deadline".to_string())?;
+    operation?;
+    Ok((frames, report))
+}
+
+#[tokio::test]
+async fn pdf_inference_baseline_rtvi_default_emits_one_exact_openai_context() {
+    let context = SharedContext::default();
+    let (frames, report) = pdf_inference_default_rtvi_pipeline(context.clone())
+        .await
+        .expect("default RTVI PDF fixture failed after cleanup");
+    let contexts: Vec<_> = frames
+        .iter()
+        .filter(|directed| {
+            matches!(
+                directed.frame.data,
+                FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+            )
+        })
+        .collect();
+    assert_eq!(
+        contexts.len(),
+        1,
+        "one actual pipeline context; report={report:?}"
+    );
+    assert_eq!(contexts[0].direction, Direction::Upstream);
+    let FrameData::LlmContextDetailed(projected) = &contexts[0].frame.data else {
+        panic!("default PDF must emit a detailed context")
+    };
+    assert!(!projected.speculation);
+    assert_eq!(projected.context, expected_rich());
+    assert_eq!(context.snapshot_rich().unwrap(), expected_rich());
+    assert!(!frames.iter().any(|directed| matches!(
+        directed.frame.data,
+        FrameData::UserFile(_) | FrameData::UserFileDetailed(_) | FrameData::UserImage(_)
+    )));
+    for direction in [Direction::Downstream, Direction::Upstream] {
+        assert_eq!(
+            frames
+                .iter()
+                .filter(|directed| directed.direction == direction
+                    && matches!(directed.frame.data, FrameData::Interruption))
+                .count(),
+            1
+        );
+    }
+    assert_eq!(report.state, WorkerState::Ended);
+    assert!(report.errors.is_empty(), "{report:?}");
+    let native = pipecat::services::frame_context::context(&projected.context).unwrap();
+    assert_eq!(native, expected_native());
+    assert_eq!(native, context.snapshot().unwrap());
+    assert_eq!(
+        request_body(
+            Provider::OpenAi,
+            &CompletionRequest::new("wire-fixture", native)
+        )
+        .unwrap(),
+        expected_openai()
+    );
+}
+
+// Candidate controls. The two PDF inference baselines above remain frozen.
+fn pdf_inference_no_context(output: AggregationOutput) {
+    use pipecat::turns::AggregationAction;
+    assert!(output.events.is_empty());
+    assert_eq!(output.actions.len(), 1);
+    let AggregationAction::Push(directed) = &output.actions[0] else {
+        panic!("expected only the ordinary speaking-state frame")
+    };
+    assert!(matches!(directed.frame.data, FrameData::BotStoppedSpeaking));
+}
+
+fn pdf_inference_unprojectable_prefix() -> Message {
+    Message {
+        role: Role::User,
+        content: Some(Content::Parts(vec![ContentPart::InlineData {
+            mime_type: "application/pdf".into(),
+            data: "JVBERg==".into(),
+        }])),
+        name: None,
+        tool_call_id: None,
+        tool_calls: vec![],
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_construction_retry_replay_and_distinct_ids() {
+    for run in [Some(true), None] {
+        for direction in [Direction::Downstream, Direction::Upstream] {
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let frame = pdf_inference_upload(run);
+            let mut malformed = frame.clone();
+            if let FrameData::UserFileDetailed(file) = &mut malformed.data {
+                file.file.file = "data:application/pdf;base64,JVBERg==".into();
+            }
+            let rejected = assistant.process_at(malformed.clone(), direction, Duration::ZERO);
+            let after_rejection = context.snapshot_rich();
+            let first = assistant.process_at(frame.clone(), direction, Duration::ZERO);
+            let replay = assistant.process_at(frame.clone(), direction, Duration::ZERO);
+            let invalid_replay = assistant.process_at(malformed, direction, Duration::ZERO);
+            let after_replay = context.snapshot_rich();
+            let distinct = assistant.process_at(Frame::new(frame.data), direction, Duration::ZERO);
+            let final_snapshot = context.snapshot_rich();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            assert!(rejected.is_err());
+            assert!(after_rejection.unwrap().messages.is_empty());
+            assert_eq!(
+                pdf_inference_context(first.unwrap()).context,
+                expected_rich()
+            );
+            silent(replay.unwrap());
+            assert!(invalid_replay.is_err(), "validation still precedes replay");
+            assert_eq!(after_replay.unwrap(), expected_rich());
+            let mut expected = expected_rich();
+            expected.messages.push(expected.messages[0].clone());
+            assert_eq!(pdf_inference_context(distinct.unwrap()).context, expected);
+            assert_eq!(final_snapshot.unwrap(), expected);
+        }
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_projection_failure_is_atomic_and_same_id_recovers_after_repair() {
+    for run in [Some(true), None] {
+        let prefix = pdf_inference_unprojectable_prefix();
+        let context = SharedContext::new(Context::new(vec![prefix.clone()]));
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let frame = pdf_inference_upload(run);
+        let rejected = consume(&assistant, frame.clone());
+        let after_rejection = context.snapshot();
+        let projection_still_fails = context.frame_data();
+        let repaired = context.replace(Context::new(vec![Message::text(Role::User, "repaired")]));
+        let no_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+        let retried = consume(&assistant, frame.clone());
+        let after_retry = context.snapshot_rich();
+        let replay = consume(&assistant, frame);
+        let later_run = consume(&assistant, Frame::new(FrameData::LlmRun));
+        let no_later_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+        let final_snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        assert!(rejected.unwrap_err().message.contains("InlineData"));
+        assert_eq!(after_rejection.unwrap(), Context::new(vec![prefix]));
+        assert!(projection_still_fails.is_err());
+        repaired.unwrap();
+        pdf_inference_no_context(no_debt.unwrap());
+        let retried = pdf_inference_context(retried.unwrap());
+        let mut expected = expected_native();
+        expected
+            .messages
+            .insert(0, Message::text(Role::User, "repaired"));
+        assert_eq!(retried.context, after_retry.unwrap());
+        assert_eq!(
+            pipecat::services::frame_context::context(&retried.context).unwrap(),
+            expected
+        );
+        silent(replay.unwrap());
+        assert_eq!(
+            pdf_inference_context(later_run.unwrap()).context,
+            retried.context
+        );
+        pdf_inference_no_context(no_later_debt.unwrap());
+        assert_eq!(final_snapshot.unwrap(), retried.context);
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_failed_run_can_retry_false_but_accepted_false_cannot_be_rearmed() {
+    for run in [Some(true), None] {
+        for unprojectable in [true, false] {
+            let original = if unprojectable {
+                Context::new(vec![pdf_inference_unprojectable_prefix()])
+            } else {
+                Context::default()
+            };
+            let context = SharedContext::new(original.clone());
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let frame = pdf_inference_upload(run);
+            let rejected = unprojectable.then(|| consume(&assistant, frame.clone()));
+            let after_rejection = context.snapshot();
+            let mut append_only = frame.clone();
+            if let FrameData::UserFileDetailed(file) = &mut append_only.data {
+                file.run_llm = Some(false);
+            }
+            let recovered = consume(&assistant, append_only);
+            let rearmed = consume(&assistant, frame);
+            let after_rearm = context.snapshot();
+            let projection = context.frame_data();
+            let no_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            if let Some(rejected) = rejected {
+                assert!(rejected.unwrap_err().message.contains("InlineData"));
+            }
+            assert_eq!(after_rejection.unwrap(), original);
+            silent(recovered.unwrap());
+            silent(rearmed.unwrap());
+            let mut expected = original;
+            expected.messages.extend(expected_native().messages);
+            assert_eq!(after_rearm.unwrap(), expected);
+            assert_eq!(projection.is_err(), unprojectable);
+            pdf_inference_no_context(no_debt.unwrap());
+        }
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_completed_signed_prefix_keeps_exact_context() {
+    for run in [Some(true), None] {
+        let prefix = Message {
+            role: Role::Assistant,
+            content: Some(Content::Parts(vec![ContentPart::GeminiText {
+                text: "signed answer".into(),
+                thought: false,
+                signature: Some("opaque-signature".into()),
+                incomplete: false,
+            }])),
+            name: None,
+            tool_call_id: None,
+            tool_calls: vec![],
+        };
+        let context = SharedContext::new(Context::new(vec![prefix.clone()]));
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let before = context.snapshot_rich();
+        let accepted = consume(&assistant, pdf_inference_upload(run));
+        let after = context.snapshot_rich();
+        let native = context.snapshot();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        let mut expected = before.unwrap();
+        expected.messages.extend(expected_rich().messages);
+        assert_eq!(pdf_inference_context(accepted.unwrap()).context, expected);
+        assert_eq!(after.unwrap(), expected);
+        let mut expected_native = expected_native();
+        expected_native.messages.insert(0, prefix);
+        assert_eq!(native.unwrap(), expected_native);
+        assert_eq!(
+            pipecat::services::frame_context::context(&expected).unwrap(),
+            expected_native
+        );
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_prepares_rich_extensions_and_direct_tools_before_service_rejection() {
+    for run in [Some(true), None] {
+        for direct_tool in [false, true] {
+            let mut original = LlmContextData {
+                messages: vec![ContextMessage {
+                    role: ChatRole::User,
+                    content: MessageContent::Text("prior".into()),
+                    name: Some("prior name".into()),
+                    tool_call_id: None,
+                    tool_calls: vec![],
+                    extra: Default::default(),
+                }],
+                tools: ToolSet::NotGiven,
+                tool_choice: None,
+            };
+            if direct_tool {
+                original.tools = ToolSet::Direct(vec![DirectFunction {
+                    schema: ToolDefinition {
+                        name: "local".into(),
+                        description: "retain identity".into(),
+                        parameters: json!({}),
+                    },
+                    handler: LocalToolFunction::new(|_| async { Ok(json!(7)) }),
+                }]);
+                original.tool_choice = Some(ToolChoice::Required);
+            } else {
+                original.messages[0].extra =
+                    [("provider_extra".into(), json!({"exact": true}))].into();
+            }
+            let context = SharedContext::new_rich(original.clone());
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let frame = pdf_inference_upload(run);
+            let prepared = consume(&assistant, frame.clone());
+            let after = context.snapshot_rich();
+            let native = context.snapshot();
+            // No emit is attempted. Even an un-emitted prepared action is committed.
+            let replay = consume(&assistant, frame);
+            let after_replay = context.snapshot_rich();
+            let no_debt = consume(&assistant, Frame::new(FrameData::BotStoppedSpeaking));
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            let mut expected = original;
+            expected.messages.extend(expected_rich().messages);
+            let prepared = pdf_inference_context(prepared.unwrap());
+            assert_eq!(prepared.context, expected);
+            assert_eq!(after.unwrap(), expected);
+            let service_error =
+                pipecat::services::frame_context::context(&prepared.context).unwrap_err();
+            assert_eq!(native.unwrap_err().message, service_error.to_string());
+            silent(replay.unwrap());
+            assert_eq!(after_replay.unwrap(), expected);
+            pdf_inference_no_context(no_debt.unwrap());
+        }
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_true_and_none_keep_idle_realtime_authority_and_terminal_gates() {
+    for run in [Some(true), None] {
+        let mut awaited = Frame::new(FrameData::UserStoppedSpeaking);
+        awaited
+            .metadata
+            .insert("user_context_follows".into(), json!(true));
+        for prelude in [
+            Frame::new(FrameData::LlmResponseStart),
+            Frame::new(FrameData::UserStartedSpeaking),
+            Frame::new(FrameData::BotStartedSpeaking),
+            awaited,
+            Frame::new(FrameData::LlmThoughtText(TextFrame::llm("held thought"))),
+            Frame::new(FrameData::LlmThoughtStartDetailed(LlmThoughtStartFrame {
+                append_to_context: true,
+                llm: Some("test".into()),
+            })),
+            Frame::new(FrameData::FunctionCallInProgress(
+                FunctionCallInProgressFrame {
+                    function_name: "pending".into(),
+                    tool_call_id: "pending".into(),
+                    arguments: json!({}),
+                    cancel_on_interruption: false,
+                    group_id: None,
+                },
+            )),
+        ] {
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let setup = consume(&assistant, prelude);
+            let before = context.snapshot();
+            let rejected = consume(&assistant, pdf_inference_upload(run));
+            let after = context.snapshot();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            setup.unwrap();
+            assert!(rejected.unwrap_err().message.contains("idle assistant"));
+            assert_eq!(before.unwrap(), after.unwrap());
+        }
+        for mode in [RealtimeServiceMode::Enabled, RealtimeServiceMode::Auto] {
+            let pair = LLMContextAggregatorPair::with_realtime_mode(
+                Context::default(),
+                Default::default(),
+                Default::default(),
+                mode,
+            )
+            .unwrap();
+            let assistant = pair.assistant();
+            let announced = (mode == RealtimeServiceMode::Auto).then(|| {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::LlmServiceMetadata(LlmServiceMetadataFrame {
+                        base: ServiceMetadataFrame {
+                            service_name: "realtime-test".into(),
+                            user_turn_strategies: None,
+                        },
+                        is_realtime_service: true,
+                    })),
+                )
+            });
+            let rejected = consume(&assistant, pdf_inference_upload(run));
+            let after = pair.context().snapshot_rich();
+            let assistant_cleaned = assistant.cleanup().await;
+            let user_cleaned = pair.user().cleanup().await;
+            drop(assistant);
+            drop(pair);
+            assistant_cleaned.unwrap();
+            user_cleaned.unwrap();
+            if let Some(announced) = announced {
+                announced.unwrap();
+            }
+            assert!(rejected.unwrap_err().message.contains("realtime"));
+            assert!(after.unwrap().messages.is_empty());
+        }
+        // Private authority is checked before the successful-ID replay fast path.
+        let owner = SpeculationOwner::new();
+        let mut private = pdf_inference_upload(run);
+        private.set_native_speculation(owner.capability()).unwrap();
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut ordinary = pdf_inference_upload(run);
+        ordinary.id = private.id;
+        let accepted = consume(&assistant, ordinary);
+        let rejected = consume(&assistant, private);
+        let after = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        assert_eq!(
+            pdf_inference_context(accepted.unwrap()).context,
+            expected_rich()
+        );
+        assert!(rejected.is_err());
+        assert_eq!(after.unwrap(), expected_rich());
+        for terminal in [
+            Frame::end(),
+            Frame::cancel("test"),
+            Frame::new(FrameData::Stop),
+        ] {
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let ended = consume(&assistant, terminal);
+            let ignored = consume(&assistant, pdf_inference_upload(run));
+            let mut malformed = pdf_inference_upload(run);
+            if let FrameData::UserFileDetailed(file) = &mut malformed.data {
+                file.file.file.clear();
+            }
+            let invalid_ignored = consume(&assistant, malformed);
+            let after = context.snapshot_rich();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            ended.unwrap();
+            silent(ignored.unwrap());
+            silent(invalid_ignored.unwrap());
+            assert!(after.unwrap().messages.is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn pdf_inference_keeps_buffered_playback_signed_owner_and_inference_debt_gates() {
+    for run in [Some(true), None] {
+        // An active unsigned text response must neither flush nor append a PDF.
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let start = consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+        let text = consume(
+            &assistant,
+            Frame::new(FrameData::LlmText(TextFrame::llm("held"))),
+        );
+        let frame = pdf_inference_upload(run);
+        let rejected = consume(&assistant, frame.clone());
+        let before_end = context.snapshot_rich();
+        let end = consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+        let accepted = consume(&assistant, frame);
+        let after = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        start.unwrap();
+        silent(text.unwrap());
+        assert!(rejected.unwrap_err().message.contains("idle assistant"));
+        assert!(before_end.unwrap().messages.is_empty());
+        end.unwrap();
+        let projected = pdf_inference_context(accepted.unwrap());
+        assert_eq!(projected.context, after.unwrap());
+        assert_eq!(projected.context.messages.len(), 2);
+        assert_eq!(projected.context.messages[0].role, ChatRole::Assistant);
+        assert_eq!(
+            projected.context.messages[0].content,
+            MessageContent::Text("held".into())
+        );
+        assert_eq!(projected.context.messages[1], expected_rich().messages[0]);
+
+        for signed in [false, true] {
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(
+                context.clone(),
+                AssistantAggregatorConfig {
+                    text_mode: AssistantTextMode::Spoken,
+                },
+            );
+            let start = signed.then(|| {
+                consume(
+                    &assistant,
+                    signed_frame(
+                        FrameData::LlmResponseStart,
+                        NativeLlmContinuation::start(994171, LlmContinuationProvider::Gemini)
+                            .unwrap(),
+                    ),
+                )
+            });
+            let playback = assistant.begin_playback("held");
+            let text = signed.then(|| {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::LlmText(TextFrame::llm("signed answer"))),
+                )
+            });
+            let frame = pdf_inference_upload(run);
+            let active = consume(&assistant, frame.clone());
+            let end = signed.then(|| {
+                consume(
+                    &assistant,
+                    signed_frame(
+                        FrameData::LlmResponseEnd,
+                        NativeLlmContinuation::new(
+                            994171,
+                            LlmContinuationProvider::Gemini,
+                            vec![LlmContinuationBlock::GeminiText {
+                                text: "signed answer".into(),
+                                thought: false,
+                                signature: Some("opaque-signature".into()),
+                            }],
+                        )
+                        .unwrap(),
+                    ),
+                )
+            });
+            let before = context.snapshot();
+            let retained = consume(&assistant, frame);
+            let after = context.snapshot();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            if let Some(start) = start {
+                start.unwrap();
+            }
+            if let Some(end) = end {
+                end.unwrap();
+            }
+            if let Some(text) = text {
+                text.unwrap();
+            }
+            playback.unwrap();
+            let reason = if signed {
+                "signed continuation"
+            } else {
+                "idle assistant"
+            };
+            assert!(active.unwrap_err().message.contains(reason));
+            assert!(retained.unwrap_err().message.contains(reason));
+            assert_eq!(before.unwrap(), after.unwrap());
+        }
+        for tool_debt in [false, true] {
+            let context =
+                SharedContext::new(Context::new(vec![pdf_inference_unprojectable_prefix()]));
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let started = tool_debt.then(|| {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::FunctionCallInProgress(
+                        FunctionCallInProgressFrame {
+                            function_name: "owned".into(),
+                            tool_call_id: "owed".into(),
+                            arguments: json!({}),
+                            cancel_on_interruption: false,
+                            group_id: None,
+                        },
+                    )),
+                )
+            });
+            let scheduling = if tool_debt {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::FunctionCallCancel(FunctionCallCancelFrame {
+                        function_name: "owned".into(),
+                        tool_call_id: "owed".into(),
+                        run_llm: true,
+                    })),
+                )
+            } else {
+                consume(&assistant, Frame::new(FrameData::LlmRun))
+            };
+            let before = context.snapshot();
+            let rejected = consume(&assistant, pdf_inference_upload(run));
+            let after = context.snapshot();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            if let Some(started) = started {
+                started.unwrap();
+            }
+            assert!(scheduling.unwrap_err().message.contains("InlineData"));
+            assert!(rejected.unwrap_err().message.contains("idle assistant"));
+            assert_eq!(before.unwrap(), after.unwrap());
+        }
     }
 }
