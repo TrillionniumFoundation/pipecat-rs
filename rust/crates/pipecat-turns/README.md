@@ -184,10 +184,11 @@ aggregator's active signed continuation or protect against concurrent external
 context edits. Signed-image bookmark production and continuation redesign are
 outside this scope.
 
-`UserFileDetailed` admits only an ordinary idle PDF upload: `source_type=Bytes`,
+`UserFileDetailed` admits an ordinary idle PDF upload or the narrow false-run
+mid-turn case below: `source_type=Bytes`,
 exact `application/pdf`, `append_to_context=Some(true)`, and `custom_options=None`.
-Explicit `run_llm=Some(false)` appends only; `Some(true)` or `None` also prepares
-one upstream context for inference. The file must start with exact
+Explicit `run_llm=Some(false)` appends only; an idle `Some(true)` or `None`
+upload also prepares one upstream context for inference. The file must start with exact
 `data:application/pdf;base64,` followed by nonempty canonical STANDARD base64.
 Decoded logical bytes must start with `%PDF-` and total at most 8,388,608 bytes.
 The encoded body is bounded to 11,184,812 bytes and the entire data URL to
@@ -211,9 +212,17 @@ when the producer preserves it. The existing OpenAI request adapter reconstructs
 one exact PDF data URL and filename; this is wire parity, not a live-provider run.
 
 PDF admission consumes the upload in either direction with no events. Explicit
-false uses `append_rich` with zero actions and no history projection, preserving
+false appends with zero actions and no history projection, preserving completed
 signed prefixes, native originals, rich extensions, tools, and their existing
-projection restrictions. True/None converts only the new message, then uses
+projection restrictions. During an ordinary unsigned active LLM response in
+`AssistantTextMode::Text`, it first commits the held assistant prefix and then
+the file under one context lock, clearing only the text buffer and its spacing
+flag. Empty buffers add no prefix; nonempty whitespace buffers add assistant
+`""` after trimming. No context, timestamp, stopped receipt or turn frame is
+emitted at upload. The real end retains the original turn ID, job generation,
+start timestamp, invocation cause and markers, and reports only the remaining
+suffix. No suffix still closes once with an empty stopped receipt and no
+context/timestamp/turn frames. True/None converts only the new message, then uses
 `append_with_frame` to append and prepare exactly one non-speculative upstream
 context under one context lock. Construction or frame-projection failure leaves
 history unchanged and the same ID retryable. Native `InlineData` can prevent
@@ -228,17 +237,26 @@ This is bounded frame deduplication, not transport-command exactly-once delivery
 or proof of provider acceptance. Python OpenAI's later `remove_invalid_file_message`
 error cleanup is a separate, unimplemented provider-specific behavior.
 
-Every PDF run mode rejects active/LLM-active turns, buffered text/thought, thought-append state,
-user/bot speech, pending playback/tools, owed/awaited inference, enabled realtime,
-and any local signed-history tracker (including retained completed ownership).
+Busy true/None PDF uploads still reject active/LLM-active turns and buffered text.
+The explicit-false exception requires both an active turn and an active LLM
+response in Text mode; Spoken and TTS-only turns remain excluded. Every PDF run
+mode rejects buffered thought, thought-append state, user/bot speech, pending
+playback/tools, owed/awaited inference, enabled realtime, and any local signed-
+history tracker (including retained completed ownership). Gemini and Anthropic
+native responses acquire that tracker even before any signature arrives.
 Private continuation/eager/speculation/realtime/tool carriers remain rejected;
 metadata never substitutes for that authority. The serialized-writer assumption
 for image admission applies here too. Validation precedes the shared 512-ID
 replay lookup; only a successful append (and frame preparation when requested)
-records the ID. Ordinary frames after End/Cancel/Stop are ignored, with the same
+records the ID. File construction finishes before any prefix mutation, so a
+malformed upload leaves held text and its ID retryable. A successful same-ID
+replay is revalidated but cannot flush a later suffix. This failure atomicity is
+Rust's ingress contract, not a claim about Python's validation behavior.
+Ordinary frames after End/Cancel/Stop are ignored, with the same
 private-carrier validation order as image ingress. Legacy UserFile, URLs, other
-MIME types, false/None append, custom options and busy file uploads remain
-unsupported. No changes to image admission are implied.
+MIME types, false/None append, custom options and busy uploads outside this
+explicit-false Text case remain unsupported. No changes to image admission are
+implied.
 
 `UserImage` has a separate encoded upload path: `request=None` and
 `append_to_context=Some(true)` are required. Its `image.image` bytes and
@@ -267,7 +285,7 @@ busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Ge
 service responses acquire a private continuation owner even before a signature
 arrives, so this does not admit their in-progress responses. False/None append,
 every non-null request and raw camera pixels remain unsupported. User files
-have only the separate idle, append-only PDF path described above.
+use the separate PDF path described above.
 No capture callback is invoked. Arbitrary `image/*`, raw-pixel conversion and
 requested/tool-image handling remain outside this bounded Python parity slice.
 

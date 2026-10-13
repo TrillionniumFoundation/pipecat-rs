@@ -544,71 +544,73 @@ async fn replay_validation_and_terminal_order_preserve_context_without_restart()
 }
 
 #[tokio::test]
-async fn busy_pdf_rejection_preserves_buffered_text_and_normal_completion() {
-    for buffered in [false, true] {
-        let context = SharedContext::default();
-        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
-        let start = consume(&assistant, Frame::new(FrameData::LlmResponseStart));
-        let text = buffered.then(|| {
-            consume(
-                &assistant,
-                Frame::new(FrameData::LlmText(TextFrame::llm("before"))),
-            )
-        });
-        let frame = pdf_upload();
-        let rejected = consume(&assistant, frame.clone());
-        let unchanged = context.snapshot_rich();
-        let suffix = buffered.then(|| {
-            consume(
-                &assistant,
-                Frame::new(FrameData::LlmText(TextFrame::llm(" after"))),
-            )
-        });
-        let end = consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
-        let retry = consume(&assistant, frame);
-        let after = context.snapshot_rich();
-        let cleaned = assistant.cleanup().await;
-        drop(assistant);
-        cleaned.unwrap();
-        start.unwrap();
-        if let Some(text) = text {
-            silent(text.unwrap());
-        }
-        assert!(rejected.unwrap_err().message.contains("idle assistant"));
-        assert!(
-            unchanged.unwrap().messages.is_empty(),
-            "must not flush the prefix"
-        );
-        if let Some(suffix) = suffix {
-            silent(suffix.unwrap());
-        }
-        assert_eq!(
-            end.unwrap().events,
-            vec![pipecat::turns::AggregationEvent::AssistantTurnStopped {
-                text: if buffered {
-                    "before after".into()
-                } else {
-                    String::new()
-                },
-                interrupted: false
-            }]
-        );
-        silent(retry.unwrap());
-        let mut expected = expected_rich();
-        if buffered {
-            expected.messages.insert(
-                0,
-                ContextMessage {
-                    role: ChatRole::Assistant,
-                    content: MessageContent::Text("before after".into()),
-                    name: None,
-                    tool_call_id: None,
-                    tool_calls: vec![],
-                    extra: Default::default(),
-                },
+async fn busy_pdf_true_and_none_rejection_preserves_buffered_text_and_normal_completion() {
+    for run in [Some(true), None] {
+        for buffered in [false, true] {
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            let start = consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+            let text = buffered.then(|| {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::LlmText(TextFrame::llm("before"))),
+                )
+            });
+            let frame = pdf_inference_upload(run);
+            let rejected = consume(&assistant, frame.clone());
+            let unchanged = context.snapshot_rich();
+            let suffix = buffered.then(|| {
+                consume(
+                    &assistant,
+                    Frame::new(FrameData::LlmText(TextFrame::llm(" after"))),
+                )
+            });
+            let end = consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+            let retry = consume(&assistant, frame);
+            let after = context.snapshot_rich();
+            let cleaned = assistant.cleanup().await;
+            drop(assistant);
+            cleaned.unwrap();
+            start.unwrap();
+            if let Some(text) = text {
+                silent(text.unwrap());
+            }
+            assert!(rejected.unwrap_err().message.contains("idle assistant"));
+            assert!(
+                unchanged.unwrap().messages.is_empty(),
+                "must not flush the prefix"
             );
+            if let Some(suffix) = suffix {
+                silent(suffix.unwrap());
+            }
+            assert_eq!(
+                end.unwrap().events,
+                vec![pipecat::turns::AggregationEvent::AssistantTurnStopped {
+                    text: if buffered {
+                        "before after".into()
+                    } else {
+                        String::new()
+                    },
+                    interrupted: false
+                }]
+            );
+            let mut expected = expected_rich();
+            if buffered {
+                expected.messages.insert(
+                    0,
+                    ContextMessage {
+                        role: ChatRole::Assistant,
+                        content: MessageContent::Text("before after".into()),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: vec![],
+                        extra: Default::default(),
+                    },
+                );
+            }
+            assert_eq!(pdf_inference_context(retry.unwrap()).context, expected);
+            assert_eq!(after.unwrap(), expected);
         }
-        assert_eq!(after.unwrap(), expected);
     }
 }
 
@@ -1762,5 +1764,933 @@ async fn pdf_inference_keeps_buffered_playback_signed_owner_and_inference_debt_g
             assert!(rejected.unwrap_err().message.contains("idle assistant"));
             assert_eq!(before.unwrap(), after.unwrap());
         }
+    }
+}
+
+// Busy-PDF baselines. Preserve these two tests and helpers byte-for-byte.
+use pipecat::turns::{
+    AggregationAction, AggregationEvent, AssistantStoppedReceiver, AssistantTurnStopped,
+};
+const BUSY_PDF_WAIT: Duration = Duration::from_secs(5);
+
+fn busy_pdf_message(role: ChatRole, content: MessageContent) -> ContextMessage {
+    ContextMessage {
+        role,
+        content,
+        name: None,
+        tool_call_id: None,
+        tool_calls: vec![],
+        extra: Default::default(),
+    }
+}
+fn busy_pdf_assistant_message(text: &str) -> ContextMessage {
+    busy_pdf_message(ChatRole::Assistant, MessageContent::Text(text.into()))
+}
+fn busy_pdf_file_message() -> ContextMessage {
+    expected_rich().messages.remove(0)
+}
+fn busy_pdf_consume(
+    assistant: &LLMAssistantAggregator,
+    frame: Frame,
+) -> Result<AggregationOutput, ProcessorError> {
+    assistant.process_at(frame, Direction::Downstream, Duration::ZERO)
+}
+fn busy_pdf_text(text: &str) -> Frame {
+    Frame::new(FrameData::LlmText(TextFrame::llm(text)))
+}
+fn busy_pdf_silent(output: &AggregationOutput) {
+    assert!(
+        output.actions.is_empty(),
+        "unexpected actions: {:?}",
+        output.actions
+    );
+    assert!(
+        output.events.is_empty(),
+        "unexpected events: {:?}",
+        output.events
+    );
+}
+fn busy_pdf_admit(
+    output: &Result<AggregationOutput, ProcessorError>,
+) -> Result<(), ProcessorError> {
+    if let Ok(output) = output {
+        for action in &output.actions {
+            if let AggregationAction::AssistantStopped(action) = action {
+                action.admit()?;
+            }
+        }
+    }
+    Ok(())
+}
+fn busy_pdf_records(receiver: &mut AssistantStoppedReceiver) -> Vec<Arc<AssistantTurnStopped>> {
+    let mut records = vec![];
+    while let Some(record) = receiver.try_recv() {
+        records.push(record.completion().clone());
+    }
+    records
+}
+fn busy_pdf_end_effects(output: &AggregationOutput, text: &str, record: &AssistantTurnStopped) {
+    assert_eq!(
+        output.events,
+        vec![AggregationEvent::AssistantTurnStopped {
+            text: text.into(),
+            interrupted: false,
+        }]
+    );
+    assert_eq!(record.text(), text);
+    assert_eq!(record.turn_id(), 1);
+    assert!(!record.interrupted());
+    let frames: Vec<_> = output
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            AggregationAction::Push(frame) => Some(frame),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        output
+            .actions
+            .iter()
+            .filter(|action| matches!(action, AggregationAction::AssistantStopped(_)))
+            .count(),
+        1
+    );
+    assert_eq!(frames.len(), if text.is_empty() { 0 } else { 4 });
+    if !text.is_empty() {
+        assert!(matches!(
+            frames[0].frame.data,
+            FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+        ));
+        assert_eq!(frames[0].direction, Direction::Downstream);
+        assert!(matches!(
+            frames[1].frame.data,
+            FrameData::LlmContextAssistantTimestamp { .. }
+        ));
+        assert_eq!(frames[1].direction, Direction::Downstream);
+        for (frame, direction) in frames[2..]
+            .iter()
+            .zip([Direction::Downstream, Direction::Upstream])
+        {
+            assert_eq!(frame.direction, direction);
+            let FrameData::LlmContextAssistantTurn(turn) = &frame.frame.data else {
+                panic!("missing final assistant turn")
+            };
+            assert_eq!(turn.text, text);
+            assert_eq!(turn.timestamp, record.started_at());
+        }
+    }
+}
+
+#[tokio::test]
+async fn busy_pdf_baseline_direct_flushes_prefix_and_stops_once_with_suffix() {
+    // The ordinary text-only case is a positive control against fixture failures.
+    for with_file in [false, true] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+        let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+        let prefix = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+        let accepted = with_file.then(|| busy_pdf_consume(&assistant, pdf_upload()));
+        let during = context.snapshot_rich();
+        let premature = busy_pdf_records(&mut receiver);
+        let during_stats = receiver.stats();
+        let suffix = busy_pdf_consume(&assistant, busy_pdf_text("B"));
+        let end = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+        let admitted = busy_pdf_admit(&end);
+        let duplicate_end = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+        let again = busy_pdf_admit(&duplicate_end);
+        let completed = busy_pdf_records(&mut receiver);
+        let snapshot = context.snapshot_rich();
+        let terminal = busy_pdf_consume(&assistant, Frame::end());
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        // No behavior assertion (in particular no expected PDF success) precedes cleanup.
+        cleaned.unwrap();
+        terminal.unwrap();
+        assert_eq!(
+            start.unwrap().events,
+            vec![AggregationEvent::AssistantTurnStarted]
+        );
+        busy_pdf_silent(&prefix.unwrap());
+        if let Some(accepted) = accepted {
+            busy_pdf_silent(&accepted.expect("ordinary active false-run PDF must be admitted"));
+        }
+        assert!(premature.is_empty());
+        assert_eq!(during_stats.reserved, 0);
+        assert_eq!(
+            during.unwrap().messages,
+            if with_file {
+                vec![busy_pdf_assistant_message("A"), busy_pdf_file_message()]
+            } else {
+                vec![]
+            }
+        );
+        busy_pdf_silent(&suffix.unwrap());
+        admitted.unwrap();
+        again.unwrap();
+        busy_pdf_silent(&duplicate_end.unwrap());
+        assert_eq!(completed.len(), 1);
+        let expected = if with_file { "B" } else { "AB" };
+        busy_pdf_end_effects(&end.unwrap(), expected, &completed[0]);
+        assert_eq!(
+            snapshot.unwrap().messages,
+            if with_file {
+                vec![
+                    busy_pdf_assistant_message("A"),
+                    busy_pdf_file_message(),
+                    busy_pdf_assistant_message("B"),
+                ]
+            } else {
+                vec![busy_pdf_assistant_message("AB")]
+            }
+        );
+    }
+}
+
+async fn busy_pdf_send(worker: &PipelineWorker, frame: Frame) -> Result<(), String> {
+    tokio::time::timeout(
+        BUSY_PDF_WAIT,
+        worker.sender().send(frame, Direction::Downstream),
+    )
+    .await
+    .map_err(|_| "send deadline".to_string())?
+    .map_err(|e| e.to_string())
+}
+async fn busy_pdf_drain_to(
+    worker: &mut PipelineWorker,
+    frames: &mut Vec<DirectedFrame>,
+    matches: impl Fn(&Frame) -> bool,
+) -> Result<(), String> {
+    tokio::time::timeout(BUSY_PDF_WAIT, async {
+        while let Some(directed) = worker.recv().await {
+            let done = matches(&directed.frame);
+            frames.push(directed);
+            if done {
+                return Ok(());
+            }
+        }
+        Err("pipeline closed before FIFO marker".to_string())
+    })
+    .await
+    .map_err(|_| "FIFO marker deadline".to_string())?
+}
+async fn busy_pdf_fence(
+    worker: &mut PipelineWorker,
+    frames: &mut Vec<DirectedFrame>,
+) -> Result<(), String> {
+    let frame = Frame::new(FrameData::Flush(FlushFrame {
+        origin: Some("busy-pdf-fixture".into()),
+        returning: false,
+    }));
+    let id = frame.id;
+    busy_pdf_send(worker, frame).await?;
+    busy_pdf_drain_to(worker, frames, |frame| {
+        frame.id == id && matches!(&frame.data, FrameData::Flush(flush) if flush.returning)
+    })
+    .await
+}
+struct BusyPdfPipelineOutcome {
+    frames: Vec<DirectedFrame>,
+    report: WorkerReport,
+    during: LlmContextData,
+    during_frames: usize,
+    premature: Vec<Arc<AssistantTurnStopped>>,
+    reserved_during: u64,
+    completed: Vec<Arc<AssistantTurnStopped>>,
+}
+async fn busy_pdf_rtvi_pipeline(
+    context: SharedContext,
+    busy: bool,
+) -> Result<BusyPdfPipelineOutcome, String> {
+    let rtvi = RtviProcessor::new(RtviConfig::default()).map_err(|e| e.to_string())?;
+    let assistant = Arc::new(LLMAssistantAggregator::new(
+        context.clone(),
+        Default::default(),
+    ));
+    let mut receiver = assistant
+        .subscribe_stopped(Default::default())
+        .map_err(|e| e.to_string())?;
+    let mut worker = Pipeline::new(vec![Arc::new(rtvi), assistant])
+        .start(PipelineConfig {
+            startup_timeout: BUSY_PDF_WAIT,
+            shutdown_timeout: Duration::from_secs(3),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut frames = vec![];
+    let operation = async {
+        if busy {
+            busy_pdf_send(&worker, Frame::new(FrameData::LlmResponseStart)).await?;
+            busy_pdf_send(&worker, busy_pdf_text("A")).await?;
+        }
+        busy_pdf_fence(&mut worker, &mut frames).await?;
+        for value in [
+            json!({"label": "rtvi-ai", "id": "busy-upload", "type": "send-file", "data": {
+                "content": "read", "file": {"format": "application/pdf", "name": "document.pdf", "source": {"type": "bytes", "bytes": PDF_BASE64}},
+                "options": {"run_immediately": false, "audio_response": true}
+            }}),
+            json!({"label": "rtvi-ai", "id": "after-busy-upload", "type": "client-message", "data": {"t": "test-fence", "d": null}}),
+        ] {
+            busy_pdf_send(&worker, Frame::new(FrameData::InputTransportMessage(value))).await?;
+        }
+        // This System command-loop FIFO marker proves the generated UserFileDetailed
+        // traversed the assistant, not that any context or turn completed.
+        // It is reached on the old rejection path too; no missing-success timeout.
+        busy_pdf_drain_to(&mut worker, &mut frames, |frame| matches!(&frame.data,
+            FrameData::RtviClientMessage(message) if message.msg_id == "after-busy-upload")).await?;
+        let during = context.snapshot_rich().map_err(|e| e.to_string())?;
+        let during_frames = frames.len();
+        let premature = busy_pdf_records(&mut receiver);
+        let reserved_during = receiver.stats().reserved;
+        if busy {
+            busy_pdf_send(&worker, busy_pdf_text("B")).await?;
+            busy_pdf_send(&worker, Frame::new(FrameData::LlmResponseEnd)).await?;
+            busy_pdf_send(&worker, Frame::new(FrameData::LlmResponseEnd)).await?;
+        }
+        busy_pdf_fence(&mut worker, &mut frames).await?;
+        Ok::<_, String>((during, during_frames, premature, reserved_during))
+    }.await;
+    // End, drain and join even when the old implementation rejects the PDF.
+    let end = tokio::time::timeout(BUSY_PDF_WAIT, worker.end()).await;
+    if !matches!(&end, Ok(Ok(()))) {
+        let _ = tokio::time::timeout(BUSY_PDF_WAIT, worker.cancel("busy upload End failed")).await;
+    }
+    let drain = tokio::time::timeout(BUSY_PDF_WAIT, async {
+        while let Some(frame) = worker.recv().await {
+            frames.push(frame);
+        }
+    })
+    .await;
+    if drain.is_err() {
+        let _ =
+            tokio::time::timeout(BUSY_PDF_WAIT, worker.cancel("busy upload drain failed")).await;
+    }
+    let join = tokio::time::timeout(BUSY_PDF_WAIT, worker.join()).await;
+    if !matches!(&join, Ok(Ok(_))) {
+        let _ = tokio::time::timeout(BUSY_PDF_WAIT, worker.cancel("busy upload join failed")).await;
+        let _ = tokio::time::timeout(BUSY_PDF_WAIT, worker.join()).await;
+    }
+    let report = join
+        .map_err(|_| "join deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    end.map_err(|_| "End deadline".to_string())?
+        .map_err(|e| e.to_string())?;
+    drain.map_err(|_| "drain deadline".to_string())?;
+    let (during, during_frames, premature, reserved_during) = operation?;
+    Ok(BusyPdfPipelineOutcome {
+        frames,
+        report,
+        during,
+        during_frames,
+        premature,
+        reserved_during,
+        completed: busy_pdf_records(&mut receiver),
+    })
+}
+fn busy_pdf_turn_effect(frame: &Frame) -> bool {
+    matches!(
+        frame.data,
+        FrameData::LlmContext(_)
+            | FrameData::LlmContextDetailed(_)
+            | FrameData::LlmContextAssistantTimestamp { .. }
+            | FrameData::LlmContextAssistantTurn(_)
+    )
+}
+
+#[tokio::test]
+async fn busy_pdf_baseline_rtvi_false_run_upload_flushes_without_premature_turn_effects() {
+    // Idle upload is the existing positive control in exactly the same real topology.
+    for busy in [false, true] {
+        let context = SharedContext::default();
+        let outcome = busy_pdf_rtvi_pipeline(context.clone(), busy)
+            .await
+            .expect("RTVI fixture after cleanup");
+        assert_eq!(outcome.report.state, WorkerState::Ended);
+        assert!(
+            outcome.report.errors.is_empty(),
+            "actual pipeline rejection: {:?}",
+            outcome.report
+        );
+        assert!(outcome.premature.is_empty());
+        assert_eq!(outcome.reserved_during, 0);
+        assert!(!outcome.frames[..outcome.during_frames]
+            .iter()
+            .any(|f| busy_pdf_turn_effect(&f.frame)));
+        assert!(!outcome.frames.iter().any(|f| matches!(
+            f.frame.data,
+            FrameData::Interruption | FrameData::UserFileDetailed(_) | FrameData::Error(_)
+        )));
+        assert_eq!(
+            outcome.during.messages,
+            if busy {
+                vec![busy_pdf_assistant_message("A"), busy_pdf_file_message()]
+            } else {
+                vec![busy_pdf_file_message()]
+            }
+        );
+        assert_eq!(
+            context.snapshot_rich().unwrap().messages,
+            if busy {
+                vec![
+                    busy_pdf_assistant_message("A"),
+                    busy_pdf_file_message(),
+                    busy_pdf_assistant_message("B"),
+                ]
+            } else {
+                vec![busy_pdf_file_message()]
+            }
+        );
+        assert_eq!(outcome.completed.len(), usize::from(busy));
+        let effects: Vec<_> = outcome
+            .frames
+            .iter()
+            .filter(|f| busy_pdf_turn_effect(&f.frame))
+            .collect();
+        assert_eq!(effects.len(), if busy { 4 } else { 0 });
+        if busy {
+            let record = &outcome.completed[0];
+            assert_eq!(record.text(), "B");
+            assert_eq!(record.turn_id(), 1);
+            assert!(!record.interrupted());
+            let contexts: Vec<_> = effects
+                .iter()
+                .filter(|f| {
+                    matches!(
+                        f.frame.data,
+                        FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_)
+                    )
+                })
+                .collect();
+            assert_eq!(contexts.len(), 1);
+            assert_eq!(contexts[0].direction, Direction::Downstream);
+            for direction in [Direction::Downstream, Direction::Upstream] {
+                let turns: Vec<_> = effects
+                    .iter()
+                    .filter_map(|f| match &f.frame.data {
+                        FrameData::LlmContextAssistantTurn(turn) if f.direction == direction => {
+                            Some(turn)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(turns.len(), 1);
+                assert_eq!(turns[0].text, "B");
+                assert_eq!(turns[0].timestamp, record.started_at());
+            }
+        }
+    }
+}
+
+// Candidate-only busy-PDF controls; the two appended baselines remain byte-frozen.
+fn busy_pdf_upload_with_text(text: &str) -> Frame {
+    edit_upload(|file| file.text = text.into())
+}
+fn busy_pdf_file_with_text(text: &str) -> ContextMessage {
+    let mut message = busy_pdf_file_message();
+    if let MessageContent::Parts(parts) = &mut message.content {
+        parts[0] = MessagePart::Text { text: text.into() };
+    }
+    message
+}
+
+async fn busy_pdf_finish_direct(
+    assistant: LLMAssistantAggregator,
+    receiver: &mut AssistantStoppedReceiver,
+) -> (
+    AggregationOutput,
+    Vec<Arc<AssistantTurnStopped>>,
+    LlmContextData,
+) {
+    let end = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+    let admitted = busy_pdf_admit(&end);
+    let duplicate = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+    let admitted_again = busy_pdf_admit(&duplicate);
+    let completed = busy_pdf_records(receiver);
+    let snapshot = assistant.context().snapshot_rich();
+    let terminal = busy_pdf_consume(&assistant, Frame::end());
+    let cleaned = assistant.cleanup().await;
+    drop(assistant);
+    cleaned.unwrap();
+    terminal.unwrap();
+    admitted.unwrap();
+    admitted_again.unwrap();
+    busy_pdf_silent(&duplicate.unwrap());
+    (end.unwrap(), completed, snapshot.unwrap())
+}
+
+#[tokio::test]
+async fn busy_pdf_empty_and_whitespace_prefixes_keep_source_presence_semantics() {
+    for prefix in ["", " \n\t ", " A "] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+        let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+        let held = busy_pdf_consume(&assistant, busy_pdf_text(prefix));
+        let file = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("inspect"));
+        let during = context.snapshot_rich();
+        let premature = busy_pdf_records(&mut receiver);
+        let (end, completed, final_context) =
+            busy_pdf_finish_direct(assistant, &mut receiver).await;
+        start.unwrap();
+        busy_pdf_silent(&held.unwrap());
+        busy_pdf_silent(&file.unwrap());
+        assert!(premature.is_empty());
+        let mut expected = vec![];
+        if !prefix.is_empty() {
+            expected.push(busy_pdf_assistant_message(prefix.trim()));
+        }
+        expected.push(busy_pdf_file_with_text("inspect"));
+        assert_eq!(during.unwrap().messages, expected);
+        assert_eq!(final_context.messages, expected);
+        assert_eq!(completed.len(), 1);
+        busy_pdf_end_effects(&end, "", &completed[0]);
+    }
+}
+
+#[tokio::test]
+async fn busy_pdf_multiple_distinct_uploads_commit_each_segment_in_order() {
+    let context = SharedContext::default();
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+    let mut outputs = vec![busy_pdf_consume(
+        &assistant,
+        Frame::new(FrameData::LlmResponseStart),
+    )];
+    let mut snapshots = vec![];
+    for (prefix, caption) in [(" A ", "first"), (" B ", "second")] {
+        outputs.push(busy_pdf_consume(&assistant, busy_pdf_text(prefix)));
+        outputs.push(busy_pdf_consume(
+            &assistant,
+            busy_pdf_upload_with_text(caption),
+        ));
+        snapshots.push(context.snapshot_rich());
+    }
+    outputs.push(busy_pdf_consume(&assistant, busy_pdf_text(" C ")));
+    let premature = busy_pdf_records(&mut receiver);
+    let (end, completed, snapshot) = busy_pdf_finish_direct(assistant, &mut receiver).await;
+    outputs.remove(0).unwrap();
+    for output in outputs {
+        busy_pdf_silent(&output.unwrap());
+    }
+    assert!(premature.is_empty());
+    assert_eq!(
+        snapshots.remove(0).unwrap().messages,
+        vec![
+            busy_pdf_assistant_message("A"),
+            busy_pdf_file_with_text("first")
+        ]
+    );
+    assert_eq!(
+        snapshots.remove(0).unwrap().messages,
+        vec![
+            busy_pdf_assistant_message("A"),
+            busy_pdf_file_with_text("first"),
+            busy_pdf_assistant_message("B"),
+            busy_pdf_file_with_text("second")
+        ]
+    );
+    assert_eq!(
+        snapshot.messages,
+        vec![
+            busy_pdf_assistant_message("A"),
+            busy_pdf_file_with_text("first"),
+            busy_pdf_assistant_message("B"),
+            busy_pdf_file_with_text("second"),
+            busy_pdf_assistant_message("C")
+        ]
+    );
+    assert_eq!(completed.len(), 1);
+    busy_pdf_end_effects(&end, "C", &completed[0]);
+}
+
+#[tokio::test]
+async fn busy_pdf_same_id_replay_cannot_flush_later_suffix_or_skip_validation() {
+    let context = SharedContext::default();
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+    let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+    let a = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+    let frame = busy_pdf_upload_with_text("inspect");
+    let first = busy_pdf_consume(&assistant, frame.clone());
+    let b = busy_pdf_consume(&assistant, busy_pdf_text("B"));
+    let before = context.snapshot_rich();
+    let replay = busy_pdf_consume(&assistant, frame.clone());
+    let mut malformed = frame;
+    if let FrameData::UserFileDetailed(file) = &mut malformed.data {
+        file.file.file.clear();
+    }
+    let invalid = busy_pdf_consume(&assistant, malformed);
+    let after = context.snapshot_rich();
+    let c = busy_pdf_consume(&assistant, busy_pdf_text("C"));
+    let (end, completed, snapshot) = busy_pdf_finish_direct(assistant, &mut receiver).await;
+    start.unwrap();
+    for result in [a, first, b, replay, c] {
+        busy_pdf_silent(&result.unwrap());
+    }
+    assert!(invalid
+        .unwrap_err()
+        .message
+        .contains("exact PDF base64 data URL header"));
+    assert_eq!(before.unwrap(), after.unwrap());
+    assert_eq!(
+        snapshot.messages,
+        vec![
+            busy_pdf_assistant_message("A"),
+            busy_pdf_file_with_text("inspect"),
+            busy_pdf_assistant_message("BC")
+        ]
+    );
+    assert_eq!(completed.len(), 1);
+    busy_pdf_end_effects(&end, "BC", &completed[0]);
+}
+
+#[tokio::test]
+async fn busy_pdf_invalid_file_preserves_prefix_and_allows_repaired_same_id() {
+    for invalid_kind in ["empty", "header", "noncanonical"] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+        let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+        let a = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+        let repaired = busy_pdf_upload_with_text("inspect");
+        let mut malformed = repaired.clone();
+        if let FrameData::UserFileDetailed(file) = &mut malformed.data {
+            match invalid_kind {
+                "empty" => file.file.file.clear(),
+                "header" => {
+                    file.file.file = format!("data:application/octet-stream;base64,{PDF_BASE64}")
+                }
+                _ => file.file.file.push(' '),
+            }
+        }
+        let rejected = busy_pdf_consume(&assistant, malformed);
+        let unchanged = context.snapshot_rich();
+        let b = busy_pdf_consume(&assistant, busy_pdf_text("B"));
+        let accepted = busy_pdf_consume(&assistant, repaired);
+        let after = context.snapshot_rich();
+        let c = busy_pdf_consume(&assistant, busy_pdf_text("C"));
+        let (end, completed, snapshot) = busy_pdf_finish_direct(assistant, &mut receiver).await;
+        start.unwrap();
+        for result in [a, b, accepted, c] {
+            busy_pdf_silent(&result.unwrap());
+        }
+        let error = rejected.unwrap_err().message;
+        let expected_error = if invalid_kind == "noncanonical" {
+            "canonical STANDARD base64"
+        } else {
+            "exact PDF base64 data URL header"
+        };
+        assert!(error.contains(expected_error), "{invalid_kind}: {error}");
+        assert!(unchanged.unwrap().messages.is_empty());
+        assert_eq!(
+            after.unwrap().messages,
+            vec![
+                busy_pdf_assistant_message("AB"),
+                busy_pdf_file_with_text("inspect")
+            ]
+        );
+        assert_eq!(
+            snapshot.messages,
+            vec![
+                busy_pdf_assistant_message("AB"),
+                busy_pdf_file_with_text("inspect"),
+                busy_pdf_assistant_message("C")
+            ]
+        );
+        assert_eq!(completed.len(), 1);
+        busy_pdf_end_effects(&end, "C", &completed[0]);
+    }
+}
+
+#[tokio::test]
+async fn busy_pdf_append_only_preserves_completed_signed_and_unprojectable_native_history() {
+    let signed = Message {
+        role: Role::Assistant,
+        content: Some(Content::Parts(vec![ContentPart::GeminiText {
+            text: "prior signed answer".into(),
+            thought: false,
+            signature: Some("opaque-signature".into()),
+            incomplete: false,
+        }])),
+        name: None,
+        tool_call_id: None,
+        tool_calls: vec![],
+    };
+    let inline = Message {
+        role: Role::User,
+        content: Some(Content::Parts(vec![ContentPart::InlineData {
+            mime_type: "application/pdf".into(),
+            data: "JVBERg==".into(),
+        }])),
+        name: None,
+        tool_call_id: None,
+        tool_calls: vec![],
+    };
+    let original = Context {
+        messages: vec![signed, inline],
+        tools: Some(vec![pipecat::services::ToolDefinition {
+            name: "existing".into(),
+            description: "retained".into(),
+            parameters: json!({"type":"object"}),
+        }]),
+        tool_choice: Some(pipecat::services::ToolChoice::Required),
+    };
+    let context = SharedContext::new(original.clone());
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+    let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+    let held = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+    let before = context.frame_data();
+    let accepted = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("read"));
+    let after = context.frame_data();
+    let native = context.snapshot();
+    // No suffix: final-end emission must not introduce an independent projection.
+    let end = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+    let admitted = busy_pdf_admit(&end);
+    let duplicate = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+    let admitted_again = busy_pdf_admit(&duplicate);
+    let completed = busy_pdf_records(&mut receiver);
+    let final_native = context.snapshot();
+    let final_rich = context.snapshot_rich();
+    let terminal = busy_pdf_consume(&assistant, Frame::end());
+    let cleaned = assistant.cleanup().await;
+    drop(assistant);
+    cleaned.unwrap();
+    terminal.unwrap();
+    admitted.unwrap();
+    admitted_again.unwrap();
+    busy_pdf_silent(&duplicate.unwrap());
+    start.unwrap();
+    busy_pdf_silent(&held.unwrap());
+    busy_pdf_silent(&accepted.unwrap());
+    assert!(before.unwrap_err().message.contains("InlineData"));
+    assert!(after.unwrap_err().message.contains("InlineData"));
+    assert!(final_rich.unwrap_err().message.contains("InlineData"));
+    let mut expected = original;
+    expected.messages.push(Message::text(Role::Assistant, "A"));
+    expected.messages.extend(expected_native().messages);
+    assert_eq!(native.unwrap(), expected);
+    assert_eq!(final_native.unwrap(), expected);
+    assert_eq!(completed.len(), 1);
+    busy_pdf_end_effects(&end.unwrap(), "", &completed[0]);
+}
+
+#[tokio::test]
+async fn busy_pdf_marker_projection_and_job_identity_survive_midturn_flush() {
+    let context = SharedContext::default();
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let correlation = assistant.bind_job_generation(73).unwrap();
+    let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+    let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+    let a = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+    let marker = busy_pdf_consume(
+        &assistant,
+        Frame::new(FrameData::LlmMarker(LlmMarkerFrame {
+            marker: "<DONE>".into(),
+            append_to_context_immediately: false,
+        })),
+    );
+    let file = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("inspect"));
+    let premature = busy_pdf_records(&mut receiver);
+    let b = busy_pdf_consume(&assistant, busy_pdf_text("B<DONE>"));
+    let (end, completed, snapshot) = busy_pdf_finish_direct(assistant, &mut receiver).await;
+    assert_eq!(
+        start.unwrap().events,
+        vec![AggregationEvent::AssistantTurnStarted]
+    );
+    for result in [a, marker, file, b] {
+        busy_pdf_silent(&result.unwrap());
+    }
+    assert!(premature.is_empty());
+    assert_eq!(
+        snapshot.messages,
+        vec![
+            busy_pdf_assistant_message("A <DONE>"),
+            busy_pdf_file_with_text("inspect"),
+            busy_pdf_assistant_message("B<DONE>")
+        ]
+    );
+    assert_eq!(completed.len(), 1);
+    assert!(correlation.matches(&completed[0]));
+    assert_eq!(completed[0].job_generation(), Some(73));
+    busy_pdf_end_effects(&end, "B", &completed[0]);
+}
+
+#[tokio::test]
+async fn busy_pdf_interruption_cancel_and_end_only_commit_unflushed_suffix() {
+    for terminal in [
+        Frame::interruption(),
+        Frame::cancel("fixture"),
+        Frame::end(),
+    ] {
+        let interrupted = !matches!(terminal.data, FrameData::End(_));
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let mut receiver = assistant.subscribe_stopped(Default::default()).unwrap();
+        let start = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseStart));
+        let a = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+        let file = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("inspect"));
+        let b = busy_pdf_consume(&assistant, busy_pdf_text("B"));
+        let stopped = busy_pdf_consume(&assistant, terminal);
+        let admitted = busy_pdf_admit(&stopped);
+        let repeated = busy_pdf_consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+        let again = busy_pdf_admit(&repeated);
+        let completed = busy_pdf_records(&mut receiver);
+        let snapshot = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        start.unwrap();
+        for result in [a, file, b] {
+            busy_pdf_silent(&result.unwrap());
+        }
+        admitted.unwrap();
+        again.unwrap();
+        busy_pdf_silent(&repeated.unwrap());
+        assert_eq!(
+            stopped.unwrap().events,
+            vec![AggregationEvent::AssistantTurnStopped {
+                text: "B".into(),
+                interrupted
+            }]
+        );
+        assert_eq!(
+            snapshot.unwrap().messages,
+            vec![
+                busy_pdf_assistant_message("A"),
+                busy_pdf_file_with_text("inspect"),
+                busy_pdf_assistant_message("B")
+            ]
+        );
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].text(), "B");
+        assert_eq!(completed[0].interrupted(), interrupted);
+        assert_eq!(completed[0].turn_id(), 1);
+    }
+}
+
+#[tokio::test]
+async fn busy_pdf_spoken_tts_only_thought_speech_tools_and_inference_debt_still_reject() {
+    for gate in [
+        "spoken",
+        "tts-only",
+        "thought",
+        "thought-append",
+        "user",
+        "bot",
+        "awaited",
+        "playback",
+        "tool",
+        "run",
+    ] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(
+            context.clone(),
+            AssistantAggregatorConfig {
+                text_mode: if matches!(gate, "spoken" | "playback") {
+                    AssistantTextMode::Spoken
+                } else {
+                    AssistantTextMode::Text
+                },
+            },
+        );
+        let mut setup = vec![];
+        setup.push(busy_pdf_consume(
+            &assistant,
+            Frame::new(if gate == "tts-only" {
+                FrameData::TtsStarted(Default::default())
+            } else {
+                FrameData::LlmResponseStart
+            }),
+        ));
+        let mut prefix = TextFrame::llm("A");
+        prefix.skip_tts = Some(true);
+        setup.push(busy_pdf_consume(
+            &assistant,
+            Frame::new(FrameData::LlmText(prefix)),
+        ));
+        let prelude = match gate {
+            "thought" => Some(Frame::new(FrameData::LlmThoughtText(TextFrame::llm(
+                "held thought",
+            )))),
+            "thought-append" => Some(Frame::new(FrameData::LlmThoughtStartDetailed(
+                LlmThoughtStartFrame {
+                    append_to_context: true,
+                    llm: Some("fixture".into()),
+                },
+            ))),
+            "user" => Some(Frame::new(FrameData::UserStartedSpeaking)),
+            "bot" => Some(Frame::new(FrameData::BotStartedSpeaking)),
+            "awaited" => {
+                let mut f = Frame::new(FrameData::UserStoppedSpeaking);
+                f.metadata
+                    .insert("user_context_follows".into(), json!(true));
+                Some(f)
+            }
+            "tool" => Some(Frame::new(FrameData::FunctionCallInProgress(
+                FunctionCallInProgressFrame {
+                    function_name: "pending".into(),
+                    tool_call_id: "pending".into(),
+                    arguments: json!({}),
+                    cancel_on_interruption: false,
+                    group_id: None,
+                },
+            ))),
+            "run" => Some(Frame::new(FrameData::LlmRun)),
+            _ => None,
+        };
+        if let Some(prelude) = prelude {
+            setup.push(busy_pdf_consume(&assistant, prelude));
+        }
+        let playback = (gate == "playback").then(|| assistant.begin_playback("pending"));
+        let before = context.snapshot_rich();
+        let rejected = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("inspect"));
+        let after = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        for result in setup {
+            result.unwrap();
+        }
+        if let Some(playback) = playback {
+            playback.unwrap();
+        }
+        assert!(
+            rejected.unwrap_err().message.contains("idle assistant"),
+            "{gate}"
+        );
+        assert_eq!(before.unwrap(), after.unwrap(), "{gate}");
+    }
+}
+
+#[tokio::test]
+async fn busy_pdf_unsigned_so_far_native_owner_still_rejects() {
+    for provider in [
+        LlmContinuationProvider::Gemini,
+        LlmContinuationProvider::Anthropic,
+    ] {
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        let frame = signed_frame(
+            FrameData::LlmResponseStart,
+            NativeLlmContinuation::start(773, provider).unwrap(),
+        );
+        let start = busy_pdf_consume(&assistant, frame);
+        let held = busy_pdf_consume(&assistant, busy_pdf_text("A"));
+        let before = context.snapshot_rich();
+        let rejected = busy_pdf_consume(&assistant, busy_pdf_upload_with_text("read"));
+        let after = context.snapshot_rich();
+        let cleaned = assistant.cleanup().await;
+        drop(assistant);
+        cleaned.unwrap();
+        start.unwrap();
+        held.unwrap();
+        assert!(rejected
+            .unwrap_err()
+            .message
+            .contains("signed continuation"));
+        assert_eq!(before.unwrap(), after.unwrap());
     }
 }

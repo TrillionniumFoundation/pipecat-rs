@@ -462,9 +462,14 @@ impl LLMAssistantAggregator {
                     "encoded user file context is unsupported during realtime or signed continuation",
                 ));
             }
-            if state.active
-                || state.llm_active
-                || !state.aggregation.text.is_empty()
+            // A false-run file may commit a prefix in the same narrow ordinary
+            // Text response as a user image. Every other state gate stays intact.
+            let busy_append_only = file.run_llm == Some(false)
+                && self.config.text_mode == AssistantTextMode::Text
+                && state.active
+                && state.llm_active;
+            if (!busy_append_only
+                && (state.active || state.llm_active || !state.aggregation.text.is_empty()))
                 || !state.thought.text.is_empty()
                 || state.thought_append
                 || state.user_speaking
@@ -485,8 +490,20 @@ impl LLMAssistantAggregator {
                 return Ok(output);
             }
             if file.run_llm == Some(false) {
-                // Append-only uploads do not project unrelated existing history.
-                self.context.append_rich(message)?;
+                // Commit the held prefix before the file under one lock without
+                // projecting history or ending the turn. Raw nonempty whitespace
+                // still contributes an empty assistant message after trimming.
+                let mut context = self.context.lock()?;
+                if busy_append_only && !state.aggregation.text.is_empty() {
+                    context.append_native(Message::text(
+                        Role::Assistant,
+                        state.aggregation.text.trim().to_owned(),
+                    ));
+                }
+                context.append_rich([message]);
+                if busy_append_only {
+                    state.aggregation.take();
+                }
             } else {
                 // Prepare one context atomically, as for an idle user image.
                 // Failed conversion/projection leaves history and the ID retryable.
