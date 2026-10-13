@@ -306,7 +306,7 @@ pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
 busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
 service responses acquire a private continuation owner even before a signature
 arrives, so this does not admit their in-progress responses. Requests with any
-function/tool/callback field present remain unsupported. The bounded RGB/L
+function/tool/callback field present remain unsupported. The bounded RGB/RGBX/L
 conversion below admits only those exact raw-pixel modes. User files use the separate
 PDF path described above.
 The assistant invokes no capture callback or tool settlement. Arbitrary
@@ -317,7 +317,8 @@ outside this bounded Python parity slice.
 
 For ordinary application/public-codec `AssistantImage`, either original field
 being absent or empty selects display bytes; the other original field is ignored.
-Exact display `format=Some("RGB")` or `Some("L")` uses bounded JPEG conversion.
+Exact display `format=Some("RGB")`, `Some("RGBX")` or `Some("L")` uses bounded
+JPEG conversion.
 Exact `image/png` or `image/jpeg` uses the existing encoded-byte validator: a
 matching PNG/JPEG signature and 1..=8,388,608 selected bytes are required. Encoded
 display bytes pass through unchanged; display dimensions are ignored and no
@@ -331,11 +332,11 @@ Pinned Python treats every case-sensitive `image/*` format as encoded pass-throu
 at this layer, including formats, empty data and signature mismatches the native
 path rejects. Native exact PNG/JPEG MIME, signature and selected-byte caps are an
 intentionally narrower admission policy. MIME aliases, case changes, parameters,
-RGBA and other raw modes are not added. There is no new provider image producer
+RGBA, LA and other raw modes are not added. There is no new provider image producer
 or live-provider capability claim.
 
-The shared RGB/L encoder below preserves the same dimensions, selected raw-buffer,
-required-prefix, output, JPEG settings and checked data-URL limits. Ignored
+The shared RGB/RGBX/L encoder below preserves the same dimensions, selected
+raw-buffer, required-prefix, output, JPEG settings and checked data-URL limits. Ignored
 originals are not prevalidated or included in those selected-pixel/output caps;
 this is not a total-frame, retained-storage or RSS budget. Encoding remains
 synchronous under the assistant state lock, with the same blocking/cancellation
@@ -363,23 +364,29 @@ production or live-provider acceptance. Existing UserImage/helper tests retain
 common encoder bounds and capped-writer coverage; no new dependency or worker
 lifecycle is introduced.
 
-### Bounded RGB/L user-image conversion
+### Bounded RGB/RGBX/L user-image conversion
 
-Only ordinary `UserImage` with exact `image.format=Some("RGB")` or `Some("L")` and
-`append_to_context=Some(true)` adds packed, top-down RGB24 or grayscale L8 encoding.
-Each L pixel is one byte; there is no palette, alpha or implicit mode conversion.
-No stride, row padding, channel swapping, BGR, RGBX, LA, bit-packed/16-bit modes or
-aliases are accepted. Width and height must each be positive and at most 65,500.
-Checked `width*height*3` for RGB or `width*height` for L
+Only ordinary `UserImage` with exact `image.format=Some("RGB")`, `Some("RGBX")` or
+`Some("L")` and `append_to_context=Some(true)` adds packed, top-down raw encoding.
+RGB uses three bytes per pixel; RGBX uses four and ignores the fourth byte.
+Each L pixel is one grayscale byte; there is no palette, alpha compositing or
+implicit mode conversion. No stride, row padding, channel swapping, BGR, RGBA,
+LA, bit-packed/16-bit modes or aliases are accepted. Width and height must each
+be positive and at most 65,500. Checked `width*height*3` for RGB,
+`width*height*4` for RGBX or `width*height` for L
 and the full input Vec logical length are independently capped at 8,388,608 bytes.
 Short input rejects; bounded surplus after the required pixel prefix is ignored,
 matching the pinned Python/Pillow raw-decoder shape. These are native resource
 policies, not a claim that Pillow enforces the same byte caps.
 
 The pinned `jpeg-encoder` 0.6.1 uses only its `std` feature and quality 75.
-RGB retains 4:2:0 (`F_2_2`); L uses its existing single-component `Luma` encoder
-with the same configured sampling setting. Progressive and optimized-Huffman
-modes remain explicitly disabled. No dependency or license change is required.
+RGB and RGBX retain 4:2:0 (`F_2_2`); L uses its existing single-component `Luma`
+encoder with the same configured sampling setting. RGBX uses the encoder's
+internal `ColorType::Rgba` four-byte layout, which reads only RGB and ignores X;
+that enum name does not admit public RGBA or implement alpha compositing.
+[Pinned Pillow 12.3.0 JPEG dispatch](https://github.com/python-pillow/Pillow/blob/12.3.0/src/PIL/JpegImagePlugin.py#L620-L627)
+accepts exact RGBX and rejects RGBA/LA. Progressive and optimized-Huffman modes
+remain explicitly disabled. No dependency or license change is required.
 No caller metadata, ICC/EXIF, resizing, user-selected quality or provider I/O is
 added.
 A fallible writer checks the independent 8 MiB encoded-output logical limit
@@ -397,8 +404,9 @@ are not caller Vec capacity, allocator behavior, queue/history retention,
 projection-clone or process-RSS bounds. Large inputs can stall the reducer and
 same-assistant operations. No off-thread worker lifecycle is introduced.
 The same 8 MiB input cap permits up to 8,388,608 L pixels, roughly three times
-the RGB pixel count. Equal byte limits do not imply equal CPU work, latency or
-temporary allocation behavior; no realtime performance qualification is claimed.
+the RGB pixel count; RGBX is limited to 2,097,152 pixels. Equal byte limits do not
+imply equal CPU work, latency or temporary allocation behavior; no realtime
+performance qualification is claimed.
 
 Authority, private-carrier, terminal, passive, realtime/signed-owner and state
 admission still run before conversion. Passive append=None/false skips conversion
@@ -406,7 +414,7 @@ and consumes no replay ID. Explicit false-run remains context-only, including
 only the existing ordinary Text+LLM busy-prefix exception. True/None remains
 idle-only and uses the existing append-and-frame transaction. Conversion precedes
 prefix/history mutation and replay lookup; failure leaves held text, history and
-the ID retryable. Replayed RGB/L still pays validation/encoding cost before the
+the ID retryable. Replayed RGB/RGBX/L still pays validation/encoding cost before the
 successful-ID no-op. This native failure atomicity is stronger than Python's
 prefix-before-encoding order and is not claimed as exact failure-order parity.
 Encoded PNG/JPEG pass-through retains its existing admission behavior.
@@ -427,7 +435,15 @@ The `raw_luma_image_context` target additionally covers direct AssistantImage
 fallback and the real owned InputTransport L-to-UserImage path, with L8 JPEG
 dimensions, asymmetric grayscale samples, bounded tails, geometry, selection,
 replay and unchanged authority/state guards. Its 12/255 interior tolerance is
-fixture-specific. The original RGB tests and encoded PNG/JPEG paths are retained.
+fixture-specific. The `raw_rgbx_image_context` target uses an odd-width,
+non-square asymmetric 49x33 RGBX fixture through both public consumers, retaining
+normal End/drain/join before owned-input behavior assertions. Independent RGB24
+JPEG decoding checks dimensions, sequential coding and color interiors. Varying
+ignored X bytes and repacking the same pixels as native RGB must preserve exact
+native JPEG bytes; no equality with Pillow JPEG bytes is claimed. Controls retain
+required-prefix/full-buffer caps, bounded tails, geometry, original selection,
+atomic retry/replay and authority/state ordering. The original RGB/L tests,
+encoded PNG/JPEG paths and capped-writer unit tests are unchanged.
 
 For a plain association, content and policy come exclusively from the UserImage
 frame: `image.image`, `image.format`, `text`, `append_to_context` and `run_llm`.
@@ -438,7 +454,8 @@ contract; public fields or IDs do not confer capture ownership.
 
 The public `InputIngress::request_image` plus keyed `push_video_frame(InputImage)`
 path can produce this shape from application-supplied encoded PNG/JPEG bytes
-or packed RGB24 labeled exactly `RGB`, or packed grayscale L8 labeled exactly `L`.
+or packed RGB24 labeled exactly `RGB`, RGB plus an ignored byte labeled exactly
+`RGBX`, or packed grayscale L8 labeled exactly `L`.
 The source must already be registered and ready; the existing sampler and
 private-tag/Queued ledger checks remain in force. Input preserves the request
 association, strips its callback from the derived UserImage, and sets
@@ -806,7 +823,7 @@ instances closed by End, Stop, or Cancel are not restartable.
 - Explicit mute and the configurable native mute policies below are supported.
   Empty-turn recovery applies only to cascade mode; paired realtime activation
   disables it
-- Raw image modes other than bounded RGB/L and non-PDF files need an explicit
+- Raw image modes other than bounded RGB/RGBX/L and non-PDF files need an explicit
   encoder; encoded rich messages are supported. Full Python callback/event parity and
   provider-specific realtime speech-to-speech qualification
   remain outside this implementation

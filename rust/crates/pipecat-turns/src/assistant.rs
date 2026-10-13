@@ -382,11 +382,11 @@ impl LLMAssistantAggregator {
             }) || (!passive
                 && !matches!(
                     image.image.format.as_deref(),
-                    Some("image/png" | "image/jpeg" | "RGB" | "L")
+                    Some("image/png" | "image/jpeg" | "RGB" | "RGBX" | "L")
                 ))
             {
                 return Err(ProcessorError::new(
-                    "raw image/file context conversion requires exact RGB or L, or encoded PNG/JPEG, without tool/callback authority",
+                    "raw image/file context conversion requires exact RGB, RGBX or L, or encoded PNG/JPEG, without tool/callback authority",
                 ));
             }
             if self.realtime.enabled()? || state.signed_history.is_some() {
