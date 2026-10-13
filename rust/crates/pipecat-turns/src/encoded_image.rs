@@ -1,4 +1,4 @@
-//! Narrow unsigned encoded-image ingress plus bounded RGB UserImage encoding.
+//! Narrow unsigned encoded-image ingress plus bounded RGB image encoding.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pipecat_core::{
     AssistantImageRawFrame, ChatRole, ContextMessage, ImageRawFrame, MessageContent, MessagePart,
@@ -12,10 +12,31 @@ const MAX_ORIGINAL_BYTES: usize = 8 * 1024 * 1024;
 const MAX_DATA_URL_BYTES: usize = 4 * MAX_ORIGINAL_BYTES.div_ceil(3) + 23;
 
 pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, ProcessorError> {
-    let original = image.original_data.as_deref().ok_or_else(|| {
-        ProcessorError::new("assistant image requires encoded original_data; raw image context conversion is not supported")
-    })?;
-    let url = data_url(original, image.original_mime_type.as_deref(), true)?;
+    // Match Python truthiness, not a rescue after original validation fails.
+    // Unselected originals are ignored, including their storage/byte length.
+    let url = match (
+        image
+            .original_data
+            .as_deref()
+            .filter(|data| !data.is_empty()),
+        image
+            .original_mime_type
+            .as_deref()
+            .filter(|mime| !mime.is_empty()),
+    ) {
+        (Some(original), Some(mime)) => {
+            data_url(original, Some(mime), "assistant image", "original_data")?
+        }
+        _ => {
+            if image.image.image.format.as_deref() != Some("RGB") {
+                return Err(ProcessorError::new(
+                    "assistant image fallback requires exact RGB display format",
+                ));
+            }
+            let jpeg = rgb_jpeg(&image.image.image, "assistant image")?;
+            data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
+        }
+    };
     Ok(ContextMessage {
         role: ChatRole::Assistant,
         content: MessageContent::Parts(vec![MessagePart::Image { url, detail: None }]),
@@ -29,10 +50,15 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
 /// Flags, ownership and state admission are checked by the assistant first.
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
     let url = if image.image.format.as_deref() == Some("RGB") {
-        let jpeg = rgb_jpeg(&image.image)?;
-        data_url(&jpeg, Some("image/jpeg"), false)?
+        let jpeg = rgb_jpeg(&image.image, "user image")?;
+        data_url(&jpeg, Some("image/jpeg"), "user image", "image")?
     } else {
-        data_url(&image.image.image, image.image.format.as_deref(), false)?
+        data_url(
+            &image.image.image,
+            image.image.format.as_deref(),
+            "user image",
+            "image",
+        )?
     };
     let mut parts = Vec::with_capacity(2);
     if let Some(text) = image.text.as_ref().filter(|text| !text.is_empty()) {
@@ -52,15 +78,11 @@ pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, 
 fn data_url(
     original: &[u8],
     mime: Option<&str>,
-    assistant_original: bool,
+    owner: &'static str,
+    field: &'static str,
 ) -> Result<String, ProcessorError> {
-    // Preserve the existing AssistantImage diagnostics while naming UserImage's
-    // actual encoded field. These labels never contain caller-supplied text.
-    let (owner, field) = if assistant_original {
-        ("assistant image", "original_data")
-    } else {
-        ("user image", "image")
-    };
+    // Fixed call-site labels preserve encoded-original/UserImage diagnostics
+    // without mislabeling generated assistant JPEGs or copying caller metadata.
     if original.is_empty() || original.len() > MAX_ORIGINAL_BYTES {
         return Err(ProcessorError::new(format!(
             "{owner} {field} must contain 1..=8388608 bytes",
@@ -92,12 +114,13 @@ fn data_url(
 
 // RGB is packed top-down RGB24, without row padding. The full input length and
 // required prefix have independent caps; bounded surplus matches Image.frombytes.
-fn rgb_jpeg(image: &ImageRawFrame) -> Result<Vec<u8>, ProcessorError> {
+// Owner labels are fixed at the two call sites, never copied from frame metadata.
+fn rgb_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, ProcessorError> {
     let (width, height) = image.size;
     if width == 0 || height == 0 || width > 65_500 || height > 65_500 {
-        return Err(ProcessorError::new(
-            "user image RGB dimensions must be 1..=65500",
-        ));
+        return Err(ProcessorError::new(format!(
+            "{owner} RGB dimensions must be 1..=65500",
+        )));
     }
     let required = usize::try_from(width)
         .ok()
@@ -108,16 +131,16 @@ fn rgb_jpeg(image: &ImageRawFrame) -> Result<Vec<u8>, ProcessorError> {
         })
         .and_then(|pixels| pixels.checked_mul(3))
         .filter(|bytes| *bytes <= MAX_ORIGINAL_BYTES)
-        .ok_or_else(|| ProcessorError::new("user image RGB pixel bytes exceed 8388608"))?;
+        .ok_or_else(|| ProcessorError::new(format!("{owner} RGB pixel bytes exceed 8388608")))?;
     if image.image.len() > MAX_ORIGINAL_BYTES {
-        return Err(ProcessorError::new(
-            "user image RGB buffer exceeds 8388608 bytes",
-        ));
+        return Err(ProcessorError::new(format!(
+            "{owner} RGB buffer exceeds 8388608 bytes",
+        )));
     }
     if image.image.len() < required {
-        return Err(ProcessorError::new(
-            "user image RGB buffer is shorter than its dimensions",
-        ));
+        return Err(ProcessorError::new(format!(
+            "{owner} RGB buffer is shorter than its dimensions",
+        )));
     }
     let mut output = CappedJpegWriter::default();
     let mut encoder = jpeg_encoder::Encoder::new(&mut output, 75);
@@ -134,7 +157,9 @@ fn rgb_jpeg(image: &ImageRawFrame) -> Result<Vec<u8>, ProcessorError> {
             jpeg_encoder::ColorType::Rgb,
         )
         .map_err(|_| {
-            ProcessorError::new("user image RGB JPEG encoding failed or exceeded its output budget")
+            ProcessorError::new(format!(
+                "{owner} RGB JPEG encoding failed or exceeded its output budget"
+            ))
         })?;
     Ok(output.bytes)
 }

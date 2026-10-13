@@ -199,7 +199,7 @@ async fn image_preserves_buffered_text_order_and_turn_events() {
 }
 
 #[tokio::test]
-async fn invalid_originals_leave_context_unchanged_and_same_id_retry_works() {
+async fn invalid_selected_images_leave_context_unchanged_and_same_id_retry_works() {
     let invalid = [
         (None, None),
         (None, Some("image/png")),
@@ -218,7 +218,19 @@ async fn invalid_originals_leave_context_unchanged_and_same_id_retry_works() {
     for (original, mime) in invalid {
         let context = SharedContext::default();
         let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
-        let bad = image_frame(original, mime);
+        let mut bad = image_frame(original, mime);
+        if let FrameData::AssistantImage(image) = &mut bad.data {
+            if image.original_data.as_ref().is_none_or(Vec::is_empty)
+                || image
+                    .original_mime_type
+                    .as_ref()
+                    .is_none_or(String::is_empty)
+            {
+                // These five selection rows now use RGB. Keep this atomicity
+                // control invalid with a genuinely truncated display buffer.
+                image.image.image.image.clear();
+            }
+        }
         let mut fixed = png_frame();
         fixed.id = bad.id;
         let rejected = consume(&assistant, bad);
@@ -228,7 +240,7 @@ async fn invalid_originals_leave_context_unchanged_and_same_id_retry_works() {
         let cleaned = assistant.cleanup().await;
         drop(assistant);
         cleaned.unwrap();
-        assert!(rejected.is_err(), "invalid original descriptor admitted");
+        assert!(rejected.is_err(), "invalid selected image admitted");
         assert!(unchanged.unwrap().messages.is_empty());
         assert_silent(retried.expect("validation failure poisoned frame ID"));
         let after = after.unwrap();
@@ -285,7 +297,11 @@ async fn terminal_state_consumes_images_without_mutating_context() {
         let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
         let ended = consume(&assistant, terminal);
         let image = consume(&assistant, png_frame());
-        let invalid_after_end = consume(&assistant, image_frame(None, None));
+        let mut malformed_rgb = image_frame(None, None);
+        if let FrameData::AssistantImage(image) = &mut malformed_rgb.data {
+            image.image.image.image.clear();
+        }
+        let invalid_after_end = consume(&assistant, malformed_rgb);
         let after = context.snapshot_rich();
         let cleaned = assistant.cleanup().await;
         drop(assistant);

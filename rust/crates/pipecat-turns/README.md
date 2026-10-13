@@ -146,7 +146,8 @@ native messages have the same core projection. A failed transform is atomic.
 
 `AssistantImage` has a narrow encoded-original context path for ordinary
 application frames, including frames decoded by the public `PythonJsonCodec`.
-Nonempty `original_data` with exact `image/png` or `image/jpeg` MIME and a matching
+When both `original_data` and `original_mime_type` are nonempty, originals win.
+Exact `image/png` or `image/jpeg` MIME with a matching
 PNG/JPEG signature is appended immediately as one assistant-role rich image
 data URL. Original encoded bytes are preserved; display RGB, size and format are
 not used. Signature checks are not complete image validation: a provider may
@@ -171,8 +172,8 @@ context before that text's normal end-of-response commit. Successful admission
 shares the existing last-512-frame-ID replay cache; failed validation leaves an
 ID retryable. This native bounded replay policy is deliberately stricter than
 Python's repeated-image append behavior. Ordinary images after End/Cancel/Stop
-are ignored. Raw-only assistant images remain explicitly unsupported. `UserImage` and
-PDF `UserFileDetailed` support are restricted below.
+are ignored. Exact-RGB fallback is restricted below. `UserImage` and PDF
+`UserFileDetailed` support have separate admission policies.
 
 Image admission rejects enabled realtime mode and any signed-continuation
 tracker retained by this assistant instance, including a completed response
@@ -309,6 +310,39 @@ The assistant invokes no capture callback or tool settlement. Arbitrary
 `image/*`, other raw-pixel modes and tool-associated image handling remain
 outside this bounded Python parity slice.
 
+### Bounded RGB assistant-image fallback
+
+For ordinary application/public-codec `AssistantImage`, either original field
+being absent or empty selects display pixels; the other original field is ignored.
+Only exact display `format=Some("RGB")` is accepted. Both nonempty originals keep
+the encoded-original path even if the display is invalid; invalid originals are
+never rescued by RGB. Whitespace MIME is nonempty and fails original validation.
+No encoded-display fallback, RGBA, mode aliases or new provider producer is added.
+
+The shared RGB encoder below preserves the same dimensions, selected raw-buffer,
+required-prefix, output, JPEG settings and checked data-URL limits. Ignored
+originals are not prevalidated or included in those selected-pixel/output caps;
+this is not a total-frame, retained-storage or RSS budget. Encoding remains
+synchronous under the assistant state lock, with the same blocking/cancellation
+residuals described below, not a realtime or camera-rate guarantee.
+
+Assistant guards remain before replay lookup, which remains before conversion.
+A malformed replay of a successfully admitted ID is silent after those guards;
+an unseen malformed frame fails without appending, flushing buffered text or
+reserving its ID. Same-ID repair remains possible. This differs deliberately
+from UserImage's validation-before-replay ordering. An accepted image appends
+before previously buffered text and creates no action, event or inference.
+Terminal/private-tool ordering, retained local signed/realtime rejection and
+completed historical signed-prefix preservation remain unchanged, under the
+same single serialized context-writer assumption.
+
+The `raw_rgb_assistant_image_context` facade target uses direct application and
+actual `PythonJsonCodec` frames, independent JPEG decoding/orientation samples,
+and exact Gemini model-role `inlineData` request construction. This is not
+Python/native JPEG byte equivalence, native provider image production or live
+provider acceptance. Existing UserImage/helper tests retain common encoder bounds
+and capped-writer coverage; no new dependency or worker lifecycle is introduced.
+
 ### Bounded RGB user-image conversion
 
 Only ordinary `UserImage` with exact `image.format=Some("RGB")` and
@@ -348,7 +382,9 @@ prefix/history mutation and replay lookup; failure leaves held text, history and
 the ID retryable. Replayed RGB still pays validation/encoding cost before the
 successful-ID no-op. This native failure atomicity is stronger than Python's
 prefix-before-encoding order and is not claimed as exact failure-order parity.
-Encoded PNG/JPEG pass-through and all `AssistantImage` behavior are unchanged.
+Encoded PNG/JPEG pass-through retains its existing admission behavior.
+`AssistantImage` uses the same encoder only under the distinct selection and
+replay rules above.
 
 The `raw_rgb_user_image_context` facade target exercises actual application RGB
 capture through InputBackend/InputTransport, the produced UserImage, assistant,
