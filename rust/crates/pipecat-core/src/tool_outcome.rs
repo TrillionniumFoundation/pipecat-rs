@@ -151,7 +151,10 @@ impl NativeToolCallBatch {
     }
 }
 
-fn encoded_bytes(value: &impl serde::Serialize, limit: usize) -> Result<usize, ProcessorError> {
+pub(crate) fn encoded_bytes(
+    value: &impl serde::Serialize,
+    limit: usize,
+) -> Result<usize, ProcessorError> {
     struct Counter {
         bytes: usize,
         limit: usize,

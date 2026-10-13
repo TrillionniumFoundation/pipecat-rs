@@ -3,6 +3,10 @@ use crate::ProcessorError;
 use serde_json::Value;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
+#[path = "local_tool_function/deferred.rs"]
+mod deferred;
+pub use deferred::LocalToolResponder;
+
 /// A successful local result and its optional model-continuation policy.
 /// An absent policy leaves continuation to the context consumer.
 #[derive(Debug, Clone, PartialEq)]
@@ -106,6 +110,7 @@ type ToolFuture =
 pub(super) struct ToolFunctionState {
     handler: Arc<dyn Fn(Value, Option<LocalToolReporter>) -> ToolFuture + Send + Sync>,
     requires_reporter: bool,
+    requires_deferred: bool,
     options: LocalToolOptions,
     cleanup: Option<LocalAsyncCallback>,
 }
@@ -161,6 +166,7 @@ impl LocalToolFunction {
                     })
                 }),
                 requires_reporter: false,
+                requires_deferred: false,
                 options: LocalToolOptions::default(),
                 cleanup: None,
             }),
@@ -181,6 +187,7 @@ impl LocalToolFunction {
                     Box::pin(async move { Some(future.await) })
                 }),
                 requires_reporter: false,
+                requires_deferred: false,
                 options: LocalToolOptions::default(),
                 cleanup: None,
             }),
@@ -207,6 +214,7 @@ impl LocalToolFunction {
                     Box::pin(async move { Some(future.await.map(LocalToolCompletion::new)) })
                 }),
                 requires_reporter: true,
+                requires_deferred: false,
                 options: LocalToolOptions {
                     cancel_on_interruption: false,
                     ..LocalToolOptions::default()
@@ -281,6 +289,11 @@ impl LocalToolFunction {
     pub fn requires_reporter(&self) -> bool {
         self.0.requires_reporter
     }
+    /// Whether a native owner must retain the dispatch and final-result wait
+    /// under one finite execution deadline.
+    pub fn requires_deferred(&self) -> bool {
+        self.0.requires_deferred
+    }
     /// Clone the teardown hook without executing it. The pipeline owner records
     /// its identity and awaits it even when this handler is later unregistered.
     pub fn cleanup_callback(&self) -> Option<LocalAsyncCallback> {
@@ -309,6 +322,7 @@ impl LocalToolFunction {
             Arc::new(ToolFunctionState {
                 handler: self.0.handler.clone(),
                 requires_reporter: self.0.requires_reporter,
+                requires_deferred: self.0.requires_deferred,
                 options,
                 cleanup,
             }),

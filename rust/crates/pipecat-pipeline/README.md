@@ -354,8 +354,33 @@ and task drop revoke the reporting endpoint before the single terminal receipt.
 An escaped reporter then rejects updates and cannot retain the owning runtime.
 Legacy handler APIs remain usable; invoking a reporting handler without an
 admitted endpoint fails before running user code. Native progress must be
-consumed explicitly before wire serialization. Reporting after handler return
-and realtime progress mapping remain separate work.
+consumed explicitly before wire serialization. Realtime progress mapping remains
+separate work.
+
+`LocalToolFunction::new_deferred` supplies a `LocalToolResponder` to a dispatcher
+that returns `Result<(), ProcessorError>`. A successful dispatcher return only
+acknowledges dispatch. The existing native task keeps its lease and concurrency
+slot while the application later calls `responder.report(result).await`,
+`report_with_context_updated(completion).await`, or the synchronous
+`responder.finish(Ok(completion))`. `finish(Err(error))` reports a failure;
+`responder.cancel()` supplies typed cancellation, distinct from a successful null.
+The final handoff is one bounded slot. Its success does not acknowledge native
+frame admission or shared-context application. An early final waits for dispatcher
+success; a dispatcher error or panic discards it. Failed size validation leaves
+the final slot available for a valid retry. Once final is claimed, further reports
+and finals reject. Concurrent or reentrant endpoint use can return a busy error.
+
+Deferred handlers require `cancel_on_interruption=false` and a finite effective
+timeout from handler options or the binding default. That deadline covers both
+dispatch and deferred waiting; progress never extends it. Ordinary interruption
+keeps the call active. Explicit cancellation, timeout, task drop and cleanup
+revoke the weak endpoint before the existing single terminal settlement. End
+drains the same task within the pipeline's shutdown budget. Application workers
+and remote effects remain application-owned; revocation cannot undo their work.
+Retaining a responder cannot retain the native call or runtime. The existing live
+reporter still closes when its handler returns. Python allows delayed callbacks
+but cancels its timeout task when the handler returns; this native deferred API
+deliberately retains a bounded deadline and reports rejected late results as errors.
 
 An intermediate update can carry a context callback through
 `reporter.report_with_context_updated(LocalToolCompletion::new(result)

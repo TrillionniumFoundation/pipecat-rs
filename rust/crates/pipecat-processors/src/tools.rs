@@ -248,6 +248,7 @@ impl ToolExecutor {
     }
     /// Register a schema handler's immutable call contract. Handler deadlines
     /// override this default; two absent deadlines mean no execution timeout.
+    /// Deferred dispatch requires a finite, representable effective deadline.
     /// Cleanup remains the owning pipeline's responsibility and is never invoked
     /// or recorded by this method.
     pub fn register_direct(
@@ -259,11 +260,16 @@ impl ToolExecutor {
         let name = name.into();
         let options = handler.options();
         let requires_reporter = handler.requires_reporter();
+        let timeout = options.timeout.or(default_timeout);
         if name.is_empty()
             || self.tools.contains_key(&name)
             || default_timeout.is_some_and(|timeout| timeout.is_zero())
             || options.timeout.is_some_and(|timeout| timeout.is_zero())
             || (requires_reporter && options.cancel_on_interruption)
+            || (handler.requires_deferred()
+                && timeout.is_none_or(|timeout| {
+                    tokio::time::Instant::now().checked_add(timeout).is_none()
+                }))
         {
             return Err(ProcessorError::new(
                 "invalid or duplicate direct tool registration",
@@ -281,7 +287,7 @@ impl ToolExecutor {
                             .map(|result| result.map_err(|error| error.to_string()))
                     })
                 }),
-                timeout: options.timeout.or(default_timeout),
+                timeout,
                 cancel_on_interruption: options.cancel_on_interruption,
                 requires_reporter,
             },
