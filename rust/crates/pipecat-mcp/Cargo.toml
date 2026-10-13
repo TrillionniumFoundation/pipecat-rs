@@ -27,6 +27,9 @@ sse-stream = "0.2.4"
 http = "1"
 bytes.workspace = true
 
+[dev-dependencies]
+pipecat-turns = { path = "../pipecat-turns" }
+
 [lints]
 workspace = true
 

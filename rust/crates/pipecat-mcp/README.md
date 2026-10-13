@@ -37,6 +37,50 @@ pipeline when using these handlers. Native core's schemas do not have Python's
 awaited pipeline teardown automatically. Dropping every client, tool snapshot,
 and handler signals asynchronous SDK cleanup, but explicit teardown is preferred.
 
+## Ordinary native LLM pipeline binding
+
+`tools.llm_stages(llm)` binds this immutable MCP snapshot to a concrete native
+`Arc<pipecat_services::LlmProcessor>`. Insert the returned stages together and in
+their original order between the user and assistant aggregators:
+
+```rust,no_run
+# use pipecat_core::FrameProcessor;
+# use pipecat_mcp::McpTools;
+# use pipecat_services::LlmProcessor;
+# use std::sync::Arc;
+# fn bind(tools: McpTools, llm: Arc<LlmProcessor>, user: Arc<dyn FrameProcessor>, assistant: Arc<dyn FrameProcessor>) -> Result<(), pipecat_core::ProcessorError> {
+let mut processors: Vec<Arc<dyn FrameProcessor>> = vec![user];
+processors.extend(tools.llm_stages(llm)?);
+processors.push(assistant);
+let pipeline = pipecat_core::Pipeline::new(processors);
+# let _ = pipeline;
+# Ok(())
+# }
+```
+
+The two projection stages accept ordinary detailed contexts and `LlmSetTools` in
+both directions. They project executable definitions only when their schema and
+callback identity match the bound MCP snapshot; same-name foreign callbacks,
+modified definitions, duplicates and excessive tool counts fail before inference.
+`tools.schema()` and snapshot clones preserve callback identity. A new `tools()`
+discovery creates a distinct snapshot and needs a new binding.
+
+The original native LLM performs provider inference, the existing MCP executor
+owns tool execution and cancellation, and the assistant aggregator schedules the
+upstream continuation with real results. Shared conversation schemas retain their
+handlers; only the forwarded ordinary frame is projected. Pipeline teardown awaits
+the executor's MCP cleanup. Ordinary pipelines without this explicit binding still
+reject executable schemas rather than discarding their handlers.
+
+This is a fixed MCP inventory, not general schema auto-registration or runtime
+handler replacement. Ordinary `Function` definitions may pass through for
+advertisement, but this executor executes only the bound MCP names; it does not
+register arbitrary application functions. Realtime sealed and speculative
+executable contexts are explicitly rejected when projection is needed: their capabilities are never
+stripped or resealed. Custom/grouped provider schemas retain the native LLM's
+unsupported behavior. The binding does not provide LLM-switcher propagation or
+successful live-provider qualification.
+
 ## Agent-worker registry
 
 ```rust,no_run

@@ -3903,6 +3903,7 @@ dependencies = [
  "pipecat-core",
  "pipecat-processors",
  "pipecat-services",
+ "pipecat-turns",
  "reqwest",
  "rmcp",
  "serde",

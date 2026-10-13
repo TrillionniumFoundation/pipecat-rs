@@ -2,11 +2,15 @@ use crate::{McpClient, McpError};
 use pipecat_agent_workers::{AgentError, ToolHandler, ToolOptions, ToolRegistry, ToolResult};
 use pipecat_core::{
     async_trait, DirectFunction, Direction, Frame, FrameData, FrameProcessor, LocalToolFunction,
-    ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolsSchema,
+    ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolSet, ToolsSchema,
 };
 use pipecat_processors::tools::{CancellableRegisteredTool, ToolExecutor};
 use serde_json::Value;
-use std::{fmt, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    sync::Arc,
+};
 
 /// A discovered immutable schema snapshot plus its session owner. Handlers
 /// remain callable until explicitly closed or every owner has been dropped.
@@ -14,6 +18,7 @@ use std::{fmt, sync::Arc};
 pub struct McpTools {
     client: McpClient,
     definitions: Vec<ToolDefinition>,
+    cached_schema: ToolsSchema,
 }
 impl fmt::Debug for McpTools {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -24,21 +29,10 @@ impl fmt::Debug for McpTools {
 }
 impl McpTools {
     pub(crate) fn new(client: McpClient, definitions: Vec<ToolDefinition>) -> Self {
-        Self {
-            client,
-            definitions,
-        }
-    }
-    pub fn definitions(&self) -> &[ToolDefinition] {
-        &self.definitions
-    }
-    /// Frame-context schemas carrying executable LocalToolFunction handlers.
-    pub fn schema(&self) -> ToolsSchema {
-        let standard_tools = self
-            .definitions
+        let standard_tools = definitions
             .iter()
             .map(|schema| {
-                let client = self.client.clone();
+                let client = client.clone();
                 let name = schema.name.clone();
                 StandardTool::Direct(DirectFunction {
                     schema: schema.clone(),
@@ -56,10 +50,40 @@ impl McpTools {
                 })
             })
             .collect();
-        ToolsSchema {
-            standard_tools,
-            custom_tools: None,
+        Self {
+            client,
+            definitions,
+            cached_schema: ToolsSchema {
+                standard_tools,
+                custom_tools: None,
+            },
         }
+    }
+    pub fn definitions(&self) -> &[ToolDefinition] {
+        &self.definitions
+    }
+    /// Executable schemas retain callback identity across clones of this snapshot.
+    pub fn schema(&self) -> ToolsSchema {
+        self.cached_schema.clone()
+    }
+    /// A fixed ordinary native-LLM binding: input projection, native inference,
+    /// owned MCP execution, and upstream projection. Keep every stage in this order.
+    /// This snapshot cannot bind callbacks from another discovery or resource.
+    /// Realtime sealed and speculative executable contexts are unsupported.
+    pub fn llm_stages(
+        &self,
+        llm: Arc<pipecat_services::LlmProcessor>,
+    ) -> Result<Vec<Arc<dyn FrameProcessor>>, ProcessorError> {
+        let projection = Arc::new(McpContextProjection::new(
+            &self.cached_schema,
+            self.client.inner.config.limits.max_tools,
+        ));
+        Ok(vec![
+            Arc::new(projection.as_ref().clone()),
+            llm,
+            Arc::new(self.executor()?),
+            projection,
+        ])
     }
     /// Install native agent-worker callbacks atomically; duplicate registration
     /// leaves the caller's registry unchanged. Add the returned lifecycle
@@ -190,5 +214,140 @@ impl FrameProcessor for McpToolExecutor {
         let result = self.executor.cleanup().await;
         self.lifecycle.cleanup().await?;
         result
+    }
+}
+
+/// Both bookends share only immutable bindings. Cleanup belongs to the executor.
+#[derive(Clone)]
+struct McpContextProjection {
+    bindings: Arc<BTreeMap<String, DirectFunction>>,
+    max_tools: usize,
+}
+impl McpContextProjection {
+    fn new(schema: &ToolsSchema, max_tools: usize) -> Self {
+        let bindings = schema
+            .standard_tools
+            .iter()
+            .filter_map(|tool| {
+                if let StandardTool::Direct(function) = tool {
+                    Some((function.schema.name.clone(), function.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Self {
+            bindings: Arc::new(bindings),
+            max_tools,
+        }
+    }
+    fn bound_definition(
+        &self,
+        function: &DirectFunction,
+    ) -> Result<ToolDefinition, ProcessorError> {
+        if self.bindings.get(&function.schema.name) != Some(function) {
+            return Err(ProcessorError::new(
+                "executable MCP tool does not match its bound snapshot",
+            ));
+        }
+        Ok(function.schema.clone())
+    }
+    fn project(&self, tools: &ToolSet) -> Result<Option<ToolSet>, ProcessorError> {
+        let mut names = BTreeSet::new();
+        let projected = match tools {
+            ToolSet::Direct(functions) => {
+                if functions.len() > self.max_tools {
+                    return Err(ProcessorError::new("bound MCP tool count exceeded"));
+                }
+                let definitions = functions
+                    .iter()
+                    .map(|function| {
+                        if !names.insert(function.schema.name.clone()) {
+                            return Err(ProcessorError::new("duplicate bound MCP tool name"));
+                        }
+                        self.bound_definition(function)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                ToolSet::Functions(definitions)
+            }
+            ToolSet::Schema(schema) => {
+                // Leave provider-specific schemas to the native service's existing
+                // explicit Unsupported path, without rewriting executable state.
+                if schema
+                    .custom_tools
+                    .as_ref()
+                    .is_some_and(|map| map.values().any(|tools| !tools.is_empty()))
+                    || !schema
+                        .standard_tools
+                        .iter()
+                        .any(|tool| matches!(tool, StandardTool::Direct(_)))
+                {
+                    return Ok(None);
+                }
+                if schema.standard_tools.len() > self.max_tools {
+                    return Err(ProcessorError::new("bound MCP tool count exceeded"));
+                }
+                let standard_tools = schema
+                    .standard_tools
+                    .iter()
+                    .map(|tool| {
+                        let definition = match tool {
+                            StandardTool::Direct(function) => self.bound_definition(function)?,
+                            StandardTool::Function(definition) => definition.clone(),
+                        };
+                        if !names.insert(definition.name.clone()) {
+                            return Err(ProcessorError::new("duplicate bound MCP tool name"));
+                        }
+                        Ok(StandardTool::Function(definition))
+                    })
+                    .collect::<Result<Vec<_>, ProcessorError>>()?;
+                ToolSet::Schema(ToolsSchema {
+                    standard_tools,
+                    custom_tools: schema.custom_tools.clone(),
+                })
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(projected))
+    }
+    fn projection(&self, frame: &Frame) -> Result<Option<ToolSet>, ProcessorError> {
+        let tools = match &frame.data {
+            FrameData::LlmContextDetailed(context) => &context.context.tools,
+            FrameData::LlmSetTools(tools) => tools,
+            _ => return Ok(None),
+        };
+        let Some(projected) = self.project(tools)? else {
+            return Ok(None);
+        };
+        if frame.native_speculation().is_some()
+            || frame.native_realtime_context_cause()?.is_some()
+            || matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
+        {
+            return Err(ProcessorError::new(
+                "bound MCP executable schema cannot project sealed or speculative context",
+            ));
+        }
+        Ok(Some(projected))
+    }
+}
+#[async_trait]
+impl FrameProcessor for McpContextProjection {
+    fn name(&self) -> &str {
+        "McpContextProjection"
+    }
+    async fn process(
+        &self,
+        mut frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if let Some(projected) = self.projection(&frame)? {
+            match &mut frame.data {
+                FrameData::LlmContextDetailed(context) => context.context.tools = projected,
+                FrameData::LlmSetTools(tools) => *tools = projected,
+                _ => unreachable!("projection only accepts contexts and tool updates"),
+            }
+        }
+        ctx.push(frame, direction).await
     }
 }
