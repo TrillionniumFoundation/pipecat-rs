@@ -150,9 +150,38 @@ custom-start combinations (including MinWords), eager/realtime aggregation,
 mixed or deferred stop lists, model-gated
 configurations and no-VAD fallback retain their prior paths. This is not a
 blank-transcript parity claim: Python's whitespace-only first-turn behavior
-and its empty-interim finality handling differ and remain separate decisions.
+remains a separate decision; blank-interim support has its own boundary below.
 The deterministic `speech_timeout_empty_final` target covers the bounded path
 and its guards; Python af9f9da9 behavior is source-derived, not a runtime oracle.
+
+### Blank interim before VAD stop
+
+An admitted empty or whitespace-only interim revokes earlier finalization only
+for an active scalar SpeechTimeout turn with existing accepted text, while VAD
+is still speaking and no VAD/external stop is pending. This path requires
+`wait_for_transcript=true`, no model completion requirement, no custom start or
+stop lists, and no pending inference request. Legacy and Detailed interim frame
+types take precedence over their incidental `finalized` field. With final
+`hello` at 10 ms, a blank interim at 15 ms and VAD stop at 20 ms, the same
+100 ms floor/800 ms P99/200 ms silence example waits until 620 ms rather than
+committing at 120 ms. A later final may still release the STT wait.
+
+Only the finality flag changes. This control does not start a turn, add text,
+refresh the watchdog, set interim-pending state, or write a deadline. Adopted
+external stops keep their existing contract. The user aggregator keeps its
+existing locked admission, interim preview and original-frame retention;
+Frame.id replay, mute, terminal and private/source checks still precede this
+effect. Interim frames do not use the final-transcript `transcript_id` deque.
+
+Inactive/no-text/no-VAD, transcript-optional/realtime, custom/model and eager
+configurations retain their existing paths. Blank interims after VAD stop are
+unchanged. The existing nonempty post-stop interim path still reopens the old
+STT safety deadline; Python does not necessarily recreate that canceled wait,
+so this adjacent native behavior is not a Python-parity claim. Native explicit
+SpeechTimeout already invalidates blank interims and needs no change. The
+`speech_timeout_empty_interim` target exercises the public controller and real
+user aggregator with caller-owned clocks; Python af9f9da9 remains a source
+comparison, not an executed oracle.
 
 ## Rich frame and context contracts
 

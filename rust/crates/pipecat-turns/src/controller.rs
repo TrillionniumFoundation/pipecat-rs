@@ -291,6 +291,27 @@ impl UserTurnController {
     pub fn process(&mut self, data: &FrameData, now: Duration) -> Vec<UserTurnEvent> {
         self.now = self.now.max(now);
         let now = self.now;
+        // A blank interim can revoke finality before the next VAD stop, without
+        // reopening an old wait or changing adopted-stop/watchdog semantics.
+        if matches!(
+            data,
+            FrameData::InterimTranscription(_) | FrameData::InterimTranscriptionDetailed(_)
+        ) && transcription(data).is_some_and(|(text, _)| text.trim().is_empty())
+            && self.active
+            && self.has_text
+            && self.speaking
+            && self.vad_observed
+            && self.vad_stopped_at.is_none()
+            && self.external_stop.is_none()
+            && self.config.wait_for_transcript
+            && !self.config.require_model_completion
+            && self.start_strategies.is_none()
+            && self.stop_strategies.is_none()
+            && self.pending_inference_request.is_none()
+        {
+            self.finalized = false;
+            return self.advance(now);
+        }
         if matches!(
             data,
             FrameData::Transcription(_) | FrameData::TranscriptionDetailed(_)
