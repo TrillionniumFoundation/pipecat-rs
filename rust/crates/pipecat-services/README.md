@@ -299,7 +299,25 @@ request; a provider-specific snapshot rejects the other provider's nonempty
 declarations explicitly. Message/settings updates retain metadata, and complete
 context/tool changes replace or clear it only after validation. Both wrappers
 share the original HTTP cancellation and decoder path. Search advertisement
-registers no callback and adds no grounding response decoding or execution.
+registers no local callback or provider-managed execution authority.
+
+Gemini streams project received `groundingMetadata` into a typed
+`StreamEvent::SearchResponse` and a normal downstream `LlmSearchResponse` frame.
+The response contains delivered ordinary text, literal rendered content and
+ordered origins with matching support text and complete confidence vectors.
+Thought text is excluded; nullable provider fields are retained. The latest
+nonempty grounding snapshot replaces earlier sources, while empty snapshots
+retain them. Projection limits bound the expanded origin/results data.
+
+Only successfully delivered events contribute text, and grounding snapshots
+are committed after their complete record reaches the bounded channel. One
+search response is finalized before native usage and completion events,
+including accepted partial results on errors or cancellation. Pipeline emission
+uses the existing completion admission gate. This follows the existing native
+error/usage lifecycle; it does not claim identical Python error-event ordering.
+The additional `StreamEvent` variant requires exhaustive consumers to handle
+search responses. Search HTML and URIs are passed through as data; this does not
+fetch sources, render HTML, add RTVI search projection or qualify live search.
 
 `preflight_context` and `preflight_tools` synchronously validate a projected
 ordinary update against the processor's current base settings and actual client.

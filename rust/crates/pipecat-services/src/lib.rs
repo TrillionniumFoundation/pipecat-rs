@@ -12,6 +12,7 @@ pub use azure::{
 pub mod client;
 pub mod context;
 pub mod frame_context;
+mod gemini_grounding;
 mod nvidia;
 pub mod presets;
 pub mod protocol;
@@ -36,6 +37,7 @@ pub use types::{
 
 pub mod processor;
 mod speculation;
+pub use pipecat_core::{LlmSearchOrigin, LlmSearchResponseFrame, LlmSearchResult};
 pub use pipecat_core::{LlmSettings, ServiceSettings, Setting};
 pub use processor::{InferenceOptions, LlmInference, LlmProcessor};
 pub use speculation::{SpeculationLimits, SpeculationSnapshot};

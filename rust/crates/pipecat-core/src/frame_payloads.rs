@@ -11,6 +11,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+mod google_search;
+pub use google_search::{LlmSearchOrigin, LlmSearchResponseFrame, LlmSearchResult};
+
 type CallbackFuture = Pin<Box<dyn Future<Output = Result<(), ProcessorError>> + Send>>;
 #[derive(Clone)]
 pub struct LocalAsyncCallback(Arc<dyn Fn() -> CallbackFuture + Send + Sync>);

@@ -88,6 +88,8 @@ pub enum StreamEvent {
     AnthropicHistory(Vec<crate::Message>),
     GeminiHistory(Vec<crate::Message>),
     GeminiCheckpoint(Vec<crate::Message>),
+    /// Final grounded answer and sources, emitted once before usage and terminal events.
+    SearchResponse(pipecat_core::LlmSearchResponseFrame),
     /// Partial arguments are untrusted, incomplete JSON until ToolCall arrives.
     ToolCallDelta {
         index: u32,

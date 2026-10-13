@@ -595,6 +595,8 @@ async fn run(
                     for event in decoder.decode(record)? {
                         send_event(event, decoder, tx).await?;
                     }
+                    // No suspension between complete record delivery and its metadata commit.
+                    decoder.commit_gemini_record();
                     if decoder.is_done() {
                         return Ok(());
                     }
@@ -620,6 +622,7 @@ async fn send_event(
     decoder: &mut ProtocolDecoder,
     tx: &mpsc::Sender<Result<StreamEvent, ServiceError>>,
 ) -> Result<(), ServiceError> {
+    let gemini_text = decoder.gemini_text_for_delivery(&event);
     let boundary = match &event {
         StreamEvent::ThoughtStart => Some(true),
         StreamEvent::ThoughtEnd => Some(false),
@@ -631,6 +634,9 @@ async fn send_event(
     // No suspension between successful delivery and recording its boundary.
     if let Some(start) = boundary {
         decoder.thought_boundary_delivered(start);
+    }
+    if let Some(text) = gemini_text {
+        decoder.gemini_text_delivered(text);
     }
     Ok(())
 }

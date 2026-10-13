@@ -1034,6 +1034,13 @@ async fn process_completion(
                     arguments: call.arguments,
                 });
             }
+            Ok(StreamEvent::SearchResponse(response)) => {
+                ctx.push(
+                    Frame::new(FrameData::LlmSearchResponse(response)),
+                    Direction::Downstream,
+                )
+                .await?;
+            }
             Ok(StreamEvent::Usage(usage)) => {
                 if ctx.configuration().enable_usage_metrics {
                     let mut frame = Frame::new(FrameData::Metrics(vec![Metric::LlmUsage {

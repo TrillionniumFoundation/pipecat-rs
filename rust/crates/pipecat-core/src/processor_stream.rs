@@ -186,6 +186,7 @@ fn stream_data(data: &FrameData) -> bool {
             | FrameData::OpenClawEnd(_)
             | FrameData::Text(_)
             | FrameData::LlmText(_)
+            | FrameData::LlmSearchResponse(_)
             | FrameData::InputText(_)
             | FrameData::VisionText(_)
             | FrameData::AggregatedText(_)

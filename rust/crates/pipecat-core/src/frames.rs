@@ -677,6 +677,7 @@ pub enum FrameData {
     Error(ErrorFrame),
     Text(TextFrame),
     LlmText(TextFrame),
+    LlmSearchResponse(LlmSearchResponseFrame),
     InputText(TextFrame),
     VisionText(TextFrame),
     AggregatedText(AggregatedTextFrame),

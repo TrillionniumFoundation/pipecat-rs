@@ -40,6 +40,9 @@ pub struct ProtocolDecoder {
     checkpoint_blocks: usize,
     nvidia: Option<crate::nvidia::NvidiaReasoning>,
     delivered_thought_depth: usize,
+    gemini_pending_grounding: Option<pipecat_core::LlmSearchResponseFrame>,
+    gemini_grounding: Option<pipecat_core::LlmSearchResponseFrame>,
+    gemini_delivered_text: Vec<String>,
 }
 impl ProtocolDecoder {
     pub fn new(provider: Provider) -> Self {
@@ -59,6 +62,9 @@ impl ProtocolDecoder {
             checkpoint_blocks: 0,
             nvidia: None,
             delivered_thought_depth: 0,
+            gemini_pending_grounding: None,
+            gemini_grounding: None,
+            gemini_delivered_text: vec![],
         }
     }
     pub(crate) fn with_preset(
@@ -78,20 +84,44 @@ impl ProtocolDecoder {
             self.delivered_thought_depth = self.delivered_thought_depth.saturating_sub(1);
         }
     }
+    pub(crate) fn gemini_text_for_delivery(&self, event: &StreamEvent) -> Option<String> {
+        match event {
+            StreamEvent::TextDelta(text) if self.provider == Provider::Gemini => Some(text.clone()),
+            _ => None,
+        }
+    }
+    pub(crate) fn gemini_text_delivered(&mut self, text: String) {
+        self.gemini_delivered_text.push(text);
+    }
+    pub(crate) fn commit_gemini_record(&mut self) {
+        if let Some(metadata) = self.gemini_pending_grounding.take() {
+            self.gemini_grounding = Some(metadata);
+        }
+    }
     pub(crate) fn finalize_response(&mut self, completed: bool) -> Vec<StreamEvent> {
+        // An interrupted record has no authority to replace the last delivered snapshot.
+        self.gemini_pending_grounding = None;
+        let text = std::mem::take(&mut self.gemini_delivered_text);
+        let mut finalized = Vec::new();
+        if let Some(mut metadata) = self.gemini_grounding.take() {
+            metadata.search_result = Some(text.concat());
+            finalized.push(StreamEvent::SearchResponse(metadata));
+        }
         let Some(reasoning) = self.nvidia.as_mut() else {
-            return Vec::new();
+            return finalized;
         };
         let events = reasoning.finish(completed);
         if completed {
-            events
+            finalized.extend(events);
         } else {
             // Cancellation can interrupt delivery halfway through one decoded
             // record. Close only starts that reached the bounded event channel.
-            (0..std::mem::take(&mut self.delivered_thought_depth))
-                .map(|_| StreamEvent::ThoughtEnd)
-                .collect()
+            finalized.extend(
+                (0..std::mem::take(&mut self.delivered_thought_depth))
+                    .map(|_| StreamEvent::ThoughtEnd),
+            );
         }
+        finalized
     }
     pub fn is_done(&self) -> bool {
         self.done
@@ -104,6 +134,7 @@ impl ProtocolDecoder {
     }
 
     pub fn decode(&mut self, event: SseEvent) -> Result<Vec<StreamEvent>, ServiceError> {
+        self.gemini_pending_grounding = None;
         if self.failed {
             return Err(ServiceError::Protocol(
                 "decoder is poisoned by a prior stream failure".into(),
@@ -113,6 +144,7 @@ impl ProtocolDecoder {
         let result = self.decode_event(event);
         if result.is_err() {
             self.nvidia = reasoning;
+            self.gemini_pending_grounding = None;
             self.failed = true;
         }
         result
@@ -902,6 +934,13 @@ impl ProtocolDecoder {
                             ));
                         }
                     }
+                }
+                if let Some(metadata) = candidate.get("groundingMetadata") {
+                    self.gemini_pending_grounding = crate::gemini_grounding::project(
+                        metadata,
+                        MAX_HISTORY_BYTES,
+                        MAX_CONTENT_BLOCKS,
+                    )?;
                 }
             }
         }
