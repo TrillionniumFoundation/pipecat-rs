@@ -18,7 +18,7 @@ use std::{
 };
 use support::Server;
 
-async fn round_trip(mode: &str) {
+async fn round_trip(mode: &str, owning: bool) {
     let server = Server::start("").await;
     let mut config = McpConfig::new(ServerConfig::StreamableHttp(HttpConfig::new(&server.url)));
     config.tools_filter = Some(BTreeSet::from(["echo".into()]));
@@ -29,10 +29,21 @@ async fn round_trip(mode: &str) {
     let client = McpClient::new(config).unwrap();
     let tools = client.tools().await.unwrap();
     let mut schema = tools.schema();
-    schema.custom_tools = Some(BTreeMap::from([(
-        pipecat_core::AdapterType::Gemini,
-        vec![BTreeMap::from([("google_search".into(), json!({}))])],
-    )]));
+    let (adapter, declaration) = if owning {
+        (
+            pipecat_core::AdapterType::Openai,
+            BTreeMap::from([
+                ("type".into(), json!("tool_search")),
+                ("options".into(), json!({"limit":2})),
+            ]),
+        )
+    } else {
+        (
+            pipecat_core::AdapterType::Gemini,
+            BTreeMap::from([("google_search".into(), json!({}))]),
+        )
+    };
+    schema.custom_tools = Some(BTreeMap::from([(adapter, vec![declaration.clone()])]));
     let pair = LLMContextAggregatorPair::new_rich(
         LlmContextData {
             messages: vec![ChatMessage::new(ChatRole::User, "invoke declared echo").into()],
@@ -109,6 +120,18 @@ async fn round_trip(mode: &str) {
         json!({"value":"agent","hidden":"static-native"})
     );
     assert!(!requests[0].to_string().contains("google_search"));
+    for request in &requests {
+        assert_eq!(request["tools"][0]["function"]["name"], "echo");
+        if owning {
+            assert_eq!(request["tools"].as_array().unwrap().len(), 2);
+            assert_eq!(
+                request["tools"][1],
+                serde_json::to_value(&declaration).unwrap()
+            );
+        } else {
+            assert_eq!(request["tools"].as_array().unwrap().len(), 1);
+        }
+    }
     assert_eq!(
         pair.context().snapshot_rich().unwrap().tools,
         ToolSet::Schema(schema)
@@ -120,19 +143,36 @@ async fn round_trip(mode: &str) {
 
 #[tokio::test]
 async fn generic_direct_static_provider_retains_mcp_callbacks_with_foreign_declarations() {
-    round_trip("direct").await;
+    round_trip("direct", false).await;
 }
 #[tokio::test]
 async fn fixed_mcp_static_provider_retains_callbacks_with_foreign_declarations() {
-    round_trip("fixed").await;
+    round_trip("fixed", false).await;
 }
 #[tokio::test]
 async fn explicit_mcp_static_provider_retains_callbacks_with_foreign_declarations() {
-    round_trip("explicit").await;
+    round_trip("explicit", false).await;
 }
 #[tokio::test]
 async fn automatic_mcp_static_provider_retains_callbacks_with_foreign_declarations() {
-    round_trip("auto").await;
+    round_trip("auto", false).await;
+}
+
+#[tokio::test]
+async fn owning_direct_static_bridge_keeps_real_mcp_continuation() {
+    round_trip("direct", true).await;
+}
+#[tokio::test]
+async fn owning_fixed_mcp_static_bridge_keeps_real_continuation() {
+    round_trip("fixed", true).await;
+}
+#[tokio::test]
+async fn owning_explicit_mcp_static_bridge_keeps_real_continuation() {
+    round_trip("explicit", true).await;
+}
+#[tokio::test]
+async fn owning_automatic_mcp_static_bridge_keeps_real_continuation() {
+    round_trip("auto", true).await;
 }
 
 fn native(provider: &Server) -> Arc<LlmProcessor> {
@@ -293,7 +333,7 @@ async fn refreshed_static_mcp_owner_keeps_provider_and_rejects_foreign_authority
         ),
         (
             with_custom(fresh.schema(), pipecat_core::AdapterType::Openai),
-            "provider-specific custom",
+            "nonempty string type",
         ),
     ] {
         worker
@@ -425,7 +465,7 @@ async fn static_direct_rejected_context_cannot_publish_handler_or_cleanup() {
     assert!(outcome(&mut worker)
         .await
         .unwrap_err()
-        .contains("provider-specific custom"));
+        .contains("nonempty string type"));
     call(&worker, "retained-old").await;
     let result = outcome(&mut worker).await.unwrap();
     assert_eq!(result.result, json!("old callback"));
@@ -486,5 +526,218 @@ async fn switcher_owners_keep_agnostic_custom_validation_without_io() {
         let (_, report) = worker.collect().await.unwrap();
         assert_eq!(report.errors.len(), 1);
     }
+    client.close().await.unwrap();
+}
+
+fn owning_tools(mut schema: pipecat_core::ToolsSchema) -> ToolSet {
+    schema.custom_tools = Some(BTreeMap::from([(
+        pipecat_core::AdapterType::Openai,
+        vec![BTreeMap::from([
+            ("type".into(), json!("tool_search")),
+            ("name".into(), json!("opaque-only")),
+        ])],
+    )]));
+    ToolSet::Schema(schema)
+}
+
+#[tokio::test]
+async fn actual_client_preflight_rejects_preset_and_reserved_fields_before_admission() {
+    for generic in [false, true] {
+        for reserved in [false, true] {
+            let server = Server::start("").await;
+            let client = McpClient::new(McpConfig::new(ServerConfig::StreamableHttp(
+                HttpConfig::new(&server.url),
+            )))
+            .unwrap();
+            let tools = client.tools().await.unwrap();
+            let provider = Server::start("llm").await;
+            let mut config = ClientConfig::new(Provider::OpenAi, "fixture");
+            config.endpoint = provider.url.clone();
+            config.api_key = None;
+            if !reserved {
+                config.openai_preset = Some(pipecat_services::presets::OpenAiPresetConfig::new(
+                    pipecat_services::presets::OpenAiPreset::OpenRouter,
+                ));
+            }
+            let mut request = CompletionRequest::new("fixture", Context::default());
+            if reserved {
+                request.extra.insert("tools".into(), json!([]));
+            }
+            let llm = Arc::new(LlmProcessor::new(LlmClient::new(config).unwrap(), request));
+            let before = llm.declared_request_snapshot().unwrap();
+            let stages = if generic {
+                DirectToolBinding::new(llm.clone()).unwrap().stages()
+            } else {
+                tools.bind_llm_auto(llm.clone()).unwrap().stages()
+            };
+            let mut worker = Pipeline::new(stages)
+                .start(PipelineConfig::default())
+                .await
+                .unwrap();
+            worker
+                .sender()
+                .send(
+                    Frame::new(FrameData::LlmSetTools(owning_tools(tools.schema()))),
+                    Direction::Downstream,
+                )
+                .await
+                .unwrap();
+            let error = outcome(&mut worker).await.unwrap_err();
+            assert!(
+                error.contains(if reserved {
+                    "extra field tools"
+                } else {
+                    "ordinary OpenAI Chat Completions"
+                }),
+                "{error}"
+            );
+            let after = llm.declared_request_snapshot().unwrap();
+            assert_eq!(
+                serde_json::to_value(before.request()).unwrap(),
+                serde_json::to_value(after.request()).unwrap()
+            );
+            assert_eq!(
+                before.openai_tools().as_slice(),
+                after.openai_tools().as_slice()
+            );
+            call(&worker, "after-client-rejection").await;
+            assert_eq!(
+                outcome(&mut worker).await.unwrap().error.as_deref(),
+                Some("tool is not registered")
+            );
+            assert!(server.state.lock().unwrap().calls.is_empty());
+            assert!(provider.state.lock().unwrap().completions.is_empty());
+            worker.end().await.unwrap();
+            let (_, report) = worker.collect().await.unwrap();
+            assert_eq!(report.errors.len(), 1);
+            // A rejected generic schema cannot publish its attached MCP cleanup.
+            assert_eq!(server.state.lock().unwrap().deletes, usize::from(!generic));
+            client.close().await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
+async fn owning_auto_preflight_retains_old_handler_and_grants_no_opaque_callback() {
+    let server = Server::start("").await;
+    let mut config = McpConfig::new(ServerConfig::StreamableHttp(HttpConfig::new(&server.url)));
+    config.tools_filter = Some(BTreeSet::from(["echo".into()]));
+    let client = McpClient::new(config).unwrap();
+    let tools = client.tools().await.unwrap();
+    let provider = Server::start("llm").await;
+    let llm = native(&provider);
+    let binding = tools.bind_llm_auto(llm.clone()).unwrap();
+    let mut worker = Pipeline::new(binding.stages())
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    set(
+        &worker,
+        &llm,
+        owning_tools(tools.schema()),
+        &tools.definitions()[0].description,
+    )
+    .await;
+    call(&worker, "before-invalid-own-context").await;
+    assert!(outcome(&mut worker).await.unwrap().error.is_none());
+    worker
+        .sender()
+        .send(
+            invalid_context(owning_tools(pipecat_core::ToolsSchema {
+                standard_tools: vec![],
+                custom_tools: None,
+            })),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    assert!(outcome(&mut worker)
+        .await
+        .unwrap_err()
+        .contains("tool result requires tool_call_id"));
+    let mut too_many = tools.schema();
+    too_many.standard_tools.extend((0..127).map(|i| {
+        pipecat_core::StandardTool::Function(pipecat_core::ToolDefinition {
+            name: format!("advertisement-{i}"),
+            description: "no callback".into(),
+            parameters: json!({"type":"object"}),
+        })
+    }));
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(owning_tools(too_many))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    assert!(outcome(&mut worker)
+        .await
+        .unwrap_err()
+        .contains("standard tools and declarations exceed tool count limit"));
+    call(&worker, "after-invalid-own-context").await;
+    assert!(outcome(&mut worker).await.unwrap().error.is_none());
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(owning_tools(
+                pipecat_core::ToolsSchema {
+                    standard_tools: vec![],
+                    custom_tools: None,
+                },
+            ))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let snapshot = llm.declared_request_snapshot().unwrap();
+            if snapshot
+                .request()
+                .context
+                .tools
+                .as_ref()
+                .is_some_and(Vec::is_empty)
+                && snapshot.openai_tools().len() == 1
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![
+                pipecat_core::FunctionCall {
+                    function_name: "opaque-only".into(),
+                    tool_call_id: "opaque-is-advertisement".into(),
+                    arguments: json!({}),
+                },
+            ])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome(&mut worker).await.unwrap().error.as_deref(),
+        Some("tool is not registered")
+    );
+    call(&worker, "pruned-old-echo").await;
+    assert_eq!(
+        outcome(&mut worker).await.unwrap().error.as_deref(),
+        Some("tool is not registered")
+    );
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert!(provider.state.lock().unwrap().completions.is_empty());
+    worker.end().await.unwrap();
+    let (_, report) = worker.collect().await.unwrap();
+    assert_eq!(report.errors.len(), 2);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    server.wait_for(|s| s.completed_deletes == 1).await;
     client.close().await.unwrap();
 }

@@ -5,7 +5,7 @@ use pipecat_core::{
     ProcessorContext, ProcessorError, StandardTool, ToolSet, ToolsSchema,
 };
 use pipecat_processors::tools::{ToolExecutor, ToolOutcomeJournal, ToolRegistrationSnapshot};
-use pipecat_services::{frame_context, Context, LlmProcessor, Provider};
+use pipecat_services::{frame_context, Context, LlmProcessor};
 use std::{
     sync::{Arc, RwLock},
     time::Duration,
@@ -51,8 +51,8 @@ impl DirectToolBinding {
         llm: Arc<LlmProcessor>,
         config: DirectToolBindingConfig,
     ) -> Result<Self, ProcessorError> {
-        let provider = llm.provider();
-        Self::build(llm, config, Some(provider))
+        let native = llm.clone();
+        Self::build(llm, config, Some(native))
     }
     pub fn new_switcher(llm: Arc<LlmSwitcher>) -> Result<Self, ProcessorError> {
         Self::with_switcher_config(llm, DirectToolBindingConfig::default())
@@ -66,7 +66,7 @@ impl DirectToolBinding {
     fn build(
         llm: Arc<dyn FrameProcessor>,
         config: DirectToolBindingConfig,
-        provider: Option<Provider>,
+        native: Option<Arc<LlmProcessor>>,
     ) -> Result<Self, ProcessorError> {
         if config.max_tools == 0
             || config.max_cleanup_hooks == 0
@@ -96,7 +96,7 @@ impl DirectToolBinding {
             owner: Arc::new(DirectExecutor {
                 executor,
                 config,
-                provider,
+                native,
                 state,
             }),
         })
@@ -133,7 +133,7 @@ struct BindingState {
 struct DirectExecutor {
     executor: ToolExecutor,
     config: DirectToolBindingConfig,
-    provider: Option<Provider>,
+    native: Option<Arc<LlmProcessor>>,
     state: RwLock<BindingState>,
 }
 impl DirectExecutor {
@@ -178,21 +178,22 @@ impl DirectExecutor {
             FrameData::LlmContextDetailed(context) => {
                 let mut context = context.context.clone();
                 context.tools = projected.clone();
-                match self.provider {
-                    Some(provider) => frame_context::context_for_provider(&context, provider),
-                    None => frame_context::context(&context),
+                match &self.native {
+                    Some(native) => native.preflight_context(&context),
+                    None => frame_context::context(&context).map(|_| ()),
                 }
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
             }
-            _ => Context {
-                tools: match self.provider {
-                    Some(provider) => frame_context::tools_for_provider(&projected, provider),
-                    None => frame_context::tools(&projected),
-                }
-                .map_err(|error| ProcessorError::new(error.to_string()))?,
-                ..Default::default()
+            _ => match &self.native {
+                Some(native) => native.preflight_tools(&projected),
+                None => frame_context::tools(&projected).and_then(|tools| {
+                    Context {
+                        tools,
+                        ..Default::default()
+                    }
+                    .validate()
+                }),
             }
-            .validate()
             .map_err(|error| ProcessorError::new(error.to_string()))?,
         }
         let mut inventory = ToolExecutor::new(

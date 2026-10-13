@@ -284,9 +284,11 @@ support this update; the far bookend forwards the projected frame without prunin
 again. Legacy `LlmContext` frames carry no executable handlers and prune selections
 after full native validation, without rewriting the frame. Full native context
 conversion and tool validation precede publication.
-Fixed native LLM bindings validate the projected context with their immutable
-provider's adapter selection, retaining foreign custom metadata without granting
-it callback authority. Owning opaque declarations, grouped schemas and
+Fixed native LLM bindings preflight projected ordinary contexts and tool setters
+with the actual LLM's current settings and client before altering handlers or
+recording cleanup hooks. Supported owning OpenAI declarations are advertisement
+alongside standard callbacks; custom metadata grants no registration authority.
+Client restrictions, reserved fields, grouped schemas and
 sealed/speculative authority changes reject before altering handlers or recording
 cleanup hooks; capabilities are never stripped or resealed. Switcher bindings
 keep provider-agnostic strict custom-schema validation.

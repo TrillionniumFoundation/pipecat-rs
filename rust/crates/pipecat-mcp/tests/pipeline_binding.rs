@@ -286,7 +286,7 @@ async fn bound_factory_rejects_foreign_or_modified_handlers_and_sealed_contexts(
                 custom_tools: Some(
                     [(
                         pipecat_core::AdapterType::Openai,
-                        vec![[("type".into(), json!("web_search"))].into_iter().collect()],
+                        vec![[("type".into(), json!(""))].into_iter().collect()],
                     )]
                     .into_iter()
                     .collect(),
@@ -345,7 +345,7 @@ async fn bound_factory_rejects_foreign_or_modified_handlers_and_sealed_contexts(
             "sealed" | "capability" | "speculation" => {
                 "bound MCP executable schema cannot project sealed or speculative context"
             }
-            "custom" => "unsupported provider feature: provider-specific custom tool schemas",
+            "custom" => "invalid request: OpenAI declarations require a nonempty string type",
             "grouped" => "unsupported provider feature: grouped provider-specific tool schemas",
             _ => unreachable!(),
         };

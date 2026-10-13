@@ -66,6 +66,17 @@ impl State {
         DeclaredRequest::new(self.request.clone(), self.openai_tools.clone())
     }
 }
+fn request_with_context(request: &CompletionRequest, context: crate::Context) -> CompletionRequest {
+    CompletionRequest {
+        settings: request.settings.clone(),
+        model: request.model.clone(),
+        context,
+        system_instruction: request.system_instruction.clone(),
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        extra: request.extra.clone(),
+    }
+}
 enum Consumption {
     Forward,
     Consumed,
@@ -124,6 +135,43 @@ impl LlmProcessor {
     /// updates do not change its provider or perform discovery.
     pub fn provider(&self) -> crate::Provider {
         self.client.provider()
+    }
+    /// Validate an ordinary handler-free context against current request settings.
+    /// This performs no I/O, state mutation, or callback execution. Frame owners
+    /// must check sealed/speculative authority first. This checks a current
+    /// snapshot and does not create a transaction across pipeline stages.
+    pub fn preflight_context(&self, context: &LlmContextData) -> Result<(), ServiceError> {
+        let (context, declarations) =
+            frame_context::declared_context_for_provider(context, self.client.provider())?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
+        let request = request_with_context(&state.request, context);
+        self.client
+            .request_body_with_declarations(&request, &declarations)
+            .map(|_| ())
+    }
+    /// Validate ordinary handler-free tools with current messages, choice, and
+    /// request settings. This performs no I/O, state mutation, or callbacks.
+    /// Frame owners must check sealed/speculative authority first. This checks
+    /// a current snapshot and is not a transaction across pipeline stages.
+    pub fn preflight_tools(&self, tools: &pipecat_core::ToolSet) -> Result<(), ServiceError> {
+        let (tools, declarations) =
+            frame_context::declared_tools_for_provider(tools, self.client.provider())?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
+        let context = crate::Context {
+            messages: state.request.context.messages.clone(),
+            tools,
+            tool_choice: state.request.context.tool_choice.clone(),
+        };
+        let request = request_with_context(&state.request, context);
+        self.client
+            .request_body_with_declarations(&request, &declarations)
+            .map(|_| ())
     }
     /// Validate the entire prospective request before committing an atomic delta.
     pub fn update_settings(&self, delta: &LlmSettings) -> Result<(), ServiceError> {

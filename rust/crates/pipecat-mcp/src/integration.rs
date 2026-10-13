@@ -8,7 +8,7 @@ use pipecat_core::{
 use pipecat_processors::tools::{
     CancellableRegisteredTool, ToolExecutor, ToolRegistrationSnapshot,
 };
-use pipecat_services::{frame_context, Context, Provider};
+use pipecat_services::{frame_context, Context, LlmProcessor};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -95,7 +95,7 @@ impl McpTools {
         let projection = Arc::new(McpContextProjection::new(
             &self.cached_schema,
             self.client.inner.config.limits.max_tools,
-            Some(llm.provider()),
+            Some(llm.clone()),
         ));
         Ok(vec![
             Arc::new(projection.as_ref().clone()),
@@ -111,8 +111,8 @@ impl McpTools {
         &self,
         llm: Arc<pipecat_services::LlmProcessor>,
     ) -> Result<McpLlmBinding, ProcessorError> {
-        let provider = Some(llm.provider());
-        self.bind_llm_mode(llm, false, provider)
+        let native_llm = Some(llm.clone());
+        self.bind_llm_mode(llm, false, native_llm)
     }
     /// Automatically select this snapshot's advertised schema handlers on each
     /// ordinary context/tool update. Explicit bindings remain inventory-based.
@@ -120,8 +120,8 @@ impl McpTools {
         &self,
         llm: Arc<pipecat_services::LlmProcessor>,
     ) -> Result<McpLlmBinding, ProcessorError> {
-        let provider = Some(llm.provider());
-        self.bind_llm_mode(llm, true, provider)
+        let native_llm = Some(llm.clone());
+        self.bind_llm_mode(llm, true, native_llm)
     }
     /// Bind the existing native LLM switcher to one shared MCP executor and
     /// cleanup owner. Its own routing propagates projected tools to all members.
@@ -142,11 +142,15 @@ impl McpTools {
         &self,
         llm: Arc<dyn FrameProcessor>,
         auto: bool,
-        provider: Option<Provider>,
+        native_llm: Option<Arc<LlmProcessor>>,
     ) -> Result<McpLlmBinding, ProcessorError> {
         let mut executor = self.executor()?;
         let state = Arc::new(RwLock::new(McpBindingState {
-            current: Arc::new(self.binding_snapshot(&executor.executor, auto, provider)?),
+            current: Arc::new(self.binding_snapshot(
+                &executor.executor,
+                auto,
+                native_llm.clone(),
+            )?),
             closed: false,
             auto,
         }));
@@ -157,14 +161,14 @@ impl McpTools {
             llm,
             executor: Arc::new(executor),
             auto,
-            provider,
+            native_llm,
         })
     }
     fn binding_snapshot(
         &self,
         executor: &ToolExecutor,
         auto: bool,
-        provider: Option<Provider>,
+        native_llm: Option<Arc<LlmProcessor>>,
     ) -> Result<McpBindingSnapshot, ProcessorError> {
         let all_registrations = executor.registrations_snapshot();
         let registrations = if auto {
@@ -176,7 +180,7 @@ impl McpTools {
             projection: McpContextProjection::new(
                 &self.cached_schema,
                 self.client.inner.config.limits.max_tools,
-                provider,
+                native_llm,
             ),
             registrations,
             all_registrations,
@@ -263,7 +267,7 @@ pub struct McpLlmBinding {
     llm: Arc<dyn FrameProcessor>,
     executor: Arc<McpToolExecutor>,
     auto: bool,
-    provider: Option<Provider>,
+    native_llm: Option<Arc<LlmProcessor>>,
 }
 impl McpLlmBinding {
     /// Input projection, native inference, owned execution, upstream projection.
@@ -294,8 +298,11 @@ impl McpLlmBinding {
             ));
         }
         let registered = tools.executor()?;
-        let current =
-            Arc::new(tools.binding_snapshot(&registered.executor, self.auto, self.provider)?);
+        let current = Arc::new(tools.binding_snapshot(
+            &registered.executor,
+            self.auto,
+            self.native_llm.clone(),
+        )?);
         let mut state = self
             .state
             .write()
@@ -511,10 +518,10 @@ impl FrameProcessor for McpToolExecutor {
 struct McpContextProjection {
     bindings: Arc<BTreeMap<String, DirectFunction>>,
     max_tools: usize,
-    provider: Option<Provider>,
+    native_llm: Option<Arc<LlmProcessor>>,
 }
 impl McpContextProjection {
-    fn new(schema: &ToolsSchema, max_tools: usize, provider: Option<Provider>) -> Self {
+    fn new(schema: &ToolsSchema, max_tools: usize, native_llm: Option<Arc<LlmProcessor>>) -> Self {
         let bindings = schema
             .standard_tools
             .iter()
@@ -529,7 +536,7 @@ impl McpContextProjection {
         Self {
             bindings: Arc::new(bindings),
             max_tools,
-            provider,
+            native_llm,
         }
     }
     fn bound_definition(
@@ -602,13 +609,13 @@ impl McpContextProjection {
     ) -> Result<(), ProcessorError> {
         // Unprojected sealed/speculative contexts keep strict conversion.
         // Projection rejects executable sealed/speculative frames.
-        let provider = if frame.native_speculation().is_some()
+        let native_llm = if frame.native_speculation().is_some()
             || frame.native_realtime_context_cause()?.is_some()
             || matches!(&frame.data, FrameData::LlmContextDetailed(context) if context.speculation)
         {
             None
         } else {
-            self.provider
+            self.native_llm.as_ref()
         };
         match &frame.data {
             FrameData::LlmContext(context) => frame_context::legacy_context(context)
@@ -619,25 +626,24 @@ impl McpContextProjection {
                 if let Some(projected) = projected {
                     context.tools = projected.clone();
                 }
-                match provider {
-                    Some(provider) => frame_context::context_for_provider(&context, provider),
-                    None => frame_context::context(&context),
+                match native_llm {
+                    Some(llm) => llm.preflight_context(&context),
+                    None => frame_context::context(&context).map(|_| ()),
                 }
-                .map(|_| ())
                 .map_err(|error| ProcessorError::new(error.to_string()))
             }
             FrameData::LlmSetTools(tools) => {
                 let tools = projected.unwrap_or(tools);
-                let tools = match provider {
-                    Some(provider) => frame_context::tools_for_provider(tools, provider),
-                    None => frame_context::tools(tools),
+                match native_llm {
+                    Some(llm) => llm.preflight_tools(tools),
+                    None => frame_context::tools(tools).and_then(|tools| {
+                        Context {
+                            tools,
+                            ..Default::default()
+                        }
+                        .validate()
+                    }),
                 }
-                .map_err(|error| ProcessorError::new(error.to_string()))?;
-                Context {
-                    tools,
-                    ..Default::default()
-                }
-                .validate()
                 .map_err(|error| ProcessorError::new(error.to_string()))
             }
             _ => Ok(()),

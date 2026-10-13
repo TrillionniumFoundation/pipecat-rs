@@ -92,10 +92,12 @@ handler replacement. Ordinary `Function` definitions may pass through for
 advertisement, but this executor executes only the bound MCP names; it does not
 register arbitrary application functions. Realtime sealed and speculative
 executable contexts are explicitly rejected when projection is needed: their capabilities are never
-stripped or resealed. Fixed native LLM bindings validate projected tools with
-that LLM's immutable provider: foreign custom declarations follow its native
-adapter selection without granting callback authority. Owning opaque declarations
-and grouped schemas retain the native LLM's unsupported behavior. Switcher bindings
+stripped or resealed. Fixed native LLM bindings preflight projected ordinary
+contexts and tool setters with the actual LLM's current settings and client,
+before changing handler authority. Supported owning OpenAI declarations remain
+advertisement-only alongside the bound standard callbacks; foreign declarations
+follow native adapter selection. Client restrictions, reserved fields and grouped
+schemas retain their existing validation. Switcher bindings
 keep provider-agnostic strict validation. These checks do not establish live-provider qualification.
 
 For explicit runtime refresh, retain the handle returned by `tools.bind_llm(llm)`:

@@ -241,12 +241,21 @@ nonempty string `type`. Empty declaration wrappers preserve the original behavio
 This advertises declarations without registering callbacks or decoding provider
 managed tool responses. Nonempty declarations currently require an ordinary
 OpenAI client; Azure and compatible presets remain unsupported. Reserved `extra`
-fields retain their validation. Public function-only context helpers, MCP/Direct
-execution owners and sealed/speculative paths retain their strict custom-schema
+fields retain their validation. Public function-only context helpers and
+sealed/speculative paths retain their strict custom-schema
 checks. Settings and message updates preserve admitted declarations; a complete
 context or tool setter replaces them only after full request validation.
 `declared_request_snapshot()` includes the full validated declarations, while
 the compatible `request_snapshot()` returns the base function context.
+
+`preflight_context` and `preflight_tools` synchronously validate a projected
+ordinary update against the processor's current base settings and actual client.
+They perform no I/O, callbacks or state mutation. Fixed MCP/Direct owners use
+this before publishing standard handler selections or cleanup hooks, so supported
+owning declarations can accompany actual standard tool results. The check is a
+current-state snapshot; it does not make later settings updates and separate
+pipeline stages one transaction. Legacy paths and switchers retain their previous
+validation boundaries.
 
 Primary wire references:
 [OpenAI Chat](https://developers.openai.com/api/reference/resources/chat),

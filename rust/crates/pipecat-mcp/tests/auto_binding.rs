@@ -307,7 +307,7 @@ async fn advertised_context_subset_retires_a_stale_provider_call() {
     custom.custom_tools = Some(
         [(
             pipecat_core::AdapterType::Openai,
-            vec![[("type".into(), json!("web_search"))].into_iter().collect()],
+            vec![[("type".into(), json!(""))].into_iter().collect()],
         )]
         .into_iter()
         .collect(),
@@ -320,7 +320,7 @@ async fn advertised_context_subset_retires_a_stale_provider_call() {
     assert!(result(&mut worker)
         .await
         .unwrap_err()
-        .contains("provider-specific custom tool schemas"));
+        .contains("nonempty string type"));
     let mut speculative_empty = context(ToolSet::NotGiven);
     let FrameData::LlmContextDetailed(speculative_context) = &mut speculative_empty.data else {
         unreachable!();
@@ -370,9 +370,7 @@ async fn advertised_context_subset_retires_a_stale_provider_call() {
     assert!(report.errors[2]
         .error
         .contains("tools require unique names and object schemas"));
-    assert!(report.errors[3]
-        .error
-        .contains("provider-specific custom tool schemas"));
+    assert!(report.errors[3].error.contains("nonempty string type"));
     assert_eq!(
         report.errors[4].error,
         "automatic MCP handler sync cannot accept sealed or speculative context"
