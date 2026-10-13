@@ -920,3 +920,101 @@ async fn native_llm_worker_interruption_and_drop_own_mcp_teardown() {
         assert_eq!(provider.state.lock().unwrap().completions.len(), 1);
     }
 }
+
+#[tokio::test]
+async fn closing_session_preserves_text_call_cancellation_without_running_filter() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let server = Server::start("").await;
+    let mut config = config_for(&server);
+    let filtered = Arc::new(AtomicUsize::new(0));
+    let observed = filtered.clone();
+    config.tools_output_filters.insert(
+        "slow".into(),
+        Arc::new(move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            Ok("filter success fallback".into())
+        }),
+    );
+    let client = McpClient::new(config).unwrap();
+    client.tools().await.unwrap();
+    let caller = client.clone();
+    let pending = tokio::spawn(async move { caller.call_text("slow", json!({})).await });
+    server.wait_for(|state| state.calls.len() == 1).await;
+    client.close().await.unwrap();
+    assert_eq!(pending.await.unwrap(), Err(McpError::Cancelled));
+    assert_eq!(filtered.load(Ordering::SeqCst), 0);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+}
+
+#[tokio::test]
+async fn closing_mcp_session_cancels_native_llm_tool_without_a_model_rerun() {
+    use pipecat_agent_workers::{LlmWorker, LlmWorkerOptions, IDLE};
+    use pipecat_services::{
+        ClientConfig, CompletionRequest, Context, LlmClient, Message, Provider, Role,
+    };
+    let server = Server::start("").await;
+    let client = client_for(&server);
+    let tools = client.tools().await.unwrap();
+    let mut registry = ToolRegistry::new();
+    let lifecycle = tools.register_into(&mut registry).unwrap();
+    let provider = Server::start("llm-slow").await;
+    let mut config = ClientConfig::new(Provider::OpenAi, "owned-native-fixture");
+    config.endpoint = provider.url.clone();
+    config.api_key = None;
+    let mut worker = LlmWorker::start_with_output(
+        LlmClient::new(config).unwrap(),
+        CompletionRequest::new("fixture", Context::default()),
+        registry,
+        LlmWorkerOptions::default(),
+        vec![Arc::new(lifecycle)],
+    )
+    .await
+    .unwrap();
+    worker
+        .handle()
+        .append(
+            vec![Message::text(Role::User, "invoke the test tool")],
+            true,
+        )
+        .await
+        .unwrap();
+    server.wait_for(|state| state.calls.len() == 1).await;
+    client.close().await.unwrap();
+    let frames = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut frames = vec![];
+        while let Some(frame) = worker.recv().await {
+            let idle = frame.frame.metadata.get(IDLE) == Some(&Value::Bool(true));
+            frames.push(frame.frame);
+            if idle {
+                break;
+            }
+        }
+        frames
+    })
+    .await
+    .unwrap();
+    let cancelled: Vec<_> = frames
+        .iter()
+        .filter_map(|frame| match &frame.data {
+            FrameData::FunctionCallCancel(call) => Some(call),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cancelled.len(), 1);
+    assert_eq!(cancelled[0].tool_call_id, "agent-call");
+    assert_eq!(cancelled[0].function_name, "slow");
+    assert!(!cancelled[0].run_llm);
+    assert!(!frames.iter().any(|frame| matches!(
+        frame.data,
+        FrameData::FunctionCallResult(_) | FrameData::FunctionCallResultDetailed(_)
+    )));
+    assert_eq!(provider.state.lock().unwrap().completions.len(), 1);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    worker.handle().end().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), worker.join())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+}

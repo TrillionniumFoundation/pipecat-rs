@@ -79,7 +79,10 @@ impl McpTools {
                 async move {
                     tokio::select! { biased;
                         _ = ctx.cancelled() => Err(AgentError::Cancelled),
-                        result = client.call_text(&name, args) => result.map(|text| ToolResult::new(Value::String(text))).map_err(|error| AgentError::Failed(error.to_string())),
+                        result = client.call_text(&name, args) => result.map(|text| ToolResult::new(Value::String(text))).map_err(|error| match error {
+                            McpError::Cancelled => AgentError::Cancelled,
+                            error => AgentError::Failed(error.to_string()),
+                        }),
                     }
                 }
             }).with_options(ToolOptions { cancel_on_interruption: true, timeout: Some(self.client.inner.config.limits.request_timeout.saturating_add(self.client.inner.config.limits.close_timeout)) });

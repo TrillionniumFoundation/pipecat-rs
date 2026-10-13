@@ -411,15 +411,16 @@ impl McpClient {
         Ok(text)
     }
     /// Source-compatible model-facing text behavior: join text blocks, apply
-    /// output filters, and use a fallback for empty/non-text results. Closed
-    /// clients still return a wiring error instead of silently reconnecting.
+    /// output filters, and use a fallback for empty/non-text results. Local
+    /// cancellation propagates without running filters or becoming tool text.
+    /// Closed clients still return a wiring error instead of reconnecting.
     pub async fn call_text(&self, name: &str, arguments: Value) -> Result<String, McpError> {
         let (text, error) = match self
             .call_unfiltered(name, arguments, CancellationToken::new())
             .await
         {
             Ok(result) => (result.text, None),
-            Err(error @ McpError::NotConnected) => return Err(error),
+            Err(error @ (McpError::NotConnected | McpError::Cancelled)) => return Err(error),
             Err(error) => (String::new(), Some(error)),
         };
         // The source passes empty text to filters after call failures, allowing

@@ -1,0 +1,30 @@
+name: Native MCP parity
+
+on:
+  push:
+    branches: [work/cloud-mcp-parity-20261013]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: rust
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install workspace Rust toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --component clippy --component rustfmt && rustup default 1.99.0
+      - name: Check affected package formatting
+        run: cargo fmt -p pipecat-mcp -p pipecat-services -- --check
+      - name: Native MCP HTTP, stdio and services regressions
+        run: cargo test -p pipecat-mcp -p pipecat-services --features pipecat-mcp/native-fixtures --locked
+      - name: Strict affected package checks
+        run: cargo clippy -p pipecat-mcp -p pipecat-services --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings

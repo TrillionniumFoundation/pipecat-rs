@@ -142,6 +142,11 @@ preserved without fetching linked resources or passing them off as text.
 behavior: empty/non-text results use its fallback string; transport/server failures
 become bounded class/code descriptions. On a failure, model-facing output filters
 receive empty text and may supply a custom fallback. `NotConnected` remains a wiring error.
+Local request cancellation propagates as `McpError::Cancelled` without invoking
+output filters. Agent-worker handlers preserve it as a cancellation frame with
+`run_llm: false`, rather than a successful result or a model rerun. Generic pipeline
+executor callbacks currently settle that error as a callback failure; explicit
+pipeline interruption/cancel commands still produce native cancellation receipts.
 Server-provided error messages/data are deliberately not copied into errors.
 
 ## Bounds and privacy
