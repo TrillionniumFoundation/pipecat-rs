@@ -374,15 +374,16 @@ impl LLMAssistantAggregator {
             // A plain request associates content without granting tool/callback
             // authority. InputTransport alone owns its private capture ledger;
             // this consumer uses the image frame's own content and run flags.
+            let passive = image.append_to_context != Some(true);
             if image.request.as_ref().is_some_and(|request| {
                 request.function_name.is_some()
                     || request.tool_call_id.is_some()
                     || request.result_callback.is_some()
-            }) || image.append_to_context != Some(true)
-                || !matches!(
+            }) || (!passive
+                && !matches!(
                     image.image.format.as_deref(),
                     Some("image/png" | "image/jpeg")
-                )
+                ))
             {
                 return Err(ProcessorError::new(
                     "raw image/file context conversion is not supported; submit encoded rich context messages",
@@ -393,14 +394,14 @@ impl LLMAssistantAggregator {
                     "encoded user image context is unsupported during realtime or signed continuation",
                 ));
             }
-            // Only an ordinary open text response may admit a mid-turn,
-            // append-only upload. All independent ownership/scheduling gates
+            // Only an ordinary open text response may flush a mid-turn prefix
+            // for passive images or append-only uploads. All ownership/scheduling gates
             // below remain required, including before the first text chunk.
-            let busy_append_only = image.run_llm == Some(false)
+            let busy_context_only = (passive || image.run_llm == Some(false))
                 && self.config.text_mode == AssistantTextMode::Text
                 && state.active
                 && state.llm_active;
-            if (!busy_append_only
+            if (!busy_context_only
                 && (state.active || state.llm_active || !state.aggregation.text.is_empty()))
                 || !state.thought.text.is_empty()
                 || state.thought_append
@@ -416,6 +417,18 @@ impl LLMAssistantAggregator {
                     "encoded user image context requires an idle assistant without pending text, playback, tools or inference",
                 ));
             }
+            if passive {
+                // Passive samples do not admit image content or consume replay IDs.
+                // Each occurrence can commit a newly held prefix in the open turn.
+                if busy_context_only && !state.aggregation.text.is_empty() {
+                    self.context.lock()?.append_native(Message::text(
+                        Role::Assistant,
+                        state.aggregation.text.trim().to_owned(),
+                    ));
+                    state.aggregation.take();
+                }
+                return Ok(output);
+            }
             // Validate before replay lookup or mutation, including corrected IDs.
             let message = crate::encoded_image::user_message(image)?;
             if state.seen.contains(frame.id) {
@@ -427,14 +440,14 @@ impl LLMAssistantAggregator {
                 // Check raw presence before trim: a whitespace-only prefix is
                 // an empty assistant message, matching the source mid-turn flush.
                 let mut context = self.context.lock()?;
-                if busy_append_only && !state.aggregation.text.is_empty() {
+                if busy_context_only && !state.aggregation.text.is_empty() {
                     context.append_native(Message::text(
                         Role::Assistant,
                         state.aggregation.text.trim().to_owned(),
                     ));
                 }
                 context.append_rich([message]);
-                if busy_append_only {
+                if busy_context_only {
                     state.aggregation.take();
                 }
             } else {

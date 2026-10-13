@@ -317,12 +317,9 @@ async fn upload_text_presence_and_jpeg_preserve_exact_user_contents_upstream() {
 }
 
 #[tokio::test]
-async fn nonselected_upload_flags_reject_and_leave_same_id_retryable() {
-    for append in [None, Some(false), Some(true)] {
+async fn passive_upload_flags_consume_without_using_same_id_content_admission() {
+    for append in [None, Some(false)] {
         for run in [None, Some(false), Some(true)] {
-            if append == Some(true) {
-                continue;
-            }
             let context = SharedContext::default();
             let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
             let mut frame = png_upload();
@@ -331,7 +328,7 @@ async fn nonselected_upload_flags_reject_and_leave_same_id_retryable() {
                 image.append_to_context = append;
                 image.run_llm = run;
             }
-            let rejected = consume(&assistant, frame);
+            let passive = consume(&assistant, frame);
             let before = context.snapshot_rich();
             let mut corrected = png_upload();
             corrected.id = id;
@@ -340,7 +337,7 @@ async fn nonselected_upload_flags_reject_and_leave_same_id_retryable() {
             let cleaned = assistant.cleanup().await;
             drop(assistant);
             cleaned.unwrap();
-            assert!(rejected.is_err(), "append={append:?} run={run:?}");
+            silent(passive.expect("passive image must not admit content or inference"));
             assert!(before.unwrap().messages.is_empty());
             silent(retry.unwrap());
             assert_eq!(after.unwrap().messages.len(), 1);

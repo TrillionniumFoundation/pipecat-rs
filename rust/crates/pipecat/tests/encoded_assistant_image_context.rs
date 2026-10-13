@@ -584,11 +584,13 @@ async fn completed_signed_prefix_is_preserved_by_ordinary_image_append() {
 }
 
 #[tokio::test]
-async fn user_image_variants_remain_unsupported_and_do_not_call_result_callback() {
+async fn passive_user_images_consume_but_raw_append_and_authority_remain_unsupported() {
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
+    // Passive request-free RGB carries no content to encode. Appending raw RGB
+    // and every authority-bearing request still use the unsupported path.
     for append in [None, Some(false), Some(true)] {
         for run in [None, Some(false), Some(true)] {
             for requested in [false, true] {
@@ -622,15 +624,19 @@ async fn user_image_variants_remain_unsupported_and_do_not_call_result_callback(
                         })
                     }),
                 }));
-                let rejected = consume(&assistant, frame);
+                let result = consume(&assistant, frame);
                 let snapshot = context.snapshot_rich();
                 let cleaned = assistant.cleanup().await;
                 drop(assistant);
                 cleaned.unwrap();
-                assert!(rejected
-                    .unwrap_err()
-                    .message
-                    .contains("raw image/file context conversion"));
+                if !requested && append != Some(true) {
+                    assert_silent(result.unwrap());
+                } else {
+                    assert!(result
+                        .unwrap_err()
+                        .message
+                        .contains("raw image/file context conversion"));
+                }
                 assert!(snapshot.unwrap().messages.is_empty());
                 assert_eq!(calls.load(Ordering::SeqCst), 0);
             }

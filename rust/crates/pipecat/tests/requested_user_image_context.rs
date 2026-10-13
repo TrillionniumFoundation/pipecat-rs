@@ -445,7 +445,7 @@ async fn frame_fields_win_over_mismatched_request_for_png_jpeg_and_run_flags() {
         let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
         let mut frame = direct_image(None);
         payload(&mut frame).append_to_context = append;
-        let rejected = consume(&assistant, frame.clone());
+        let passive = consume(&assistant, frame.clone());
         let before = context.snapshot_rich();
         payload(&mut frame).append_to_context = Some(true);
         let retry = consume(&assistant, frame);
@@ -453,10 +453,7 @@ async fn frame_fields_win_over_mismatched_request_for_png_jpeg_and_run_flags() {
         let cleaned = assistant.cleanup().await;
         drop(assistant);
         cleaned.unwrap();
-        assert!(
-            rejected.is_err(),
-            "request true must not override frame {append:?}"
-        );
+        silent(passive.expect("request true must not override passive frame append"));
         assert!(before.unwrap().messages.is_empty());
         assert_eq!(one_context(retry.unwrap()).context, after.unwrap());
     }

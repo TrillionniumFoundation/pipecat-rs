@@ -285,9 +285,9 @@ Both paths reject a local signed owner, buffered thought, user/bot speech,
 pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
 busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
 service responses acquire a private continuation owner even before a signature
-arrives, so this does not admit their in-progress responses. False/None append,
-requests with any function/tool/callback field present and raw camera pixels
-remain unsupported. User files use the separate PDF path described above.
+arrives, so this does not admit their in-progress responses. Requests with any
+function/tool/callback field present and raw camera pixel conversion remain
+unsupported. User files use the separate PDF path described above.
 The assistant invokes no capture callback or tool settlement. Arbitrary
 `image/*`, raw-pixel conversion and tool-associated image handling remain
 outside this bounded Python parity slice.
@@ -304,11 +304,36 @@ path can produce this shape from application-supplied encoded PNG/JPEG bytes.
 The source must already be registered and ready; the existing sampler and
 private-tag/Queued ledger checks remain in force. Input preserves the request
 association, strips its callback from the derived UserImage, and sets
-`run_llm=None`, so a real owned image still requires the ordinary idle inference
-path. Explicit false-run direct content tests do not imply Input emits false.
+`run_llm=None`, so an append=true owned image still requires the ordinary idle
+inference path. Explicit false-run direct content tests do not imply Input emits false.
 Generic capture `push` still rejects request-bearing UserImage, keyed capture
 still accepts only InputImage, and the Python JSON codec still rejects nested
 request identity. None of these checks is relaxed by content admission here.
+
+A passive `UserImage` with `append_to_context=None` or `Some(false)` consumes no
+image content and never requests inference, regardless of `run_llm`. Its request
+must be absent or plain as above. A clean idle assistant leaves history unchanged;
+an ordinary unsigned active LLM response in Text mode first commits only its held
+assistant prefix and clears that text buffer and spacing flag. Empty buffers add
+nothing; nonempty whitespace buffers commit an empty assistant message after
+trimming. The turn remains open with the same identity, timestamp, job correlation
+and transcript markers, and its real end reports the remaining suffix. No action,
+event, context, timestamp, stopped receipt or turn frame is emitted by the passive
+image itself. The same thought, speech, playback, tool, owed/awaited inference,
+realtime, signed-owner and private-carrier gates remain in force; Spoken and
+TTS-only busy turns are excluded. This selected state envelope does not reproduce
+Python's reset of thought or deferred-inference flags in other states.
+
+Passive handling skips image bytes, MIME and dimensions without encoding or
+projecting existing history. It neither checks nor inserts the content replay
+cache: repeated passive IDs can commit newly held prefixes, an earlier successful
+content ID does not suppress that commit, and later append=true content with an
+otherwise unused ID remains admissible. The keyed InputTransport all_frames
+sampler actually produces request=None/append=None/run=None UserImage when no
+request is queued. Producer dimension, media budget, source-readiness and queue
+validation remain unchanged. Consumer acceptance is not permission to bypass
+those ingress requirements. Ordinary terminal-image behavior and its existing
+private-tool validation order remain unchanged.
 
 An original request callback may be owned and completed once by InputTransport.
 Its Null result acknowledges downstream queue admission only; it may precede an
