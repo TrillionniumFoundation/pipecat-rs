@@ -1,7 +1,7 @@
 //! Process-local tool settlement receipts. Admission is not downstream consumption.
 use crate::{
     Direction, Frame, FrameData, FunctionCall, FunctionCallCancelFrame, FunctionCallResultFrame,
-    ProcessorContext, ProcessorError,
+    LocalAsyncCallback, ProcessorContext, ProcessorError,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -383,6 +383,7 @@ impl ToolOutcomePublisher {
             effects,
             reason,
             run_llm,
+            None,
         )
     }
     pub fn complete(
@@ -397,8 +398,20 @@ impl ToolOutcomePublisher {
     /// Failures, including an oversized result, retain the default policy.
     pub fn complete_with_run_llm(
         self,
+        result: Result<Value, String>,
+        run_llm: Option<bool>,
+        effects: ToolCallEffectStatus,
+        reason: ToolCallEndReason,
+    ) -> ToolCallReceipt {
+        self.complete_with_context_updated(result, run_llm, None, effects, reason)
+    }
+    /// Carry a callback to the consumer of a successful final result. Admission
+    /// never invokes it; failed, stale or closed publications discard it.
+    pub fn complete_with_context_updated(
+        self,
         mut result: Result<Value, String>,
         run_llm: Option<bool>,
+        on_context_updated: Option<LocalAsyncCallback>,
         effects: ToolCallEffectStatus,
         mut reason: ToolCallEndReason,
     ) -> ToolCallReceipt {
@@ -411,12 +424,19 @@ impl ToolOutcomePublisher {
             result = Err("native tool result exceeds byte limit".into());
             reason = ToolCallEndReason::ResultTooLarge;
         }
-        let (state, result, error, run_llm) = match result {
-            Ok(result) => (ToolCallTerminalState::Completed, result, None, run_llm),
+        let (state, result, error, run_llm, on_context_updated) = match result {
+            Ok(result) => (
+                ToolCallTerminalState::Completed,
+                result,
+                None,
+                run_llm,
+                on_context_updated,
+            ),
             Err(error) => (
                 ToolCallTerminalState::Failed,
                 json!({"error":error}),
                 Some(error),
+                None,
                 None,
             ),
         };
@@ -429,7 +449,7 @@ impl ToolOutcomePublisher {
             is_final: true,
             error,
         });
-        self.publish(data, state, effects, reason, false)
+        self.publish(data, state, effects, reason, false, on_context_updated)
     }
     fn publish(
         self,
@@ -438,6 +458,7 @@ impl ToolOutcomePublisher {
         effects: ToolCallEffectStatus,
         mut reason: ToolCallEndReason,
         mut run_llm: bool,
+        mut on_context_updated: Option<LocalAsyncCallback>,
     ) -> ToolCallReceipt {
         let ctx = &self.context;
         ctx.with_admission(&ctx.runtime, || {
@@ -461,6 +482,7 @@ impl ToolOutcomePublisher {
                 state = ToolCallTerminalState::Cancelled;
                 reason = ToolCallEndReason::StaleResult;
                 run_llm = false;
+                on_context_updated = None;
             }
             let mut frame = Frame::new(data).with_interruptible(false);
             let outcome = Arc::new(NativeToolCallOutcome {
@@ -495,6 +517,11 @@ impl ToolOutcomePublisher {
             // Terminal tool receipts survive the next interruption after admission.
             // Admission of a result is nevertheless fenced by its original scope.
             frame.attach_tool_outcome(outcome.clone());
+            if state == ToolCallTerminalState::Completed {
+                if let Some(callback) = on_context_updated {
+                    frame.attach_tool_context_updated(outcome.clone(), callback);
+                }
+            }
             let admission = match ctx.runtime.route_unlocked(
                 ctx.index,
                 generation,

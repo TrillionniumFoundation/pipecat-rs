@@ -348,6 +348,9 @@ impl LLMAssistantAggregator {
         }
         if let Some(outcome) = native_outcome {
             if state.ended {
+                let callback = frame.take_native_tool_context_updated(&outcome)?;
+                drop(state);
+                drop(callback);
                 return Ok(output);
             }
             if direction != Direction::Downstream {
@@ -355,9 +358,25 @@ impl LLMAssistantAggregator {
                     "native tool settlement must arrive downstream",
                 ));
             }
-            return self
-                .native_result(&mut state, &frame.data, outcome, &mut output)
-                .map(|()| output);
+            if frame.native_tool_context_updated()?.is_some() && self.realtime.enabled()? {
+                return Err(ProcessorError::new(
+                    "native context-updated callbacks require ordinary aggregation",
+                ));
+            }
+            let applied =
+                self.native_result(&mut state, &frame.data, outcome.clone(), &mut output)?;
+            let callback = frame.take_native_tool_context_updated(&outcome)?;
+            if applied {
+                if let Some(callback) = callback {
+                    output
+                        .actions
+                        .push(crate::AggregationAction::ContextUpdated(callback));
+                }
+            } else {
+                drop(state);
+                drop(callback);
+            }
+            return Ok(output);
         }
         if matches!(
             frame.data,
@@ -985,7 +1004,7 @@ impl LLMAssistantAggregator {
         data: &FrameData,
         outcome: Arc<pipecat_core::NativeToolCallOutcome>,
         output: &mut AggregationOutput,
-    ) -> Result<(), ProcessorError> {
+    ) -> Result<bool, ProcessorError> {
         let id = &outcome.call().tool_call_id;
         let cancelled = matches!(data, FrameData::FunctionCallCancel(_));
         if let Some((old, was_cancelled)) = state
@@ -995,7 +1014,7 @@ impl LLMAssistantAggregator {
             .and_then(|entry| entry.terminal.as_ref())
         {
             return if *old == outcome.id() && *was_cancelled == cancelled {
-                Ok(())
+                Ok(false)
             } else {
                 Err(ProcessorError::new(
                     "conflicting committed native tool outcome",
@@ -1227,14 +1246,22 @@ impl LLMAssistantAggregator {
             state.interrupted_declarations.remove(&call.tool_call_id);
             self.start_call(state, call)?;
         }
-        match data {
-            FrameData::FunctionCallResult(result) => self.result(
-                state,
-                result,
-                Some(pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(&outcome)),
-                None,
-                output,
-            )?,
+        let applied = match data {
+            FrameData::FunctionCallResult(result) => {
+                let applied = state
+                    .pending
+                    .get(&result.tool_call_id)
+                    .is_some_and(Option::is_some)
+                    && outcome.state() == pipecat_core::ToolCallTerminalState::Completed;
+                self.result(
+                    state,
+                    result,
+                    Some(pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(&outcome)),
+                    None,
+                    output,
+                )?;
+                applied
+            }
             FrameData::FunctionCallCancel(cancel) => {
                 let group = state
                     .pending
@@ -1258,15 +1285,16 @@ impl LLMAssistantAggregator {
                     // the last grouped call can release an already owed request.
                     self.maybe_run(state, output)?;
                 }
+                false
             }
             _ => {
                 return Err(ProcessorError::new(
                     "native tool outcome requires a terminal frame",
                 ))
             }
-        }
+        };
         state.native_tools.finish(outcome, cancelled);
-        Ok(())
+        Ok(applied)
     }
     fn native_progress(
         &self,
@@ -2287,10 +2315,10 @@ mod native_progress_consumer_tests {
     use super::*;
     use crate::{AggregationAction, LLMContextAggregatorPair, RealtimeServiceMode};
     use pipecat_core::{
-        FunctionCall, LlmContinuationBlock, LlmContinuationProvider, LocalToolResult,
-        NativeLlmContinuation, NativeToolCallBatch, Pipeline, PipelineWorker, StartFrame,
-        ToolCallEffectStatus, ToolCallEndReason, ToolOutcomeAdmission, ToolOutcomePublisher,
-        ToolProgressPublisher,
+        FunctionCall, LlmContinuationBlock, LlmContinuationProvider, LocalAsyncCallback,
+        LocalToolResult, NativeLlmContinuation, NativeToolCallBatch, Pipeline, PipelineWorker,
+        StartFrame, ToolCallEffectStatus, ToolCallEndReason, ToolOutcomeAdmission,
+        ToolOutcomePublisher, ToolProgressPublisher,
     };
     use pipecat_services::Context;
     use std::time::Duration;
@@ -2455,6 +2483,17 @@ mod native_progress_consumer_tests {
                     ToolCallEndReason::CallbackReturned,
                 )
             };
+            assert_eq!(receipt.admission, ToolOutcomeAdmission::Admitted);
+            self.receipt().await
+        }
+        async fn terminal_with_context_updated(&mut self, callback: LocalAsyncCallback) -> Frame {
+            let receipt = self.outcome.take().unwrap().complete_with_context_updated(
+                Ok(json!({"done":true})),
+                Some(false),
+                Some(callback),
+                ToolCallEffectStatus::ExternalEffectsUnknown,
+                ToolCallEndReason::CallbackReturned,
+            );
             assert_eq!(receipt.admission, ToolOutcomeAdmission::Admitted);
             self.receipt().await
         }
@@ -2636,6 +2675,128 @@ mod native_progress_consumer_tests {
             assert_eq!(context.snapshot_rich().unwrap(), before);
             assert!(assistant.has_function_calls_in_progress().unwrap());
         }
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_context_updated_transfers_once_after_context_commit() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let called = Arc::new(AtomicUsize::new(0));
+        let callback = LocalAsyncCallback::new({
+            let context = context.clone();
+            let called = called.clone();
+            move || {
+                let context = context.clone();
+                let called = called.clone();
+                async move {
+                    let history = context.snapshot_rich()?;
+                    assert!(matches!(&history.messages.last().unwrap().content,
+                        MessageContent::Text(text) if text.contains("done")));
+                    called.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        });
+        let frame = source.terminal_with_context_updated(callback).await;
+        let mut output = consume(&assistant, frame.clone());
+        assert!(!assistant.has_function_calls_in_progress().unwrap());
+        let committed = context.snapshot_rich().unwrap();
+        let mut callbacks = output.actions.drain(..).filter_map(|action| match action {
+            AggregationAction::ContextUpdated(callback) => Some(callback),
+            _ => None,
+        });
+        let callback = callbacks.next().unwrap();
+        assert!(callbacks.next().is_none());
+        assert_eq!(called.load(Ordering::SeqCst), 0);
+        for replay in [frame.clone(), frame.duplicate()] {
+            let output = consume(&assistant, replay);
+            assert!(!output
+                .actions
+                .iter()
+                .any(|action| matches!(action, AggregationAction::ContextUpdated(_))));
+            assert_eq!(context.snapshot_rich().unwrap(), committed);
+        }
+        callback.call().await.unwrap();
+        assert_eq!(called.load(Ordering::SeqCst), 1);
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_context_updated_closed_consumer_releases_shared_callback_without_running_it() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let retained = Arc::new(());
+        let weak = Arc::downgrade(&retained);
+        let called = Arc::new(AtomicBool::new(false));
+        let callback = LocalAsyncCallback::new({
+            let called = called.clone();
+            move || {
+                let retained = retained.clone();
+                let called = called.clone();
+                async move {
+                    drop(retained);
+                    called.store(true, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        });
+        let frame = source.terminal_with_context_updated(callback).await;
+        let mut alias = frame.duplicate();
+        let outcome = alias.native_tool_outcome().unwrap().unwrap().clone();
+        assert!(weak.upgrade().is_some());
+        consume(&assistant, Frame::new(FrameData::Stop));
+        let before = context.snapshot_rich().unwrap();
+        let output = consume(&assistant, frame);
+        assert!(output.actions.is_empty());
+        assert!(!called.load(Ordering::SeqCst));
+        assert_eq!(context.snapshot_rich().unwrap(), before);
+        assert!(weak.upgrade().is_none());
+        assert!(alias
+            .take_native_tool_context_updated(&outcome)
+            .unwrap()
+            .is_none());
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn native_context_updated_failed_context_admission_does_not_consume_callback() {
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let callback = LocalAsyncCallback::new(|| async { Ok(()) });
+        let frame = source.terminal_with_context_updated(callback.clone()).await;
+        let mut alias = frame.duplicate();
+        let outcome = alias.native_tool_outcome().unwrap().unwrap().clone();
+        // Identical messages still belong to a new, caller-replaced context lineage.
+        context
+            .replace_rich(context.snapshot_rich().unwrap())
+            .unwrap();
+        let before = context.snapshot_rich().unwrap();
+        let error = assistant
+            .process_frame(frame, Direction::Downstream)
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "native tool policy or context identity changed"
+        );
+        assert_eq!(context.snapshot_rich().unwrap(), before);
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        assert_eq!(
+            alias.native_tool_context_updated().unwrap(),
+            Some(outcome.id())
+        );
+        assert_eq!(
+            alias.take_native_tool_context_updated(&outcome).unwrap(),
+            Some(callback)
+        );
         source.close().await;
     }
 }

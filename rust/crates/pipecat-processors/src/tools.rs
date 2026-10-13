@@ -2,10 +2,10 @@
 use futures_util::FutureExt;
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, LocalToolReporter,
-    LocalToolResult, NativeLlmContinuation, NativeToolCallBatch, ProcessorContext, ProcessorError,
-    ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt, ToolOutcomeAdmission,
-    ToolOutcomePublisher, ToolProgressPublisher,
+    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolCompletion, LocalToolFunction,
+    LocalToolReporter, LocalToolResult, NativeLlmContinuation, NativeToolCallBatch,
+    ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt,
+    ToolOutcomeAdmission, ToolOutcomePublisher, ToolProgressPublisher,
 };
 use serde_json::Value;
 use std::{
@@ -60,7 +60,7 @@ impl CancellableRegisteredTool {
     }
 }
 type NormalizedToolFuture =
-    Pin<Box<dyn Future<Output = Option<Result<LocalToolResult, String>>> + Send>>;
+    Pin<Box<dyn Future<Output = Option<Result<LocalToolCompletion, String>>> + Send>>;
 type NormalizedToolCallback =
     Arc<dyn Fn(FunctionCall, Option<LocalToolReporter>) -> NormalizedToolFuture + Send + Sync>;
 #[derive(Clone)]
@@ -229,9 +229,12 @@ impl ToolExecutor {
                     let callback = callback.clone();
                     Box::pin(async move {
                         callback(call).await.map(|result| {
-                            result.map(|value| LocalToolResult {
-                                value,
-                                run_llm: None,
+                            result.map(|value| LocalToolCompletion {
+                                result: LocalToolResult {
+                                    value,
+                                    run_llm: None,
+                                },
+                                on_context_updated: None,
                             })
                         })
                     })
@@ -273,7 +276,7 @@ impl ToolExecutor {
                     let handler = handler.clone();
                     Box::pin(async move {
                         handler
-                            .call_result_with_reporter(call.arguments, reporter)
+                            .call_completion_with_reporter(call.arguments, reporter)
                             .await
                             .map(|result| result.map_err(|error| error.to_string()))
                     })
@@ -822,7 +825,7 @@ impl ActiveLease {
             Ok(())
         }))
     }
-    fn complete(&mut self, result: Result<LocalToolResult, String>, reason: ToolCallEndReason) {
+    fn complete(&mut self, result: Result<LocalToolCompletion, String>, reason: ToolCallEndReason) {
         let Some(publisher) = self.publisher.take() else {
             return;
         };
@@ -839,11 +842,21 @@ impl ActiveLease {
         let receipt = if let Some(run_llm) = control.cancel {
             publisher.cancel(effects, ToolCallEndReason::ExplicitCancel, run_llm)
         } else {
-            let (result, run_llm) = match result {
-                Ok(result) => (Ok(result.value), result.run_llm),
-                Err(error) => (Err(error), None),
+            let (result, run_llm, on_context_updated) = match result {
+                Ok(completion) => (
+                    Ok(completion.result.value),
+                    completion.result.run_llm,
+                    completion.on_context_updated,
+                ),
+                Err(error) => (Err(error), None, None),
             };
-            publisher.complete_with_run_llm(result, run_llm, effects, reason)
+            publisher.complete_with_context_updated(
+                result,
+                run_llm,
+                on_context_updated,
+                effects,
+                reason,
+            )
         };
         drop(control);
         drop(revoked);

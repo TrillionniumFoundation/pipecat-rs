@@ -23,6 +23,26 @@ impl LocalToolResult {
     }
 }
 
+/// A final successful result and an optional callback for its context consumer.
+/// Invoking a local handler alone never runs this callback.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalToolCompletion {
+    pub result: LocalToolResult,
+    pub on_context_updated: Option<LocalAsyncCallback>,
+}
+impl LocalToolCompletion {
+    pub fn new(result: LocalToolResult) -> Self {
+        Self {
+            result,
+            on_context_updated: None,
+        }
+    }
+    pub fn with_context_updated(mut self, callback: LocalAsyncCallback) -> Self {
+        self.on_context_updated = Some(callback);
+        self
+    }
+}
+
 /// A local reporting endpoint supplied by an admitted tool owner.
 /// Clones share the same synchronous sink; this type carries no wire capability.
 #[derive(Clone)]
@@ -64,7 +84,7 @@ impl Default for LocalToolOptions {
     }
 }
 type ToolFuture =
-    Pin<Box<dyn Future<Output = Option<Result<LocalToolResult, ProcessorError>>> + Send>>;
+    Pin<Box<dyn Future<Output = Option<Result<LocalToolCompletion, ProcessorError>>> + Send>>;
 pub(super) struct ToolFunctionState {
     handler: Arc<dyn Fn(Value, Option<LocalToolReporter>) -> ToolFuture + Send + Sync>,
     requires_reporter: bool,
@@ -114,7 +134,34 @@ impl LocalToolFunction {
     {
         Self(
             Arc::new(ToolFunctionState {
-                handler: Arc::new(move |arguments, _reporter| Box::pin(handler(arguments))),
+                handler: Arc::new(move |arguments, _reporter| {
+                    let future = handler(arguments);
+                    Box::pin(async move {
+                        future
+                            .await
+                            .map(|result| result.map(LocalToolCompletion::new))
+                    })
+                }),
+                requires_reporter: false,
+                options: LocalToolOptions::default(),
+                cleanup: None,
+            }),
+            LocalToolFunctionIdentity(Arc::new(())),
+        )
+    }
+    /// Construct a final handler retaining a callback for the owning context consumer.
+    /// Neither standalone invocation nor a compatibility result call runs the hook.
+    pub fn new_with_completion<F, Fut>(handler: F) -> Self
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<LocalToolCompletion, ProcessorError>> + Send + 'static,
+    {
+        Self(
+            Arc::new(ToolFunctionState {
+                handler: Arc::new(move |arguments, _reporter| {
+                    let future = handler(arguments);
+                    Box::pin(async move { Some(future.await) })
+                }),
                 requires_reporter: false,
                 options: LocalToolOptions::default(),
                 cleanup: None,
@@ -139,7 +186,7 @@ impl LocalToolFunction {
                         });
                     };
                     let future = handler(arguments, reporter);
-                    Box::pin(async move { Some(future.await) })
+                    Box::pin(async move { Some(future.await.map(LocalToolCompletion::new)) })
                 }),
                 requires_reporter: true,
                 options: LocalToolOptions {
@@ -151,20 +198,40 @@ impl LocalToolFunction {
             LocalToolFunctionIdentity(Arc::new(())),
         )
     }
-    /// Invoke with the owner's reporting endpoint while preserving final metadata
-    /// and typed cancellation. Missing required endpoints fail before constructing
-    /// the user's handler future. Ordinary handlers ignore a supplied endpoint.
-    pub async fn call_result_with_reporter(
+    /// Invoke with the owner's reporting endpoint, retaining final result and hook.
+    /// Missing required endpoints fail before constructing the user's handler future.
+    /// Ordinary handlers ignore a supplied endpoint. This method never runs the hook.
+    pub async fn call_completion_with_reporter(
         &self,
         arguments: Value,
         reporter: Option<LocalToolReporter>,
-    ) -> Option<Result<LocalToolResult, ProcessorError>> {
+    ) -> Option<Result<LocalToolCompletion, ProcessorError>> {
         if self.requires_reporter() && reporter.is_none() {
             return Some(Err(ProcessorError::new(MISSING_REPORTER)));
         }
         (self.0.handler)(arguments, reporter).await
     }
-    /// Invoke with typed cancellation and preserve successful result metadata.
+    /// Invoke without a reporter while retaining completion metadata and cancellation.
+    /// Reporting handlers require `call_completion_with_reporter` and an endpoint.
+    pub async fn call_completion_cancellable(
+        &self,
+        arguments: Value,
+    ) -> Option<Result<LocalToolCompletion, ProcessorError>> {
+        self.call_completion_with_reporter(arguments, None).await
+    }
+    /// Compatibility invocation retaining result policy but discarding its hook.
+    /// This method never runs a discarded context-update callback.
+    pub async fn call_result_with_reporter(
+        &self,
+        arguments: Value,
+        reporter: Option<LocalToolReporter>,
+    ) -> Option<Result<LocalToolResult, ProcessorError>> {
+        self.call_completion_with_reporter(arguments, reporter)
+            .await
+            .map(|result| result.map(|completion| completion.result))
+    }
+    /// Invoke with typed cancellation and preserve successful result policy.
+    /// Context-update hooks are discarded and never invoked by this method.
     /// Reporting handlers require `call_result_with_reporter` and an admitted endpoint.
     pub async fn call_result_cancellable(
         &self,
@@ -240,6 +307,107 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Mutex,
     };
+
+    #[tokio::test]
+    async fn completion_retains_hook_but_compatibility_invocations_never_run_it() {
+        let hooks = Arc::new(AtomicUsize::new(0));
+        let captured = hooks.clone();
+        let hook = LocalAsyncCallback::new(move || {
+            let captured = captured.clone();
+            async move {
+                captured.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        });
+        let callback = hook.clone();
+        let handler = LocalToolFunction::new_with_completion(move |arguments| {
+            let callback = callback.clone();
+            async move {
+                Ok(
+                    LocalToolCompletion::new(LocalToolResult::new(arguments).with_run_llm(false))
+                        .with_context_updated(callback),
+                )
+            }
+        });
+        let configured = handler
+            .with_options(LocalToolOptions::default())
+            .unwrap()
+            .with_cleanup(LocalAsyncCallback::new(|| async { Ok(()) }));
+        let completion = configured
+            .call_completion_cancellable(Value::Null)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            completion.result,
+            LocalToolResult::new(Value::Null).with_run_llm(false)
+        );
+        assert_eq!(completion.on_context_updated, Some(hook));
+        assert_eq!(
+            configured.call_result_cancellable(Value::Null).await,
+            Some(Ok(LocalToolResult::new(Value::Null).with_run_llm(false)))
+        );
+        assert_eq!(
+            configured.call_cancellable(Value::Null).await,
+            Some(Ok(Value::Null))
+        );
+        assert_eq!(configured.call(Value::Null).await.unwrap(), Value::Null);
+        assert_eq!(hooks.load(Ordering::SeqCst), 0);
+        completion.on_context_updated.unwrap().call().await.unwrap();
+        assert_eq!(hooks.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn completion_normalizes_legacy_results_and_preserves_reporter_preconditions() {
+        for handler in [
+            LocalToolFunction::new(|value| async move { Ok(value) }),
+            LocalToolFunction::new_with_result(
+                |value| async move { Ok(LocalToolResult::new(value)) },
+            ),
+        ] {
+            assert_eq!(
+                handler.call_completion_cancellable(Value::Null).await,
+                Some(Ok(LocalToolCompletion::new(LocalToolResult::new(
+                    Value::Null
+                ))))
+            );
+        }
+        let cancelled = LocalToolFunction::new_cancellable(|_| async { None });
+        assert_eq!(
+            cancelled.call_completion_cancellable(Value::Null).await,
+            None
+        );
+        let failed = LocalToolFunction::new_with_completion(|_| async {
+            Err(ProcessorError::fatal("callback failure"))
+        });
+        assert_eq!(
+            failed.call_completion_cancellable(Value::Null).await,
+            Some(Err(ProcessorError::fatal("callback failure")))
+        );
+        let effects = Arc::new(AtomicUsize::new(0));
+        let captured = effects.clone();
+        let reporting = LocalToolFunction::new_with_reporter(move |arguments, _reporter| {
+            captured.fetch_add(1, Ordering::SeqCst);
+            async move { Ok(LocalToolResult::new(arguments).with_run_llm(false)) }
+        });
+        assert_eq!(
+            reporting
+                .call_completion_with_reporter(Value::Null, None)
+                .await,
+            Some(Err(ProcessorError::new(MISSING_REPORTER)))
+        );
+        assert_eq!(effects.load(Ordering::SeqCst), 0);
+        let reporter = LocalToolReporter::new_sink(|_| Ok(()));
+        assert_eq!(
+            reporting
+                .call_completion_with_reporter(json!(7), Some(reporter))
+                .await,
+            Some(Ok(LocalToolCompletion::new(
+                LocalToolResult::new(json!(7)).with_run_llm(false)
+            )))
+        );
+        assert_eq!(effects.load(Ordering::SeqCst), 1);
+    }
 
     #[tokio::test]
     async fn reporting_requires_endpoint_before_constructing_handler() {

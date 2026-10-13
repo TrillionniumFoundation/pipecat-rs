@@ -340,7 +340,26 @@ An escaped reporter then rejects updates and cannot retain the owning runtime.
 Legacy handler APIs remain usable; invoking a reporting handler without an
 admitted endpoint fails before running user code. Native progress must be
 consumed explicitly before wire serialization. Reporting after handler return,
-context-updated hooks and realtime progress mapping remain separate work.
+intermediate context-updated hooks and realtime progress mapping remain separate work.
+
+Successful final results can use `LocalToolFunction::new_with_completion` and
+return `LocalToolCompletion::new(result).with_context_updated(callback)`, where
+`result` is a `LocalToolResult` and `callback` is a `LocalAsyncCallback`.
+The native assistant schedules the callback after applying the result and the
+existing inference actions; the callback can read the committed shared context
+and runs in the existing task owner without blocking pipeline traffic.
+It survives ordinary interruption, while End, Cancel and cleanup close that
+owner and cancel its tasks. Callback errors do not change the settled tool receipt.
+
+The hook is bound to the final receipt in a shared one-shot frame slot. Replay
+cannot invoke it again, while separate publications can reuse the same callback.
+The terminal journal retains no callback; an unconsumed frame still owns its
+captures until the shared slot is taken, discarded or dropped. Error, oversized,
+stale and cancelled results discard the hook. Failed context admission leaves it
+unconsumed; inference-route failure or shutdown does not guarantee execution.
+Standalone completion invocation returns the metadata without running the hook;
+legacy result/value invocation deliberately discards it. Wire serialization
+rejects an unconsumed slot even after terminal provenance has been taken.
 
 `DirectToolBindingConfig` defaults to 16 in-flight calls, a 1,024-ID duplicate
 window, 64 KiB argument/identity limits, 128 advertised tools and 1,024 retained
