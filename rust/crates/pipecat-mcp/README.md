@@ -144,9 +144,11 @@ become bounded class/code descriptions. On a failure, model-facing output filter
 receive empty text and may supply a custom fallback. `NotConnected` remains a wiring error.
 Local request cancellation propagates as `McpError::Cancelled` without invoking
 output filters. Agent-worker handlers preserve it as a cancellation frame with
-`run_llm: false`, rather than a successful result or a model rerun. Generic pipeline
-executor callbacks currently settle that error as a callback failure; explicit
-pipeline interruption/cancel commands still produce native cancellation receipts.
+`run_llm: false`, rather than a successful result or a model rerun. The MCP pipeline
+executor also preserves that cancellation as one native Cancelled / ExplicitCancel
+receipt with unknown external effects and no LLM rerun request. Other callback
+errors remain failures; explicit pipeline interruption/cancel commands retain
+their native cancellation receipts.
 Server-provided error messages/data are deliberately not copied into errors.
 
 ## Bounds and privacy

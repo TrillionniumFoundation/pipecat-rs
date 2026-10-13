@@ -80,6 +80,15 @@ callback panic, and callback errors remain failed tool results. A callback's
 return never proves that an external effect can be rolled back; the executor
 never retries effects.
 
+`CancellableRegisteredTool` and `register_cancellable` provide an additive callback
+contract: `Some(Ok(value))` is a result, `Some(Err(error))` is a callback failure,
+and `None` explicitly acknowledges local cancellation. `None` produces one native
+Cancelled / ExplicitCancel receipt with `run_llm: false`; a racing explicit cancel
+command retains its own `run_llm` policy. Once the callback entered, effects are
+still `ExternalEffectsUnknown`. Returning cancellation cannot undo remote effects.
+The existing `RegisteredTool`, `ToolCallback`, `ToolFuture`, and `register` API
+continue to treat every returned error as a callback failure.
+
 Result admission is fenced against the original invocation and inherited origins.
 A stale result becomes a cancellation acknowledgment. Admitted results retain
 their existing uninterruptible behavior; cancellation acknowledgments are also

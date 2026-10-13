@@ -46,6 +46,117 @@ fn results(out: &[DirectedFrame]) -> Vec<&FunctionCallResultFrame> {
         })
         .collect()
 }
+
+#[tokio::test]
+async fn callback_cancellation_settles_once_and_legacy_results_keep_their_behavior() {
+    let mut executor = ToolExecutor::new(5, 8, 1024).unwrap();
+    let cancelled = CancellableRegisteredTool::new(Arc::new(|call| {
+        Box::pin(async move {
+            match call.tool_call_id.as_str() {
+                "cancel" => None,
+                "null" => Some(Ok(serde_json::Value::Null)),
+                _ => Some(Err("typed callback error".into())),
+            }
+        })
+    }));
+    executor
+        .register_cancellable("cancelled", cancelled.clone())
+        .unwrap();
+    executor
+        .register(
+            "success",
+            RegisteredTool {
+                callback: Arc::new(|_| Box::pin(async { Ok(json!("legacy result")) })),
+                timeout: Duration::from_secs(1),
+                cancel_on_interruption: true,
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            "failed",
+            RegisteredTool::new(Arc::new(|_| Box::pin(async { Err("legacy error".into()) }))),
+        )
+        .unwrap();
+    assert!(executor.register_cancellable("success", cancelled).is_err());
+    let journal = executor.outcomes();
+    let (out, report) = run(
+        executor,
+        vec![
+            call("cancel", "cancelled"),
+            call("null", "cancelled"),
+            call("typed-err", "cancelled"),
+            call("ok", "success"),
+            call("err", "failed"),
+        ],
+    )
+    .await;
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let cancellation: Vec<_> = out
+        .iter()
+        .filter_map(|frame| {
+            if let FrameData::FunctionCallCancel(call) = &frame.frame.data {
+                Some(call)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(cancellation.len(), 1);
+    assert_eq!(cancellation[0].function_name, "cancelled");
+    assert_eq!(cancellation[0].tool_call_id, "cancel");
+    assert!(!cancellation[0].run_llm);
+    let results = results(&out);
+    assert_eq!(results.len(), 4);
+    let empty = results
+        .iter()
+        .find(|result| result.tool_call_id == "null")
+        .unwrap();
+    assert!(empty.result.is_null());
+    assert!(empty.error.is_none());
+    let typed_error = results
+        .iter()
+        .find(|result| result.tool_call_id == "typed-err")
+        .unwrap();
+    assert_eq!(typed_error.error.as_deref(), Some("typed callback error"));
+    let succeeded = results
+        .iter()
+        .find(|result| result.tool_call_id == "ok")
+        .unwrap();
+    assert_eq!(succeeded.result, json!("legacy result"));
+    assert!(succeeded.error.is_none());
+    let failed = results
+        .iter()
+        .find(|result| result.tool_call_id == "err")
+        .unwrap();
+    assert_eq!(failed.error.as_deref(), Some("legacy error"));
+    let snapshot = journal.snapshot();
+    assert!(snapshot.active.is_empty());
+    assert_eq!(snapshot.total_terminal, 5);
+    assert_eq!(snapshot.terminal.len(), 5);
+    let cancelled = snapshot
+        .terminal
+        .iter()
+        .find(|receipt| receipt.outcome.call().tool_call_id == "cancel")
+        .unwrap();
+    assert_eq!(cancelled.outcome.state(), ToolCallTerminalState::Cancelled);
+    assert_eq!(
+        cancelled.outcome.reason(),
+        ToolCallEndReason::ExplicitCancel
+    );
+    assert_eq!(
+        cancelled.outcome.effects(),
+        ToolCallEffectStatus::ExternalEffectsUnknown
+    );
+    assert!(!cancelled.outcome.run_llm());
+    let failed = snapshot
+        .terminal
+        .iter()
+        .find(|receipt| receipt.outcome.call().tool_call_id == "err")
+        .unwrap();
+    assert_eq!(failed.outcome.state(), ToolCallTerminalState::Failed);
+    assert_eq!(failed.outcome.reason(), ToolCallEndReason::CallbackError);
+}
 #[tokio::test]
 async fn parallel_callbacks_have_all_placeholders_before_results() {
     let mut executor = ToolExecutor::new(4, 16, 1024).unwrap();

@@ -18,6 +18,10 @@ use tokio::sync::{oneshot, OwnedSemaphorePermit, Semaphore};
 
 pub type ToolFuture = Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>;
 pub type ToolCallback = Arc<dyn Fn(FunctionCall) -> ToolFuture + Send + Sync>;
+/// `None` explicitly cancels this invocation; it never means an empty result.
+pub type CancellableToolFuture =
+    Pin<Box<dyn Future<Output = Option<Result<Value, String>>> + Send>>;
+pub type CancellableToolCallback = Arc<dyn Fn(FunctionCall) -> CancellableToolFuture + Send + Sync>;
 #[derive(Clone)]
 pub struct RegisteredTool {
     pub callback: ToolCallback,
@@ -26,6 +30,27 @@ pub struct RegisteredTool {
 }
 impl RegisteredTool {
     pub fn new(callback: ToolCallback) -> Self {
+        Self {
+            callback,
+            timeout: Duration::from_secs(30),
+            cancel_on_interruption: true,
+        }
+    }
+}
+/// A callback that can return a cancellation acknowledgment without inventing
+/// an error string. `Some(Ok(value))` and `Some(Err(error))` retain the ordinary
+/// callback behavior. `None` settles as Cancelled / ExplicitCancel and does not
+/// request another LLM run, unless a racing explicit cancellation command has
+/// already selected its own `run_llm` policy. Once entered, every outcome still
+/// reports ExternalEffectsUnknown; cancellation cannot undo remote side effects.
+#[derive(Clone)]
+pub struct CancellableRegisteredTool {
+    pub callback: CancellableToolCallback,
+    pub timeout: Duration,
+    pub cancel_on_interruption: bool,
+}
+impl CancellableRegisteredTool {
+    pub fn new(callback: CancellableToolCallback) -> Self {
         Self {
             callback,
             timeout: Duration::from_secs(30),
@@ -80,7 +105,7 @@ impl ToolOutcomeJournal {
 /// Every admitted identity first reserves a finite journal slot. Full pipeline
 /// lanes fail the session closed; inspect `outcomes()` for undelivered receipts.
 pub struct ToolExecutor {
-    tools: BTreeMap<String, RegisteredTool>,
+    tools: BTreeMap<String, CancellableRegisteredTool>,
     slots: Arc<Semaphore>,
     settlement_slots: Arc<Semaphore>,
     seen: Arc<Mutex<History>>,
@@ -127,6 +152,26 @@ impl ToolExecutor {
         &mut self,
         name: impl Into<String>,
         tool: RegisteredTool,
+    ) -> Result<(), ProcessorError> {
+        let callback = tool.callback;
+        self.register_cancellable(
+            name,
+            CancellableRegisteredTool {
+                callback: Arc::new(move |call| {
+                    let callback = callback.clone();
+                    Box::pin(async move { Some(callback(call).await) })
+                }),
+                timeout: tool.timeout,
+                cancel_on_interruption: tool.cancel_on_interruption,
+            },
+        )
+    }
+    /// Register an explicitly cancellation-aware callback. Admission, limits,
+    /// duplicate protection and settlement ownership match `register`.
+    pub fn register_cancellable(
+        &mut self,
+        name: impl Into<String>,
+        tool: CancellableRegisteredTool,
     ) -> Result<(), ProcessorError> {
         let name = name.into();
         if name.is_empty() || tool.timeout.is_zero() || self.tools.contains_key(&name) {
@@ -331,7 +376,7 @@ impl ToolExecutor {
                 if !lease.enter() {
                     return None;
                 }
-                Some((tool.callback)(call).await)
+                (tool.callback)(call).await
             })
             .catch_unwind();
             let guarded = async {

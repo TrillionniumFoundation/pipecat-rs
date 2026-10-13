@@ -4,7 +4,7 @@ use pipecat_core::{
     async_trait, DirectFunction, Direction, Frame, FrameData, FrameProcessor, LocalToolFunction,
     ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolsSchema,
 };
-use pipecat_processors::tools::{RegisteredTool, ToolExecutor};
+use pipecat_processors::tools::{CancellableRegisteredTool, ToolExecutor};
 use serde_json::Value;
 use std::{fmt, sync::Arc};
 
@@ -100,19 +100,20 @@ impl McpTools {
         for schema in &self.definitions {
             let client = self.client.clone();
             let name = schema.name.clone();
-            let mut tool = RegisteredTool::new(Arc::new(move |call| {
+            let mut tool = CancellableRegisteredTool::new(Arc::new(move |call| {
                 let client = client.clone();
                 let name = name.clone();
                 Box::pin(async move {
-                    client
-                        .call_text(&name, call.arguments)
-                        .await
-                        .map(Value::String)
-                        .map_err(|error| error.to_string())
+                    match client.call_text(&name, call.arguments).await {
+                        Err(McpError::Cancelled) => None,
+                        result => {
+                            Some(result.map(Value::String).map_err(|error| error.to_string()))
+                        }
+                    }
                 })
             }));
             tool.timeout = limits.request_timeout.saturating_add(limits.close_timeout);
-            executor.register(schema.name.clone(), tool)?;
+            executor.register_cancellable(schema.name.clone(), tool)?;
         }
         Ok(McpToolExecutor {
             executor,

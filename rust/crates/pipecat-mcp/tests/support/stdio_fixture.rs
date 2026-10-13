@@ -44,6 +44,11 @@ async fn main() {
         if method == "tools/call" && message["params"]["name"] == "side_effect" {
             return;
         }
+        if method == "tools/call" && message["params"]["name"] == "slow" {
+            if let Ok(marker) = std::env::var("MCP_FIXTURE_SLOW_MARKER") {
+                std::fs::write(marker, b"dispatched").unwrap();
+            }
+        }
         let writer = writer.clone();
         let active_tasks = active.clone();
         let mode = mode.clone();

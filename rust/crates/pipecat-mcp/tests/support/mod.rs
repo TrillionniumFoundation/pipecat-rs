@@ -185,7 +185,13 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
     }
     let name = message["params"]["name"].as_str().unwrap_or_default();
     if name == "slow" {
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        if mode == "blocked-slow" {
+            // This call stays pending until the owning fixture aborts the
+            // connection task. Close tests must win by cancellation, not time.
+            std::future::pending::<()>().await;
+        } else {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
     }
     if name == "side_effect" {
         if mode == "disconnect" {

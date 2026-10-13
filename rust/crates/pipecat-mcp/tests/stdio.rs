@@ -230,3 +230,93 @@ async fn nonexistent_native_executable_reports_redacted_initialization_failure()
     assert!(!format!("{client:?} {error:?}").contains("secret-token"));
     client.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn closing_native_stdio_executor_cancels_dispatched_call_and_reaps_child() {
+    use pipecat_core::{
+        Direction, Frame, FrameData, FunctionCall, Pipeline, ToolCallEffectStatus,
+        ToolCallTerminalState,
+    };
+    use std::sync::Arc;
+    let directory = std::env::temp_dir().join(format!(
+        "pipecat-mcp-executor-cancel-{}-{}",
+        std::process::id(),
+        Frame::new(FrameData::LlmRun).id,
+    ));
+    std::fs::create_dir(&directory).unwrap();
+    let marker = directory.join("dispatched");
+    let pid_file = directory.join("pid");
+    let mut config = config();
+    let ServerConfig::Stdio(stdio) = &mut config.server else {
+        unreachable!()
+    };
+    stdio.arguments.push(pid_file.to_str().unwrap().into());
+    stdio.environment.insert(
+        "MCP_FIXTURE_SLOW_MARKER".into(),
+        marker.to_str().unwrap().into(),
+    );
+    let client = McpClient::new(config).unwrap();
+    let tools = client.tools().await.unwrap();
+    let pid: u64 = std::fs::read_to_string(&pid_file).unwrap().parse().unwrap();
+    let worker = Pipeline::new(vec![Arc::new(tools.executor().unwrap())])
+        .start(Default::default())
+        .await
+        .unwrap();
+    let call = FunctionCall {
+        function_name: "slow".into(),
+        tool_call_id: "stdio-closed-call".into(),
+        arguments: json!({}),
+    };
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![call.clone()])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !marker.exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("native fixture received tools/call");
+    client.close().await.unwrap();
+    gone(pid).await;
+    worker.end().await.unwrap();
+    let (frames, report) = worker.collect().await.unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let terminal: Vec<_> = frames
+        .iter()
+        .filter(|frame| {
+            matches!(
+                frame.frame.data,
+                FrameData::FunctionCallCancel(_)
+                    | FrameData::FunctionCallResult(_)
+                    | FrameData::FunctionCallResultDetailed(_)
+            )
+        })
+        .collect();
+    assert_eq!(terminal.len(), 1);
+    let FrameData::FunctionCallCancel(cancelled) = &terminal[0].frame.data else {
+        panic!("stdio cancellation must remain a native cancellation");
+    };
+    assert_eq!(cancelled.function_name, call.function_name);
+    assert_eq!(cancelled.tool_call_id, call.tool_call_id);
+    assert!(!cancelled.run_llm);
+    let outcome = terminal[0]
+        .frame
+        .native_tool_outcome()
+        .unwrap()
+        .expect("owned native receipt");
+    assert_eq!(outcome.call(), &call);
+    assert_eq!(outcome.state(), ToolCallTerminalState::Cancelled);
+    assert_eq!(
+        outcome.effects(),
+        ToolCallEffectStatus::ExternalEffectsUnknown
+    );
+    assert!(!outcome.run_llm());
+    client.close().await.unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+}

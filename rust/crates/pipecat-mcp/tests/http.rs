@@ -924,8 +924,9 @@ async fn native_llm_worker_interruption_and_drop_own_mcp_teardown() {
 #[tokio::test]
 async fn closing_session_preserves_text_call_cancellation_without_running_filter() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let server = Server::start("").await;
+    let server = Server::start("blocked-slow").await;
     let mut config = config_for(&server);
+    config.limits.request_timeout = Duration::from_secs(30);
     let filtered = Arc::new(AtomicUsize::new(0));
     let observed = filtered.clone();
     config.tools_output_filters.insert(
@@ -953,8 +954,10 @@ async fn closing_mcp_session_cancels_native_llm_tool_without_a_model_rerun() {
     use pipecat_services::{
         ClientConfig, CompletionRequest, Context, LlmClient, Message, Provider, Role,
     };
-    let server = Server::start("").await;
-    let client = client_for(&server);
+    let server = Server::start("blocked-slow").await;
+    let mut mcp_config = config_for(&server);
+    mcp_config.limits.request_timeout = Duration::from_secs(30);
+    let client = McpClient::new(mcp_config).unwrap();
     let tools = client.tools().await.unwrap();
     let mut registry = ToolRegistry::new();
     let lifecycle = tools.register_into(&mut registry).unwrap();
@@ -1016,5 +1019,84 @@ async fn closing_mcp_session_cancels_native_llm_tool_without_a_model_rerun() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+}
+
+#[tokio::test]
+async fn closing_mcp_session_settles_pipeline_call_as_one_native_cancellation() {
+    use pipecat_core::{ToolCallEffectStatus, ToolCallEndReason, ToolCallTerminalState};
+    let server = Server::start("blocked-slow").await;
+    let mut mcp_config = config_for(&server);
+    mcp_config.limits.request_timeout = Duration::from_secs(30);
+    let client = McpClient::new(mcp_config).unwrap();
+    let tools = client.tools().await.unwrap();
+    let worker = Pipeline::new(vec![Arc::new(tools.executor().unwrap())])
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    let call = FunctionCall {
+        function_name: "slow".into(),
+        tool_call_id: "closed-pipeline-call".into(),
+        arguments: json!({}),
+    };
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![
+                call.clone(),
+                call.clone(),
+            ])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    server.wait_for(|state| state.calls.len() == 1).await;
+    client.close().await.unwrap();
+    // The retained identity cannot settle again, even after the session closes.
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![call.clone()])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    worker.end().await.unwrap();
+    let (frames, report) = worker.collect().await.unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let terminal: Vec<_> = frames
+        .iter()
+        .filter(|frame| {
+            matches!(
+                frame.frame.data,
+                FrameData::FunctionCallCancel(_)
+                    | FrameData::FunctionCallResult(_)
+                    | FrameData::FunctionCallResultDetailed(_)
+            )
+        })
+        .collect();
+    assert_eq!(terminal.len(), 1);
+    let FrameData::FunctionCallCancel(cancelled) = &terminal[0].frame.data else {
+        panic!("MCP cancellation must remain a native cancellation");
+    };
+    assert_eq!(cancelled.function_name, call.function_name);
+    assert_eq!(cancelled.tool_call_id, call.tool_call_id);
+    assert!(!cancelled.run_llm);
+    let outcome = terminal[0]
+        .frame
+        .native_tool_outcome()
+        .unwrap()
+        .expect("owned native receipt");
+    assert_eq!(outcome.call(), &call);
+    assert_eq!(outcome.state(), ToolCallTerminalState::Cancelled);
+    assert_eq!(outcome.reason(), ToolCallEndReason::ExplicitCancel);
+    assert_eq!(
+        outcome.effects(),
+        ToolCallEffectStatus::ExternalEffectsUnknown
+    );
+    assert!(!outcome.run_llm());
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    client.close().await.unwrap();
     assert_eq!(server.state.lock().unwrap().deletes, 1);
 }
