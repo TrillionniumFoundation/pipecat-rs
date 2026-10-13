@@ -57,9 +57,12 @@ including partial startup failure.
 - Processor pause/resume frames addressed to this endpoint are also supported
 - Interruptions discard queued/buffered interruptible PCM and reset its
   resampler history. Uninterruptible audio and gain controls remain queued
-- TTS speaking boundaries are emitted only after played audio, and stop after
-  TTS stop, interruption, idle timeout or End. Explicit speech-audio frames use
-  the native PCM silence threshold; plain output/background audio is not speech
+- TTS speaking boundaries are emitted only after played audio. A TTS stop owns
+  the speaking interval only if this destination has played TTS PCM since its
+  last stop; ordinary/avatar speech cannot acquire that ownership. Interruption,
+  idle timeout and End retain their existing stop behavior. Explicit speech-audio
+  frames use the native PCM silence threshold; plain output/background audio is
+  not speech
 - All speaking events carry the destination and paired broadcast identities
 - Timestamped non-audio frames wait relative to output-worker startup, preserve
   source order, and remain interruptible
@@ -77,6 +80,33 @@ Native keypad signalling is optional: `send_dtmf` returns false to select the
 bundled native PCM16 tones. Urgent keypad frames enter ahead of waiting media,
 after the currently in-flight operation; ordinary keypad frames preserve queue
 order. Both paths are interruption-aware and do not claim the bot spoke.
+
+### TTS stop ownership and avatar speech
+
+Each destination latches TTS ownership only after an explicit `Played` receipt
+for `TtsAudio`. A later `SpeechOutputAudio` frame does not erase an existing TTS
+latch: both TTS-to-speech and speech-to-TTS intervals still stop at `TtsStopped`.
+Every existing speaking stop resets the latch. `TtsStarted`, empty/filter-empty
+TTS and discarded writes cannot acquire it. Cancellation destroys the sender;
+backend failure keeps its existing unusable-destination behavior.
+
+`TtsStopped` still flushes buffered/resampled PCM and forwards the original frame
+once. The latch is checked after that flush, so a successfully played partial TTS
+tail can establish ownership before the stop. With no played TTS since the last
+stop, the control does not split an ordinary/avatar speech interval. The default
+one-second idle policy, queue admission, PTS ordering and playback fences are
+unchanged.
+
+The public facade `tts_stop_speech_ownership` tests decode an embedded fixture
+emitted by three unchanged methods from the pinned Python `HeyGenVideoService`
+and the original frame/bus serializer, executed offline with explicit recording
+collaborators. In the official TTS-to-HeyGen-to-output route, HeyGen consumes TTS
+PCM, emits callback `SpeechOutputAudioRawFrame` PCM and forwards `TTSStoppedFrame`.
+The test replays the actual offline-emitted speech/stop/speech sequence through
+native `PythonJsonCodec`, `Pipeline` and `OutputTransport`, alongside real TTS
+positive controls. Its backend records PCM and explicitly acknowledges `Played`;
+this does not qualify physical playback, a complete Python service or output
+runtime, hosted HeyGen sessions, SDK initialization, provider timing or networks.
 
 ### Urgent transport messages
 

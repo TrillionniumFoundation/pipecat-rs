@@ -597,6 +597,9 @@ struct Sender {
     volume: f32,
     gain: f32,
     speaking: bool,
+    // TTS ownership lasts until this destination stops speaking. Only a
+    // successfully Played TTS chunk can acquire it; avatar speech cannot.
+    tts_audio_played: bool,
     last_speech: Option<Instant>,
     last_speaking_event: Option<Instant>,
     started_at: Instant,
@@ -643,6 +646,7 @@ impl Sender {
             chunk_bytes,
             gain: 1.0,
             speaking: false,
+            tts_audio_played: false,
             last_speech: None,
             last_speaking_event: None,
             started_at,
@@ -865,7 +869,9 @@ impl Sender {
             FrameData::TtsStopped(_) => {
                 self.flush_resampler()?;
                 self.flush_chunks(true).await?;
-                self.stop_speaking().await?;
+                if self.tts_audio_played {
+                    self.stop_speaking().await?;
+                }
                 self.forward(frame, epoch).await
             }
             FrameData::FilterEnable(_)
@@ -1315,7 +1321,10 @@ impl Sender {
     }
     async fn track_speech(&mut self, frame: &Frame) -> Result<(), ProcessorError> {
         let speech = match &frame.data {
-            FrameData::TtsAudio(_) => true,
+            FrameData::TtsAudio(_) => {
+                self.tts_audio_played = true;
+                true
+            }
             FrameData::SpeechOutputAudio(a) => !is_silence(&a.audio).map_err(error)?,
             _ => false,
         };
@@ -1336,6 +1345,7 @@ impl Sender {
         Ok(())
     }
     async fn stop_speaking(&mut self) -> Result<(), ProcessorError> {
+        self.tts_audio_played = false;
         if self.speaking {
             self.speaking = false;
             self.broadcast(FrameData::BotStoppedSpeaking).await?;
