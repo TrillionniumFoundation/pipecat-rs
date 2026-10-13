@@ -50,6 +50,8 @@ fn convert_tools(
                     Some(Provider::OpenAi) => tools
                         .get(&AdapterType::Openai)
                         .is_some_and(|tools| !tools.is_empty()),
+                    // The source Anthropic adapter converts only standard tools.
+                    Some(Provider::Anthropic) => false,
                     _ => tools.values().any(|tools| !tools.is_empty()),
                 })
             {

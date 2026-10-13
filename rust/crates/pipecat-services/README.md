@@ -221,8 +221,10 @@ the Python OpenAI adapter. Other adapters' declarations are ignored while the
 standard function definitions and tool choice remain intact. A nonempty OpenAI
 custom entry still returns `Unsupported`; this does not add opaque tool request
 or response support. Ordinary Direct handlers still require an executor, while
-inference only advertises their definitions. Public provider-agnostic conversion,
-other providers and speculative/confirmed-owner context paths keep their existing
+inference only advertises their definitions. Ordinary Anthropic paths ignore the
+custom map entirely, matching the source adapter's standard-function-only
+conversion; this forwards no opaque declarations. Public provider-agnostic conversion,
+Gemini and speculative/confirmed-owner context paths keep their existing
 strict behavior. Message and image conversion are unchanged.
 
 Primary wire references:

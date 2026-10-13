@@ -285,7 +285,7 @@ async fn openai_owned_custom_tools_and_other_providers_still_reject_before_io() 
     let server = Server::start().await;
     for (provider, schema) in [
         (Provider::OpenAi, own_custom()),
-        (Provider::Anthropic, schema()),
+        (Provider::Gemini, schema()),
     ] {
         let processor = processor(&server, provider);
         let error = processor
