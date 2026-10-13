@@ -301,6 +301,28 @@ selection current when their tool batch is admitted. Cancellation-aware handlers
 return `None` through `LocalToolFunction::new_cancellable`; successful JSON null
 and callback errors retain their separate native outcomes.
 
+Successful handlers can use `LocalToolFunction::new_with_result` or
+`new_cancellable_with_result` and return
+`LocalToolResult::new(value).with_run_llm(false)` to suppress a new continuation
+request from that result. `true` requests continuation even while a sibling tool
+is pending; ordinary speaking, active-response and playback gates still apply.
+`None` retains the context consumer's default group policy. A false result policy
+does not retract a continuation already requested by another result.
+
+The flag is separate from user JSON and is sealed into the owned final result.
+Existing Value callback constructors and invocation methods retain their return
+types; the Value invocation methods deliberately discard result metadata.
+Executors use `call_result_cancellable` to preserve it. Cancellation retains its
+own policy and takes priority; callback errors and oversized results use the
+existing error path without a successful-result override. Options, handler
+identity, snapshot selection, cleanup and result-byte bounds are unchanged.
+This adds final-result control only, without intermediate/deferred callbacks or
+context-updated hooks. Python parity applies here to nonempty, truthy results:
+the pinned Python consumer ignores properties for falsy results, while the
+existing native consumer respects explicit flags for those values as well.
+Loopback HTTP tests do not qualify a cloud provider's acceptance of continuation
+with a pending sibling's placeholder result.
+
 `DirectToolBindingConfig` defaults to 16 in-flight calls, a 1,024-ID duplicate
 window, 64 KiB argument/identity limits, 128 advertised tools and 1,024 retained
 cleanup hooks. Handler deadlines override `default_timeout`; both absent means no

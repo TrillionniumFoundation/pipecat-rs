@@ -2,9 +2,10 @@
 use futures_util::FutureExt;
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, NativeLlmContinuation,
-    NativeToolCallBatch, ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason,
-    ToolCallReceipt, ToolOutcomeAdmission, ToolOutcomePublisher,
+    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, LocalToolResult,
+    NativeLlmContinuation, NativeToolCallBatch, ProcessorContext, ProcessorError,
+    ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt, ToolOutcomeAdmission,
+    ToolOutcomePublisher,
 };
 use serde_json::Value;
 use std::{
@@ -58,9 +59,12 @@ impl CancellableRegisteredTool {
         }
     }
 }
+type NormalizedToolFuture =
+    Pin<Box<dyn Future<Output = Option<Result<LocalToolResult, String>>> + Send>>;
+type NormalizedToolCallback = Arc<dyn Fn(FunctionCall) -> NormalizedToolFuture + Send + Sync>;
 #[derive(Clone)]
 struct RegistrationRow {
-    callback: CancellableToolCallback,
+    callback: NormalizedToolCallback,
     timeout: Option<Duration>,
     cancel_on_interruption: bool,
 }
@@ -215,10 +219,21 @@ impl ToolExecutor {
                 "invalid or duplicate tool registration",
             ));
         }
+        let callback = tool.callback;
         self.tools.insert(
             name,
             RegistrationRow {
-                callback: tool.callback,
+                callback: Arc::new(move |call| {
+                    let callback = callback.clone();
+                    Box::pin(async move {
+                        callback(call).await.map(|result| {
+                            result.map(|value| LocalToolResult {
+                                value,
+                                run_llm: None,
+                            })
+                        })
+                    })
+                }),
                 timeout: Some(tool.timeout),
                 cancel_on_interruption: tool.cancel_on_interruption,
             },
@@ -253,7 +268,7 @@ impl ToolExecutor {
                     let handler = handler.clone();
                     Box::pin(async move {
                         handler
-                            .call_cancellable(call.arguments)
+                            .call_result_cancellable(call.arguments)
                             .await
                             .map(|result| result.map_err(|error| error.to_string()))
                     })
@@ -735,7 +750,7 @@ impl ActiveLease {
         control.entered = true;
         true
     }
-    fn complete(&mut self, result: Result<Value, String>, reason: ToolCallEndReason) {
+    fn complete(&mut self, result: Result<LocalToolResult, String>, reason: ToolCallEndReason) {
         let Some(publisher) = self.publisher.take() else {
             return;
         };
@@ -751,7 +766,11 @@ impl ActiveLease {
         let receipt = if let Some(run_llm) = control.cancel {
             publisher.cancel(effects, ToolCallEndReason::ExplicitCancel, run_llm)
         } else {
-            publisher.complete(result, effects, reason)
+            let (result, run_llm) = match result {
+                Ok(result) => (Ok(result.value), result.run_llm),
+                Err(error) => (Err(error), None),
+            };
+            publisher.complete_with_run_llm(result, run_llm, effects, reason)
         };
         drop(control);
         self.record(receipt);

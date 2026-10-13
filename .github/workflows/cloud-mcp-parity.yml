@@ -26,9 +26,9 @@ jobs:
         run: cargo fmt -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat -- --check
       - name: Native MCP HTTP, stdio and affected package regressions
         run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi --features pipecat-mcp/native-fixtures --locked
-      - name: Native Gemini grounding to RTVI search integration
-        run: cargo test -p pipecat --test gemini_rtvi_search --locked
+      - name: Native Gemini RTVI and Direct result policy integration
+        run: cargo test -p pipecat --test gemini_rtvi_search --test direct_result_policy --locked
       - name: Strict affected package checks
         run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
-      - name: Strict native Gemini RTVI integration checks
-        run: cargo clippy -p pipecat --test gemini_rtvi_search --locked -- -D warnings
+      - name: Strict native Gemini and Direct integration checks
+        run: cargo clippy -p pipecat --test gemini_rtvi_search --test direct_result_policy --locked -- -D warnings

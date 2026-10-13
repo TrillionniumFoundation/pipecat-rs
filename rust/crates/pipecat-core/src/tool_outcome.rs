@@ -384,7 +384,18 @@ impl ToolOutcomePublisher {
     }
     pub fn complete(
         self,
+        result: Result<Value, String>,
+        effects: ToolCallEffectStatus,
+        reason: ToolCallEndReason,
+    ) -> ToolCallReceipt {
+        self.complete_with_run_llm(result, None, effects, reason)
+    }
+    /// Publish an owned final result with an explicit inference policy.
+    /// Failures, including an oversized result, retain the default policy.
+    pub fn complete_with_run_llm(
+        self,
         mut result: Result<Value, String>,
+        run_llm: Option<bool>,
         effects: ToolCallEffectStatus,
         mut reason: ToolCallEndReason,
     ) -> ToolCallReceipt {
@@ -397,12 +408,13 @@ impl ToolOutcomePublisher {
             result = Err("native tool result exceeds byte limit".into());
             reason = ToolCallEndReason::ResultTooLarge;
         }
-        let (state, result, error) = match result {
-            Ok(result) => (ToolCallTerminalState::Completed, result, None),
+        let (state, result, error, run_llm) = match result {
+            Ok(result) => (ToolCallTerminalState::Completed, result, None, run_llm),
             Err(error) => (
                 ToolCallTerminalState::Failed,
                 json!({"error":error}),
                 Some(error),
+                None,
             ),
         };
         let data = FrameData::FunctionCallResult(FunctionCallResultFrame {
@@ -410,7 +422,7 @@ impl ToolOutcomePublisher {
             tool_call_id: self.call.tool_call_id.clone(),
             arguments: self.call.arguments.clone(),
             result,
-            run_llm: None,
+            run_llm,
             is_final: true,
             error,
         });

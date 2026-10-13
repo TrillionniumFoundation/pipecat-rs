@@ -3,6 +3,26 @@ use crate::ProcessorError;
 use serde_json::Value;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
+/// A successful local result and its optional model-continuation policy.
+/// An absent policy leaves continuation to the context consumer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalToolResult {
+    pub value: Value,
+    pub run_llm: Option<bool>,
+}
+impl LocalToolResult {
+    pub fn new(value: Value) -> Self {
+        Self {
+            value,
+            run_llm: None,
+        }
+    }
+    pub fn with_run_llm(mut self, run_llm: bool) -> Self {
+        self.run_llm = Some(run_llm);
+        self
+    }
+}
+
 /// Options carried by a local handler. An absent deadline inherits the owning
 /// binding's default; when both are absent, the call has no execution deadline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +38,8 @@ impl Default for LocalToolOptions {
         }
     }
 }
-type ToolFuture = Pin<Box<dyn Future<Output = Option<Result<Value, ProcessorError>>> + Send>>;
+type ToolFuture =
+    Pin<Box<dyn Future<Output = Option<Result<LocalToolResult, ProcessorError>>> + Send>>;
 pub(super) struct ToolFunctionState {
     handler: Arc<dyn Fn(Value) -> ToolFuture + Send + Sync>,
     options: LocalToolOptions,
@@ -43,6 +64,28 @@ impl LocalToolFunction {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Option<Result<Value, ProcessorError>>> + Send + 'static,
     {
+        Self::new_cancellable_with_result(move |arguments| {
+            let future = handler(arguments);
+            async move { future.await.map(|result| result.map(LocalToolResult::new)) }
+        })
+    }
+    /// Construct a handler preserving its successful result's continuation policy.
+    pub fn new_with_result<F, Fut>(handler: F) -> Self
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<LocalToolResult, ProcessorError>> + Send + 'static,
+    {
+        Self::new_cancellable_with_result(move |arguments| {
+            let future = handler(arguments);
+            async move { Some(future.await) }
+        })
+    }
+    /// Construct a result-policy handler whose `None` acknowledges cancellation.
+    pub fn new_cancellable_with_result<F, Fut>(handler: F) -> Self
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<Result<LocalToolResult, ProcessorError>>> + Send + 'static,
+    {
         Self(
             Arc::new(ToolFunctionState {
                 handler: Arc::new(move |arguments| Box::pin(handler(arguments))),
@@ -52,13 +95,22 @@ impl LocalToolFunction {
             LocalToolFunctionIdentity(Arc::new(())),
         )
     }
-    /// Invoke with typed cancellation. Owning executors must use this entrypoint
-    /// instead of interpreting an error message as a cancellation acknowledgment.
+    /// Invoke with typed cancellation and preserve successful result metadata.
+    pub async fn call_result_cancellable(
+        &self,
+        arguments: Value,
+    ) -> Option<Result<LocalToolResult, ProcessorError>> {
+        (self.0.handler)(arguments).await
+    }
+    /// Compatibility invocation with typed cancellation and an ordinary value.
+    /// Result metadata is discarded; owners that honor it use `call_result_cancellable`.
     pub async fn call_cancellable(
         &self,
         arguments: Value,
     ) -> Option<Result<Value, ProcessorError>> {
-        (self.0.handler)(arguments).await
+        self.call_result_cancellable(arguments)
+            .await
+            .map(|result| result.map(|result| result.value))
     }
     /// Compatibility invocation returning an ordinary result. Typed cancellation
     /// is represented as an error here because this return type cannot carry it.
