@@ -545,7 +545,7 @@ impl LlmInference for LlmProcessor {
             ));
         }
         let mut request = self.request_snapshot()?;
-        request.context = frame_context::context(&context)?;
+        request.context = frame_context::inference_context(&context)?;
         settings::merge_settings(&mut request.settings, &options.settings);
         let mut stream = self.client.stream(request)?;
         let mut text = String::new();

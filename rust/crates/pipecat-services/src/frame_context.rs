@@ -24,6 +24,12 @@ fn definition(tool: &pipecat_core::ToolDefinition) -> ToolDefinition {
     }
 }
 pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
+    convert_tools(tools, false)
+}
+fn convert_tools(
+    tools: &ToolSet,
+    advertise_handlers: bool,
+) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
     match tools {
         ToolSet::NotGiven => Ok(None),
         ToolSet::Functions(tools) => Ok(Some(tools.iter().map(definition).collect())),
@@ -42,6 +48,9 @@ pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceErro
                 .iter()
                 .map(|tool| match tool {
                     StandardTool::Function(tool) => Ok(definition(tool)),
+                    StandardTool::Direct(tool) if advertise_handlers => {
+                        Ok(definition(&tool.schema))
+                    }
                     StandardTool::Direct(_) => Err(ServiceError::Unsupported(
                         "direct tool handlers must be registered with a tool executor".into(),
                     )),
@@ -49,6 +58,9 @@ pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceErro
                 .collect::<Result<Vec<_>, _>>()
                 .map(Some)
         }
+        ToolSet::Direct(tools) if advertise_handlers => Ok(Some(
+            tools.iter().map(|tool| definition(&tool.schema)).collect(),
+        )),
         ToolSet::Direct(_) => Err(ServiceError::Unsupported(
             "direct tool handlers must be registered with a tool executor".into(),
         )),
@@ -58,13 +70,23 @@ pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceErro
     }
 }
 pub fn context(context: &LlmContextData) -> Result<Context, ServiceError> {
+    convert_context(context, false)
+}
+/// Out-of-band inference advertises tools but has no execution lifecycle.
+pub(crate) fn inference_context(context: &LlmContextData) -> Result<Context, ServiceError> {
+    convert_context(context, true)
+}
+fn convert_context(
+    context: &LlmContextData,
+    advertise_handlers: bool,
+) -> Result<Context, ServiceError> {
     let result = Context {
         messages: context
             .messages
             .iter()
             .map(message)
             .collect::<Result<_, _>>()?,
-        tools: tools(&context.tools)?,
+        tools: convert_tools(&context.tools, advertise_handlers)?,
         tool_choice: context.tool_choice.as_ref().map(tool_choice),
     };
     result.validate()?;

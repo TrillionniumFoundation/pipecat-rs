@@ -202,9 +202,11 @@ Unsupported features are not labeled as implemented integrations:
   lifecycle; native signed text/tool continuation is described in [GEMINI.md](GEMINI.md)
 - Opaque provider-specific tools/message extensions, remote file fetching,
   tool execution/registration/timeouts, and context repair after rejected files.
-  Direct executable tool handlers require a separate executor and are rejected
-  instead of silently converted to schemas. Speculative contexts require the native
-  turn-owner capability and integrated bounded `LlmProcessor` gate described in
+  Pipeline contexts carrying direct executable tool handlers require a separate
+  executor and are rejected instead of silently dropping the handlers.
+  Out-of-band `LlmInference::run_inference` advertises their schemas and returns
+  text without executing tool calls or rerunning the model. Speculative contexts
+  require the native turn-owner capability and integrated bounded `LlmProcessor` gate described in
   [EAGER.md](../pipecat-turns/EAGER.md); missing capabilities return an explicit
   error. Runtime prompt-caching controls and incomplete-user-turn filtering remain
   unsupported
