@@ -284,8 +284,12 @@ support this update; the far bookend forwards the projected frame without prunin
 again. Legacy `LlmContext` frames carry no executable handlers and prune selections
 after full native validation, without rewriting the frame. Full native context
 conversion and tool validation precede publication.
-Custom/grouped schemas and sealed/speculative authority changes reject before
-altering handlers; capabilities are never stripped or resealed.
+Fixed native LLM bindings validate the projected context with their immutable
+provider's adapter selection, retaining foreign custom metadata without granting
+it callback authority. Owning opaque declarations, grouped schemas and
+sealed/speculative authority changes reject before altering handlers or recording
+cleanup hooks; capabilities are never stripped or resealed. Switcher bindings
+keep provider-agnostic strict custom-schema validation.
 
 The single executor keeps admitted callbacks, their timeout/interruption options,
 the settlement journal exposed by `outcomes()`, and its recent duplicate identities

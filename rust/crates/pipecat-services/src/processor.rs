@@ -100,6 +100,11 @@ impl LlmProcessor {
             .map(|state| state.request.clone())
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
     }
+    /// The immutable backend used by this native processor. Settings and model
+    /// updates do not change its provider or perform discovery.
+    pub fn provider(&self) -> crate::Provider {
+        self.client.provider()
+    }
     /// Validate the entire prospective request before committing an atomic delta.
     pub fn update_settings(&self, delta: &LlmSettings) -> Result<(), ServiceError> {
         let mut state = self

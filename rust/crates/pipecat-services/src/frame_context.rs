@@ -26,7 +26,9 @@ fn definition(tool: &pipecat_core::ToolDefinition) -> ToolDefinition {
 pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
     convert_tools(tools, false, None)
 }
-pub(crate) fn tools_for_provider(
+/// Convert ordinary handler-free tools using the selected provider's adapter.
+/// Executable Direct entries still require projection by their owning executor.
+pub fn tools_for_provider(
     tools: &ToolSet,
     provider: Provider,
 ) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
@@ -92,7 +94,10 @@ fn convert_tools(
 pub fn context(context: &LlmContextData) -> Result<Context, ServiceError> {
     convert_context(context, false, None)
 }
-pub(crate) fn context_for_provider(
+/// Validate an ordinary context using the selected provider's tool adapter.
+/// This performs no I/O and never registers or executes handlers. Frame owners
+/// must check sealed/speculative capabilities before calling this conversion.
+pub fn context_for_provider(
     context: &LlmContextData,
     provider: Provider,
 ) -> Result<Context, ServiceError> {

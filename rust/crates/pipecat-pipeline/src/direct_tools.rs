@@ -5,7 +5,7 @@ use pipecat_core::{
     ProcessorContext, ProcessorError, StandardTool, ToolSet, ToolsSchema,
 };
 use pipecat_processors::tools::{ToolExecutor, ToolOutcomeJournal, ToolRegistrationSnapshot};
-use pipecat_services::{frame_context, Context, LlmProcessor};
+use pipecat_services::{frame_context, Context, LlmProcessor, Provider};
 use std::{
     sync::{Arc, RwLock},
     time::Duration,
@@ -51,7 +51,8 @@ impl DirectToolBinding {
         llm: Arc<LlmProcessor>,
         config: DirectToolBindingConfig,
     ) -> Result<Self, ProcessorError> {
-        Self::build(llm, config)
+        let provider = llm.provider();
+        Self::build(llm, config, Some(provider))
     }
     pub fn new_switcher(llm: Arc<LlmSwitcher>) -> Result<Self, ProcessorError> {
         Self::with_switcher_config(llm, DirectToolBindingConfig::default())
@@ -60,11 +61,12 @@ impl DirectToolBinding {
         llm: Arc<LlmSwitcher>,
         config: DirectToolBindingConfig,
     ) -> Result<Self, ProcessorError> {
-        Self::build(llm, config)
+        Self::build(llm, config, None)
     }
     fn build(
         llm: Arc<dyn FrameProcessor>,
         config: DirectToolBindingConfig,
+        provider: Option<Provider>,
     ) -> Result<Self, ProcessorError> {
         if config.max_tools == 0
             || config.max_cleanup_hooks == 0
@@ -94,6 +96,7 @@ impl DirectToolBinding {
             owner: Arc::new(DirectExecutor {
                 executor,
                 config,
+                provider,
                 state,
             }),
         })
@@ -130,6 +133,7 @@ struct BindingState {
 struct DirectExecutor {
     executor: ToolExecutor,
     config: DirectToolBindingConfig,
+    provider: Option<Provider>,
     state: RwLock<BindingState>,
 }
 impl DirectExecutor {
@@ -174,12 +178,18 @@ impl DirectExecutor {
             FrameData::LlmContextDetailed(context) => {
                 let mut context = context.context.clone();
                 context.tools = projected.clone();
-                frame_context::context(&context)
-                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+                match self.provider {
+                    Some(provider) => frame_context::context_for_provider(&context, provider),
+                    None => frame_context::context(&context),
+                }
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
             }
             _ => Context {
-                tools: frame_context::tools(&projected)
-                    .map_err(|error| ProcessorError::new(error.to_string()))?,
+                tools: match self.provider {
+                    Some(provider) => frame_context::tools_for_provider(&projected, provider),
+                    None => frame_context::tools(&projected),
+                }
+                .map_err(|error| ProcessorError::new(error.to_string()))?,
                 ..Default::default()
             }
             .validate()

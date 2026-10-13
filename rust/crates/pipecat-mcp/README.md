@@ -92,8 +92,11 @@ handler replacement. Ordinary `Function` definitions may pass through for
 advertisement, but this executor executes only the bound MCP names; it does not
 register arbitrary application functions. Realtime sealed and speculative
 executable contexts are explicitly rejected when projection is needed: their capabilities are never
-stripped or resealed. Custom/grouped provider schemas retain the native LLM's
-unsupported behavior. These checks do not establish live-provider qualification.
+stripped or resealed. Fixed native LLM bindings validate projected tools with
+that LLM's immutable provider: foreign custom declarations follow its native
+adapter selection without granting callback authority. Owning opaque declarations
+and grouped schemas retain the native LLM's unsupported behavior. Switcher bindings
+keep provider-agnostic strict validation. These checks do not establish live-provider qualification.
 
 For explicit runtime refresh, retain the handle returned by `tools.bind_llm(llm)`:
 
@@ -128,7 +131,8 @@ Cleanup permanently closes this binding before awaiting MCP teardown. An explici
 client reopen cannot reactivate it. This API provides caller-driven refresh of one
 MCP inventory; it does not implement automatic server notification handling,
 general advertised-handler synchronization or arbitrary resources.
-The same sealed/speculative and custom/grouped restrictions apply.
+Refresh preserves the fixed provider and the same sealed/speculative and
+unsupported-schema restrictions.
 
 Use `tools.bind_llm_auto(llm)?` when the advertised schema should select the
 executable handlers. This opt-in binding starts with no selected handlers and
@@ -144,8 +148,8 @@ The complete cached inventory remains available, so advertising the original
 handlers again restores them without discovery. A same-client `update` replaces
 the inventory and clears the selection until a new valid schema frame arrives.
 Complete native context conversion, including messages and tool choice, precedes
-selection changes. Validation and publication are atomic; a late foreign handler, custom/grouped
-schema or sealed/speculative context cannot partially change authority. Automatic
+selection changes. Validation and publication are atomic; a late foreign handler,
+unsupported custom/grouped schema or sealed/speculative context cannot partially change authority. Automatic
 sync rejects sealed/speculative frames even when their tool set is empty, since
 pruning itself changes execution authority. The incoming projection bookend alone
 selects handlers; the opposite bookend forwards the plain projected declaration
