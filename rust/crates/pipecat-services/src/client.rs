@@ -1,7 +1,10 @@
 use crate::adapters::request_body;
 use crate::protocol::ProtocolDecoder;
 use crate::sse::SseDecoder;
-use crate::{CancellationToken, CompletionRequest, Provider, ServiceError, StreamEvent};
+use crate::{
+    CancellationToken, CompletionRequest, DeclaredRequest, OpenAiToolDeclarations, Provider,
+    ServiceError, StreamEvent,
+};
 use futures_util::StreamExt;
 use reqwest::header::{HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use std::fmt;
@@ -188,6 +191,42 @@ impl LlmClient {
             result
         }
     }
+    /// Pure serialization with bounded OpenAI advertisement-only declarations.
+    /// Nonempty declarations require ordinary OpenAI Chat Completions; Azure
+    /// and compatible presets keep their existing request contracts.
+    pub fn request_body_declared(
+        &self,
+        request: &DeclaredRequest,
+    ) -> Result<serde_json::Value, ServiceError> {
+        self.request_body_with_declarations(request.request(), request.openai_tools())
+    }
+    pub(crate) fn request_body_with_declarations(
+        &self,
+        request: &CompletionRequest,
+        declarations: &OpenAiToolDeclarations,
+    ) -> Result<serde_json::Value, ServiceError> {
+        if !declarations.is_empty() {
+            if self.config.provider != Provider::OpenAi
+                || self.config.azure.is_some()
+                || self.config.openai_preset.is_some()
+            {
+                return Err(ServiceError::Unsupported(
+                    "OpenAI declarations require ordinary OpenAI Chat Completions".into(),
+                ));
+            }
+            let standard_count = request.context.tools.as_ref().map_or(0, Vec::len);
+            if standard_count
+                .checked_add(declarations.len())
+                .is_none_or(|count| count > OpenAiToolDeclarations::MAX_TOOLS)
+            {
+                return Err(ServiceError::InvalidRequest(
+                    "OpenAI standard tools and declarations exceed tool count limit".into(),
+                ));
+            }
+        }
+        let body = self.request_body(request)?;
+        crate::adapters::append_openai_declarations(body, declarations)
+    }
     fn request_body_inner(
         &self,
         request: &CompletionRequest,
@@ -211,11 +250,21 @@ impl LlmClient {
         request: CompletionRequest,
         cancel: CancellationToken,
     ) -> Result<LlmStream, ServiceError> {
+        self.stream_declared_with_cancel(request.into(), cancel)
+    }
+    pub fn stream_declared(&self, request: DeclaredRequest) -> Result<LlmStream, ServiceError> {
+        self.stream_declared_with_cancel(request, CancellationToken::new())
+    }
+    pub fn stream_declared_with_cancel(
+        &self,
+        request: DeclaredRequest,
+        cancel: CancellationToken,
+    ) -> Result<LlmStream, ServiceError> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|_| {
             ServiceError::InvalidRequest("stream requires an active Tokio runtime".into())
         })?;
-        let body = self.request_body(&request)?;
-        let resolved = crate::settings::resolve(&request)?;
+        let body = self.request_body_declared(&request)?;
+        let resolved = crate::settings::resolve(request.request())?;
         let endpoint = self.endpoint(&resolved.model)?;
         let mut builder = self
             .http

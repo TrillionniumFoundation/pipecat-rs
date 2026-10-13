@@ -1,6 +1,9 @@
 //! Bridges native completion streams into interruption-aware core pipelines.
 use crate::{frame_context, settings};
-use crate::{CompletionRequest, LlmClient, ServiceError, StreamEvent};
+use crate::{
+    CompletionRequest, DeclaredRequest, LlmClient, OpenAiToolDeclarations, ServiceError,
+    StreamEvent,
+};
 use pipecat_core::{
     async_trait, Direction, ErrorCategory, ErrorFrame, Frame, FrameData, FrameProcessor,
     FunctionCall, LlmContextData, LlmContinuationBlock, LlmContinuationProvider,
@@ -54,8 +57,14 @@ pub struct LlmProcessor {
 #[derive(Clone)]
 struct State {
     request: CompletionRequest,
+    openai_tools: OpenAiToolDeclarations,
     skip_tts: Option<bool>,
     speculation: Option<pipecat_core::NativeSpeculation>,
+}
+impl State {
+    fn declared_request(&self) -> DeclaredRequest {
+        DeclaredRequest::new(self.request.clone(), self.openai_tools.clone())
+    }
 }
 enum Consumption {
     Forward,
@@ -70,6 +79,7 @@ impl LlmProcessor {
             client,
             state: Mutex::new(State {
                 request,
+                openai_tools: OpenAiToolDeclarations::default(),
                 skip_tts: None,
                 speculation: None,
             }),
@@ -93,11 +103,21 @@ impl LlmProcessor {
         self.name = name.into();
         self
     }
-    /// A clone is independent from pending and future frame updates.
+    /// The base request, excluding opaque declarations. A clone is independent
+    /// from pending and future frame updates; use `declared_request_snapshot`
+    /// when the complete declaration-aware request is needed.
     pub fn request_snapshot(&self) -> Result<CompletionRequest, ServiceError> {
         self.state
             .lock()
             .map(|state| state.request.clone())
+            .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
+    }
+    /// The complete request, including validated opaque declarations. The clone
+    /// is independent from pending and future frame updates.
+    pub fn declared_request_snapshot(&self) -> Result<DeclaredRequest, ServiceError> {
+        self.state
+            .lock()
+            .map(|state| state.declared_request())
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))
     }
     /// The immutable backend used by this native processor. Settings and model
@@ -111,10 +131,11 @@ impl LlmProcessor {
             .state
             .lock()
             .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
-        let mut candidate = state.request.clone();
-        settings::merge_settings(&mut candidate.settings, delta);
-        self.client.request_body(&candidate)?;
-        state.request = candidate;
+        let mut candidate = state.clone();
+        settings::merge_settings(&mut candidate.request.settings, delta);
+        self.client
+            .request_body_with_declarations(&candidate.request, &candidate.openai_tools)?;
+        *state = candidate;
         Ok(())
     }
     async fn metadata(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
@@ -182,7 +203,8 @@ impl LlmProcessor {
                 .map_err(|_| ServiceError::InvalidRequest("LLM state lock poisoned".into()))?;
             let mut next = state.clone();
             next.request.context.messages = messages;
-            self.client.request_body(&next.request)?;
+            self.client
+                .request_body_with_declarations(&next.request, &next.openai_tools)?;
             *state = next.clone();
             return Ok(if transform.run_llm.unwrap_or(false) {
                 Consumption::Run(Box::new(next))
@@ -203,9 +225,14 @@ impl LlmProcessor {
                     ));
                 }
                 next.request.context = frame_context::legacy_context(context);
+                next.openai_tools = OpenAiToolDeclarations::default();
                 true
             }
             FrameData::LlmContextDetailed(context) => {
+                let sealed = frame
+                    .native_realtime_context_cause()
+                    .map_err(|error| ServiceError::InvalidRequest(error.to_string()))?
+                    .is_some();
                 if !context.speculation && frame.native_speculation().is_some() {
                     return Err(ServiceError::InvalidRequest(
                         "speculation capability on ordinary context".into(),
@@ -230,11 +257,17 @@ impl LlmProcessor {
                     .as_ref()
                     .and_then(pipecat_core::NativeSpeculation::confirmed_context);
                 let native_context = committed.as_ref().unwrap_or(&context.context);
-                next.request.context = if context.speculation || committed.is_some() {
-                    frame_context::context(native_context)?
+                if context.speculation || committed.is_some() || sealed {
+                    next.request.context = frame_context::context(native_context)?;
+                    next.openai_tools = OpenAiToolDeclarations::default();
                 } else {
-                    frame_context::context_for_provider(native_context, self.client.provider())?
-                };
+                    let (context, declarations) = frame_context::declared_context_for_provider(
+                        native_context,
+                        self.client.provider(),
+                    )?;
+                    next.request.context = context;
+                    next.openai_tools = declarations;
+                }
                 true
             }
             FrameData::LlmRun => return Ok(Consumption::Run(Box::new(next))),
@@ -272,8 +305,20 @@ impl LlmProcessor {
                 messages.run_llm.unwrap_or(false)
             }
             FrameData::LlmSetTools(tools) => {
-                next.request.context.tools =
-                    frame_context::tools_for_provider(tools, self.client.provider())?;
+                if frame.native_speculation().is_some()
+                    || frame
+                        .native_realtime_context_cause()
+                        .map_err(|error| ServiceError::InvalidRequest(error.to_string()))?
+                        .is_some()
+                {
+                    next.request.context.tools = frame_context::tools(tools)?;
+                    next.openai_tools = OpenAiToolDeclarations::default();
+                } else {
+                    let (tools, declarations) =
+                        frame_context::declared_tools_for_provider(tools, self.client.provider())?;
+                    next.request.context.tools = tools;
+                    next.openai_tools = declarations;
+                }
                 false
             }
             FrameData::LlmSetToolChoice(choice) => {
@@ -291,7 +336,8 @@ impl LlmProcessor {
             }
             _ => return Ok(Consumption::Forward),
         };
-        self.client.request_body(&next.request)?;
+        self.client
+            .request_body_with_declarations(&next.request, &next.openai_tools)?;
         if let Some(capability) = &next.speculation {
             if !capability.claim_inference() {
                 return Ok(Consumption::Consumed);
@@ -338,7 +384,14 @@ impl LlmProcessor {
                 if !output.admits_completion() {
                     return Ok(());
                 }
-                process_completion(client, state.request, state.skip_tts, output.clone()).await
+                process_completion(
+                    client,
+                    state.request,
+                    state.openai_tools,
+                    state.skip_tts,
+                    output.clone(),
+                )
+                .await
             };
             let result = output.guard_completion(completion).await;
             let result = match result {
@@ -481,8 +534,9 @@ impl FrameProcessor for LlmProcessor {
                     let mut next = state.clone();
                     next.request.context = frame_context::context(&context)
                         .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    next.openai_tools = OpenAiToolDeclarations::default();
                     self.client
-                        .request_body(&next.request)
+                        .request_body_with_declarations(&next.request, &next.openai_tools)
                         .map_err(|error| ProcessorError::new(error.to_string()))?;
                     *state = next;
                 }
@@ -555,10 +609,13 @@ impl LlmInference for LlmProcessor {
             ));
         }
         let mut request = self.request_snapshot()?;
-        request.context =
+        let (context, declarations) =
             frame_context::inference_context_for_provider(&context, self.client.provider())?;
+        request.context = context;
         settings::merge_settings(&mut request.settings, &options.settings);
-        let mut stream = self.client.stream(request)?;
+        let mut stream = self
+            .client
+            .stream_declared(DeclaredRequest::new(request, declarations))?;
         let mut text = String::new();
         while let Some(event) = stream.next().await {
             if let StreamEvent::TextDelta(delta) = event? {
@@ -676,6 +733,7 @@ impl CompletionOutput {
 async fn process_completion(
     client: LlmClient,
     request: CompletionRequest,
+    declarations: OpenAiToolDeclarations,
     skip_tts: Option<bool>,
     ctx: CompletionOutput,
 ) -> Result<(), ProcessorError> {
@@ -715,7 +773,7 @@ async fn process_completion(
     if !ctx.admits_completion() {
         return Ok(());
     }
-    let mut stream = match client.stream(request) {
+    let mut stream = match client.stream_declared(DeclaredRequest::new(request, declarations)) {
         Ok(stream) => stream,
         Err(error) => {
             ctx.push_error(error_frame(error)).await?;

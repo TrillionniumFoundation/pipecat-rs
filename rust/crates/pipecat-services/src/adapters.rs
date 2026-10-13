@@ -90,6 +90,30 @@ pub fn request_body(
     Ok(body)
 }
 
+/// Append validated advertisement-only declarations after standard functions.
+/// The client checks the provider and combined inventory before constructing
+/// this body; the declarations grant no callback registration authority.
+pub(crate) fn append_openai_declarations(
+    mut body: Value,
+    declarations: &crate::OpenAiToolDeclarations,
+) -> Result<Value, ServiceError> {
+    if declarations.is_empty() {
+        return Ok(body);
+    }
+    let object = body.as_object_mut().ok_or_else(|| {
+        ServiceError::InvalidRequest("OpenAI request body is not an object".into())
+    })?;
+    let tools = object
+        .entry("tools")
+        .or_insert_with(|| Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| ServiceError::InvalidRequest("OpenAI tools are not an array".into()))?;
+    for declaration in declarations.as_slice() {
+        tools.push(Value::Object(declaration.clone().into_iter().collect()));
+    }
+    Ok(body)
+}
+
 /// A redacted copy for diagnostics; prompt and tool arguments remain visible.
 pub fn request_body_for_logging(
     provider: Provider,

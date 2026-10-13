@@ -220,13 +220,33 @@ inference select only the OpenAI entry in a `ToolsSchema` custom map, matching
 the Python OpenAI adapter. Other adapters' declarations are ignored while the
 standard function definitions and tool choice remain intact. Ordinary Gemini
 paths likewise select only the Gemini entry and ignore OpenAI declarations.
-A nonempty owning OpenAI or Gemini custom entry still returns `Unsupported`; this does not add opaque tool request
-or response support. Ordinary Direct handlers still require an executor, while
+A nonempty owning Gemini custom entry still returns `Unsupported`.
+Ordinary Direct handlers still require an executor, while
 inference only advertises their definitions. Ordinary Anthropic paths ignore the
 custom map entirely, matching the source adapter's standard-function-only
 conversion; this forwards no opaque declarations. Public provider-agnostic conversion
 and speculative/confirmed-owner context paths keep their existing
 strict behavior. Message and image conversion are unchanged.
+
+Ordinary OpenAI context frames, tool setters and inference retain owning custom
+declarations in validated `OpenAiToolDeclarations`, separately from function
+definitions. `DeclaredRequest` and the client's additive `request_body_declared`,
+`stream_declared` and `stream_declared_with_cancel` APIs append each original
+dictionary after standard functions. Existing `CompletionRequest` and `Context`
+fields and client method signatures stay compatible. Declarations are limited to
+64 KiB of JSON and the core argument depth limit; a custom-bearing request allows
+128 standard functions plus declarations in total. Each dictionary requires a
+nonempty string `type`. Empty declaration wrappers preserve the original behavior.
+
+This advertises declarations without registering callbacks or decoding provider
+managed tool responses. Nonempty declarations currently require an ordinary
+OpenAI client; Azure and compatible presets remain unsupported. Reserved `extra`
+fields retain their validation. Public function-only context helpers, MCP/Direct
+execution owners and sealed/speculative paths retain their strict custom-schema
+checks. Settings and message updates preserve admitted declarations; a complete
+context or tool setter replaces them only after full request validation.
+`declared_request_snapshot()` includes the full validated declarations, while
+the compatible `request_snapshot()` returns the base function context.
 
 Primary wire references:
 [OpenAI Chat](https://developers.openai.com/api/reference/resources/chat),

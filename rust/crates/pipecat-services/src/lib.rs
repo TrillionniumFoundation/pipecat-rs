@@ -15,6 +15,7 @@ pub mod frame_context;
 mod nvidia;
 pub mod presets;
 pub mod protocol;
+pub mod provider_tools;
 pub mod sarvam;
 pub mod settings;
 pub mod sse;
@@ -24,6 +25,7 @@ pub use tts_health::TtsAudioWatchdog;
 
 pub use client::{ClientConfig, LlmClient, LlmStream, RetryPolicy};
 pub use context::{Content, ContentPart, Context, Message, Role, ToolChoice, ToolDefinition};
+pub use provider_tools::{DeclaredRequest, OpenAiToolDeclarations};
 pub use types::{
     CancellationToken, CompletionRequest, FinishReason, Provider, ServiceError, StreamEvent,
     ToolCall, Usage,

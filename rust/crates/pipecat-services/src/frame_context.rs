@@ -1,12 +1,13 @@
 //! Loss-aware conversion from the core's universal context frames.
 use crate::{
-    Content, ContentPart, Context, Message, Provider, Role, ServiceError, ToolCall, ToolChoice,
-    ToolDefinition,
+    Content, ContentPart, Context, Message, OpenAiToolDeclarations, Provider, Role, ServiceError,
+    ToolCall, ToolChoice, ToolDefinition,
 };
 use pipecat_core::{
     AdapterType, ChatMessage, ChatRole, ContextMessage, LlmContextData, LlmContextFrame,
     MessageContent, MessagePart, StandardTool, ToolSet,
 };
+use std::borrow::Cow;
 
 pub fn tool_choice(choice: &pipecat_core::ToolChoice) -> ToolChoice {
     match choice {
@@ -33,6 +34,39 @@ pub fn tools_for_provider(
     provider: Provider,
 ) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
     convert_tools(tools, false, Some(provider))
+}
+/// Convert ordinary tools and retain validated OpenAI declarations separately.
+/// Direct entries still require their executor; frame owners must check native
+/// sealed/speculative authority before using this declaration-aware conversion.
+pub fn declared_tools_for_provider(
+    tools: &ToolSet,
+    provider: Provider,
+) -> Result<(Option<Vec<ToolDefinition>>, OpenAiToolDeclarations), ServiceError> {
+    let (tools, declarations) = declared_tool_selection(tools, provider)?;
+    Ok((convert_tools(&tools, false, Some(provider))?, declarations))
+}
+fn declared_tool_selection(
+    tools: &ToolSet,
+    provider: Provider,
+) -> Result<(Cow<'_, ToolSet>, OpenAiToolDeclarations), ServiceError> {
+    let (Provider::OpenAi, ToolSet::Schema(schema)) = (provider, tools) else {
+        return Ok((Cow::Borrowed(tools), OpenAiToolDeclarations::default()));
+    };
+    let Some(own) = schema
+        .custom_tools
+        .as_ref()
+        .and_then(|tools| tools.get(&AdapterType::Openai))
+        .filter(|tools| !tools.is_empty())
+    else {
+        return Ok((Cow::Borrowed(tools), OpenAiToolDeclarations::default()));
+    };
+    // Bound the borrowed data before retaining owning metadata in the sidecar.
+    let declarations = OpenAiToolDeclarations::from_slice(own)?;
+    let selected = pipecat_core::ToolsSchema {
+        standard_tools: schema.standard_tools.clone(),
+        custom_tools: None,
+    };
+    Ok((Cow::Owned(ToolSet::Schema(selected)), declarations))
 }
 fn convert_tools(
     tools: &ToolSet,
@@ -92,7 +126,7 @@ fn convert_tools(
     }
 }
 pub fn context(context: &LlmContextData) -> Result<Context, ServiceError> {
-    convert_context(context, false, None)
+    convert_context(context, false, None, &context.tools)
 }
 /// Validate an ordinary context using the selected provider's tool adapter.
 /// This performs no I/O and never registers or executes handlers. Frame owners
@@ -101,19 +135,37 @@ pub fn context_for_provider(
     context: &LlmContextData,
     provider: Provider,
 ) -> Result<Context, ServiceError> {
-    convert_context(context, false, Some(provider))
+    convert_context(context, false, Some(provider), &context.tools)
+}
+/// Convert an ordinary context and preserve validated OpenAI declarations.
+/// This performs no I/O or execution. Sealed/speculative frame owners must use
+/// the strict conversions instead of extracting declarations from their frames.
+pub fn declared_context_for_provider(
+    context: &LlmContextData,
+    provider: Provider,
+) -> Result<(Context, OpenAiToolDeclarations), ServiceError> {
+    let (tools, declarations) = declared_tool_selection(&context.tools, provider)?;
+    Ok((
+        convert_context(context, false, Some(provider), &tools)?,
+        declarations,
+    ))
 }
 /// Out-of-band inference advertises tools but has no execution lifecycle.
 pub(crate) fn inference_context_for_provider(
     context: &LlmContextData,
     provider: Provider,
-) -> Result<Context, ServiceError> {
-    convert_context(context, true, Some(provider))
+) -> Result<(Context, OpenAiToolDeclarations), ServiceError> {
+    let (tools, declarations) = declared_tool_selection(&context.tools, provider)?;
+    Ok((
+        convert_context(context, true, Some(provider), &tools)?,
+        declarations,
+    ))
 }
 fn convert_context(
     context: &LlmContextData,
     advertise_handlers: bool,
     provider: Option<Provider>,
+    tools: &ToolSet,
 ) -> Result<Context, ServiceError> {
     let result = Context {
         messages: context
@@ -121,7 +173,7 @@ fn convert_context(
             .iter()
             .map(message)
             .collect::<Result<_, _>>()?,
-        tools: convert_tools(&context.tools, advertise_handlers, provider)?,
+        tools: convert_tools(tools, advertise_handlers, provider)?,
         tool_choice: context.tool_choice.as_ref().map(tool_choice),
     };
     result.validate()?;

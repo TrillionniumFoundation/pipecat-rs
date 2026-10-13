@@ -25,7 +25,10 @@ fn context(tools: ToolSet) -> LlmContextData {
     }
 }
 fn processor() -> LlmProcessor {
-    let mut config = ClientConfig::new(Provider::OpenAi, "unused-native-fixture");
+    processor_for(Provider::OpenAi)
+}
+fn processor_for(provider: Provider) -> LlmProcessor {
+    let mut config = ClientConfig::new(provider, "unused-native-fixture");
     config.endpoint = "http://127.0.0.1:1/unused".into();
     config.api_key = None;
     LlmProcessor::new(
@@ -65,23 +68,26 @@ async fn inference_schema_projection_preserves_message_validation() {
 }
 
 #[tokio::test]
-async fn inference_still_rejects_custom_and_grouped_tool_schemas() {
-    for tools in [
-        ToolSet::Schema(core::ToolsSchema {
-            standard_tools: vec![StandardTool::Direct(direct())],
-            custom_tools: Some(
-                [(
-                    core::AdapterType::Openai,
-                    vec![[("type".into(), json!("web_search"))].into_iter().collect()],
-                )]
-                .into_iter()
-                .collect(),
-            ),
-        }),
-        ToolSet::Grouped(Default::default()),
+async fn inference_rejects_gemini_owned_and_grouped_tool_schemas() {
+    for (provider, tools) in [
+        (
+            Provider::Gemini,
+            ToolSet::Schema(core::ToolsSchema {
+                standard_tools: vec![StandardTool::Direct(direct())],
+                custom_tools: Some(
+                    [(
+                        core::AdapterType::Gemini,
+                        vec![[("google_search".into(), json!({}))].into_iter().collect()],
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+            }),
+        ),
+        (Provider::OpenAi, ToolSet::Grouped(Default::default())),
     ] {
         assert!(matches!(
-            processor()
+            processor_for(provider)
                 .run_inference(context(tools), InferenceOptions::default())
                 .await,
             Err(ServiceError::Unsupported(_))
