@@ -26,7 +26,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
     })
 }
 
-/// Flags, ownership and idle-state admission are checked by the assistant first.
+/// Flags, ownership and state admission are checked by the assistant first.
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
     let url = data_url(&image.image.image, image.image.format.as_deref(), false)?;
     let mut parts = Vec::with_capacity(2);

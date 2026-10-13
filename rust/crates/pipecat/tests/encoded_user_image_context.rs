@@ -514,8 +514,13 @@ async fn image_replays_share_frame_ids_across_families_but_not_equal_bytes() {
 }
 
 #[tokio::test]
-async fn active_upload_rejection_preserves_buffered_text_and_normal_turn_end() {
-    for buffered in [false, true] {
+async fn active_inference_upload_rejection_preserves_buffered_text_and_normal_turn_end() {
+    for (buffered, run) in [
+        (false, Some(true)),
+        (true, Some(true)),
+        (false, None),
+        (true, None),
+    ] {
         let context = SharedContext::default();
         let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
         let start = consume(&assistant, Frame::new(FrameData::LlmResponseStart));
@@ -525,7 +530,10 @@ async fn active_upload_rejection_preserves_buffered_text_and_normal_turn_end() {
                 Frame::new(FrameData::LlmText(TextFrame::llm("before"))),
             )
         });
-        let frame = png_upload();
+        let mut frame = png_upload();
+        if let FrameData::UserImage(image) = &mut frame.data {
+            image.run_llm = run;
+        }
         let rejected = consume(&assistant, frame.clone());
         let unchanged = context.snapshot_rich();
         let suffix = buffered.then(|| {
@@ -535,6 +543,9 @@ async fn active_upload_rejection_preserves_buffered_text_and_normal_turn_end() {
             )
         });
         let end = consume(&assistant, Frame::new(FrameData::LlmResponseEnd));
+        if let FrameData::UserImage(image) = &mut frame.data {
+            image.run_llm = Some(false);
+        }
         let retry = consume(&assistant, frame);
         let after = context.snapshot_rich();
         let cleaned = assistant.cleanup().await;

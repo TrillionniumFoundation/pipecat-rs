@@ -387,9 +387,15 @@ impl LLMAssistantAggregator {
                     "encoded user image context is unsupported during realtime or signed continuation",
                 ));
             }
-            if state.active
-                || state.llm_active
-                || !state.aggregation.text.is_empty()
+            // Only an ordinary open text response may admit a mid-turn,
+            // append-only upload. All independent ownership/scheduling gates
+            // below remain required, including before the first text chunk.
+            let busy_append_only = image.run_llm == Some(false)
+                && self.config.text_mode == AssistantTextMode::Text
+                && state.active
+                && state.llm_active;
+            if (!busy_append_only
+                && (state.active || state.llm_active || !state.aggregation.text.is_empty()))
                 || !state.thought.text.is_empty()
                 || state.thought_append
                 || state.user_speaking
@@ -410,8 +416,21 @@ impl LLMAssistantAggregator {
                 return Ok(output);
             }
             if image.run_llm == Some(false) {
-                // Append-only admission does not require existing history to project.
-                self.context.append_rich(message)?;
+                // Admit the held prefix and image under one context lock, without
+                // projecting existing history or performing turn-end effects.
+                // Check raw presence before trim: a whitespace-only prefix is
+                // an empty assistant message, matching the source mid-turn flush.
+                let mut context = self.context.lock()?;
+                if busy_append_only && !state.aggregation.text.is_empty() {
+                    context.append_native(Message::text(
+                        Role::Assistant,
+                        state.aggregation.text.trim().to_owned(),
+                    ));
+                }
+                context.append_rich([message]);
+                if busy_append_only {
+                    state.aggregation.take();
+                }
             } else {
                 // Convert only this known user Text/Image message before mutation.
                 // The existing transaction checks history and prepares one frame;

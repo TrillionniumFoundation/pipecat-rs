@@ -194,13 +194,25 @@ authority. The public RTVI `send-file` producer supplies this shape both with
 `run_immediately=false` and with options omitted (the default is true). No new
 decoder or dependency is used.
 
-This upload requires an idle non-realtime assistant, with no local signed owner,
-active assistant/LLM response, buffered text/thought, user/bot speech, pending
-playback/tool calls, or owed/awaited inference. It never flushes buffered text,
-closes a turn or invokes a capture callback. False/None append, every non-null
-request, raw camera pixels and user files remain unsupported. This is narrower
-than Python's partial-text flush, arbitrary `image/*` and raw-pixel conversion;
-it is not full Python image-handler parity.
+The ordinary upload path requires an idle non-realtime assistant. A narrow
+mid-turn alternative accepts explicit `run_llm=Some(false)` during an active
+unsigned LLM response in `AssistantTextMode::Text`. It commits held assistant
+text immediately before the user image under one context lock, then clears only
+the text aggregation. Empty buffers add no assistant message; nonempty
+whitespace-only buffers add an empty assistant message after the existing trim.
+This emits no context, timestamp, stopped receipt or turn frame. The real end
+keeps the original turn identity/start timestamp and emits only the remaining
+suffix as its stopped/turn text; no suffix means one empty stopped event and no
+context/timestamp/turn frames. Transcript marker bookkeeping is retained.
+
+Both paths reject a local signed owner, buffered thought, user/bot speech,
+pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
+busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
+service responses acquire a private continuation owner even before a signature
+arrives, so this does not admit their in-progress responses. False/None append,
+every non-null request, raw camera pixels and user files remain unsupported.
+No capture callback is invoked. Arbitrary `image/*`, raw-pixel conversion and
+requested/tool-image handling remain outside this bounded Python parity slice.
 
 Accepted uploads are consumed in either direction without aggregation events.
 Explicit `run_llm=Some(false)` is append-only and produces no actions. True or
@@ -212,8 +224,11 @@ existing interruption/audio envelope. Nondefault audio-option timing through a
 provider chain is not qualified by this slice.
 
 Encoded payload validation precedes context mutation and replay lookup; only a
-committed append records its ID in the same 512-ID cache. Failed validation or context projection
-leaves the ID retryable. An accepted false-run upload retyped as true with the
+committed append records its ID in the same 512-ID cache. Failed validation or
+context admission leaves both the held prefix and ID retryable. Replay lookup
+precedes a mid-turn flush, so a duplicate cannot flush later suffix text.
+Append-only admission does not require unrelated existing history to project;
+normal turn-end projection retains its existing boundary. An accepted false-run upload retyped as true with the
 same ID emits no inference action. Equal bytes with different IDs remain distinct.
 This is bounded native frame replay suppression, not lifetime or RTVI-command
 exactly-once delivery. Ordinary uploads after End/Cancel/Stop are ignored,
