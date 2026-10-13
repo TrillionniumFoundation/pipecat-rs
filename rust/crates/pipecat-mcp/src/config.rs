@@ -63,6 +63,74 @@ impl fmt::Debug for HttpConfig {
             .finish()
     }
 }
+/// Standalone GET/POST SSE, as used by the source `SseServerParameters`.
+/// Event-stream idle time is independent of each POST/request deadline.
+/// Cleanup closes the owned stream and tasks; this protocol has no DELETE.
+#[derive(Clone)]
+pub struct LegacySseConfig {
+    pub url: String,
+    pub headers: BTreeMap<String, String>,
+    pub sse_read_timeout: Duration,
+    pub limits: Limits,
+    pub tools_filter: Option<BTreeSet<String>>,
+    pub tools_arguments: BTreeMap<String, Map<String, Value>>,
+    pub tools_output_filters: BTreeMap<String, OutputFilter>,
+}
+impl LegacySseConfig {
+    pub fn new(url: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            headers: BTreeMap::new(),
+            sse_read_timeout: Duration::from_secs(300),
+            limits: Limits::default(),
+            tools_filter: None,
+            tools_arguments: BTreeMap::new(),
+            tools_output_filters: BTreeMap::new(),
+        }
+    }
+    pub(crate) fn into_config(self) -> Result<(McpConfig, Duration), McpError> {
+        if self.sse_read_timeout.is_zero()
+            || tokio::time::Instant::now()
+                .checked_add(self.sse_read_timeout)
+                .is_none()
+        {
+            return Err(McpError::Config(
+                "SSE idle timeout must be positive and finite",
+            ));
+        }
+        // The private backend selector distinguishes standalone SSE. Normalize
+        // its shared policy once without changing the public ServerConfig enum.
+        let config = McpConfig {
+            server: ServerConfig::StreamableHttp(HttpConfig {
+                url: self.url,
+                headers: self.headers,
+                terminate_on_close: false,
+            }),
+            limits: self.limits,
+            tools_filter: self.tools_filter,
+            tools_arguments: self.tools_arguments,
+            tools_output_filters: self.tools_output_filters,
+        };
+        config.validate()?;
+        Ok((config, self.sse_read_timeout))
+    }
+}
+impl fmt::Debug for LegacySseConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LegacySseConfig")
+            .field("url", &"[redacted]")
+            .field("header_count", &self.headers.len())
+            .field("sse_read_timeout", &self.sse_read_timeout)
+            .field("limits", &self.limits)
+            .field(
+                "tools_filter_count",
+                &self.tools_filter.as_ref().map(BTreeSet::len),
+            )
+            .field("fixed_argument_tool_count", &self.tools_arguments.len())
+            .field("output_filter_count", &self.tools_output_filters.len())
+            .finish()
+    }
+}
 #[derive(Clone, Debug)]
 pub enum ServerConfig {
     Stdio(StdioConfig),

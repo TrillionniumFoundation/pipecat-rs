@@ -4,6 +4,7 @@ Native MCP tools for Pipecat's Rust contexts, processors, and agent workers. Use
 the official [`rmcp` 3.3.0 SDK](https://docs.rs/rmcp/3.3.0/rmcp/) for negotiation,
 JSON-RPC correlation, sessions, and Streamable HTTP semantics. There is no Python
 or Node runtime, shell adapter, credential discovery, or external MCP test server.
+The native standalone SSE adapter uses the same SDK negotiation and correlation.
 
 ## Pipeline tool executor
 
@@ -214,6 +215,35 @@ null stderr, bounded writes, and kill/wait cleanup. Tests launch only the compil
 Normal builds do not produce or install that executable. No process-group or arbitrary descendant management
 is promised; native MCP executables must own their own descendants.
 
+## Standalone SSE configuration
+
+For the source's `SseServerParameters` transport, use the explicit factory:
+
+```rust,no_run
+use pipecat_mcp::{LegacySseConfig, McpClient};
+# async fn example() -> Result<(), pipecat_mcp::McpError> {
+let mut config = LegacySseConfig::new("http://127.0.0.1:8000/sse");
+config.sse_read_timeout = std::time::Duration::from_secs(300);
+let client = McpClient::new_legacy_sse(config)?;
+let tools = client.tools().await?;
+# let _ = tools;
+client.close().await?;
+# Ok(())
+# }
+```
+
+`LegacySseConfig` provides the same limits, name filters, fixed arguments and
+output filters. The GET event stream has its own positive finite idle timeout;
+POST writes use the request deadline. A bounded `endpoint` event selects the
+separate message URL only after same-origin validation, including effective port.
+Caller headers are sent to both authorized endpoints. Responses arrive through
+the owned GET stream, never from a substitute POST JSON body. Stream errors/EOF
+invalidate the session, and the failed call is never replayed. Close cancels and
+awaits owned reads/writes; standalone SSE has no HTTP DELETE. The existing HTTP
+factory remains Streamable HTTP with no automatic downgrade, stream resumption,
+or endpoint change. Existing `ServerConfig` variants and `McpConfig` literals are
+unchanged.
+
 ## Session and cancellation contract
 
 - `start()` is idempotent and waits for the MCP initialize/initialized handshake.
@@ -314,7 +344,8 @@ its own network chunk before the application applies its byte limit.
 HTTPS uses rustls and bundled public certificate roots with verification enabled.
 Plaintext HTTP is limited to loopback. Redirects and environment proxies are
 disabled. URL userinfo/fragments and overridden MCP/framing headers are rejected.
-Explicit caller-provided auth headers are sent only to the configured endpoint.
+Explicit caller-provided auth headers are sent only to the configured endpoint
+and the validated same-origin standalone SSE message endpoint.
 No OAuth, refresh, persistent grant, credential store, root discovery, resource
 read, sampling, elicitation, or tool auto-execution is enabled.
 
@@ -348,12 +379,12 @@ filters, typed and model-facing results/errors, task-independent close/reopen,
 generation-safe dropped-session recovery, interruption/cancellation, bounded
 requests, native pipeline/agent registry integration, and schema-carried options
 and shared cleanup for ordinary Direct bindings.
+Native stdio, Streamable HTTP and standalone GET/POST SSE are supported.
 
-Not implemented: deprecated standalone HTTP+SSE (`SseServerParameters`), Python
-SDK session injection/types/context managers, deprecated Python registration method
+Not implemented: Python SDK session injection/types/context managers, deprecated Python registration method
 aliases, and implicit `LLMSwitcher` handler propagation. The official SDK has no
-legacy standalone SSE transport; Streamable HTTP SSE responses are supported and
-tested. The source has no tool alias feature. Unknown configured fixed-argument
+public standalone SSE transport; this crate supplies its native owned adapter.
+The source has no tool alias feature. Unknown configured fixed-argument
 tool names are unused; Python's warning log for them is not reproduced. String
 filters replace Python's dynamically typed callback contract. HTTP redirects,
 inherited stdio environment, and unbounded/error-detail logging are intentionally
@@ -370,7 +401,7 @@ cargo clippy -p pipecat-mcp --all-targets --features native-fixtures -j 2 --offl
 cargo fmt -p pipecat-mcp -- --check
 ```
 
-Fixtures cover real loopback HTTP JSON, Streamable HTTP SSE, stateful/stateless
+Fixtures cover real loopback HTTP JSON, Streamable HTTP SSE, standalone SSE GET/POST, stateful/stateless
 sessions, the native LLM-worker tool round, native stdio child ownership/reaping,
 side-effect-before404/disconnect no-replay behavior, teardown/reopen races,
 request/initializer cancellation, future-drop cancellation, pagination, schema

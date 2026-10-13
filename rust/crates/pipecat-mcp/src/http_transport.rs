@@ -152,7 +152,10 @@ impl EventBudget {
         Ok(())
     }
 }
-fn events(response: reqwest::Response, limit: usize) -> BoxStream<'static, Result<Sse, SseError>> {
+pub(crate) fn events(
+    response: reqwest::Response,
+    limit: usize,
+) -> BoxStream<'static, Result<Sse, SseError>> {
     let stream = response
         .bytes_stream()
         .scan(EventBudget::default(), move |state, chunk| {

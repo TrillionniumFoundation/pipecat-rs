@@ -9,9 +9,12 @@ mod config;
 mod error;
 mod http_transport;
 mod integration;
+mod legacy_sse;
 mod schema;
 mod stdio;
-pub use config::{HttpConfig, Limits, McpConfig, OutputFilter, ServerConfig, StdioConfig};
+pub use config::{
+    HttpConfig, LegacySseConfig, Limits, McpConfig, OutputFilter, ServerConfig, StdioConfig,
+};
 pub use error::McpError;
 pub use integration::{McpLifecycle, McpLlmBinding, McpToolExecutor, McpTools};
 use pipecat_core::{LocalAsyncCallback, ProcessorError, ToolDefinition};
@@ -63,6 +66,7 @@ struct State {
 }
 struct Inner {
     config: McpConfig,
+    legacy_sse_read_timeout: Option<std::time::Duration>,
     state: Mutex<State>,
     slots: Arc<Semaphore>,
 }
@@ -100,6 +104,10 @@ impl fmt::Debug for McpClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("McpClient")
             .field("config", &self.inner.config)
+            .field(
+                "standalone_sse",
+                &self.inner.legacy_sse_read_timeout.is_some(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -125,10 +133,23 @@ impl McpClient {
     /// Validates configuration without connecting, discovering credentials, or
     /// spawning a process. No authentication flow is implemented.
     pub fn new(config: McpConfig) -> Result<Self, McpError> {
+        Self::new_inner(config, None)
+    }
+    /// Explicit standalone SSE entry point. Construction performs no I/O.
+    /// The existing Streamable HTTP factory never silently downgrades to SSE.
+    pub fn new_legacy_sse(config: LegacySseConfig) -> Result<Self, McpError> {
+        let (config, idle_timeout) = config.into_config()?;
+        Self::new_inner(config, Some(idle_timeout))
+    }
+    fn new_inner(
+        config: McpConfig,
+        legacy_sse_read_timeout: Option<std::time::Duration>,
+    ) -> Result<Self, McpError> {
         config.validate()?;
         let inner = Arc::new(Inner {
             slots: Arc::new(Semaphore::new(config.limits.max_in_flight)),
             config,
+            legacy_sse_read_timeout,
             state: Mutex::new(State::default()),
         });
         // Capture the resource, not a client that owns this callback. Inner
@@ -193,14 +214,29 @@ impl McpClient {
                     )?)
                     .await
                     .map_err(|_| McpError::Initialization),
-                ServerConfig::StreamableHttp(http) => info
-                    .serve(http_transport::transport(
-                        http,
-                        &config.limits,
-                        cleanup.clone(),
-                    )?)
-                    .await
-                    .map_err(|_| McpError::Initialization),
+                ServerConfig::StreamableHttp(http) => {
+                    if let Some(idle_timeout) = self.inner.legacy_sse_read_timeout {
+                        info.serve(
+                            legacy_sse::transport(
+                                http,
+                                idle_timeout,
+                                &config.limits,
+                                cleanup.clone(),
+                            )
+                            .await?,
+                        )
+                        .await
+                        .map_err(|_| McpError::Initialization)
+                    } else {
+                        info.serve(http_transport::transport(
+                            http,
+                            &config.limits,
+                            cleanup.clone(),
+                        )?)
+                        .await
+                        .map_err(|_| McpError::Initialization)
+                    }
+                }
             }
         })
         .await
