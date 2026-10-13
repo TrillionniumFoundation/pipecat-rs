@@ -261,6 +261,17 @@ final audio precedes the stopped event. Recording buffers, resampler-tail
 reservations, turn/preroll buffers, and broadcast event history are bounded.
 Slow event consumers receive Tokio's explicit `Lagged` error.
 
+With `enable_turn_audio=false`, generic pipeline `Stop` keeps the recorder active
+and preserves its primary buffers without emitting final audio or a stopped event.
+The stopped worker skips processor cleanup; an owner retaining the recorder must
+call `stop_recording()` or `FrameProcessor::cleanup()` to flush and finish it.
+Repeated explicit stop and cleanup do not duplicate final events. This does not
+promise worker resume or recorder reattachment. Explicit recording-stop controls,
+End and Cancel still flush and stop. Every `enable_turn_audio=true` configuration
+keeps the existing Stop drain and terminal boundary, including manual numbering
+and attached sessions whose attribution has already been disabled. This boundary
+is independent of whether the `turn-recording` feature is compiled.
+
 `RecordingEvent` includes recording lifecycle, mixed and track audio, speech-run
 and numbered turn events. `emit_turn_audio(turn_number)` supports manual numbering;
 recording stop retains pending turn audio for that call. The optional

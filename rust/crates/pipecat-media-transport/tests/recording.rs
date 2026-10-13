@@ -283,14 +283,13 @@ fn stop_restart_clears_timestamps_speaking_and_resampler_state() {
 }
 
 #[test]
-fn controls_and_all_terminal_variants_stop_recording() {
+fn explicit_recording_stop_end_and_cancel_variants_stop_recording() {
     for terminal in [
         FrameData::AudioBufferStopRecording,
         Frame::end().data,
         Frame::cancel("test").data,
         FrameData::EndDetailed(pipecat_core::ReasonFrame { reason: None }),
         FrameData::CancelDetailed(pipecat_core::ReasonFrame { reason: None }),
-        FrameData::Stop,
     ] {
         let (processor, _) = recorder(configured());
         processor

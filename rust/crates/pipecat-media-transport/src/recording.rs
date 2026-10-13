@@ -678,6 +678,9 @@ impl AudioBufferProcessor {
                 }
             }
             FrameData::AudioBufferStartRecording => self.start_locked(state)?,
+            // Plain recording belongs to the owner after pipeline Stop. Turn-enabled
+            // recording keeps its existing terminal drain and attribution boundary.
+            FrameData::Stop if !self.config.enable_turn_audio => {}
             FrameData::AudioBufferStopRecording
             | FrameData::End(_)
             | FrameData::EndDetailed(_)
