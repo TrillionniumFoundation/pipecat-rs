@@ -80,8 +80,9 @@ impl fmt::Debug for OpenAiToolDeclarations {
     }
 }
 
-/// Validated Gemini search declarations. This initial contract accepts only
-/// `{"google_search": {}}`; declarations advertise tools without local execution.
+/// Validated Gemini search declarations. This contract accepts a single
+/// `google_search` or `googleSearch` key with an empty object. Stored declarations
+/// keep their original spelling and advertise tools without local execution.
 #[derive(Clone, Default)]
 pub struct GeminiToolDeclarations {
     tools: Vec<BTreeMap<String, Value>>,
@@ -126,6 +127,7 @@ impl GeminiToolDeclarations {
             if tool.len() != 1
                 || !tool
                     .get("google_search")
+                    .or_else(|| tool.get("googleSearch"))
                     .and_then(Value::as_object)
                     .is_some_and(|config| config.is_empty())
             {

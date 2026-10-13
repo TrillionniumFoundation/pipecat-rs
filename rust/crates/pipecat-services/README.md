@@ -250,8 +250,10 @@ context or tool setter replaces them only after full request validation.
 the compatible `request_snapshot()` returns the base function context.
 
 Ordinary Gemini context frames, setters and inference accept exactly
-`{"google_search": {}}` as a custom declaration. The locked Python google-genai
-2.25.0 SDK maps it to `{"googleSearch": {}}` and moves the merged standard
+`{"google_search": {}}` or its SDK input alias `{"googleSearch": {}}` as a
+custom declaration. The original dictionary spelling is retained in wrappers
+and full snapshots. Both spellings in one dictionary are rejected. The locked
+Python google-genai 2.25.0 SDK maps either input to `{"googleSearch": {}}` and moves the merged standard
 function group after built-in tools. Native requests follow that declaration
 mapping and order, retaining the source adapter's standard-schema adaptation.
 This does not establish full SDK request equality or live model support for a

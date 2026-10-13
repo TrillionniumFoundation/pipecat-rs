@@ -22,6 +22,15 @@ async fn round_trip(mode: &str, owning: bool) {
     provider_round_trip(mode, owning, Provider::OpenAi).await;
 }
 async fn provider_round_trip(mode: &str, owning: bool, native_provider: Provider) {
+    provider_round_trip_with_search_key(mode, owning, native_provider, "google_search").await;
+}
+
+async fn provider_round_trip_with_search_key(
+    mode: &str,
+    owning: bool,
+    native_provider: Provider,
+    search_key: &str,
+) {
     let server = Server::start("").await;
     let mut config = McpConfig::new(ServerConfig::StreamableHttp(HttpConfig::new(&server.url)));
     config.tools_filter = Some(BTreeSet::from(["echo".into()]));
@@ -35,7 +44,7 @@ async fn provider_round_trip(mode: &str, owning: bool, native_provider: Provider
     let (adapter, declaration) = if native_provider == Provider::Gemini {
         (
             pipecat_core::AdapterType::Gemini,
-            BTreeMap::from([("google_search".into(), json!({}))]),
+            BTreeMap::from([(search_key.into(), json!({}))]),
         )
     } else if owning {
         (
@@ -182,6 +191,11 @@ async fn provider_round_trip(mode: &str, owning: bool, native_provider: Provider
 #[tokio::test]
 async fn gemini_owning_static_auto_bridge_returns_real_mcp_result_and_cleanup() {
     provider_round_trip("auto", true, Provider::Gemini).await;
+}
+
+#[tokio::test]
+async fn gemini_camel_search_static_auto_bridge_returns_real_mcp_result_and_cleanup() {
+    provider_round_trip_with_search_key("auto", true, Provider::Gemini, "googleSearch").await;
 }
 #[tokio::test]
 async fn gemini_owning_static_direct_bridge_returns_real_mcp_result_and_cleanup() {

@@ -412,21 +412,31 @@ async fn gemini_schema_alias_conflicts_reject_before_io_without_changing_state()
     assert!(server.requests.lock().unwrap().is_empty());
 }
 fn owning_schema() -> core::ToolsSchema {
+    owning_schema_with_key("google_search")
+}
+fn owning_schema_with_key(key: &str) -> core::ToolsSchema {
     let mut schema = schema();
     schema.custom_tools.as_mut().unwrap().insert(
         core::AdapterType::Gemini,
-        vec![BTreeMap::from([("google_search".into(), json!({}))])],
+        vec![BTreeMap::from([(key.into(), json!({}))])],
     );
     schema
 }
 async fn pipeline_round_trip(setter: bool, owning: bool) {
+    pipeline_round_trip_with_key(setter, owning, "google_search").await;
+}
+async fn pipeline_round_trip_with_key(setter: bool, owning: bool, key: &str) {
     let server = Server::start().await;
     let processor = processor(&server, Provider::Gemini);
     let mut worker = Pipeline::new(vec![processor])
         .start(PipelineConfig::default())
         .await
         .unwrap();
-    let schema = if owning { owning_schema() } else { schema() };
+    let schema = if owning {
+        owning_schema_with_key(key)
+    } else {
+        schema()
+    };
     let input = context(schema.clone());
     if setter {
         worker
@@ -518,6 +528,34 @@ async fn gemini_owning_setter_matches_locked_sdk_wire_order() {
     pipeline_round_trip(true, true).await;
 }
 #[tokio::test]
+async fn gemini_camel_search_context_reaches_native_http_with_the_original_dictionary() {
+    pipeline_round_trip_with_key(false, true, "googleSearch").await;
+}
+#[tokio::test]
+async fn gemini_camel_search_setter_reaches_native_http_with_the_original_dictionary() {
+    pipeline_round_trip_with_key(true, true, "googleSearch").await;
+}
+#[tokio::test]
+async fn gemini_camel_search_inference_reaches_native_http_without_mutation() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let input = context(owning_schema_with_key("googleSearch"));
+    let before = processor.request_snapshot().unwrap().context;
+    let result = processor
+        .run_inference(input.clone(), InferenceOptions::default())
+        .await;
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(
+        requests.len(),
+        1,
+        "valid SDK camel Search alias must reach HTTP; result={result:?}"
+    );
+    assert_eq!(result.unwrap(), Some("declared".into()));
+    assert_wire(&requests[0], true);
+    assert_eq!(input, context(owning_schema_with_key("googleSearch")));
+    assert_eq!(processor.request_snapshot().unwrap().context, before);
+}
+#[tokio::test]
 async fn gemini_owning_inference_keeps_sdk_declaration_order_without_mutating_input() {
     let server = Server::start().await;
     let processor = processor(&server, Provider::Gemini);
@@ -576,9 +614,14 @@ fn gemini_declaration_wrapper_keeps_legacy_bodies_and_exact_supported_shape() {
     ));
     for unsupported in [
         BTreeMap::new(),
-        BTreeMap::from([("googleSearch".into(), json!({}))]),
+        BTreeMap::from([("GoogleSearch".into(), json!({}))]),
         BTreeMap::from([("code_execution".into(), json!({}))]),
         BTreeMap::from([("google_search".into(), Value::Null)]),
+        BTreeMap::from([("googleSearch".into(), Value::Null)]),
+        BTreeMap::from([(
+            "googleSearch".into(),
+            json!({"excludeDomains":["example.com"]}),
+        )]),
         BTreeMap::from([(
             "google_search".into(),
             json!({"exclude_domains":["example.com"]}),
@@ -586,6 +629,10 @@ fn gemini_declaration_wrapper_keeps_legacy_bodies_and_exact_supported_shape() {
         BTreeMap::from([
             ("google_search".into(), json!({})),
             ("marker".into(), json!("do not retain")),
+        ]),
+        BTreeMap::from([
+            ("google_search".into(), json!({})),
+            ("googleSearch".into(), json!({})),
         ]),
     ] {
         assert!(matches!(
@@ -597,6 +644,28 @@ fn gemini_declaration_wrapper_keeps_legacy_bodies_and_exact_supported_shape() {
     config.api_key = None;
     let client = LlmClient::new(config).unwrap();
     let request = CompletionRequest::new("fixture", Context::default());
+    for key in ["google_search", "googleSearch"] {
+        let source = BTreeMap::from([(key.into(), json!({}))]);
+        let copied = GeminiToolDeclarations::from_slice(std::slice::from_ref(&source)).unwrap();
+        let owned = GeminiToolDeclarations::new(vec![source.clone()]).unwrap();
+        assert_eq!(copied.as_slice(), owned.as_slice());
+        assert_eq!(copied.as_slice(), std::slice::from_ref(&source));
+        assert!(matches!(
+            GeminiToolDeclarations::from_slice(&vec![source.clone(); 129]),
+            Err(ServiceError::InvalidRequest(_))
+        ));
+        let declared = GeminiDeclaredRequest::new(request.clone(), copied);
+        assert_eq!(
+            client.request_body_gemini_declared(&declared).unwrap()["tools"],
+            json!([{"googleSearch":{}}])
+        );
+        let (base, retained) = declared.into_parts();
+        assert_eq!(
+            serde_json::to_value(base).unwrap(),
+            serde_json::to_value(&request).unwrap()
+        );
+        assert_eq!(retained.as_slice(), std::slice::from_ref(&source));
+    }
     let declared = GeminiDeclaredRequest::new(request.clone(), own.clone());
     assert_eq!(
         client.request_body_gemini_declared(&declared).unwrap()["tools"],
@@ -735,13 +804,22 @@ async fn gemini_setter_applied(
 
 #[tokio::test]
 async fn gemini_owning_state_retains_metadata_and_rejects_before_publication() {
+    owning_state_retains_metadata("google_search").await;
+}
+
+#[tokio::test]
+async fn gemini_camel_search_state_retains_the_original_key_and_rejects_before_publication() {
+    owning_state_retains_metadata("googleSearch").await;
+}
+
+async fn owning_state_retains_metadata(key: &str) {
     let server = Server::start().await;
     let processor = processor(&server, Provider::Gemini);
     let mut worker = Pipeline::new(vec![processor.clone()])
         .start(PipelineConfig::default())
         .await
         .unwrap();
-    gemini_setter_applied(&worker, &processor, owning_schema()).await;
+    gemini_setter_applied(&worker, &processor, owning_schema_with_key(key)).await;
     assert!(
         matches!(
             processor.declared_request_snapshot(),
@@ -781,11 +859,15 @@ async fn gemini_owning_state_retains_metadata_and_rejects_before_publication() {
     .unwrap();
     let before = processor.gemini_declared_request_snapshot().unwrap();
     assert_eq!(before.gemini_tools().len(), 1);
+    assert_eq!(
+        before.gemini_tools().as_slice(),
+        &[BTreeMap::from([(key.into(), json!({}))])]
+    );
     processor
-        .preflight_context(&context(owning_schema()))
+        .preflight_context(&context(owning_schema_with_key(key)))
         .unwrap();
     processor
-        .preflight_tools(&core::ToolSet::Schema(owning_schema()))
+        .preflight_tools(&core::ToolSet::Schema(owning_schema_with_key(key)))
         .unwrap();
     let preflight_after = processor.gemini_declared_request_snapshot().unwrap();
     assert_eq!(
@@ -797,7 +879,7 @@ async fn gemini_owning_state_retains_metadata_and_rejects_before_publication() {
         preflight_after.gemini_tools().as_slice()
     );
     assert!(server.requests.lock().unwrap().is_empty());
-    let mut invalid = owning_schema();
+    let mut invalid = owning_schema_with_key(key);
     invalid.standard_tools = (0..128)
         .map(|i| {
             let mut tool = definition();
