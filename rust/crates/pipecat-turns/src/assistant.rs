@@ -327,6 +327,25 @@ impl LLMAssistantAggregator {
         }
         let native_batch = frame.take_native_tool_batch()?;
         let native_outcome = frame.take_native_tool_outcome()?;
+        let native_progress = frame.take_native_tool_progress()?;
+        if let Some(progress) = native_progress {
+            if state.ended {
+                return Ok(output);
+            }
+            if direction != Direction::Downstream {
+                return Err(ProcessorError::new(
+                    "native tool progress must arrive downstream",
+                ));
+            }
+            if self.realtime.enabled()? {
+                return Err(ProcessorError::new(
+                    "native tool progress requires ordinary aggregation",
+                ));
+            }
+            return self
+                .native_progress(&mut state, &frame.data, &progress, &mut output)
+                .map(|()| output);
+        }
         if let Some(outcome) = native_outcome {
             if state.ended {
                 return Ok(output);
@@ -814,7 +833,7 @@ impl LLMAssistantAggregator {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
                     return Err(ProcessorError::new("native tool requires its terminal receipt"));
                 }
-                self.result(&mut state, result, None, &mut output)?
+                self.result(&mut state, result, None, None, &mut output)?
             }
             FrameData::FunctionCallResultDetailed(result) => {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
@@ -827,7 +846,7 @@ impl LLMAssistantAggregator {
                     arguments: result.arguments.clone(), result: result.result.clone(),
                     run_llm: properties.and_then(|properties| properties.run_llm).or(result.run_llm),
                     is_final: properties.is_none_or(|properties| properties.is_final), error: result.error.clone(),
-                }, None, &mut output)?;
+                }, None, None, &mut output)?;
                 if accepted {
                     if let Some(callback) = properties.and_then(|properties| properties.on_context_updated.clone()) {
                         output.actions.push(crate::AggregationAction::ContextUpdated(callback));
@@ -1213,6 +1232,7 @@ impl LLMAssistantAggregator {
                 state,
                 result,
                 Some(pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(&outcome)),
+                None,
                 output,
             )?,
             FrameData::FunctionCallCancel(cancel) => {
@@ -1247,6 +1267,30 @@ impl LLMAssistantAggregator {
         }
         state.native_tools.finish(outcome, cancelled);
         Ok(())
+    }
+    fn native_progress(
+        &self,
+        state: &mut AssistantState,
+        data: &FrameData,
+        progress: &pipecat_core::NativeToolCallProgress,
+        output: &mut AggregationOutput,
+    ) -> Result<(), ProcessorError> {
+        let id = &progress.call().tool_call_id;
+        if state
+            .native_tools
+            .calls
+            .get(id)
+            .is_none_or(|entry| entry.terminal.is_some())
+            || !state.pending.get(id).is_some_and(Option::is_some)
+        {
+            return Ok(());
+        }
+        let FrameData::FunctionCallResult(result) = data else {
+            return Err(ProcessorError::new(
+                "native tool progress requires a nonterminal result",
+            ));
+        };
+        self.result(state, result, None, Some(progress), output)
     }
     fn cancel_callbacks(&self) -> Result<(), ProcessorError> {
         self.lock()?.callbacks_closed = true;
@@ -1750,6 +1794,7 @@ impl LLMAssistantAggregator {
         state: &mut AssistantState,
         result: &FunctionCallResultFrame,
         native_reason: Option<pipecat_core::RealtimeNativeToolSchedulingReason>,
+        native_progress: Option<&pipecat_core::NativeToolCallProgress>,
         output: &mut AggregationOutput,
     ) -> Result<(), ProcessorError> {
         let Some(Some(call)) = state.pending.get(&result.tool_call_id).cloned() else {
@@ -1771,6 +1816,14 @@ impl LLMAssistantAggregator {
             result.result.to_string()
         };
         let mut context = self.context.lock()?;
+        if let Some(progress) = native_progress {
+            if !state
+                .native_tools
+                .check_progress(progress, &call, context.lineage)?
+            {
+                return Ok(());
+            }
+        }
         let first_new = context.messages.len();
         let addition = if !result.is_final {
             Some(async_message(
@@ -1804,6 +1857,9 @@ impl LLMAssistantAggregator {
             for index in first_new..context.messages.len() {
                 history.message(index, &context.messages[index])?;
             }
+        }
+        if let Some(progress) = native_progress {
+            state.native_tools.commit_progress(progress);
         }
         drop(context);
         // Intermediate updates can request a response while their call remains
@@ -2223,5 +2279,363 @@ mod realtime_continuation_tests {
                 .sequence(),
             1
         );
+    }
+}
+
+#[cfg(test)]
+mod native_progress_consumer_tests {
+    use super::*;
+    use crate::{AggregationAction, LLMContextAggregatorPair, RealtimeServiceMode};
+    use pipecat_core::{
+        FunctionCall, LlmContinuationBlock, LlmContinuationProvider, LocalToolResult,
+        NativeLlmContinuation, NativeToolCallBatch, Pipeline, PipelineWorker, StartFrame,
+        ToolCallEffectStatus, ToolCallEndReason, ToolOutcomeAdmission, ToolOutcomePublisher,
+        ToolProgressPublisher,
+    };
+    use pipecat_services::Context;
+    use std::time::Duration;
+
+    #[derive(Default)]
+    struct Capture(Mutex<Option<ProcessorContext>>);
+    #[async_trait]
+    impl FrameProcessor for Capture {
+        fn name(&self) -> &str {
+            "consumer-progress-source"
+        }
+        async fn setup(
+            &self,
+            _: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            *self.0.lock().unwrap() = Some(ctx.clone());
+            Ok(())
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            ctx.push(frame, direction).await
+        }
+    }
+
+    struct Source {
+        worker: PipelineWorker,
+        outcome: Option<ToolOutcomePublisher>,
+        progress: ToolProgressPublisher,
+        call: Arc<FunctionCall>,
+        batch: Arc<NativeToolCallBatch>,
+    }
+    impl Source {
+        async fn new() -> Self {
+            let capture = Arc::new(Capture::default());
+            let worker = tokio::time::timeout(
+                Duration::from_secs(3),
+                Pipeline::new(vec![capture.clone()]).start(Default::default()),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            let ctx = capture.0.lock().unwrap().take().unwrap();
+            let call = Arc::new(FunctionCall {
+                function_name: "live_work".into(),
+                tool_call_id: "consumer-progress".into(),
+                arguments: json!({"request":1}),
+            });
+            let batch =
+                NativeToolCallBatch::new("consumer-group".into(), vec![(call.clone(), false)])
+                    .unwrap();
+            let outcome = ctx
+                .tool_outcome_publisher(call.clone(), false)
+                .unwrap()
+                .with_batch(batch.clone())
+                .unwrap();
+            let progress = outcome.progress_publisher().unwrap();
+            Self {
+                worker,
+                outcome: Some(outcome),
+                progress,
+                call,
+                batch,
+            }
+        }
+        fn declare(&self, assistant: &LLMAssistantAggregator, signed: bool) {
+            if signed {
+                let mut start = Frame::new(FrameData::LlmResponseStart);
+                start
+                    .set_native_llm_continuation(Arc::new(
+                        NativeLlmContinuation::start(93001, LlmContinuationProvider::Anthropic)
+                            .unwrap(),
+                    ))
+                    .unwrap();
+                assistant
+                    .process_frame(start, Direction::Downstream)
+                    .unwrap();
+            }
+            let mut started =
+                Frame::new(FrameData::FunctionCallsStarted(vec![(*self.call).clone()]));
+            started.set_native_tool_batch(self.batch.clone()).unwrap();
+            if signed {
+                started
+                    .set_native_llm_continuation(Arc::new(
+                        NativeLlmContinuation::new(
+                            93001,
+                            LlmContinuationProvider::Anthropic,
+                            vec![
+                                LlmContinuationBlock::Thinking {
+                                    text: "reasoning".into(),
+                                    signature: "opaque+/==".into(),
+                                },
+                                LlmContinuationBlock::ToolCall((*self.call).clone()),
+                            ],
+                        )
+                        .unwrap(),
+                    ))
+                    .unwrap();
+            }
+            assistant
+                .process_frame(started, Direction::Downstream)
+                .unwrap();
+            let mut running = Frame::new(FrameData::FunctionCallInProgress(
+                FunctionCallInProgressFrame {
+                    function_name: self.call.function_name.clone(),
+                    tool_call_id: self.call.tool_call_id.clone(),
+                    arguments: self.call.arguments.clone(),
+                    cancel_on_interruption: false,
+                    group_id: Some(self.batch.group_id().into()),
+                },
+            ));
+            running.set_native_tool_batch(self.batch.clone()).unwrap();
+            assistant
+                .process_frame(running, Direction::Downstream)
+                .unwrap();
+            if !signed {
+                assistant
+                    .process_frame(Frame::new(FrameData::LlmResponseEnd), Direction::Downstream)
+                    .unwrap();
+            }
+        }
+        async fn receipt(&mut self) -> Frame {
+            tokio::time::timeout(Duration::from_secs(3), async {
+                loop {
+                    let frame = self.worker.recv().await.unwrap().frame;
+                    if frame.native_tool_progress().unwrap().is_some()
+                        || frame.native_tool_outcome().unwrap().is_some()
+                    {
+                        return frame;
+                    }
+                }
+            })
+            .await
+            .unwrap()
+        }
+        async fn update(&mut self, sequence: u64, value: Value, run: bool) -> Frame {
+            assert_eq!(
+                self.progress
+                    .publish_progress(LocalToolResult::new(value).with_run_llm(run), sequence,)
+                    .unwrap(),
+                ToolOutcomeAdmission::Admitted
+            );
+            self.receipt().await
+        }
+        async fn terminal(&mut self, cancelled: bool) -> Frame {
+            let publisher = self.outcome.take().unwrap();
+            let receipt = if cancelled {
+                publisher.cancel(
+                    ToolCallEffectStatus::ExternalEffectsUnknown,
+                    ToolCallEndReason::ExplicitCancel,
+                    false,
+                )
+            } else {
+                publisher.complete_with_run_llm(
+                    Ok(json!({"done":true})),
+                    Some(false),
+                    ToolCallEffectStatus::ExternalEffectsUnknown,
+                    ToolCallEndReason::CallbackReturned,
+                )
+            };
+            assert_eq!(receipt.admission, ToolOutcomeAdmission::Admitted);
+            self.receipt().await
+        }
+        async fn close(self) {
+            let Source {
+                worker,
+                outcome,
+                progress,
+                ..
+            } = self;
+            drop(outcome);
+            drop(progress);
+            tokio::time::timeout(Duration::from_secs(3), async {
+                worker.end().await.unwrap();
+                let (_, report) = worker.collect().await.unwrap();
+                assert!(report.errors.is_empty(), "{:?}", report.errors);
+            })
+            .await
+            .unwrap();
+        }
+    }
+    fn consume(assistant: &LLMAssistantAggregator, frame: Frame) -> AggregationOutput {
+        assistant
+            .process_frame(frame, Direction::Downstream)
+            .unwrap()
+    }
+    fn runs(output: &AggregationOutput) -> usize {
+        output.actions.iter().filter(|action| matches!(action,
+        AggregationAction::Push(item) if item.direction == Direction::Upstream
+            && matches!(item.frame.data, FrameData::LlmContext(_) | FrameData::LlmContextDetailed(_))
+    )).count()
+    }
+
+    #[tokio::test]
+    async fn authentic_progress_keeps_pending_and_deduplicates_receipt_identity() {
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, false);
+        let declared = context.snapshot_rich().unwrap();
+        let first = source.update(1, json!({"progress":"halfway"}), false).await;
+        let mut tampered = first.clone();
+        let FrameData::FunctionCallResult(result) = &mut tampered.data else {
+            unreachable!()
+        };
+        result.result = json!({"progress":"forged"});
+        assert!(assistant
+            .process_frame(tampered, Direction::Downstream)
+            .is_err());
+        assert_eq!(context.snapshot_rich().unwrap(), declared);
+        let mut foreign = Source::new().await;
+        assert_eq!(source.call, foreign.call);
+        assert_ne!(source.batch.id(), foreign.batch.id());
+        let foreign_frame = foreign
+            .update(1, json!({"progress":"foreign batch"}), false)
+            .await;
+        assert!(assistant
+            .process_frame(foreign_frame, Direction::Downstream)
+            .is_err());
+        assert_eq!(context.snapshot_rich().unwrap(), declared);
+        foreign.close().await;
+        assert!(assistant
+            .process_frame(first.clone(), Direction::Upstream)
+            .is_err());
+        assert_eq!(context.snapshot_rich().unwrap(), declared);
+        assert_eq!(runs(&consume(&assistant, first.clone())), 0);
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        let before = context.snapshot_rich().unwrap();
+        assert_eq!(before.messages.len(), declared.messages.len() + 1);
+        assert_eq!(before.messages.last().unwrap().role, ChatRole::Developer);
+        assert!(matches!(&before.messages.last().unwrap().content,
+        MessageContent::Text(text) if text.contains("halfway")));
+        let duplicate = first.duplicate();
+        assert_ne!(duplicate.id, first.id);
+        assert_eq!(
+            duplicate.native_tool_progress().unwrap().unwrap().id(),
+            first.native_tool_progress().unwrap().unwrap().id()
+        );
+        for replay in [first.clone(), duplicate] {
+            assert_eq!(runs(&consume(&assistant, replay)), 0);
+            assert_eq!(context.snapshot_rich().unwrap(), before);
+        }
+        consume(&assistant, Frame::interruption());
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        let second = source.update(2, json!({"progress":"almost"}), true).await;
+        assert_eq!(runs(&consume(&assistant, second)), 1);
+        assert!(assistant.has_function_calls_in_progress().unwrap());
+        let after_second = context.snapshot_rich().unwrap();
+        assert_eq!(after_second.messages.len(), before.messages.len() + 1);
+        consume(&assistant, first.duplicate());
+        assert_eq!(context.snapshot_rich().unwrap(), after_second);
+        consume(&assistant, source.terminal(false).await);
+        assert!(!assistant.has_function_calls_in_progress().unwrap());
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn queued_authentic_progress_cannot_reopen_terminal_cancelled_or_stopped_call() {
+        for terminal_kind in 0..3 {
+            let mut source = Source::new().await;
+            let context = SharedContext::default();
+            let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+            source.declare(&assistant, false);
+            let queued = source
+                .update(1, json!({"late":"must not enter history"}), true)
+                .await;
+            if terminal_kind < 2 {
+                consume(&assistant, source.terminal(terminal_kind == 1).await);
+            } else {
+                consume(&assistant, Frame::new(FrameData::Stop));
+            }
+            let before = context.snapshot_rich().unwrap();
+            assert!(!assistant.has_function_calls_in_progress().unwrap());
+            assert_eq!(runs(&consume(&assistant, queued)), 0);
+            assert_eq!(context.snapshot_rich().unwrap(), before);
+            assert!(!assistant.has_function_calls_in_progress().unwrap());
+            source.close().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn realtime_rejects_authentic_progress_before_adopting_batch_or_mutating_context() {
+        let mut source = Source::new().await;
+        let pair = LLMContextAggregatorPair::with_realtime_mode(
+            Context::default(),
+            Default::default(),
+            Default::default(),
+            RealtimeServiceMode::Enabled,
+        )
+        .unwrap();
+        let assistant = pair.assistant();
+        let before = pair.context().snapshot_rich().unwrap();
+        let frame = source.update(1, json!({"progress":true}), true).await;
+        assert!(assistant
+            .process_frame(frame.clone(), Direction::Downstream)
+            .is_err());
+        assert_eq!(pair.context().snapshot_rich().unwrap(), before);
+        assert!(!assistant.has_function_calls_in_progress().unwrap());
+        // The receipt remains valid; rejection was the consumer's capability boundary.
+        let context = SharedContext::default();
+        let cascade = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&cascade, false);
+        assert_eq!(runs(&consume(&cascade, frame)), 1);
+        assert!(cascade.has_function_calls_in_progress().unwrap());
+        source.close().await;
+    }
+
+    #[tokio::test]
+    async fn signed_mirror_rejection_does_not_advance_progress_sequence() {
+        let mut source = Source::new().await;
+        let context = SharedContext::default();
+        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+        source.declare(&assistant, true);
+        {
+            let mut state = assistant.lock().unwrap();
+            let history = state.signed_history.as_mut().unwrap();
+            let mut context_state = context.lock().unwrap();
+            // Seed small, genuinely owned mirror messages up to its message limit.
+            // Neither progress provenance nor the cursor is manufactured or reset.
+            while context_state.messages.len() < 4096 {
+                let index = context_state.messages.len();
+                let message = text_message(ChatRole::Developer, "small owned mirror seed");
+                history.message(index, &message).unwrap();
+                context_state.messages.push(message);
+            }
+            history.check_context(&context_state).unwrap();
+        }
+        let before = context.snapshot_rich().unwrap();
+        let frame = source
+            .update(1, json!({"progress":"small authentic update"}), false)
+            .await;
+        // A prematurely consumed cursor would turn the second submission into an
+        // ignored success, hiding its capacity failure.
+        for attempt in [frame.clone(), frame.duplicate()] {
+            let error = assistant
+                .process_frame(attempt, Direction::Downstream)
+                .unwrap_err();
+            assert!(error.message.contains("message limit"), "{}", error.message);
+            assert_eq!(context.snapshot_rich().unwrap(), before);
+            assert!(assistant.has_function_calls_in_progress().unwrap());
+        }
+        source.close().await;
     }
 }

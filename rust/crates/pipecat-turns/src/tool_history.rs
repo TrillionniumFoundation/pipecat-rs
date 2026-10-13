@@ -1,6 +1,7 @@
 //! Bounded process-local bookkeeping; conversation messages remain context-owned.
 use pipecat_core::{
-    FunctionCallInProgressFrame, NativeToolCallBatch, NativeToolCallOutcome, ProcessorError,
+    FunctionCallInProgressFrame, NativeToolCallBatch, NativeToolCallOutcome,
+    NativeToolCallProgress, ProcessorError,
 };
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -159,6 +160,7 @@ pub(super) struct NativeCall {
     pub lineage: u64,
     pub batch: Option<Arc<NativeToolCallBatch>>,
     pub terminal: Option<(u64, bool)>,
+    last_progress_sequence: u64,
     retained: Option<Arc<NativeToolCallOutcome>>,
     receipt_bytes: usize,
     bytes: usize,
@@ -252,6 +254,7 @@ impl NativeTools {
                     lineage,
                     batch: batch.cloned(),
                     terminal: None,
+                    last_progress_sequence: 0,
                     retained: None,
                     receipt_bytes: 0,
                     bytes,
@@ -259,6 +262,48 @@ impl NativeTools {
             );
         }
         Ok(())
+    }
+    /// Validate one live update without consuming its sequence before history admission.
+    pub fn check_progress(
+        &self,
+        progress: &NativeToolCallProgress,
+        running: &FunctionCallInProgressFrame,
+        lineage: u64,
+    ) -> Result<bool, ProcessorError> {
+        let Some(entry) = self.calls.get(&progress.call().tool_call_id) else {
+            return Ok(false);
+        };
+        if entry.terminal.is_some() {
+            return Ok(false);
+        }
+        let call = progress.call();
+        if entry.lineage != lineage
+            || entry.call != *running
+            || entry.call.function_name != call.function_name
+            || entry.call.tool_call_id != call.tool_call_id
+            || entry.call.arguments != call.arguments
+            || entry.call.cancel_on_interruption
+            || progress.cancel_on_interruption()
+            || entry.batch.as_ref() != progress.batch()
+            || progress
+                .batch()
+                .is_none_or(|batch| entry.call.group_id.as_deref() != Some(batch.group_id()))
+        {
+            return Err(ProcessorError::new(
+                "native tool progress differs from its running identity or policy",
+            ));
+        }
+        Ok(progress.sequence() > entry.last_progress_sequence)
+    }
+    /// Called only after the checked intermediate message has been appended.
+    pub fn commit_progress(&mut self, progress: &NativeToolCallProgress) {
+        let entry = self
+            .calls
+            .get_mut(&progress.call().tool_call_id)
+            .expect("validated running native progress");
+        debug_assert!(entry.terminal.is_none());
+        debug_assert!(progress.sequence() > entry.last_progress_sequence);
+        entry.last_progress_sequence = progress.sequence();
     }
     fn release_receipt(&mut self) -> bool {
         for id in &self.completed {

@@ -312,16 +312,35 @@ does not retract a continuation already requested by another result.
 The flag is separate from user JSON and is sealed into the owned final result.
 Existing Value callback constructors and invocation methods retain their return
 types; the Value invocation methods deliberately discard result metadata.
-Executors use `call_result_cancellable` to preserve it. Cancellation retains its
+Executors use the result-preserving invocation path. Cancellation retains its
 own policy and takes priority; callback errors and oversized results use the
 existing error path without a successful-result override. Options, handler
 identity, snapshot selection, cleanup and result-byte bounds are unchanged.
-This adds final-result control only, without intermediate/deferred callbacks or
-context-updated hooks. Python parity applies here to nonempty, truthy results:
+Python parity applies here to nonempty, truthy results:
 the pinned Python consumer ignores properties for falsy results, while the
 existing native consumer respects explicit flags for those values as well.
 Loopback HTTP tests do not qualify a cloud provider's acceptance of continuation
 with a pending sibling's placeholder result.
+
+`LocalToolFunction::new_with_reporter` supplies a `LocalToolReporter` for ordinary
+live intermediate results. It defaults to `cancel_on_interruption=false`;
+enabling interruption cancellation on a reporting handler is rejected. Call
+`reporter.report(LocalToolResult::new(value).with_run_llm(false)).await?` while
+the handler is running, then return a `LocalToolResult` for its final result.
+Report success acknowledges bounded first-hop admission, before the assistant
+has applied the update to shared context. Each update carries an immutable local
+receipt and a monotonic sequence; the native assistant appends an async developer
+message while retaining the pending call. Duplicate or retired progress cannot
+append again. The result policy uses the existing inference gates.
+
+Intermediate reports neither settle the call, release its reservation, nor
+extend its original deadline. Final return, error, timeout, explicit cancellation
+and task drop revoke the reporting endpoint before the single terminal receipt.
+An escaped reporter then rejects updates and cannot retain the owning runtime.
+Legacy handler APIs remain usable; invoking a reporting handler without an
+admitted endpoint fails before running user code. Native progress must be
+consumed explicitly before wire serialization. Reporting after handler return,
+context-updated hooks and realtime progress mapping remain separate work.
 
 `DirectToolBindingConfig` defaults to 16 in-flight calls, a 1,024-ID duplicate
 window, 64 KiB argument/identity limits, 128 advertised tools and 1,024 retained
@@ -334,9 +353,8 @@ failures and returning the first error. Core's Stop contract still retains
 resources until explicit owner-stage cleanup.
 
 Each call settles with one final result or cancellation. `cancel_on_interruption`
-controls the native owned-task policy; it does not add Python's immediate async
-developer-message continuation, intermediate tool updates or LLM-generated
-`cancel_<name>` tools. Cleanup runs within the owning pipeline's shutdown budget:
+controls the native owned-task policy. LLM-generated `cancel_<name>` tools remain
+unsupported. Cleanup runs within the owning pipeline's shutdown budget:
 hook errors and panics continue to later hooks while retaining the first error.
 If that outer deadline cancels cleanup, the owner requests abort of the currently
 awaited hook and drops hooks not yet started. That abort request does not await

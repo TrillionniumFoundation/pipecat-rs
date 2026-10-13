@@ -802,7 +802,7 @@ impl Default for VadUserStoppedSpeakingFrame {
 
 #[path = "frame_payloads/local_tool_function.rs"]
 mod local_tool_function;
-pub use local_tool_function::{LocalToolOptions, LocalToolResult};
+pub use local_tool_function::{LocalToolOptions, LocalToolReporter, LocalToolResult};
 
 #[derive(Clone)]
 pub struct LocalToolFunction(

@@ -2,10 +2,10 @@
 use futures_util::FutureExt;
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, LocalToolResult,
-    NativeLlmContinuation, NativeToolCallBatch, ProcessorContext, ProcessorError,
+    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, LocalToolReporter,
+    LocalToolResult, NativeLlmContinuation, NativeToolCallBatch, ProcessorContext, ProcessorError,
     ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt, ToolOutcomeAdmission,
-    ToolOutcomePublisher,
+    ToolOutcomePublisher, ToolProgressPublisher,
 };
 use serde_json::Value;
 use std::{
@@ -61,12 +61,14 @@ impl CancellableRegisteredTool {
 }
 type NormalizedToolFuture =
     Pin<Box<dyn Future<Output = Option<Result<LocalToolResult, String>>> + Send>>;
-type NormalizedToolCallback = Arc<dyn Fn(FunctionCall) -> NormalizedToolFuture + Send + Sync>;
+type NormalizedToolCallback =
+    Arc<dyn Fn(FunctionCall, Option<LocalToolReporter>) -> NormalizedToolFuture + Send + Sync>;
 #[derive(Clone)]
 struct RegistrationRow {
     callback: NormalizedToolCallback,
     timeout: Option<Duration>,
     cancel_on_interruption: bool,
+    requires_reporter: bool,
 }
 /// An immutable callback inventory captured from validated registrations.
 /// It retains callback/options only; admission limits and outcome history remain
@@ -223,7 +225,7 @@ impl ToolExecutor {
         self.tools.insert(
             name,
             RegistrationRow {
-                callback: Arc::new(move |call| {
+                callback: Arc::new(move |call, _reporter| {
                     let callback = callback.clone();
                     Box::pin(async move {
                         callback(call).await.map(|result| {
@@ -236,6 +238,7 @@ impl ToolExecutor {
                 }),
                 timeout: Some(tool.timeout),
                 cancel_on_interruption: tool.cancel_on_interruption,
+                requires_reporter: false,
             },
         );
         Ok(())
@@ -252,10 +255,12 @@ impl ToolExecutor {
     ) -> Result<(), ProcessorError> {
         let name = name.into();
         let options = handler.options();
+        let requires_reporter = handler.requires_reporter();
         if name.is_empty()
             || self.tools.contains_key(&name)
             || default_timeout.is_some_and(|timeout| timeout.is_zero())
             || options.timeout.is_some_and(|timeout| timeout.is_zero())
+            || (requires_reporter && options.cancel_on_interruption)
         {
             return Err(ProcessorError::new(
                 "invalid or duplicate direct tool registration",
@@ -264,17 +269,18 @@ impl ToolExecutor {
         self.tools.insert(
             name,
             RegistrationRow {
-                callback: Arc::new(move |call| {
+                callback: Arc::new(move |call, reporter| {
                     let handler = handler.clone();
                     Box::pin(async move {
                         handler
-                            .call_result_cancellable(call.arguments)
+                            .call_result_with_reporter(call.arguments, reporter)
                             .await
                             .map(|result| result.map_err(|error| error.to_string()))
                     })
                 }),
                 timeout: options.timeout.or(default_timeout),
                 cancel_on_interruption: options.cancel_on_interruption,
+                requires_reporter,
             },
         );
         Ok(())
@@ -489,10 +495,18 @@ impl ToolExecutor {
             };
             let call = lease.call.as_ref().clone();
             let callback = std::panic::AssertUnwindSafe(async {
+                let reporter = if tool.requires_reporter {
+                    match lease.reporter() {
+                        Ok(reporter) => Some(reporter),
+                        Err(error) => return Some(Err(error.to_string())),
+                    }
+                } else {
+                    None
+                };
                 if !lease.enter() {
                     return None;
                 }
-                (tool.callback)(call).await
+                (tool.callback)(call, reporter).await
             })
             .catch_unwind();
             let guarded = async {
@@ -598,16 +612,21 @@ impl ToolExecutor {
                 {
                     return Err(ProcessorError::new("tool cancellation identity mismatch"));
                 }
-                history.active.get(&cancel.tool_call_id).map(|active| {
+                history.active.get(&cancel.tool_call_id).and_then(|active| {
                     let mut control = active
                         .control
                         .lock()
                         .unwrap_or_else(|error| error.into_inner());
+                    if control.settled {
+                        return None;
+                    }
                     control.cancel.get_or_insert(cancel.run_llm);
-                    (active.context.clone(), control.task)
+                    let revoked = control.close_reporting();
+                    Some((active.context.clone(), control.task, revoked))
                 })
             };
-            if let Some((origin, task)) = target {
+            if let Some((origin, task, revoked)) = target {
+                drop(revoked);
                 if let Some(task) = task {
                     origin.cancel_task(task);
                 }
@@ -729,6 +748,15 @@ struct Control {
     task: Option<u64>,
     entered: bool,
     cancel: Option<bool>,
+    settled: bool,
+    progress_sequence: u64,
+    progress: Option<ToolProgressPublisher>,
+}
+impl Control {
+    fn close_reporting(&mut self) -> Option<ToolProgressPublisher> {
+        self.settled = true;
+        self.progress.take()
+    }
 }
 struct ActiveLease {
     call: Arc<FunctionCall>,
@@ -744,20 +772,65 @@ impl ActiveLease {
             .control
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if control.cancel.is_some() {
+        if control.cancel.is_some() || control.settled {
             return false;
         }
         control.entered = true;
         true
     }
+    fn reporter(&self) -> Result<LocalToolReporter, ProcessorError> {
+        let progress = self
+            .publisher
+            .as_ref()
+            .ok_or_else(|| ProcessorError::new("tool reporter is no longer active"))?
+            .progress_publisher()?;
+        {
+            let mut control = self
+                .control
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            if control.cancel.is_some() || control.settled {
+                return Err(ProcessorError::new("tool reporter is no longer active"));
+            }
+            control.progress = Some(progress);
+        }
+        let weak = Arc::downgrade(&self.control);
+        // Retaining an endpoint must not retain the call's runtime or publisher.
+        Ok(LocalToolReporter::new_sink(move |result| {
+            let state = weak
+                .upgrade()
+                .ok_or_else(|| ProcessorError::new("tool reporter is no longer active"))?;
+            let mut control = state.lock().unwrap_or_else(|error| error.into_inner());
+            if !control.entered || control.cancel.is_some() || control.settled {
+                return Err(ProcessorError::new("tool reporter is no longer active"));
+            }
+            let sequence = control
+                .progress_sequence
+                .checked_add(1)
+                .ok_or_else(|| ProcessorError::new("tool progress sequence exhausted"))?;
+            // Keep this lock through queue admission so settlement cannot overtake
+            // an accepted update. Rejected attempts do not consume a sequence.
+            let admission = control
+                .progress
+                .as_ref()
+                .ok_or_else(|| ProcessorError::new("tool reporter is no longer active"))?
+                .publish_progress(result, sequence)?;
+            if admission != ToolOutcomeAdmission::Admitted {
+                return Err(ProcessorError::new("tool progress was not admitted"));
+            }
+            control.progress_sequence = sequence;
+            Ok(())
+        }))
+    }
     fn complete(&mut self, result: Result<LocalToolResult, String>, reason: ToolCallEndReason) {
         let Some(publisher) = self.publisher.take() else {
             return;
         };
-        let control = self
+        let mut control = self
             .control
             .lock()
             .unwrap_or_else(|error| error.into_inner());
+        let revoked = control.close_reporting();
         let effects = if control.entered {
             ToolCallEffectStatus::ExternalEffectsUnknown
         } else {
@@ -773,16 +846,18 @@ impl ActiveLease {
             publisher.complete_with_run_llm(result, run_llm, effects, reason)
         };
         drop(control);
+        drop(revoked);
         self.record(receipt);
     }
     fn cancel(&mut self, reason: ToolCallEndReason) {
         let Some(publisher) = self.publisher.take() else {
             return;
         };
-        let control = self
+        let mut control = self
             .control
             .lock()
             .unwrap_or_else(|error| error.into_inner());
+        let revoked = control.close_reporting();
         let effects = if control.entered {
             ToolCallEffectStatus::ExternalEffectsUnknown
         } else {
@@ -795,6 +870,7 @@ impl ActiveLease {
         };
         let receipt = publisher.cancel(effects, reason, control.cancel.unwrap_or(false));
         drop(control);
+        drop(revoked);
         self.record(receipt);
     }
     fn record(&self, receipt: ToolCallReceipt) {

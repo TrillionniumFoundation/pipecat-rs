@@ -6,6 +6,9 @@ use crate::{
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+mod progress;
+pub use progress::{NativeToolCallProgress, ToolProgressPublisher};
+
 /// Complete, immutable membership of one admitted executor batch. Every member
 /// shares this descriptor, so terminal delivery can reconstruct overtaken policy.
 #[derive(Debug, Clone, PartialEq)]

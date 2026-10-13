@@ -97,6 +97,7 @@ pub struct Frame {
     native_eager_source: Option<NativeEagerSourceFrame>,
     pub(crate) native_realtime_context: Option<Arc<crate::NativeRealtimeContextCause>>,
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
+    native_tool_progress: Option<Arc<crate::NativeToolCallProgress>>,
     native_tool_timeout_projected: bool,
     native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
@@ -245,6 +246,7 @@ impl<'de> Deserialize<'de> for Frame {
             native_eager_source: None,
             native_realtime_context: None,
             native_tool_outcome: None,
+            native_tool_progress: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
             reported_runtimes,
@@ -266,6 +268,7 @@ impl PartialEq for Frame {
             && self.native_eager_source == other.native_eager_source
             && self.native_realtime_context == other.native_realtime_context
             && self.native_tool_outcome == other.native_tool_outcome
+            && self.native_tool_progress == other.native_tool_progress
             && self.native_tool_timeout_projected == other.native_tool_timeout_projected
             && self.native_tool_batch == other.native_tool_batch
             && self.metadata == other.metadata
@@ -306,6 +309,30 @@ impl Frame {
         self.native_tool_batch()?;
         Ok(self.native_tool_batch.take())
     }
+    pub(crate) fn attach_tool_progress(&mut self, progress: Arc<crate::NativeToolCallProgress>) {
+        self.native_tool_progress = Some(progress);
+    }
+    /// Validated nonterminal update from an admitted asynchronous tool call.
+    pub fn native_tool_progress(
+        &self,
+    ) -> Result<Option<&Arc<crate::NativeToolCallProgress>>, crate::ProcessorError> {
+        if let Some(progress) = &self.native_tool_progress {
+            if self.native_tool_outcome.is_some() {
+                return Err(crate::ProcessorError::new(
+                    "frame cannot carry terminal and nonterminal tool receipts",
+                ));
+            }
+            progress.validate(&self.data)?;
+        }
+        Ok(self.native_tool_progress.as_ref())
+    }
+    /// Consume nonterminal provenance at an explicit native or wire boundary.
+    pub fn take_native_tool_progress(
+        &mut self,
+    ) -> Result<Option<Arc<crate::NativeToolCallProgress>>, crate::ProcessorError> {
+        self.native_tool_progress()?;
+        Ok(self.native_tool_progress.take())
+    }
     pub(crate) fn attach_tool_outcome(&mut self, outcome: Arc<crate::NativeToolCallOutcome>) {
         self.native_tool_timeout_projected = false;
         self.native_tool_outcome = Some(outcome);
@@ -315,6 +342,11 @@ impl Frame {
         &self,
     ) -> Result<Option<&Arc<crate::NativeToolCallOutcome>>, crate::ProcessorError> {
         if let Some(outcome) = &self.native_tool_outcome {
+            if self.native_tool_progress.is_some() {
+                return Err(crate::ProcessorError::new(
+                    "frame cannot carry terminal and nonterminal tool receipts",
+                ));
+            }
             outcome.validate(&self.data, self.native_tool_timeout_projected)?;
         }
         Ok(self.native_tool_outcome.as_ref())
@@ -476,7 +508,7 @@ impl Frame {
         if self.native_tool_batch.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedToolBatch);
         }
-        if self.native_tool_outcome.is_some() {
+        if self.native_tool_outcome.is_some() || self.native_tool_progress.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedToolOutcome);
         }
         if self.native_speculation.is_some() {
@@ -557,6 +589,7 @@ impl Frame {
             native_eager_source: None,
             native_realtime_context: None,
             native_tool_outcome: None,
+            native_tool_progress: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
             reported_runtimes,
