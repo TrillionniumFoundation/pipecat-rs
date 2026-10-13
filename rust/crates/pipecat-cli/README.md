@@ -301,10 +301,97 @@ not a retrospective allocation cap.
 
 Qualification is limited to real loopback protocol/PCM, shared pipeline/history,
 client-reported completion, cancellation and ownership. It does not establish
-browser audio callbacks, live providers, physical speaker output or video I/O.
+browser audio callbacks, live providers or physical speaker output. The separate
+explicit native image mechanism and its limits are described below.
 
 `ReceiptRunConfig.initial_frames` is a trusted native startup API. Its frame
 count is bounded, but arbitrary caller-supplied metadata, native continuations
 or other startup payload allocations are outside the network ingress byte
 budget. The configured CLI supplies only a payload-free `LlmRun`; this API is
 not an alternative untrusted client input channel.
+
+## Explicit native image channel
+
+`ReceiptSession::negotiate_with_images` takes a loopback `TcpListener` and an
+`ImageChannelConfig`. `ReceiptOutput::new_with_images` connects that same
+`Arc<ReceiptBackend>` to the real shared output's bounded live-video lane.
+These are native application APIs: the current voice-agent binary, runner and
+generated browser do not opt in. `negotiate` and `ReceiptOutput::new` retain
+their existing defaults. A default backend advertises no independent video.
+The enabled backend advertises the configured mechanism; peer readiness is
+separate and an image callback may wait within its operation deadline.
+
+An enabled `playback-v2-offer` contains `image_channel` with version 1,
+`session_id`, null default `destination`, nonzero `incarnation`, a one-use
+`pairing_nonce`, loopback `address`, limits and `encoding: "PCIMG001"`. The main
+accept must additionally contain `independent_images: true`; omission/false is
+rejected for an enabled session, and true is rejected for an ordinary session.
+There is no silent fallback. The image peer upgrades its separate WebSocket,
+then sends a text `image-channel-pair` with that exact version/session/default
+destination/incarnation/nonce. `image-channel-paired` confirms that handshake;
+installation still rechecks live ownership and identity. This pairs channels
+inside the existing loopback trust boundary, not public-network authentication.
+
+Each binary image message is eight ASCII magic bytes `PCIMG001`, a big-endian
+u32 JSON-header length, that UTF-8 header, then exact raw pixel bytes. The bounded
+header identifies version, session, null destination, incarnation, request ID,
+width, height, RGB/RGBA format, interruptibility and pixel byte count. Width and
+height are nonzero, at most 4096 each, and checked pixel length must match exactly.
+The hard pixel maximum is 8 MiB; callers can configure a smaller limit. Header
+maximum is 512 bytes. OutputImage, OutputImageDetailed, UrlImage and AssistantImage
+use their already supplied pixels; URL/original-image metadata causes no fetch
+or decoding. Other formats, sprites and non-default destinations fail explicitly.
+Shared `sync_with_audio=true` ordering is preserved; false/live images can overlap
+PCM and cutoff traffic over the separate physical socket.
+
+There is one request reservation (waiting or leased), one idle or callback-owned
+unsplit image stream, and at most one pairing attempt. Direct concurrent image
+callbacks fail fast; they do not grow a wait queue. No image actor, mpsc send,
+detached writer or split socket performs image completion. The callback's actual
+WebSocket send/flush completion attests only the local hook, not peer receipt,
+rendering or physical display. A completed write may already have delivered a
+whole image and cannot be undone.
+
+Dropping an unfinished callback first disposes its complete socket without
+polling close/flush, then retires its matching request. No remaining owner can
+flush that socket's userspace pixel buffer. Already kernel-accepted bytes remain
+irreversible: cancellation tests deliberately establish underlying TCP Pending
+and an incomplete peer frame, preserve its transmitted prefix, and only then
+check disposal. This is not a claim that every completion/cancellation race
+prevents a complete image. A dropped waiting callback owns no socket. A lost
+leased stream requires a fresh incarnation/nonce offered on the main channel;
+old images are never automatically retried and old tokens cannot pair again.
+Ordinary audio interruption does not globally close images: the shared queue
+drops eligible interruptible callbacks while uninterruptible work survives.
+A genuine image I/O error/shared write timeout can still make the pipeline
+terminal under the existing output error policy.
+
+ImageChannelConfig defaults: pairing 2s after TCP accept; operation 5s including
+pair wait and actual write; disposal 2s. Every duration must be nonzero and at
+most 60s. Repeated invalid pairs/notifications do not extend these deadlines or
+rotate valid offers. Idle accept holds no task/timer retry loop; idle peer close
+is discovered lazily by the next operation. No hidden reader polls that socket.
+`image_status` exposes bounded ownership and actual TCP Pending counters, not
+delivery acknowledgements.
+
+The one session owner polls pairing alongside audio receipts, including partial
+pipeline startup cleanup. End/Stop keep it available until admitted shared lanes
+drain. Cancel/disconnect/failure closes image admission, pairing and listener,
+drops idle sockets and wakes active callbacks. Clean return requires zero owned
+streams/requests. An external caller can retain a checked-out write future
+without polling it; stop cannot destroy that caller's memory and reports
+“image disposal deadline exceeded; join is unverified” within its disposal
+budget. Dropping that future then disposes it, and repeated stop can verify
+settlement. Emergency outer Drop is fail-closed but cannot prove async task joins.
+Image disposal is a separate budget from media drain and audio socket shutdown.
+
+Memory limits are additive: caller pixels and shared queued/current frames,
+one encoded image allocation, tungstenite's retained/copied write buffer,
+plus read/handshake buffers. The codec uses a 4096-byte read buffer, eager writes,
+finite max-write-buffer (pixel limit + 512 + 12 + 1024 bytes), and 1024-byte
+incoming frame/message limits for pairing. Tungstenite 0.28 separately bounds
+HTTP upgrade attack buffering at 64 KiB; the post-upgrade 1024-byte pairing cap
+is not a retrospective HTTP allocation cap. Native frame metadata and caller
+queues remain outside that encoded-pixel bound. No browser rendering, real
+network deployment, physical display, multidestination video or runner wiring
+is qualified by this native loopback mechanism.

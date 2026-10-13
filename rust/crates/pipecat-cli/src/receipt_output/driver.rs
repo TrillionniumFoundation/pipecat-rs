@@ -1,7 +1,8 @@
 use super::{
+    images::ImageOwner,
     state::{Command, Outbound, OutboundId, Shared},
-    ReceiptBackend, ReceiptConfig, GATE_TOKEN, INPUT_BYTE_CAPACITY, INPUT_CAPACITY,
-    MAX_PACKET_BYTES, MAX_PCM_BYTES,
+    ImageChannelConfig, ReceiptBackend, ReceiptConfig, GATE_TOKEN, INPUT_BYTE_CAPACITY,
+    INPUT_CAPACITY, MAX_PACKET_BYTES, MAX_PCM_BYTES,
 };
 use crate::{
     wire::{self, ClientInput, V2Control},
@@ -48,6 +49,7 @@ pub struct ReceiptSession {
     session: Option<WebSocketSession>,
     backend: Arc<ReceiptBackend>,
     commands: Option<mpsc::Receiver<Command>>,
+    image_owner: Option<ImageOwner>,
 }
 impl Drop for ReceiptSession {
     fn drop(&mut self) {
@@ -58,9 +60,28 @@ impl ReceiptSession {
     /// Application handshake occurs before any provider, VAD or pipeline startup.
     /// SessionSender admission is not a socket-write acknowledgement.
     pub async fn negotiate(
+        session: WebSocketSession,
+        config: ReceiptConfig,
+        output_rate: u32,
+    ) -> Result<Self, AgentError> {
+        Self::negotiate_inner(session, config, output_rate, None).await
+    }
+    /// Explicitly pair a separate loopback image socket. Existing constructors
+    /// and the voice-agent binary do not enable this mechanism.
+    pub async fn negotiate_with_images(
+        session: WebSocketSession,
+        config: ReceiptConfig,
+        output_rate: u32,
+        listener: tokio::net::TcpListener,
+        images: ImageChannelConfig,
+    ) -> Result<Self, AgentError> {
+        Self::negotiate_inner(session, config, output_rate, Some((listener, images))).await
+    }
+    async fn negotiate_inner(
         mut session: WebSocketSession,
         config: ReceiptConfig,
         output_rate: u32,
+        images: Option<(tokio::net::TcpListener, ImageChannelConfig)>,
     ) -> Result<Self, AgentError> {
         if let Err(error) = config.validate() {
             let _ = session.cancel().await;
@@ -77,16 +98,28 @@ impl ReceiptSession {
                 return Err(error);
             }
         };
+        let image_owner = match images {
+            Some((listener, images)) => match ImageOwner::new(listener, images, session_id.clone())
+            {
+                Ok(owner) => Some(owner),
+                Err(error) => {
+                    let _ = session.cancel().await;
+                    return Err(error);
+                }
+            },
+            None => None,
+        };
+        let mut offer = json!({
+            "type":"playback-v2-offer", "version":2, "session_id":session_id,
+            "output_rate":output_rate, "channels":1, "encoding":"pcm_s16le",
+            "max_pcm_bytes":MAX_PCM_BYTES,
+        });
+        if let Some(owner) = &image_owner {
+            offer["image_channel"] = owner.shared.offer();
+        }
         let deadline = Instant::now() + config.handshake_timeout;
         let result = async {
-            session
-                .sender()
-                .send(wire::message(json!({
-                    "type":"playback-v2-offer", "version":2, "session_id":session_id,
-                    "output_rate":output_rate, "channels":1, "encoding":"pcm_s16le",
-                    "max_pcm_bytes":MAX_PCM_BYTES,
-                }))?)
-                .await?;
+            session.sender().send(wire::message(offer)?).await?;
             let packet = session.recv().await.ok_or(AgentError::Protocol(
                 "client disconnected during v2 negotiation",
             ))?;
@@ -98,7 +131,10 @@ impl ReceiptSession {
                     chunk_receipts: true,
                     cutoff_receipts: true,
                     flush_on_disconnect: true,
-                }) if accepted == session_id => Ok(()),
+                    independent_images,
+                }) if accepted == session_id && independent_images == image_owner.is_some() => {
+                    Ok(())
+                }
                 _ => Err(AgentError::Protocol(
                     "chunk-v2 requires exact playback and cutoff negotiation",
                 )),
@@ -114,11 +150,17 @@ impl ReceiptSession {
                 };
             }
         }
-        let (shared, commands) = Shared::new(session_id, output_rate, config);
+        let (shared, commands) = match &image_owner {
+            Some(owner) => {
+                Shared::with_images(session_id, output_rate, config, Some(owner.shared.clone()))
+            }
+            None => Shared::new(session_id, output_rate, config),
+        };
         Ok(Self {
             session: Some(session),
             backend: Arc::new(ReceiptBackend { shared }),
             commands: Some(commands),
+            image_owner,
         })
     }
     pub fn backend(&self) -> Arc<ReceiptBackend> {
@@ -126,9 +168,17 @@ impl ReceiptSession {
     }
     pub async fn close(mut self) -> Result<(), AgentError> {
         self.backend.shared.close();
-        if let Some(session) = self.session.take() {
-            session.cancel().await?;
-        }
+        self.image_owner = None;
+        let image_result = match &self.backend.shared.images {
+            Some(images) => images.settled().await,
+            None => Ok(()),
+        };
+        let socket_result = match self.session.take() {
+            Some(session) => session.cancel().await,
+            None => Ok(()),
+        };
+        image_result.map_err(|error| image_disposal_error(error, false))?;
+        socket_result?;
         Ok(())
     }
     pub async fn run(
@@ -139,30 +189,92 @@ impl ReceiptSession {
     ) -> Result<ReceiptRunReport, AgentError> {
         if run.idle_timeout.is_zero() || !(8000..=48000).contains(&run.input_rate) {
             self.backend.shared.close();
+            self.image_owner = None;
             if let Some(session) = self.session.take() {
                 let _ = session.cancel().await;
+            }
+            if let Some(images) = &self.backend.shared.images {
+                images
+                    .settled()
+                    .await
+                    .map_err(|error| image_disposal_error(error, false))?;
             }
             return Err(AgentError::Config("invalid v2 session input configuration"));
         }
         let shared = self.backend.shared.clone();
+        let mut image_owner = self.image_owner.take();
         let mut session = self.session.take();
         let mut commands = self.commands.take().expect("receipt owner runs once");
-        // start() does only local format validation; before any PCM is published,
-        // partial-start cleanup is also local and does not await this driver.
-        let mut worker = match pipeline.start(config).await {
+        // Audio start does local validation. Image cleanup additionally waits
+        // for disposal by the cooperative owner below.
+        let mut notices = VecDeque::new();
+        let mut startup_error = None;
+        // Partial start invokes processor cleanup before start() returns. Keep
+        // the image owner cooperative through that cleanup, including stop().
+        let starting = pipeline.start(config);
+        tokio::pin!(starting);
+        let started = loop {
+            let image_notify = shared
+                .images
+                .as_ref()
+                .map(|images| images.changed.notified());
+            tokio::pin!(image_notify);
+            if let Some(notified) = image_notify.as_mut().as_pin_mut() {
+                notified.enable();
+            }
+            if let Some(owner) = &mut image_owner {
+                match owner.advance() {
+                    Ok(Some(notice)) if notices.len() < INPUT_CAPACITY => {
+                        match wire::message(notice) {
+                            Ok(packet) => notices.push_back(packet),
+                            Err(error) => {
+                                startup_error = Some(error);
+                                shared.close();
+                                owner.close();
+                            }
+                        }
+                    }
+                    Ok(Some(_)) => {
+                        startup_error = Some(AgentError::Protocol(
+                            "v2 image startup control queue is full",
+                        ));
+                        shared.close();
+                        owner.close();
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        startup_error = Some(error);
+                        shared.close();
+                        owner.close();
+                    }
+                }
+            }
+            tokio::select! {
+                result = &mut starting => break result,
+                _ = async { match image_owner.as_mut() { Some(owner) => owner.next_event().await, None => pending().await } } => {},
+                _ = async { match image_notify.as_mut().as_pin_mut() { Some(notified) => notified.await, None => pending().await } } => {},
+            }
+        };
+        let mut worker = match started {
             Ok(worker) => worker,
             Err(error) => {
                 shared.close();
+                drop(image_owner.take());
+                let image_result = match &shared.images {
+                    Some(images) => images.settled().await,
+                    None => Ok(()),
+                };
                 if let Some(session) = session.take() {
                     let _ = session.cancel().await;
                 }
+                image_result.map_err(|error| image_disposal_error(error, false))?;
                 return Err(error.into());
             }
         };
         let sender = worker.sender();
         let transport_sender = session.as_ref().expect("session present").sender();
         let mut pump = InputPump::new(sender.clone(), shared.config.drain_timeout);
-        let mut outcome: Result<(), AgentError> = Ok(());
+        let mut outcome: Result<(), AgentError> = startup_error.map_or(Ok(()), Err);
         for frame in run.initial_frames {
             if let Err(error) = pump.admit(frame, false) {
                 outcome = Err(error);
@@ -172,7 +284,6 @@ impl ReceiptSession {
         let mut write: Option<WriteFuture> = None;
         let mut closing: Option<CloseFuture> = None;
         let mut close_failure: Option<AgentError> = None;
-        let mut notices = VecDeque::new();
         let mut last_activity = Instant::now();
         let mut drain = None;
         let mut end_requested = false;
@@ -185,6 +296,15 @@ impl ReceiptSession {
             let changed = shared.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
+            // Register the Notify listener before observing image state.
+            let image_notify = shared
+                .images
+                .as_ref()
+                .map(|images| images.changed.notified());
+            tokio::pin!(image_notify);
+            if let Some(notified) = image_notify.as_mut().as_pin_mut() {
+                notified.enable();
+            }
             if failed && failure_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
                 cleanup_unverified = true;
                 break;
@@ -231,6 +351,24 @@ impl ReceiptSession {
                     }
                 }
             }
+            if let Some(owner) = &mut image_owner {
+                match owner.advance() {
+                    Ok(Some(notice)) if notices.len() < INPUT_CAPACITY => {
+                        match wire::message(notice) {
+                            Ok(packet) => notices.push_back(packet),
+                            Err(error) => outcome = Err(error),
+                        }
+                    }
+                    Ok(Some(_)) => {
+                        outcome = Err(AgentError::Protocol("v2 image control queue is full"))
+                    }
+                    Ok(None) => {}
+                    Err(error) => outcome = Err(error),
+                }
+            }
+            if outcome.is_err() && !failed {
+                continue;
+            }
             if write.is_none() && !failed {
                 let outbound = match shared.next_cutoff() {
                     Ok(Some(outbound)) => Some(outbound),
@@ -270,6 +408,8 @@ impl ReceiptSession {
                     .unwrap()
             };
             tokio::select! {
+                _ = async { match image_owner.as_mut() { Some(owner) => owner.next_event().await, None => pending().await } } => {},
+                _ = async { match image_notify.as_mut().as_pin_mut() { Some(notified) => notified.await, None => pending().await } } => {},
                 result = async { match write.as_mut() { Some(write) => write.await, None => pending().await } }, if write.is_some() => {
                     write = None;
                     match result { Ok(id) => shared.enqueued(id), Err(error) => outcome = Err(error) }
@@ -369,6 +509,7 @@ impl ReceiptSession {
             drop(worker);
             pump.clear();
             shared.close();
+            drop(image_owner.take());
             if let Some(close) = closing {
                 let _ = close.await;
             }
@@ -425,6 +566,11 @@ impl ReceiptSession {
             }
         }
         shared.close();
+        drop(image_owner.take());
+        let image_result = match &shared.images {
+            Some(images) => images.settled().await,
+            None => Ok(()),
+        };
         if let Some(close) = closing {
             if let Err(error) = close.await {
                 close_failure = Some(error.into());
@@ -434,13 +580,16 @@ impl ReceiptSession {
             // Successful completion has no unresolved PCM. Finishing here is
             // ordinary close, never used as a cancellation/revocation claim.
             if outcome.is_ok() {
-                socket.finish().await?;
+                if let Err(error) = socket.finish().await {
+                    close_failure = Some(error.into());
+                }
             } else {
                 if let Err(error) = socket.cancel().await {
                     close_failure = Some(error.into());
                 }
             }
         }
+        image_result.map_err(|error| image_disposal_error(error, shutdown_requested))?;
         if shutdown_requested {
             // Ctrl+C is a requested cancellation, not graceful media success.
             // Preserve the joined core report so serve exits like legacy-v1.
@@ -657,5 +806,43 @@ mod input_pump_tests {
             .await
             .unwrap()
             .unwrap();
+    }
+}
+
+fn image_disposal_error(
+    _error: pipecat_core::ProcessorError,
+    shutdown_requested: bool,
+) -> AgentError {
+    // This helper is used only for Images::settled's one bounded failure.
+    // AgentError::Processor intentionally has a generic Display for ordinary
+    // processors; never hide this ownership-unverified boundary behind it.
+    let error = AgentError::Protocol("image disposal deadline exceeded; join is unverified");
+    if shutdown_requested {
+        AgentError::ShutdownFailed(Box::new(error))
+    } else {
+        error
+    }
+}
+#[cfg(test)]
+mod image_shutdown_tests {
+    use super::*;
+    #[test]
+    fn image_disposal_failure_preserves_requested_shutdown_type_and_display() {
+        let error = || {
+            pipecat_core::ProcessorError::new(
+                "image disposal deadline exceeded; join is unverified",
+            )
+        };
+        let shutdown = image_disposal_error(error(), true);
+        assert!(matches!(shutdown, AgentError::ShutdownFailed(_)));
+        assert!(shutdown.to_string().contains(
+            "shutdown failed: protocol: image disposal deadline exceeded; join is unverified"
+        ));
+        let ordinary = image_disposal_error(error(), false);
+        assert!(matches!(ordinary, AgentError::Protocol(_)));
+        assert_eq!(
+            ordinary.to_string(),
+            "protocol: image disposal deadline exceeded; join is unverified"
+        );
     }
 }

@@ -3646,6 +3646,7 @@ dependencies = [
 name = "pipecat-cli"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "getrandom 0.3.4",
  "pipecat-audio",
  "pipecat-core",
@@ -3660,6 +3661,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-tungstenite 0.28.0",
 ]
 
 [[package]]

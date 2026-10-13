@@ -23,6 +23,7 @@ pub enum V2Control {
         chunk_receipts: bool,
         cutoff_receipts: bool,
         flush_on_disconnect: bool,
+        independent_images: bool,
     },
     ChunkComplete {
         version: u8,
@@ -49,6 +50,8 @@ enum Control {
         chunk_receipts: bool,
         cutoff_receipts: bool,
         flush_on_disconnect: bool,
+        #[serde(default)]
+        independent_images: bool,
     },
     ChunkComplete {
         version: u8,
@@ -113,6 +116,7 @@ pub fn decode(packet: Packet, input_rate: u32) -> Result<ClientInput, AgentError
                     chunk_receipts,
                     cutoff_receipts,
                     flush_on_disconnect,
+                    independent_images,
                 } => {
                     receipt_token(&session_id)?;
                     return Ok(ClientInput::V2(V2Control::Accept {
@@ -121,6 +125,7 @@ pub fn decode(packet: Packet, input_rate: u32) -> Result<ClientInput, AgentError
                         chunk_receipts,
                         cutoff_receipts,
                         flush_on_disconnect,
+                        independent_images,
                     }));
                 }
                 Control::ChunkComplete {

@@ -4,12 +4,16 @@
 //! physical audibility. The default CLI remains the legacy context protocol.
 mod backend;
 mod driver;
+mod images;
 mod provider;
 mod state;
 
 use crate::AgentError;
 pub use backend::{ReceiptBackend, ReceiptOutput};
 pub use driver::{ReceiptRunConfig, ReceiptRunReport, ReceiptSession};
+pub use images::{
+    ImageChannelConfig, ImageChannelStatus, IMAGE_HEADER_BYTES, IMAGE_MAX_PIXELS_BYTES,
+};
 pub(crate) use provider::run_provider_session;
 use std::time::Duration;
 

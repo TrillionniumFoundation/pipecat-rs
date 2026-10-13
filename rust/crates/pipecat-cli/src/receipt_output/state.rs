@@ -77,12 +77,21 @@ pub(super) struct Shared {
     pub state: Mutex<Ledger>,
     pub changed: Notify,
     pub commands: mpsc::Sender<Command>,
+    pub images: Option<Arc<super::images::Images>>,
 }
 impl Shared {
     pub fn new(
         session_id: String,
         output_rate: u32,
         config: ReceiptConfig,
+    ) -> (Arc<Self>, mpsc::Receiver<Command>) {
+        Self::with_images(session_id, output_rate, config, None)
+    }
+    pub fn with_images(
+        session_id: String,
+        output_rate: u32,
+        config: ReceiptConfig,
+        images: Option<Arc<super::images::Images>>,
     ) -> (Arc<Self>, mpsc::Receiver<Command>) {
         let (commands, rx) = mpsc::channel(8);
         (
@@ -91,6 +100,7 @@ impl Shared {
                 output_rate,
                 config,
                 commands,
+                images,
                 changed: Notify::new(),
                 state: Mutex::new(Ledger {
                     closed: false,
@@ -126,6 +136,9 @@ impl Shared {
         let mut state = self.state.lock().unwrap();
         Self::close_locked(&mut state, "v2 session closed before playback completion");
         drop(state);
+        if let Some(images) = &self.images {
+            images.close();
+        }
         self.changed.notify_waiters();
     }
     /// Reliable synchronous revocation. No bounded queue and no task spawn in Drop.

@@ -9,8 +9,8 @@ use pipecat_core::{
     StartFrame,
 };
 use pipecat_media_transport::{
-    OutputBackend, OutputControl, OutputTransport, OutputTransportConfig, PlaybackReceipt,
-    SpokenHistory,
+    LiveVideoOutputConfig, OutputBackend, OutputControl, OutputTransport, OutputTransportConfig,
+    PlaybackReceipt, SpokenHistory,
 };
 use pipecat_protocol::protobuf::{self as pb, frame::Kind};
 use std::{collections::BTreeMap, sync::Arc};
@@ -32,6 +32,9 @@ impl Drop for RequestGuard {
     }
 }
 impl ReceiptBackend {
+    pub fn image_status(&self) -> Option<super::ImageChannelStatus> {
+        self.shared.images.as_ref().map(|images| images.status())
+    }
     pub fn session_id(&self) -> &str {
         &self.shared.session_id
     }
@@ -198,16 +201,29 @@ impl OutputBackend for ReceiptBackend {
         self.shared.quiescent(deadline).await
     }
     async fn stop(&self) -> Result<(), ProcessorError> {
-        {
+        let closed = {
             let mut state = self.shared.state.lock().unwrap();
-            if state.closed {
-                return Ok(());
-            }
             state.stopping = true;
+            state.closed
+        };
+        if let Some(images) = &self.shared.images {
+            images.close();
         }
-        let deadline = Instant::now() + self.shared.config.cutoff_timeout;
-        self.shared.request_cutoff(true, false)?;
-        self.shared.quiescent(deadline).await
+        let audio = if closed {
+            Ok(())
+        } else {
+            let deadline = Instant::now() + self.shared.config.cutoff_timeout;
+            match self.shared.request_cutoff(true, false) {
+                Ok(_) => self.shared.quiescent(deadline).await,
+                Err(error) => Err(error),
+            }
+        };
+        // A caller-retained, unpolled checked-out future cannot be forcibly
+        // destroyed here. Never call that case cleanly joined.
+        if let Some(images) = &self.shared.images {
+            images.settled().await?;
+        }
+        audio
     }
     async fn send_message(&self, frame: &Frame) -> Result<(), ProcessorError> {
         let FrameData::OutputTransportMessage(value) = &frame.data else {
@@ -245,7 +261,23 @@ impl OutputBackend for ReceiptBackend {
             )),
         }
     }
-    // supports_independent_video remains the trait's false default.
+    fn supports_independent_video(&self) -> bool {
+        self.shared.images.is_some()
+    }
+    async fn write_image(&self, frame: &Frame) -> Result<(), ProcessorError> {
+        let images = self
+            .shared
+            .images
+            .as_ref()
+            .ok_or_else(|| ProcessorError::new("backend does not support image output"))?;
+        {
+            let state = self.shared.state.lock().unwrap();
+            if state.closed || state.stopping || !state.started {
+                return Err(ProcessorError::new("v2 image output admission is closed"));
+            }
+        }
+        images.write(frame).await
+    }
 }
 
 /// A narrow lifecycle delegate around the actual shared OutputTransport. The
@@ -273,6 +305,18 @@ impl ReceiptOutput {
             output = output.with_spoken_history(history)?;
         }
         Ok(Self { output, backend })
+    }
+    /// Explicit native opt-in using the same Arc backend for both physical paths.
+    pub fn new_with_images(
+        name: impl Into<String>,
+        config: OutputTransportConfig,
+        backend: Arc<ReceiptBackend>,
+        history: Option<SpokenHistory>,
+        live: LiveVideoOutputConfig,
+    ) -> Result<Self, ProcessorError> {
+        let mut this = Self::new(name, config, backend, history)?;
+        this.output = this.output.with_live_video(live)?;
+        Ok(this)
     }
     pub fn control(&self) -> OutputControl {
         self.output.control()
