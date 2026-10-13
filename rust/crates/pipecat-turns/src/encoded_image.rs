@@ -1,4 +1,4 @@
-//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/YCbCr/L/CMYK image encoding.
+//! Narrow unsigned encoded-image ingress plus bounded RGB/RGBX/YCbCr/L/CMYK/1 image encoding.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pipecat_core::{
     AssistantImageRawFrame, ChatRole, ContextMessage, ImageRawFrame, MessageContent, MessagePart,
@@ -8,6 +8,8 @@ use pipecat_core::{
 // Native admission policy for one frame's encoded logical byte length. This is
 // not a SharedContext total, input Vec capacity, image-decoder, or RSS budget.
 const MAX_ORIGINAL_BYTES: usize = 8 * 1024 * 1024;
+// Packed mode 1 has a separate work/storage cap on its expanded L8 pixels.
+const MAX_MONO_EXPANDED_BYTES: usize = 8 * 1024 * 1024;
 // Longest permitted prefix is "data:image/jpeg;base64," (23 bytes).
 const MAX_DATA_URL_BYTES: usize = 4 * MAX_ORIGINAL_BYTES.div_ceil(3) + 23;
 
@@ -30,7 +32,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
         _ => {
             if matches!(
                 image.image.image.format.as_deref(),
-                Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK")
+                Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK" | "1")
             ) {
                 let jpeg = raw_jpeg(&image.image.image, "assistant image")?;
                 data_url(&jpeg, Some("image/jpeg"), "assistant image", "image")?
@@ -58,7 +60,7 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
     let url = if matches!(
         image.image.format.as_deref(),
-        Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK")
+        Some("RGB" | "RGBX" | "YCbCr" | "L" | "CMYK" | "1")
     ) {
         let jpeg = raw_jpeg(&image.image, "user image")?;
         data_url(&jpeg, Some("image/jpeg"), "user image", "image")?
@@ -129,6 +131,10 @@ fn data_url(
 // bounded surplus matches Image.frombytes.
 // Owner labels are fixed at the two call sites, never copied from frame metadata.
 fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, ProcessorError> {
+    // Packed bits are a distinct layout, never a fictitious bytes-per-pixel mode.
+    if image.format.as_deref() == Some("1") {
+        return packed_mono_jpeg(image, owner);
+    }
     let (mode, bytes_per_pixel, color) = match image.format.as_deref() {
         Some("RGB") => ("RGB", 3, jpeg_encoder::ColorType::Rgb),
         // Rgba is only the encoder layout: exact public RGBA is still rejected.
@@ -138,7 +144,7 @@ fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, Proce
         Some("CMYK") => ("CMYK", 4, jpeg_encoder::ColorType::Cmyk),
         _ => {
             return Err(ProcessorError::new(format!(
-                "{owner} raw pixels require exact RGB, RGBX, YCbCr, L or CMYK"
+                "{owner} raw pixels require exact RGB, RGBX, YCbCr, L, CMYK or 1"
             )))
         }
     };
@@ -188,6 +194,82 @@ fn raw_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, Proce
                 "{owner} {mode} JPEG encoding failed or exceeded its output budget"
             ))
         })?;
+    Ok(output.bytes)
+}
+
+// Exact mode 1: MSB-first rows, one set bit becomes 255 and one clear bit 0.
+// Unused low bits in each final row byte and bounded trailing bytes are ignored.
+fn packed_mono_jpeg(image: &ImageRawFrame, owner: &'static str) -> Result<Vec<u8>, ProcessorError> {
+    let (width, height) = image.size;
+    if width == 0 || height == 0 || width > 65_500 || height > 65_500 {
+        return Err(ProcessorError::new(format!(
+            "{owner} 1 dimensions must be 1..=65500",
+        )));
+    }
+    let dimensions = usize::try_from(width)
+        .ok()
+        .zip(usize::try_from(height).ok());
+    let expanded_bytes = dimensions
+        .and_then(|(width, height)| width.checked_mul(height))
+        .filter(|bytes| *bytes <= MAX_MONO_EXPANDED_BYTES)
+        .ok_or_else(|| {
+            ProcessorError::new(format!("{owner} 1 expanded pixel bytes exceed 8388608"))
+        })?;
+    let (width_usize, height_usize) = dimensions.ok_or_else(|| {
+        ProcessorError::new(format!("{owner} 1 expanded pixel bytes exceed 8388608"))
+    })?;
+    let row_bytes = width_usize.checked_add(7).map(|width| width / 8);
+    let required = row_bytes
+        .and_then(|row| row.checked_mul(height_usize))
+        .filter(|bytes| *bytes <= MAX_ORIGINAL_BYTES)
+        .ok_or_else(|| {
+            ProcessorError::new(format!("{owner} 1 packed pixel bytes exceed 8388608"))
+        })?;
+    if image.image.len() > MAX_ORIGINAL_BYTES {
+        return Err(ProcessorError::new(format!(
+            "{owner} 1 buffer exceeds 8388608 bytes",
+        )));
+    }
+    if image.image.len() < required {
+        return Err(ProcessorError::new(format!(
+            "{owner} 1 buffer is shorter than its dimensions",
+        )));
+    }
+    let row_bytes = row_bytes.ok_or_else(|| {
+        ProcessorError::new(format!("{owner} 1 packed pixel bytes exceed 8388608"))
+    })?;
+    let mut expanded = Vec::new();
+    expanded
+        .try_reserve_exact(expanded_bytes)
+        .map_err(|_| ProcessorError::new(format!("{owner} 1 expansion allocation failed")))?;
+    for row in image.image[..required].chunks_exact(row_bytes) {
+        for x in 0..width_usize {
+            expanded.push(if row[x / 8] & (0x80 >> (x % 8)) != 0 {
+                255
+            } else {
+                0
+            });
+        }
+    }
+    let mut output = CappedJpegWriter::default();
+    let mut encoder = jpeg_encoder::Encoder::new(&mut output, 75);
+    encoder.set_sampling_factor(jpeg_encoder::SamplingFactor::F_2_2);
+    encoder.set_progressive(false);
+    encoder.set_optimized_huffman_tables(false);
+    encoder
+        .encode(
+            &expanded,
+            width as u16,
+            height as u16,
+            jpeg_encoder::ColorType::Luma,
+        )
+        .map_err(|_| {
+            ProcessorError::new(format!(
+                "{owner} 1 JPEG encoding failed or exceeded its output budget"
+            ))
+        })?;
+    // Release the only full-image expansion before the caller creates base64.
+    drop(expanded);
     Ok(output.bytes)
 }
 

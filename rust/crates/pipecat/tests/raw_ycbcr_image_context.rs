@@ -545,7 +545,7 @@ async fn ycbcr_mode_is_exact_and_rejections_do_not_mutate_history() {
             Some("CMYK"),
             Some("L8"),
             Some("LA"),
-            Some("1"),
+            Some("1;8"),
             Some("P"),
             Some("I;16"),
             Some("image/png"),

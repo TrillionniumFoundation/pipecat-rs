@@ -382,11 +382,13 @@ impl LLMAssistantAggregator {
             }) || (!passive
                 && !matches!(
                     image.image.format.as_deref(),
-                    Some("image/png" | "image/jpeg" | "RGB" | "RGBX" | "YCbCr" | "L" | "CMYK")
+                    Some(
+                        "image/png" | "image/jpeg" | "RGB" | "RGBX" | "YCbCr" | "L" | "CMYK" | "1"
+                    )
                 ))
             {
                 return Err(ProcessorError::new(
-                    "raw image/file context conversion requires exact RGB, RGBX, YCbCr, L or CMYK, or encoded PNG/JPEG, without tool/callback authority",
+                    "raw image/file context conversion requires exact RGB, RGBX, YCbCr, L, CMYK or 1, or encoded PNG/JPEG, without tool/callback authority",
                 ));
             }
             if self.realtime.enabled()? || state.signed_history.is_some() {

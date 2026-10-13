@@ -306,7 +306,7 @@ pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
 busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
 service responses acquire a private continuation owner even before a signature
 arrives, so this does not admit their in-progress responses. Requests with any
-function/tool/callback field present remain unsupported. The bounded RGB/RGBX/YCbCr/L/CMYK
+function/tool/callback field present remain unsupported. The bounded RGB/RGBX/YCbCr/L/CMYK/1
 conversion below admits only those exact raw-pixel modes. User files use the separate
 PDF path described above.
 The assistant invokes no capture callback or tool settlement. Arbitrary
@@ -317,7 +317,7 @@ outside this bounded Python parity slice.
 
 For ordinary application/public-codec `AssistantImage`, either original field
 being absent or empty selects display bytes; the other original field is ignored.
-Exact display `format=Some("RGB")`, `Some("RGBX")`, `Some("YCbCr")`, `Some("L")` or `Some("CMYK")`
+Exact display `format=Some("RGB")`, `Some("RGBX")`, `Some("YCbCr")`, `Some("L")`, `Some("CMYK")` or `Some("1")`
 uses bounded JPEG conversion.
 Exact `image/png` or `image/jpeg` uses the existing encoded-byte validator: a
 matching PNG/JPEG signature and 1..=8,388,608 selected bytes are required. Encoded
@@ -335,7 +335,7 @@ intentionally narrower admission policy. MIME aliases, case changes, parameters,
 RGBA, LA and other raw modes are not added. There is no new provider image producer
 or live-provider capability claim.
 
-The shared RGB/RGBX/YCbCr/L/CMYK encoder below preserves the same dimensions, selected
+The shared RGB/RGBX/YCbCr/L/CMYK/1 encoder below preserves the same dimensions, selected
 raw-buffer, required-prefix, output and checked data-URL limits. Existing modes
 retain their JPEG settings; CMYK uses the distinct sampling documented below.
 Ignored originals are not prevalidated or included in those selected-pixel/output caps;
@@ -365,37 +365,50 @@ production or live-provider acceptance. Existing UserImage/helper tests retain
 common encoder bounds and capped-writer coverage; no new dependency or worker
 lifecycle is introduced.
 
-### Bounded RGB/RGBX/YCbCr/L/CMYK user-image conversion
+### Bounded RGB/RGBX/YCbCr/L/CMYK/1 user-image conversion
 
 Only ordinary `UserImage` with exact `image.format=Some("RGB")`, `Some("RGBX")`,
-`Some("YCbCr")`, `Some("L")` or `Some("CMYK")` and `append_to_context=Some(true)` adds packed,
+`Some("YCbCr")`, `Some("L")`, `Some("CMYK")` or `Some("1")` and `append_to_context=Some(true)` adds packed,
 top-down raw encoding. RGB and YCbCr use three bytes per pixel; RGBX uses four
 and ignores the fourth byte. CMYK uses four ordered C, M, Y, K bytes, with K
-retained as a real channel. Each L pixel is one grayscale byte. Exact YCbCr
-means interleaved Y, Cb, Cr in full-range JPEG color space, with no RGB conversion,
+retained as a real channel. Each L pixel is one grayscale byte. Exact `1` uses
+MSB-first packed rows of `ceil(width/8)` bytes: set bits become 255, clear bits 0.
+Unused low bits in each final row byte and bounded trailing bytes are ignored.
+Rows are rounded independently, never continuously packed across row boundaries.
+Exact YCbCr means interleaved Y, Cb, Cr in full-range JPEG color space, with no RGB conversion,
 chroma swapping, limited-range expansion or full-frame repack. There is no
-palette or alpha compositing. Stride, row padding, BGR, RGBA, LA, bit-packed/
-16-bit pixels, NV12/I420/YUV422 layouts and aliases are outside this contract.
+palette or alpha compositing. Configurable stride, extra row-padding bytes, BGR,
+RGBA, LA, other packed-bit layouts, 16-bit pixels, NV12/I420/YUV422 and aliases
+including `1;I`, `1;R`, `1;IR`, `1;8` and `01` are outside this contract.
 The bytes do not carry a layout discriminator: a wrong layout with enough bytes
 cannot be detected reliably, and bounded trailing bytes remain accepted below.
 Width and height must each be positive and at most 65,500. Checked
 `width*height*3` for RGB/YCbCr, `width*height*4` for RGBX/CMYK or `width*height` for L
 and the full input Vec logical length are independently capped at 8,388,608 bytes.
+For `1`, checked expanded `width*height` has its own 8,388,608-byte limit, even
+when packed input is much smaller. Checked row rounding and packed required-prefix
+arithmetic are bounded separately; full supplied input retains the same cap.
+All geometry, expansion, packed-prefix, full-buffer and short-buffer checks occur
+before the single fallible expanded-L allocation. Only valid row bits are filled;
+no second full-image staging buffer is introduced. Expansion is released before
+base64 construction. These are logical limits, not allocator-capacity/RSS bounds.
 Short input rejects; bounded surplus after the required pixel prefix is ignored,
 matching the pinned Python/Pillow raw-decoder shape. These are native resource
 policies, not a claim that Pillow enforces the same byte caps.
 
 The pinned `jpeg-encoder` 0.6.1 uses only its `std` feature and quality 75.
 RGB, RGBX and YCbCr retain 4:2:0 (`F_2_2`); L uses its existing single-component
-`Luma` encoder with the same configured sampling setting. Exact YCbCr selects
-`ColorType::Ycbcr`, which consumes the packed Y/Cb/Cr values directly. RGBX uses the encoder's
+`Luma` encoder with the same configured sampling setting. Exact `1` expands once
+to L8 and uses this same quality-75, configured `F_2_2` Luma path (one actual 1x1
+component). Exact YCbCr selects `ColorType::Ycbcr`, which consumes the packed Y/Cb/Cr values directly. RGBX uses the encoder's
 internal `ColorType::Rgba` four-byte layout, which reads only RGB and ignores X;
 that enum name does not admit public RGBA or implement alpha compositing.
 Exact CMYK selects `ColorType::Cmyk` without pre-inversion: the encoder inverts
 all four channels for Adobe APP14 transform 0. It uses `F_1_1` for CMYK only,
 so C/M/Y/K all have 1x1 sampling; reusing `F_2_2` would give K a different
 sampling factor. `CmykAsYcck`, transform 2, alternate layouts and raw-mode aliases
-such as `CMYK;I` are not admitted. No full-frame repack is introduced.
+such as `CMYK;I` are not admitted. Existing byte-per-pixel modes still avoid
+full-frame repacking; only packed mode `1` introduces an expanded-L buffer.
 [Pinned Pillow 12.3.0 JPEG dispatch](https://github.com/python-pillow/Pillow/blob/12.3.0/src/PIL/JpegImagePlugin.py#L620-L627)
 accepts exact RGBX, YCbCr and CMYK and rejects RGBA/LA. Pillow passes YCbCr to
 libjpeg as `JCS_YCbCr`, and CMYK uses `CMYK;I`/`JCS_CMYK` for Adobe conventions.
@@ -412,16 +425,23 @@ use the existing fixed `image/jpeg` data-URL helper and checked base64 bound.
 acknowledgement: this software is based in part on the work of the Independent
 JPEG Group. The upstream encoder is unmodified.
 
-Encoding is synchronous while the assistant state mutex is held, before taking
-the SharedContext lock. Input and output
+Encoding and mode-1 expansion are synchronous under the assistant state mutex,
+before taking the SharedContext lock. Input and output
 caps do not provide a deadline, realtime/camera-rate throughput, cancellation
 preemption, or Python `asyncio.to_thread` responsiveness. The encoder has internal
 infallible allocations (including width-dependent MCU row buffers); the limits
 are not caller Vec capacity, allocator behavior, queue/history retention,
 projection-clone or process-RSS bounds. Large inputs can stall the reducer and
-same-assistant operations. No off-thread worker lifecycle is introduced.
+same-assistant operations. Packed mode `1` adds an expansion loop and a transient
+full-image allocation; packed input, expanded L, JPEG output and encoder internals
+can coexist. Fallible reservation does not bound allocator capacity or process RSS.
+No off-thread worker lifecycle or cancellation preemption is introduced.
 The same 8 MiB input cap permits up to 8,388,608 L pixels, roughly three times
 the RGB/YCbCr pixel count; RGBX/CMYK are limited to 2,097,152 pixels.
+Mode `1` has the same maximum 8,388,608 expanded pixels: 4096x2048 is admitted
+from 1,048,576 packed bytes; 4096x2049 rejects by expansion size even though its
+1,049,088-byte packed input fits. The expansion cap prevents an eightfold pixel
+work increase from accepting 8 MiB of packed bits, but does not bound CPU time.
 For CMYK, 2048x1024 requires exactly 8,388,608 bytes, while 2048x1025 exceeds
 the required-prefix cap. Four-component encoding adds work without a CPU bound.
 Three-byte modes
@@ -437,8 +457,8 @@ and consumes no replay ID. Explicit false-run remains context-only, including
 only the existing ordinary Text+LLM busy-prefix exception. True/None remains
 idle-only and uses the existing append-and-frame transaction. Conversion precedes
 prefix/history mutation and replay lookup; failure leaves held text, history and
-the ID retryable. Replayed RGB/RGBX/YCbCr/L/CMYK still pays validation/encoding cost before the
-successful-ID no-op. This native failure atomicity is stronger than Python's
+the ID retryable. Replayed RGB/RGBX/YCbCr/L/CMYK/1 still pays validation/encoding
+(and for `1`, expansion) cost before the successful-ID no-op. This native failure atomicity is stronger than Python's
 prefix-before-encoding order and is not claimed as exact failure-order parity.
 Encoded PNG/JPEG pass-through retains its existing admission behavior.
 `AssistantImage` uses the same encoder only under the distinct selection and
@@ -496,6 +516,19 @@ passive/authority/state guards and transaction retry. Only the RGBX negative
 matrix's complete four-byte CMYK case becomes unsupported CMYKX. The YCbCr
 matrix's CMYK case stays unchanged because its three-byte buffer is too short.
 
+The `raw_mono_image_context` target adds exact packed `1` through both public
+consumers with unchanged End/drain/join cleanup. Literal independent L rows at
+widths 1/7/8/9/17 establish same-native JPEG equality, MSB order and per-row rounding;
+this is not Pillow JPEG equality. Independent decoding checks sequential L8,
+dimensions and pixel count. A separate 49x33 asymmetric block fixture uses a
+predeclared interior tolerance of 8, without demanding lossless sharp patterns.
+Controls check unused low bits, bounded tails, distinct expansion/full-input caps,
+short rows, selection, replay/retry, passive/authority/state and transaction rules.
+Only the four old L/RGBX/YCbCr/CMYK matrices' complete exact-`1` rejection tokens
+become unsupported `1;8`; every other row remains unchanged, including YCbCr's
+short CMYK case. No allocator-failure or naturally oversized JPEG claim is made;
+the existing capped-writer units retain exact/over-limit coverage.
+
 For a plain association, content and policy come exclusively from the UserImage
 frame: `image.image`, `image.format`, `text`, `append_to_context` and `run_llm`.
 A differing request text or append flag does not override them. The aggregator
@@ -507,7 +540,8 @@ The public `InputIngress::request_image` plus keyed `push_video_frame(InputImage
 path can produce this shape from application-supplied encoded PNG/JPEG bytes
 or packed RGB24 labeled exactly `RGB`, RGB plus an ignored byte labeled exactly
 `RGBX`, packed full-range Y/Cb/Cr triplets labeled exactly `YCbCr`, or packed
-grayscale L8 labeled exactly `L`, or ordinary C/M/Y/K quads labeled exactly `CMYK`.
+grayscale L8 labeled exactly `L`, ordinary C/M/Y/K quads labeled exactly `CMYK`,
+or MSB-first packed monochrome rows labeled exactly `1`.
 The source must already be registered and ready; the existing sampler and
 private-tag/Queued ledger checks remain in force. Input preserves the request
 association, strips its callback from the derived UserImage, and sets
@@ -875,7 +909,7 @@ instances closed by End, Stop, or Cancel are not restartable.
 - Explicit mute and the configurable native mute policies below are supported.
   Empty-turn recovery applies only to cascade mode; paired realtime activation
   disables it
-- Raw image modes other than bounded RGB/RGBX/YCbCr/L/CMYK and non-PDF files need an explicit
+- Raw image modes other than bounded RGB/RGBX/YCbCr/L/CMYK/1 and non-PDF files need an explicit
   encoder; encoded rich messages are supported. Full Python callback/event parity and
   provider-specific realtime speech-to-speech qualification
   remain outside this implementation
