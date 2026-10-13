@@ -471,7 +471,8 @@ impl LLMAssistantAggregator {
             frame
                 .require_no_native_llm_continuation()
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
-            if file.append_to_context != Some(true) || file.custom_options.is_some() {
+            let passive = file.append_to_context != Some(true);
+            if !passive && file.custom_options.is_some() {
                 return Err(ProcessorError::new(
                     "raw image/file context conversion is not supported; submit encoded rich context messages",
                 ));
@@ -481,13 +482,13 @@ impl LLMAssistantAggregator {
                     "encoded user file context is unsupported during realtime or signed continuation",
                 ));
             }
-            // A false-run file may commit a prefix in the same narrow ordinary
-            // Text response as a user image. Every other state gate stays intact.
-            let busy_append_only = file.run_llm == Some(false)
+            // Passive files and false-run uploads share the narrow ordinary
+            // Text response envelope. All independent state gates stay intact.
+            let busy_context_only = (passive || file.run_llm == Some(false))
                 && self.config.text_mode == AssistantTextMode::Text
                 && state.active
                 && state.llm_active;
-            if (!busy_append_only
+            if (!busy_context_only
                 && (state.active || state.llm_active || !state.aggregation.text.is_empty()))
                 || !state.thought.text.is_empty()
                 || state.thought_append
@@ -503,6 +504,11 @@ impl LLMAssistantAggregator {
                     "encoded user file context requires an idle assistant without pending text, playback, tools or inference",
                 ));
             }
+            if passive {
+                // Python returns before prefix flush or any payload/run handling.
+                // Preserve held text, spacing, history and successful replay IDs.
+                return Ok(output);
+            }
             // Validate before replay lookup; bad input never consumes its ID.
             let message = crate::encoded_file::user_message(file)?;
             if state.seen.contains(frame.id) {
@@ -513,14 +519,14 @@ impl LLMAssistantAggregator {
                 // projecting history or ending the turn. Raw nonempty whitespace
                 // still contributes an empty assistant message after trimming.
                 let mut context = self.context.lock()?;
-                if busy_append_only && !state.aggregation.text.is_empty() {
+                if busy_context_only && !state.aggregation.text.is_empty() {
                     context.append_native(Message::text(
                         Role::Assistant,
                         state.aggregation.text.trim().to_owned(),
                     ));
                 }
                 context.append_rich([message]);
-                if busy_append_only {
+                if busy_context_only {
                     state.aggregation.take();
                 }
             } else {

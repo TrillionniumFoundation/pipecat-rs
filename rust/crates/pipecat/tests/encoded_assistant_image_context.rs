@@ -711,40 +711,29 @@ async fn terminal_retyped_carriers_keep_existing_validation_order() {
 }
 
 #[tokio::test]
-async fn legacy_and_nonappending_user_files_remain_explicitly_unsupported() {
+async fn legacy_user_files_remain_explicitly_unsupported() {
     let file = FileRawFrame {
         file: "data:application/pdf;base64,JVBERg==".into(),
         source_type: FileSourceType::Bytes,
         filename: Some("document.pdf".into()),
         format: "application/pdf".into(),
     };
-    for data in [
-        FrameData::UserFile(UserFileRawFrame {
-            file: file.clone(),
-            user_id: "user".into(),
-        }),
-        FrameData::UserFileDetailed(DetailedUserFileRawFrame {
-            file,
-            user_id: "user".into(),
-            text: "read".into(),
-            append_to_context: Some(false),
-            custom_options: None,
-            run_llm: Some(true),
-        }),
-    ] {
-        let context = SharedContext::default();
-        let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
-        let rejected = consume(&assistant, Frame::new(data));
-        let snapshot = context.snapshot_rich();
-        let cleaned = assistant.cleanup().await;
-        drop(assistant);
-        cleaned.unwrap();
-        assert!(rejected
-            .unwrap_err()
-            .message
-            .contains("raw image/file context conversion"));
-        assert!(snapshot.unwrap().messages.is_empty());
-    }
+    let data = FrameData::UserFile(UserFileRawFrame {
+        file,
+        user_id: "user".into(),
+    });
+    let context = SharedContext::default();
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let rejected = consume(&assistant, Frame::new(data));
+    let snapshot = context.snapshot_rich();
+    let cleaned = assistant.cleanup().await;
+    drop(assistant);
+    cleaned.unwrap();
+    assert!(rejected
+        .unwrap_err()
+        .message
+        .contains("raw image/file context conversion"));
+    assert!(snapshot.unwrap().messages.is_empty());
 }
 
 struct PublishReceipt;

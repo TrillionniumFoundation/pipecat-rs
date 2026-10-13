@@ -253,10 +253,26 @@ malformed upload leaves held text and its ID retryable. A successful same-ID
 replay is revalidated but cannot flush a later suffix. This failure atomicity is
 Rust's ingress contract, not a claim about Python's validation behavior.
 Ordinary frames after End/Cancel/Stop are ignored, with the same
-private-carrier validation order as image ingress. Legacy UserFile, URLs, other
-MIME types, false/None append, custom options and busy uploads outside this
-explicit-false Text case remain unsupported. No changes to image admission are
-implied.
+private-carrier validation order as image ingress. Legacy UserFile remains
+unsupported. Appending URLs, other MIME types, custom options and busy uploads
+outside this explicit-false Text case remain unsupported.
+
+A passive `UserFileDetailed` with `append_to_context=None` or `Some(false)` is
+silently consumed in clean idle state or the same ordinary unsigned active
+Text+LLM response envelope. All independent thought, speech, playback, tools,
+inference-debt, realtime, signed-owner and private-carrier guards remain in force.
+The pinned Python file handler returns before flushing held assistant text, so
+prefix + passive file + suffix stays one complete text at the normal turn end.
+No context mutation, projection, encoding, inference, events or actions occur.
+File source type, bytes/URL, MIME, filename, text, custom options and all run
+values are ignored; this does not authorize retrieval or appending those payloads.
+Passive IDs neither enter nor evict the successful 512-ID replay cache; repeated
+passives and later same-ID valid active uploads retain normal admission semantics.
+The public PythonJsonCodec decodes UserFileRawFrame into this Detailed variant;
+the concrete passive bus fixture arrives UPSTREAM. RTVI send-file always sets
+append true, including when run-immediately is false, and is not a passive
+producer. Raw FrameData::UserFile remains unsupported. No image behavior changes
+are implied.
 
 `UserImage` has a separate encoded upload path: `append_to_context=Some(true)`
 is required. `request` may be absent or a plain association whose

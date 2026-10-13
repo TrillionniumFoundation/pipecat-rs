@@ -398,17 +398,6 @@ async fn invalid_encoding_header_signature_and_nonselected_flags_preserve_retry(
         file.file.source_type = FileSourceType::Url;
         file.file.file = "https://example.invalid/private-payload.pdf".into();
     }));
-    for append in [None, Some(false), Some(true)] {
-        for run in [None, Some(false), Some(true)] {
-            if append == Some(true) {
-                continue;
-            }
-            cases.push(edit_upload(|file| {
-                file.append_to_context = append;
-                file.run_llm = run;
-            }));
-        }
-    }
     cases.push(edit_upload(|file| {
         file.custom_options = Some(Default::default())
     }));
