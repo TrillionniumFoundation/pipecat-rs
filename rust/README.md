@@ -88,6 +88,13 @@ includes bounded shared realtime aggregation and native executor terminal
 receipts. Arbitrary context replacement/transforms, unsupported rich history and
 live-provider qualification remain open. These facade exports do not establish
 physical-output acceptance or full workspace parity.
+The turns aggregator also admits bounded packed RGB24 `UserImage` content,
+encoding it to JPEG before the existing context path. This requires no optional
+`images` facade feature. See [the precise RGB contract and synchronous-latency
+limitations](crates/pipecat-turns/README.md#bounded-rgb-user-image-conversion) and
+[the encoder/IJG notices](third-party/README.md). Encoded PNG/JPEG and
+`AssistantImage` behavior remain unchanged; this is not camera or live-provider
+qualification.
 The optional `classifiers` feature exposes standalone typed batches through native
 LLM inference or Jev HTTP. `pipecat-evals` integrates them for
 [bounded scripted text/function judging](crates/pipecat-evals/README.md#native-scripted-classifier-judging);

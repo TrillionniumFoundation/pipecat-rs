@@ -1,8 +1,8 @@
-//! Narrow unsigned encoded-image ingress; no pixel decoding or provider receipt.
+//! Narrow unsigned encoded-image ingress plus bounded RGB UserImage encoding.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pipecat_core::{
-    AssistantImageRawFrame, ChatRole, ContextMessage, MessageContent, MessagePart, ProcessorError,
-    UserImageRawFrame,
+    AssistantImageRawFrame, ChatRole, ContextMessage, ImageRawFrame, MessageContent, MessagePart,
+    ProcessorError, UserImageRawFrame,
 };
 
 // Native admission policy for one frame's encoded logical byte length. This is
@@ -28,7 +28,12 @@ pub(crate) fn message(image: &AssistantImageRawFrame) -> Result<ContextMessage, 
 
 /// Flags, ownership and state admission are checked by the assistant first.
 pub(crate) fn user_message(image: &UserImageRawFrame) -> Result<ContextMessage, ProcessorError> {
-    let url = data_url(&image.image.image, image.image.format.as_deref(), false)?;
+    let url = if image.image.format.as_deref() == Some("RGB") {
+        let jpeg = rgb_jpeg(&image.image)?;
+        data_url(&jpeg, Some("image/jpeg"), false)?
+    } else {
+        data_url(&image.image.image, image.image.format.as_deref(), false)?
+    };
     let mut parts = Vec::with_capacity(2);
     if let Some(text) = image.text.as_ref().filter(|text| !text.is_empty()) {
         parts.push(MessagePart::Text { text: text.clone() });
@@ -68,7 +73,7 @@ fn data_url(
         _ => {
             return Err(ProcessorError::new(format!(
                 "{owner} requires image/png or image/jpeg MIME with a matching signature",
-            )))
+            )));
         }
     };
     // Signature admission is not complete image validation. The downstream
@@ -83,4 +88,117 @@ fn data_url(
     url.push_str(prefix);
     STANDARD.encode_string(original, &mut url);
     Ok(url)
+}
+
+// RGB is packed top-down RGB24, without row padding. The full input length and
+// required prefix have independent caps; bounded surplus matches Image.frombytes.
+fn rgb_jpeg(image: &ImageRawFrame) -> Result<Vec<u8>, ProcessorError> {
+    let (width, height) = image.size;
+    if width == 0 || height == 0 || width > 65_500 || height > 65_500 {
+        return Err(ProcessorError::new(
+            "user image RGB dimensions must be 1..=65500",
+        ));
+    }
+    let required = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(3))
+        .filter(|bytes| *bytes <= MAX_ORIGINAL_BYTES)
+        .ok_or_else(|| ProcessorError::new("user image RGB pixel bytes exceed 8388608"))?;
+    if image.image.len() > MAX_ORIGINAL_BYTES {
+        return Err(ProcessorError::new(
+            "user image RGB buffer exceeds 8388608 bytes",
+        ));
+    }
+    if image.image.len() < required {
+        return Err(ProcessorError::new(
+            "user image RGB buffer is shorter than its dimensions",
+        ));
+    }
+    let mut output = CappedJpegWriter::default();
+    let mut encoder = jpeg_encoder::Encoder::new(&mut output, 75);
+    encoder.set_sampling_factor(jpeg_encoder::SamplingFactor::F_2_2);
+    encoder.set_progressive(false);
+    encoder.set_optimized_huffman_tables(false);
+    // Dimensions fit u16 by the stricter compatibility bound above. Prevalidation
+    // also protects the encoder's internal usize input-size multiplication.
+    encoder
+        .encode(
+            &image.image[..required],
+            width as u16,
+            height as u16,
+            jpeg_encoder::ColorType::Rgb,
+        )
+        .map_err(|_| {
+            ProcessorError::new("user image RGB JPEG encoding failed or exceeded its output budget")
+        })?;
+    Ok(output.bytes)
+}
+
+#[derive(Default)]
+struct CappedJpegWriter {
+    bytes: Vec<u8>,
+}
+impl std::io::Write for CappedJpegWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let needed = self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .filter(|length| *length <= MAX_ORIGINAL_BYTES)
+            .ok_or_else(|| std::io::Error::other("JPEG output exceeds 8388608 bytes"))?;
+        // Both limit and allocation failure are checked before any bytes append.
+        // Bounded geometric requests avoid reallocating for each small write;
+        // actual allocator capacity/RSS remains outside this logical byte cap.
+        if needed > self.bytes.capacity() {
+            let desired = needed
+                .max(self.bytes.capacity().saturating_mul(2))
+                .min(MAX_ORIGINAL_BYTES);
+            self.bytes
+                .try_reserve_exact(desired - self.bytes.len())
+                .map_err(|_| std::io::Error::other("JPEG output allocation failed"))?;
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod rgb_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    #[test]
+    fn capped_writer_rejects_before_append_and_accepts_exact_limit() {
+        let mut small = CappedJpegWriter::default();
+        for byte in 0..8 {
+            small.write_all(&[byte]).unwrap();
+        }
+        assert_eq!(small.bytes, (0..8).collect::<Vec<u8>>());
+        let small_capacity = small.bytes.capacity();
+        assert_eq!(small.write(&[]).unwrap(), 0);
+        assert_eq!(small.bytes.capacity(), small_capacity);
+        let mut writer = CappedJpegWriter {
+            bytes: vec![7; MAX_ORIGINAL_BYTES - 1],
+        };
+        let capacity_before = writer.bytes.capacity();
+        assert!(writer.write_all(&[8, 9]).is_err());
+        assert_eq!(writer.bytes.capacity(), capacity_before);
+        assert_eq!(writer.bytes.len(), MAX_ORIGINAL_BYTES - 1);
+        assert!(writer.bytes.iter().all(|byte| *byte == 7));
+        writer.write_all(&[8]).unwrap();
+        assert_eq!(writer.bytes.len(), MAX_ORIGINAL_BYTES);
+        assert_eq!(writer.bytes.last(), Some(&8));
+        assert!(writer.write_all(&[9]).is_err());
+        assert_eq!(writer.bytes.len(), MAX_ORIGINAL_BYTES);
+        assert_eq!(writer.write(&[]).unwrap(), 0);
+        writer.flush().unwrap();
+    }
 }

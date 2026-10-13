@@ -283,8 +283,8 @@ data-URL limits above; dimensions are ignored. Nonempty accompanying text comes
 first (whitespace is retained), followed by one image part in a user-role message.
 User IDs and frame metadata do not become message names, tool results or provider
 authority. The public RTVI `send-file` producer supplies this shape both with
-`run_immediately=false` and with options omitted (the default is true). No new
-decoder or dependency is used.
+`run_immediately=false` and with options omitted (the default is true). Encoded
+PNG/JPEG pass-through still performs no pixel decoding or re-encoding.
 
 The ordinary upload path requires an idle non-realtime assistant. A narrow
 mid-turn alternative accepts explicit `run_llm=Some(false)` during an active
@@ -302,11 +302,64 @@ pending playback/tool calls, and owed/awaited inference. Busy true/None uploads,
 busy Spoken mode and TTS-only turns remain excluded. Realtime is unsupported. Gemini and Anthropic
 service responses acquire a private continuation owner even before a signature
 arrives, so this does not admit their in-progress responses. Requests with any
-function/tool/callback field present and raw camera pixel conversion remain
-unsupported. User files use the separate PDF path described above.
+function/tool/callback field present remain unsupported. The bounded RGB
+conversion below is the only raw-pixel mode admitted. User files use the separate
+PDF path described above.
 The assistant invokes no capture callback or tool settlement. Arbitrary
-`image/*`, raw-pixel conversion and tool-associated image handling remain
+`image/*`, other raw-pixel modes and tool-associated image handling remain
 outside this bounded Python parity slice.
+
+### Bounded RGB user-image conversion
+
+Only ordinary `UserImage` with exact `image.format=Some("RGB")` and
+`append_to_context=Some(true)` adds packed, top-down RGB24 encoding. No stride,
+row padding, channel swapping, alpha, grayscale, BGR, RGBX or aliases are accepted.
+Width and height must each be positive and at most 65,500. Checked `width*height*3`
+and the full input Vec logical length are independently capped at 8,388,608 bytes.
+Short input rejects; bounded surplus after the required pixel prefix is ignored,
+matching the pinned Python/Pillow raw-decoder shape. These are native resource
+policies, not a claim that Pillow enforces the same byte caps.
+
+The pinned `jpeg-encoder` 0.6.1 uses only its `std` feature, quality 75 and 4:2:0
+(`F_2_2`), with progressive and optimized-Huffman modes explicitly disabled.
+No caller metadata, ICC/EXIF, resizing, user-selected quality or provider I/O is
+added.
+A fallible writer checks the independent 8 MiB encoded-output logical limit
+before every append and discards partial output on failure. Successful bytes
+use the existing fixed `image/jpeg` data-URL helper and checked base64 bound.
+[Third-party notices](../../third-party/README.md) include the required IJG
+acknowledgement: this software is based in part on the work of the Independent
+JPEG Group. The upstream encoder is unmodified.
+
+Encoding is synchronous while the assistant state lock is held. Input and output
+caps do not provide a deadline, realtime/camera-rate throughput, cancellation
+preemption, or Python `asyncio.to_thread` responsiveness. The encoder has internal
+infallible allocations (including width-dependent MCU row buffers); the limits
+are not caller Vec capacity, allocator behavior, queue/history retention,
+projection-clone or process-RSS bounds. Large inputs can stall the reducer and
+same-assistant operations. No off-thread worker lifecycle is introduced.
+
+Authority, private-carrier, terminal, passive, realtime/signed-owner and state
+admission still run before conversion. Passive append=None/false skips conversion
+and consumes no replay ID. Explicit false-run remains context-only, including
+only the existing ordinary Text+LLM busy-prefix exception. True/None remains
+idle-only and uses the existing append-and-frame transaction. Conversion precedes
+prefix/history mutation and replay lookup; failure leaves held text, history and
+the ID retryable. Replayed RGB still pays validation/encoding cost before the
+successful-ID no-op. This native failure atomicity is stronger than Python's
+prefix-before-encoding order and is not claimed as exact failure-order parity.
+Encoded PNG/JPEG pass-through and all `AssistantImage` behavior are unchanged.
+
+The `raw_rgb_user_image_context` facade target exercises actual application RGB
+capture through InputBackend/InputTransport, the produced UserImage, assistant,
+prepared shared context and a Gemini request body. Callback Null proves queue
+admission only; explicit End/drain/join and consumer output are checked separately.
+A direct test-only vendored `jpeg-decoder` 0.3.2 independently checks SOF dimensions,
+RGB24 output length, odd-size padding and orientation/color samples with a
+fixture-specific 12/255 channel tolerance. It enables `platform_independent`,
+not rayon, and does not expose the image-generation decoder or enable `images`.
+Neither JPEG byte-equivalence to Pillow, universal lossy-pixel tolerance, native
+LiveKit pixel decoding, hardware capture nor live provider acceptance is claimed.
 
 For a plain association, content and policy come exclusively from the UserImage
 frame: `image.image`, `image.format`, `text`, `append_to_context` and `run_llm`.
@@ -316,7 +369,8 @@ Directly constructed plain request-bearing frames prove only this content
 contract; public fields or IDs do not confer capture ownership.
 
 The public `InputIngress::request_image` plus keyed `push_video_frame(InputImage)`
-path can produce this shape from application-supplied encoded PNG/JPEG bytes.
+path can produce this shape from application-supplied encoded PNG/JPEG bytes
+or packed RGB24 labeled exactly `RGB`.
 The source must already be registered and ready; the existing sampler and
 private-tag/Queued ledger checks remain in force. Input preserves the request
 association, strips its callback from the derived UserImage, and sets
@@ -669,8 +723,8 @@ instances closed by End, Stop, or Cancel are not restartable.
 - Explicit mute and the configurable native mute policies below are supported.
   Empty-turn recovery applies only to cascade mode; paired realtime activation
   disables it
-- Raw image/file-to-context encoding needs an explicit encoder; encoded rich
-  messages are supported. Full Python callback/event parity and
+- Raw image modes other than bounded RGB and non-PDF files need an explicit
+  encoder; encoded rich messages are supported. Full Python callback/event parity and
   provider-specific realtime speech-to-speech qualification
   remain outside this implementation
 - Grouped tool results and active-response deferrals are coalesced. Arbitrary

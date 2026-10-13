@@ -92,6 +92,8 @@ realtime = ["dep:pipecat-realtime"]
 responses = ["dep:pipecat-responses"]
 
 [dev-dependencies]
+base64 = "=0.22.1"
+jpeg-decoder = { version = "=0.3.2", path = "../../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }
 tokio.workspace = true
 bytes.workspace = true
 futures-util = { version = "0.3", features = ["sink"] }

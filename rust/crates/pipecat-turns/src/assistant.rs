@@ -382,7 +382,7 @@ impl LLMAssistantAggregator {
             }) || (!passive
                 && !matches!(
                     image.image.format.as_deref(),
-                    Some("image/png" | "image/jpeg")
+                    Some("image/png" | "image/jpeg" | "RGB")
                 ))
             {
                 return Err(ProcessorError::new(

@@ -584,13 +584,13 @@ async fn completed_signed_prefix_is_preserved_by_ordinary_image_append() {
 }
 
 #[tokio::test]
-async fn passive_user_images_consume_but_raw_append_and_authority_remain_unsupported() {
+async fn passive_user_images_consume_rgb_appends_and_authority_remains_unsupported() {
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
-    // Passive request-free RGB carries no content to encode. Appending raw RGB
-    // and every authority-bearing request still use the unsupported path.
+    // Passive RGB carries no content to encode; the bounded RGB UserImage path
+    // accepts this legal 1x1 input. Every authority-bearing request still rejects.
     for append in [None, Some(false), Some(true)] {
         for run in [None, Some(false), Some(true)] {
             for requested in [false, true] {
@@ -629,15 +629,51 @@ async fn passive_user_images_consume_but_raw_append_and_authority_remain_unsuppo
                 let cleaned = assistant.cleanup().await;
                 drop(assistant);
                 cleaned.unwrap();
-                if !requested && append != Some(true) {
-                    assert_silent(result.unwrap());
-                } else {
+                let snapshot = snapshot.unwrap();
+                if requested {
                     assert!(result
                         .unwrap_err()
                         .message
                         .contains("raw image/file context conversion"));
+                    assert!(snapshot.messages.is_empty());
+                } else if append != Some(true) {
+                    assert_silent(result.unwrap());
+                    assert!(snapshot.messages.is_empty());
+                } else {
+                    let output = result.unwrap();
+                    assert!(output.events.is_empty());
+                    if run == Some(false) {
+                        assert!(output.actions.is_empty());
+                    } else {
+                        assert_eq!(output.actions.len(), 1);
+                        let pipecat::turns::AggregationAction::Push(directed) = &output.actions[0]
+                        else {
+                            panic!("expected context")
+                        };
+                        assert_eq!(directed.direction, Direction::Upstream);
+                        let FrameData::LlmContextDetailed(emitted) = &directed.frame.data else {
+                            panic!("expected detailed context")
+                        };
+                        assert_eq!(emitted.context, snapshot);
+                    }
+                    assert_eq!(snapshot.messages.len(), 1);
+                    assert_eq!(snapshot.messages[0].role, ChatRole::User);
+                    let MessageContent::Parts(parts) = &snapshot.messages[0].content else {
+                        panic!("expected text and image")
+                    };
+                    assert_eq!(parts.len(), 2);
+                    assert_eq!(
+                        parts[0],
+                        MessagePart::Text {
+                            text: "describe".into()
+                        }
+                    );
+                    let MessagePart::Image { url, detail } = &parts[1] else {
+                        panic!("expected JPEG")
+                    };
+                    assert!(url.starts_with("data:image/jpeg;base64,"));
+                    assert!(detail.is_none());
                 }
-                assert!(snapshot.unwrap().messages.is_empty());
                 assert_eq!(calls.load(Ordering::SeqCst), 0);
             }
         }
