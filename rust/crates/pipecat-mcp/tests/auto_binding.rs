@@ -453,3 +453,233 @@ async fn automatic_tool_updates_sync_once_in_both_directions_and_explicit_mode_s
         }
     }
 }
+
+// Append these two tests to pipecat-mcp/tests/auto_binding.rs.
+// They reuse its existing HTTP fixture and context/selection/outcome helpers.
+
+#[tokio::test]
+async fn automatic_context_invalid_complete_cannot_prune_selected_mcp_handler() {
+    let server = Server::start("").await;
+    let (_client, tools) = discover(&server).await;
+    let provider = Server::start("llm").await;
+    let native_llm = llm(&provider);
+    let binding = tools.bind_llm_auto(native_llm.clone()).unwrap();
+    let mut worker = Pipeline::new(binding.stages())
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    let echo = tools
+        .definitions()
+        .iter()
+        .find(|tool| tool.name == "echo")
+        .unwrap()
+        .clone();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(subset(&tools, "echo"))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    setter_applied(&native_llm, &[echo]).await;
+    send_call(&worker, "echo", "before-invalid-complete-context").await;
+    let (before, before_outcome) = result(&mut worker).await.unwrap();
+    assert_completed(&before, &before_outcome);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+
+    let mut invalid = context(ToolSet::Functions(vec![]));
+    let FrameData::LlmContextDetailed(detailed) = &mut invalid.data else {
+        unreachable!();
+    };
+    detailed.context.messages[0].role = ChatRole::Tool; // No tool_call_id.
+    worker
+        .sender()
+        .send(invalid, Direction::Downstream)
+        .await
+        .unwrap();
+    assert!(result(&mut worker)
+        .await
+        .unwrap_err()
+        .contains("tool result requires tool_call_id"));
+    assert!(provider.state.lock().unwrap().completions.is_empty());
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+
+    send_call(&worker, "echo", "after-invalid-complete-context").await;
+    let (retained, retained_outcome) = result(&mut worker).await.unwrap();
+    assert_eq!(
+        retained_outcome.reason(),
+        ToolCallEndReason::CallbackReturned,
+        "rejected complete context must leave the previously selected MCP callback installed"
+    );
+    assert_completed(&retained, &retained_outcome);
+    assert_eq!(retained.function_name, "echo");
+    assert_eq!(retained.tool_call_id, "after-invalid-complete-context");
+    assert_eq!(retained.result, json!("{}"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert!(server
+        .state
+        .lock()
+        .unwrap()
+        .calls
+        .iter()
+        .all(|call| call["name"] == "echo"));
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 0);
+    worker.end().await.unwrap();
+    let (remaining, report) = worker.collect().await.unwrap();
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(report.errors[0]
+        .error
+        .contains("tool result requires tool_call_id"));
+    assert!(!remaining.iter().any(|frame| matches!(
+        frame.frame.data,
+        FrameData::FunctionCallResult(_)
+            | FrameData::FunctionCallResultDetailed(_)
+            | FrameData::FunctionCallCancel(_)
+    )));
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    server.wait_for(|state| state.completed_deletes == 1).await;
+}
+
+#[tokio::test]
+async fn automatic_context_legacy_prunes_and_invalid_legacy_preserves_selection() {
+    let server = Server::start("").await;
+    let (_client, tools) = discover(&server).await;
+    let provider = Server::start("llm-force-other").await;
+    let native_llm = llm(&provider);
+    let binding = tools.bind_llm_auto(native_llm.clone()).unwrap();
+    let mut worker = Pipeline::new(binding.stages())
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    let echo = tools
+        .definitions()
+        .iter()
+        .find(|tool| tool.name == "echo")
+        .unwrap()
+        .clone();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(subset(&tools, "echo"))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    setter_applied(&native_llm, std::slice::from_ref(&echo)).await;
+    send_call(&worker, "echo", "before-valid-legacy").await;
+    let (before, before_outcome) = result(&mut worker).await.unwrap();
+    assert_completed(&before, &before_outcome);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+
+    // This valid legacy frame runs while the native LLM is healthy.
+    // Sending an invalid legacy frame first would mask this RED through LLM health.
+    let legacy = pipecat_core::LlmContextFrame {
+        messages: vec![ChatMessage::new(
+            ChatRole::User,
+            "legacy advertises no tools",
+        )],
+        ..Default::default()
+    };
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmContext(legacy)),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    let (stale_provider, stale_provider_outcome) = result(&mut worker).await.unwrap();
+    assert_eq!(stale_provider.function_name, "other");
+    assert_eq!(stale_provider.tool_call_id, "forced-call-1");
+    assert_not_registered(&stale_provider, &stale_provider_outcome);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    let requests = provider.state.lock().unwrap().completions.clone();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0]
+        .get("tools")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(|tools| tools.is_empty()));
+    assert!(native_llm
+        .request_snapshot()
+        .unwrap()
+        .context
+        .tools
+        .is_none());
+    send_call(&worker, "echo", "after-valid-legacy").await;
+    let (retired, retired_outcome) = result(&mut worker).await.unwrap();
+    assert_eq!(
+        retired_outcome.reason(),
+        ToolCallEndReason::NotRegistered,
+        "a valid legacy frame with no advertised handlers must retire the old automatic callback"
+    );
+    assert_not_registered(&retired, &retired_outcome);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+
+    // Restoring the original cached handler needs no new discovery.
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(subset(&tools, "echo"))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    setter_applied(&native_llm, &[echo]).await;
+    let invalid_legacy = pipecat_core::LlmContextFrame {
+        messages: vec![ChatMessage::new(
+            ChatRole::Tool,
+            "legacy result has no call identity",
+        )],
+        ..Default::default()
+    };
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmContext(invalid_legacy)),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    assert!(result(&mut worker)
+        .await
+        .unwrap_err()
+        .contains("tool result requires tool_call_id"));
+    send_call(&worker, "echo", "after-invalid-legacy").await;
+    let (retained, retained_outcome) = result(&mut worker).await.unwrap();
+    assert_completed(&retained, &retained_outcome);
+    assert_eq!(retained.result, json!("{}"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert_eq!(provider.state.lock().unwrap().completions.len(), 1);
+
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmSetTools(ToolSet::Direct(vec![]))),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    setter_applied(&native_llm, &[]).await;
+    send_call(&worker, "echo", "after-final-prune").await;
+    let (pruned, pruned_outcome) = result(&mut worker).await.unwrap();
+    assert_not_registered(&pruned, &pruned_outcome);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 0);
+    worker.end().await.unwrap();
+    let (remaining, report) = worker.collect().await.unwrap();
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(report.errors[0]
+        .error
+        .contains("tool result requires tool_call_id"));
+    assert!(!remaining.iter().any(|frame| matches!(
+        frame.frame.data,
+        FrameData::FunctionCallResult(_)
+            | FrameData::FunctionCallResultDetailed(_)
+            | FrameData::FunctionCallCancel(_)
+    )));
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    server.wait_for(|state| state.completed_deletes == 1).await;
+}

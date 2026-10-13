@@ -117,16 +117,19 @@ The same sealed/speculative and custom/grouped restrictions apply.
 
 Use `tools.bind_llm_auto(llm)?` when the advertised schema should select the
 executable handlers. This opt-in binding starts with no selected handlers and
-synchronizes on each ordinary detailed context or `LlmSetTools` frame. Only exact
+synchronizes on each ordinary detailed or legacy context, or `LlmSetTools` frame. Only exact
 bound `Direct` handlers are selected; omitted names, empty/`NotGiven` tool sets
 and handler-free declarations prune automatic selections. A handler-free function
 with the same name stays advertisement-only. Preconfigured native function
 declarations provide no executable handler fallback.
+Legacy contexts carry handler-free definitions and retire automatic handlers
+after successful native validation; their original payload is forwarded unchanged.
 
 The complete cached inventory remains available, so advertising the original
 handlers again restores them without discovery. A same-client `update` replaces
 the inventory and clears the selection until a new valid schema frame arrives.
-Validation and publication are atomic; a late foreign handler, custom/grouped
+Complete native context conversion, including messages and tool choice, precedes
+selection changes. Validation and publication are atomic; a late foreign handler, custom/grouped
 schema or sealed/speculative context cannot partially change authority. Automatic
 sync rejects sealed/speculative frames even when their tool set is empty, since
 pruning itself changes execution authority. The incoming projection bookend alone

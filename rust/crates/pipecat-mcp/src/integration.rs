@@ -315,7 +315,12 @@ struct McpLiveContextProjection {
 }
 impl McpLiveContextProjection {
     fn auto_project(&self, frame: &mut Frame) -> Result<(), ProcessorError> {
+        let legacy_tools;
         let tools = match &frame.data {
+            FrameData::LlmContext(context) => {
+                legacy_tools = ToolSet::Functions(context.tools.clone());
+                &legacy_tools
+            }
             FrameData::LlmContextDetailed(context) => &context.context.tools,
             FrameData::LlmSetTools(tools) => tools,
             _ => return Ok(()),
@@ -337,15 +342,27 @@ impl McpLiveContextProjection {
             return Err(ProcessorError::new("MCP binding is closed"));
         }
         let projected = state.current.projection.projection(frame)?;
-        // Preserve native Unsupported errors before selecting any callbacks.
-        let converted = pipecat_services::frame_context::tools(projected.as_ref().unwrap_or(tools))
-            .map_err(|error| ProcessorError::new(error.to_string()))?;
-        pipecat_services::Context {
-            tools: converted,
-            ..Default::default()
+        // Validate the complete native context before changing execution authority.
+        match &frame.data {
+            FrameData::LlmContext(context) => {
+                pipecat_services::frame_context::legacy_context(context)
+                    .validate()
+                    .map_err(|error| ProcessorError::new(error.to_string()))?
+            }
+            FrameData::LlmContextDetailed(context) => {
+                let mut context = context.context.clone();
+                context.tools = projected.as_ref().unwrap_or(tools).clone();
+                pipecat_services::frame_context::context(&context)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+            }
+            _ => pipecat_services::Context {
+                tools: pipecat_services::frame_context::tools(projected.as_ref().unwrap_or(tools))
+                    .map_err(|error| ProcessorError::new(error.to_string()))?,
+                ..Default::default()
+            }
+            .validate()
+            .map_err(|error| ProcessorError::new(error.to_string()))?,
         }
-        .validate()
-        .map_err(|error| ProcessorError::new(error.to_string()))?;
         let names = match tools {
             ToolSet::Direct(functions) => functions
                 .iter()
