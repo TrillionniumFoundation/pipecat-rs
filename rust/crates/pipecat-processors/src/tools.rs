@@ -1,11 +1,11 @@
 //! Registered native function callbacks with bounded admission and typed settlement.
 use futures_util::FutureExt;
 use pipecat_core::{
-    async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolCompletion, LocalToolFunction,
-    LocalToolReporter, LocalToolResult, NativeLlmContinuation, NativeToolCallBatch,
-    ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt,
-    ToolOutcomeAdmission, ToolOutcomePublisher, ToolProgressPublisher,
+    async_trait, Direction, ErrorCategory, ErrorFrame, Frame, FrameData, FrameProcessor,
+    FunctionCall, FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolCompletion,
+    LocalToolFunction, LocalToolReporter, LocalToolResult, NativeLlmContinuation,
+    NativeToolCallBatch, ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason,
+    ToolCallReceipt, ToolOutcomeAdmission, ToolOutcomePublisher, ToolProgressPublisher,
 };
 use serde_json::Value;
 use std::{
@@ -59,6 +59,42 @@ impl CancellableRegisteredTool {
         }
     }
 }
+// This is a diagnostic budget, separate from the existing terminal payload budget.
+fn application_error(function_name: &str, error: &str) -> ErrorFrame {
+    const MAX_BYTES: usize = 4096;
+    const TRUNCATED: &str = "... [truncated]";
+    let mut message = String::with_capacity(MAX_BYTES);
+    let mut truncated = false;
+    for part in [
+        "Error executing function call [",
+        function_name,
+        "]: ",
+        error,
+    ] {
+        let remaining = MAX_BYTES - TRUNCATED.len() - message.len();
+        if part.len() <= remaining {
+            message.push_str(part);
+        } else {
+            let mut end = remaining;
+            while !part.is_char_boundary(end) {
+                end -= 1;
+            }
+            message.push_str(&part[..end]);
+            truncated = true;
+            break;
+        }
+    }
+    if truncated {
+        message.push_str(TRUNCATED);
+    }
+    ErrorFrame {
+        error: message,
+        fatal: false,
+        processor: None,
+        category: ErrorCategory::Application,
+    }
+}
+
 type NormalizedToolFuture =
     Pin<Box<dyn Future<Output = Option<Result<LocalToolCompletion, String>>> + Send>>;
 type NormalizedToolCallback =
@@ -69,6 +105,7 @@ struct RegistrationRow {
     timeout: Option<Duration>,
     cancel_on_interruption: bool,
     requires_reporter: bool,
+    report_application_errors: bool,
 }
 /// An immutable callback inventory captured from validated registrations.
 /// It retains callback/options only; admission limits and outcome history remain
@@ -242,6 +279,7 @@ impl ToolExecutor {
                 timeout: Some(tool.timeout),
                 cancel_on_interruption: tool.cancel_on_interruption,
                 requires_reporter: false,
+                report_application_errors: false,
             },
         );
         Ok(())
@@ -290,6 +328,7 @@ impl ToolExecutor {
                 timeout,
                 cancel_on_interruption: options.cancel_on_interruption,
                 requires_reporter,
+                report_application_errors: true,
             },
         );
         Ok(())
@@ -497,6 +536,7 @@ impl ToolExecutor {
         // The settlement lease is handed over only AFTER spawn releases runtime
         // admission locks. Rejected futures therefore cannot deadlock in Drop.
         let (handoff, receive) = oneshot::channel::<ActiveLease>();
+        let diagnostic_context = tool.report_application_errors.then(|| ctx.clone());
         let task = ctx.spawn("tool-call", tool.cancel_on_interruption, async move {
             let _permit = permit;
             let Ok(mut lease) = receive.await else {
@@ -535,7 +575,19 @@ impl ToolExecutor {
                     } else {
                         ToolCallEndReason::CallbackError
                     };
-                    lease.complete(result, reason);
+                    let diagnostic = diagnostic_context.as_ref().and_then(|_| {
+                        result
+                            .as_ref()
+                            .err()
+                            .map(|error| application_error(&lease.call.function_name, error))
+                    });
+                    // Settlement decides cancellation/staleness before reporting.
+                    // Diagnostic routing cannot change the one terminal result.
+                    if lease.complete_reportable(result, reason) {
+                        if let (Some(context), Some(error)) = (&diagnostic_context, diagnostic) {
+                            let _ = context.push_error(error).await;
+                        }
+                    }
                 }
                 Ok(Some(Err(_))) => lease.complete(
                     Err("tool callback panicked".into()),
@@ -836,14 +888,23 @@ impl ActiveLease {
         }))
     }
     fn complete(&mut self, result: Result<LocalToolCompletion, String>, reason: ToolCallEndReason) {
+        self.complete_reportable(result, reason);
+    }
+    fn complete_reportable(
+        &mut self,
+        result: Result<LocalToolCompletion, String>,
+        reason: ToolCallEndReason,
+    ) -> bool {
         let Some(publisher) = self.publisher.take() else {
-            return;
+            return false;
         };
         let mut control = self
             .control
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let revoked = control.close_reporting();
+        let callback_error =
+            control.entered && reason == ToolCallEndReason::CallbackError && result.is_err();
         let effects = if control.entered {
             ToolCallEffectStatus::ExternalEffectsUnknown
         } else {
@@ -870,7 +931,11 @@ impl ActiveLease {
         };
         drop(control);
         drop(revoked);
+        let reportable = callback_error
+            && receipt.outcome.state() == pipecat_core::ToolCallTerminalState::Failed
+            && receipt.admission == ToolOutcomeAdmission::Admitted;
         self.record(receipt);
+        reportable
     }
     fn cancel(&mut self, reason: ToolCallEndReason) {
         let Some(publisher) = self.publisher.take() else {

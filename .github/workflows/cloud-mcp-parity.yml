@@ -30,10 +30,10 @@ jobs:
       - name: Native MCP HTTP, stdio and affected package regressions
         run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat-responses --features pipecat-mcp/native-fixtures,pipecat-pipeline/responses --locked
       - name: Native Gemini RTVI and Direct result lifecycle integration
-        run: cargo test -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --test direct_deferred --locked
+        run: cargo test -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --test direct_deferred --test direct_application_error --locked
       - name: Strict affected package checks
         run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat-responses --all-targets --features pipecat-mcp/native-fixtures,pipecat-pipeline/responses --locked -- -D warnings
       - name: Strict native Gemini and Direct integration checks
-        run: cargo clippy -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --test direct_deferred --locked -- -D warnings
+        run: cargo clippy -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --test direct_deferred --test direct_application_error --locked -- -D warnings
       - name: Strict default Direct binding feature check
         run: cargo clippy -p pipecat-pipeline --all-targets --no-default-features --locked -- -D warnings

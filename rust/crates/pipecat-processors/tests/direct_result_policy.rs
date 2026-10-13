@@ -69,6 +69,7 @@ async fn direct_success_preserves_explicit_final_result_policy() {
 async fn execute(
     executor: ToolExecutor,
     names: &[&str],
+    expected_diagnostics: usize,
 ) -> (Vec<DirectedFrame>, ToolOutcomeSnapshot) {
     let journal = executor.outcomes();
     let worker = Pipeline::new(vec![Arc::new(executor)])
@@ -102,7 +103,16 @@ async fn execute(
         .await
         .unwrap()
         .unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(
+        report.errors.len(),
+        expected_diagnostics,
+        "{:?}",
+        report.errors
+    );
+    assert!(report
+        .errors
+        .iter()
+        .all(|error| error.category == ErrorCategory::Application && !error.fatal));
     (frames, journal.snapshot())
 }
 
@@ -127,7 +137,7 @@ async fn result_policy_is_sealed_and_user_json_and_default_policy_are_preserved(
             )
             .unwrap();
     }
-    let (frames, journal) = execute(executor, &["default", "false", "true"]).await;
+    let (frames, journal) = execute(executor, &["default", "false", "true"], 0).await;
     assert_eq!(journal.total_terminal, 3);
     for (name, flag) in [
         ("default", None),
@@ -184,7 +194,7 @@ async fn typed_errors_and_oversize_results_keep_default_failure_policy() {
             None,
         )
         .unwrap();
-    let (frames, journal) = execute(executor, &["error", "oversize", "cancelled"]).await;
+    let (frames, journal) = execute(executor, &["error", "oversize", "cancelled"], 1).await;
     assert_eq!(journal.total_terminal, 3);
     for (name, reason) in [
         ("error", ToolCallEndReason::CallbackError),

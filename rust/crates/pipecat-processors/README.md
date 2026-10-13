@@ -80,6 +80,21 @@ callback panic, and callback errors remain failed tool results. A callback's
 return never proves that an external effect can be rolled back; the executor
 never retries effects.
 
+Direct handlers registered through `register_direct` also report returned application
+errors upstream as nonfatal `Application` diagnostics. Tool error categories or
+fatal flags do not invalidate the LLM service. The existing cancellation and stale
+scope decision settles the call first; only an admitted failed callback result
+can report. Reporting then runs outside settlement locks, and routing failure
+cannot change the terminal receipt. This settlement-before-diagnostic order differs
+from the pinned Python exception path, which reports before settling.
+
+Diagnostics contain the function name and error text within a 4 KiB UTF-8 budget,
+with a truncation marker when needed; they add no arguments or provider metadata.
+The existing native model-facing error result is preserved, including its error
+text. Python's generic model-facing failure policy is a separate remaining gap.
+Legacy string-error registrations, typed cancellation, callback panic, timeouts,
+unknown tools and capacity failures keep their existing result-only behavior.
+
 `CancellableRegisteredTool` and `register_cancellable` provide an additive callback
 contract: `Some(Ok(value))` is a result, `Some(Err(error))` is a callback failure,
 and `None` explicitly acknowledges local cancellation. `None` produces one native

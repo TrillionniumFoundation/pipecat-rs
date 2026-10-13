@@ -316,7 +316,21 @@ async fn typed_dispositions_prune_handlers_but_retain_deduplicated_cleanup_and_c
         ),
     ] {
         send_call(&worker, name, name, json!({})).await;
-        let (frame, outcome) = settle(&mut worker).await.unwrap();
+        let (frame, outcome) = if name == "error" {
+            // The urgent diagnostic and ordered terminal may reach the public
+            // receiver in either order. Both are required, without replay.
+            let first = settle(&mut worker).await;
+            let second = settle(&mut worker).await;
+            match (first, second) {
+                (Ok(settled), Err(diagnostic)) | (Err(diagnostic), Ok(settled)) => {
+                    assert_eq!(diagnostic, "Error executing function call [error]: direct tool invocation was cancelled");
+                    settled
+                }
+                other => panic!("one application diagnostic and one terminal required: {other:?}"),
+            }
+        } else {
+            settle(&mut worker).await.unwrap()
+        };
         assert_eq!(outcome.call().function_name, name);
         assert_eq!(outcome.reason(), reason);
         assert_eq!(outcome.state(), state);

@@ -218,7 +218,10 @@ async fn failure_oversize_and_cancellation_discard_hooks_without_running_them() 
             .unwrap();
         worker.end().await.unwrap();
         let (frames, report) = worker.collect().await.unwrap();
-        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert_eq!(report.errors[0].category, ErrorCategory::Application);
+        assert!(!report.errors[0].fatal);
+        assert!(report.errors[0].error.contains("callback failed"));
         assert!(frames.iter().all(|item| item
             .frame
             .native_tool_context_updated()

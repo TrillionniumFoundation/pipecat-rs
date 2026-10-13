@@ -89,7 +89,12 @@ async fn direct_registration_uses_typed_cancellation_and_leaves_cleanup_to_its_o
     .await;
     worker.end().await.unwrap();
     let (outputs, report) = worker.collect().await.unwrap();
-    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert_eq!(report.errors[0].category, ErrorCategory::Application);
+    assert!(!report.errors[0].fatal);
+    assert!(report.errors[0]
+        .error
+        .contains("direct tool invocation was cancelled"));
     assert_eq!(cleanup_calls.load(Ordering::SeqCst), 0);
     let outcomes = journal.snapshot();
     assert_eq!(outcomes.total_terminal, 4);
