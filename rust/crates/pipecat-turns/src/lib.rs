@@ -15,6 +15,7 @@ mod context;
 mod controller;
 mod eager;
 mod empty;
+mod encoded_image;
 mod tool_history;
 pub use eager::{EagerEndOfTurn, EagerMatchPolicy, EagerUserTurnConfig};
 mod idle;
@@ -343,6 +344,9 @@ struct RecentFrames {
     set: HashSet<u64>,
 }
 impl RecentFrames {
+    fn contains(&self, id: u64) -> bool {
+        self.set.contains(&id)
+    }
     fn insert(&mut self, id: u64) -> bool {
         if !self.set.insert(id) {
             return false;

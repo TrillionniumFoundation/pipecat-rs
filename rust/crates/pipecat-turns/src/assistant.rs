@@ -340,6 +340,30 @@ impl LLMAssistantAggregator {
                 .native_result(&mut state, &frame.data, outcome, &mut output)
                 .map(|()| output);
         }
+        if let FrameData::AssistantImage(image) = &frame.data {
+            if state.ended {
+                return Ok(output);
+            }
+            // Tool carriers were revalidated above. Reject all remaining private
+            // control authority before signed history or any new image effect.
+            frame
+                .require_no_native_llm_continuation()
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
+            if self.realtime.enabled()? || state.signed_history.is_some() {
+                return Err(ProcessorError::new(
+                    "encoded assistant image context is unsupported during realtime or signed continuation",
+                ));
+            }
+            if state.seen.contains(frame.id) {
+                return Ok(output);
+            }
+            let message = crate::encoded_image::message(image)?;
+            self.context.append_rich(message)?;
+            // Commit replay protection only after successful context admission;
+            // a rejected image can be corrected and retried with the same ID.
+            state.seen.insert(frame.id);
+            return Ok(output);
+        }
         if matches!(
             frame.data,
             FrameData::LlmText(_)
@@ -892,7 +916,7 @@ impl LLMAssistantAggregator {
             FrameData::LlmSetToolChoice(choice) => self.context.lock()?.tool_choice = Some(choice.clone()),
             FrameData::ProposedUserStartedSpeaking if self.realtime.resolves(true)? => {}
             FrameData::ProposedUserStoppedSpeaking if self.realtime.resolves(false)? => {}
-            FrameData::UserImage(_) | FrameData::AssistantImage(_) | FrameData::UserFileDetailed(_)
+            FrameData::UserImage(_) | FrameData::UserFileDetailed(_)
             | FrameData::UserFile(_) => return Err(ProcessorError::new("raw image/file context conversion is not supported; submit encoded rich context messages")),
             _ => output.push(frame, direction),
         }

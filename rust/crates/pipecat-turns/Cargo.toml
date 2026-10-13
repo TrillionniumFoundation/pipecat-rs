@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+base64 = "=0.22.1"
 pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-vad = { path = "../pipecat-vad" }

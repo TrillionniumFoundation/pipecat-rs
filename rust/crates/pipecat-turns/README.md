@@ -143,6 +143,47 @@ require an explicit image/file conversion. Message transforms preserve every
 retained native occurrence, and reject ambiguous partial selection when distinct
 native messages have the same core projection. A failed transform is atomic.
 
+
+`AssistantImage` has a narrow encoded-original context path for ordinary
+application frames, including frames decoded by the public `PythonJsonCodec`.
+Nonempty `original_data` with exact `image/png` or `image/jpeg` MIME and a matching
+PNG/JPEG signature is appended immediately as one assistant-role rich image
+data URL. Original encoded bytes are preserved; display RGB, size and format are
+not used. Signature checks are not complete image validation: a provider may
+still reject malformed data. Existing snapshots/framing and the Gemini request
+adapter preserve these bytes as model-role `inlineData`; this does not establish
+live-provider acceptance or a native-provider visual round trip. Native image
+processors still produce `UrlImage`, and native Gemini multimodal output remains
+unsupported.
+
+This path adds a fixed native admission cap of 8,388,608 original bytes per image,
+without changing `AssistantAggregatorConfig` or its existing struct literals.
+Checked base64 expansion and prefix addition limit a data URL to 11,184,835 bytes
+before fallible allocation. These are per-image logical-length limits, not a
+SharedContext total, input allocation-capacity, decoded-pixel or RSS budget.
+Callers still manage cumulative history. The codec's JSON-envelope limit remains
+separate. No image decoder or new background task is involved.
+
+An accepted image is consumed in either direction, produces no action/event,
+does not flush pending assistant text, and does not run inference or invoke a
+tool callback. Consequently an image received during buffered text appears in
+context before that text's normal end-of-response commit. Successful admission
+shares the existing last-512-frame-ID replay cache; failed validation leaves an
+ID retryable. This native bounded replay policy is deliberately stricter than
+Python's repeated-image append behavior. Ordinary images after End/Cancel/Stop
+are ignored. Raw-only assistant images, all UserImage variants and user files
+remain explicitly unsupported.
+
+Image admission rejects enabled realtime mode and any signed-continuation
+tracker retained by this assistant instance, including a completed response
+still waiting for playback/reconciliation. A live image cannot carry native
+continuation or tool authority, including a retyped private-carrier clone.
+Completed signed prefixes are preserved when no local tracker remains. This
+capability assumes one serialized context writer: it cannot detect another
+aggregator's active signed continuation or protect against concurrent external
+context edits. Signed-image bookmark production and continuation redesign are
+outside this scope.
+
 Detailed message append/update and local transforms honor optional `run_llm`;
 `None` does not request a run. Tool-set and tool-choice changes update the actual
 shared history. Source-specific rich thoughts retain the LLM identity and JSON
