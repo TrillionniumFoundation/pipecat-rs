@@ -3646,7 +3646,10 @@ dependencies = [
 name = "pipecat-cli"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.3.4",
+ "pipecat-audio",
  "pipecat-core",
+ "pipecat-media-transport",
  "pipecat-protocol",
  "pipecat-services",
  "pipecat-streaming-speech",

@@ -1,6 +1,7 @@
 //! Runnable native voice agent and its playback-confirmed transport boundary.
 pub mod config;
 pub mod playback;
+pub mod receipt_output;
 pub mod smoke;
 pub mod wire;
 use config::{Options, ProviderConfig};
@@ -27,6 +28,8 @@ use tokio::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
+    #[error("shutdown failed: {0}")]
+    ShutdownFailed(Box<AgentError>),
     #[error("configuration: {0}")]
     Config(&'static str),
     #[error("protocol: {0}")]
@@ -89,6 +92,7 @@ pub async fn serve(options: Options, providers: ProviderConfig) -> Result<(), Ag
             Err(error) => eprintln!("Session ended: {error}"),
         }
         if options.once
+            || matches!(&result, Err(AgentError::ShutdownFailed(_)))
             || result
                 .as_ref()
                 .is_ok_and(|report| report.shutdown_requested)
@@ -120,6 +124,12 @@ pub async fn run_session_with_input_processors(
 ) -> Result<SessionReport, AgentError> {
     let session_config = SessionConfig {
         queue_capacity: 8,
+        max_message_bytes: if options.playback_protocol == receipt_output::PlaybackProtocol::ChunkV2
+        {
+            receipt_output::MAX_PACKET_BYTES
+        } else {
+            SessionConfig::default().max_message_bytes
+        },
         write_timeout: Duration::from_secs(5),
         ..Default::default()
     };
@@ -129,6 +139,10 @@ pub async fn run_session_with_input_processors(
         OriginPolicy::LoopbackOnlyAllowMissing,
     )
     .await?;
+    if options.playback_protocol == receipt_output::PlaybackProtocol::ChunkV2 {
+        return receipt_output::run_provider_session(session, options, providers, input_processors)
+            .await;
+    }
     if let Some(paths) = options.vad.clone() {
         let rate = providers.input_rate;
         let processor = tokio::task::spawn_blocking(move || {
@@ -223,6 +237,7 @@ pub async fn run_session_with_input_processors(
                         if let Err(e)=sender.send(*frame,Direction::Downstream).await {break Err(e.into());}
                     },
                     Ok(wire::ClientInput::PlaybackComplete(id))=>if let Err(e)=output.acknowledge(id).await {break Err(e);},
+                    Ok(wire::ClientInput::V2(_)) | Ok(wire::ClientInput::Cancel)=>break Err(AgentError::Protocol("v2 control requires explicit chunk-v2 mode")),
                     Ok(wire::ClientInput::End)=>{end_requested=true;if let Err(e)=sender.end().await {break Err(e.into());}},
                     Err(e)=>break Err(e),
                 }

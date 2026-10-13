@@ -1,8 +1,11 @@
 //! Explicit CLI and environment configuration. Secrets never appear in Debug.
-use crate::AgentError;
+use crate::{
+    receipt_output::{PlaybackProtocol, ReceiptConfig},
+    AgentError,
+};
 use std::{fmt, net::SocketAddr, path::PathBuf, time::Duration};
 
-pub const HELP: &str = "pipecat-voice-agent [OPTIONS]\n\nNative WebSocket protobuf → Deepgram STT → OpenAI LLM → Cartesia TTS agent.\n\nOPTIONS\n  --help                     Show this help without reading credentials\n  --smoke                    Run local synthetic providers and a full socket roundtrip\n  --bind ADDRESS             Listen address (default 127.0.0.1:7860)\n  --once                     Exit after one client disconnects\n  --vad-model PATH           Enable native Silero using this ONNX model\n  --onnx-runtime PATH        Explicit ONNX Runtime library (required with --vad-model)\n  --no-intro                 Wait for the user instead of generating an introduction\n  --turn-timeout-ms N         Transcript silence timeout (default 600)\n  --idle-timeout-secs N       Client inactivity limit (default 300)\n\nREQUIRED ENVIRONMENT (except --help / --smoke)\n  DEEPGRAM_API_KEY  OPENAI_API_KEY  CARTESIA_API_KEY\n\nOPTIONAL ENVIRONMENT\n  OPENAI_MODEL                default gpt-4.1-mini\n  CARTESIA_VOICE_ID           default 86e30c1d-714b-4074-a1f2-1cb6b552fb49\n  PIPECAT_SYSTEM_PROMPT       Spoken-response system instruction\n  PIPECAT_INPUT_SAMPLE_RATE   PCM16 input Hz (default 16000, mono)\n  PIPECAT_OUTPUT_SAMPLE_RATE  PCM16 output Hz (default 24000, mono)\n\nAudio clients must send playback-complete only after actual remote playback.\nNo microphone, local speaker, Daily, or LiveKit is embedded. Native Silero is optional and requires the two explicit file paths.\nBind to loopback by default; use an authenticated TLS proxy for remote access.\n";
+pub const HELP: &str = "pipecat-voice-agent [OPTIONS]\n\nNative WebSocket protobuf → Deepgram STT → OpenAI LLM → Cartesia TTS agent.\n\nOPTIONS\n  --help                     Show this help without reading credentials\n  --smoke                    Run local synthetic providers and a full socket roundtrip\n  --bind ADDRESS             Listen address (default 127.0.0.1:7860)\n  --once                     Exit after one client disconnects\n  --vad-model PATH           Enable native Silero using this ONNX model\n  --onnx-runtime PATH        Explicit ONNX Runtime library (required with --vad-model)\n  --playback-protocol MODE   legacy-v1 (default) or explicitly negotiated chunk-v2\n  --no-intro                 Wait for the user instead of generating an introduction\n  --turn-timeout-ms N         Transcript silence timeout (default 600)\n  --idle-timeout-secs N       Client inactivity limit (default 300)\n\nREQUIRED ENVIRONMENT (except --help / --smoke)\n  DEEPGRAM_API_KEY  OPENAI_API_KEY  CARTESIA_API_KEY\n\nOPTIONAL ENVIRONMENT\n  OPENAI_MODEL                default gpt-4.1-mini\n  CARTESIA_VOICE_ID           default 86e30c1d-714b-4074-a1f2-1cb6b552fb49\n  PIPECAT_SYSTEM_PROMPT       Spoken-response system instruction\n  PIPECAT_INPUT_SAMPLE_RATE   PCM16 input Hz (default 16000, mono)\n  PIPECAT_OUTPUT_SAMPLE_RATE  PCM16 output Hz (default 24000, mono)\n\nAudio clients must send playback-complete only after actual remote playback.\nNo microphone, local speaker, Daily, or LiveKit is embedded. Native Silero is optional and requires the two explicit file paths.\nBind to loopback by default; use an authenticated TLS proxy for remote access.\n";
 
 pub const DEFAULT_SYSTEM: &str = "You are a helpful assistant in a voice conversation. Your responses will be spoken aloud, so avoid emojis, bullet points, or other formatting that cannot be spoken. Respond to what the user said in a creative, helpful, and brief way.";
 
@@ -20,6 +23,8 @@ pub struct VadPaths {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
+    pub playback_protocol: PlaybackProtocol,
+    pub receipt: ReceiptConfig,
     pub vad: Option<VadPaths>,
     pub bind: SocketAddr,
     pub once: bool,
@@ -30,6 +35,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            playback_protocol: PlaybackProtocol::LegacyV1,
+            receipt: ReceiptConfig::default(),
             vad: None,
             bind: SocketAddr::from(([127, 0, 0, 1], 7860)),
             once: false,
@@ -51,6 +58,17 @@ impl Command {
                 "--help" | "-h" => return Ok(Self::Help),
                 "--smoke" => smoke = true,
                 "--once" => options.once = true,
+                "--playback-protocol" => {
+                    options.playback_protocol = match args.next().as_deref() {
+                        Some("legacy-v1") => PlaybackProtocol::LegacyV1,
+                        Some("chunk-v2") => PlaybackProtocol::ChunkV2,
+                        _ => {
+                            return Err(AgentError::Config(
+                                "--playback-protocol needs legacy-v1 or chunk-v2",
+                            ))
+                        }
+                    };
+                }
                 "--vad-model" => {
                     vad_model = Some(PathBuf::from(
                         args.next()
@@ -101,6 +119,11 @@ impl Command {
                 ))
             }
         };
+        if smoke && options.playback_protocol != PlaybackProtocol::LegacyV1 {
+            return Err(AgentError::Config(
+                "--smoke exercises legacy-v1; chunk-v2 requires its explicit client protocol",
+            ));
+        }
         Ok(if smoke {
             Self::Smoke
         } else {

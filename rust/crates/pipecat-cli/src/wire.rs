@@ -10,11 +10,62 @@ use serde_json::Value;
 pub enum ClientInput {
     Frame(Box<Frame>),
     PlaybackComplete(String),
+    V2(V2Control),
+    Cancel,
     End,
+}
+/// Strict application-level receipts. These are client assertions, not device proof.
+#[derive(Debug, Clone)]
+pub enum V2Control {
+    Accept {
+        version: u8,
+        session_id: String,
+        chunk_receipts: bool,
+        cutoff_receipts: bool,
+        flush_on_disconnect: bool,
+    },
+    ChunkComplete {
+        version: u8,
+        session_id: String,
+        epoch: u64,
+        chunk_id: u64,
+        receipt_nonce: String,
+    },
+    CutoffComplete {
+        version: u8,
+        session_id: String,
+        epoch: u64,
+        cutoff_id: u64,
+        receipt_nonce: String,
+        all: bool,
+    },
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 enum Control {
+    PlaybackV2Accept {
+        version: u8,
+        session_id: String,
+        chunk_receipts: bool,
+        cutoff_receipts: bool,
+        flush_on_disconnect: bool,
+    },
+    ChunkComplete {
+        version: u8,
+        session_id: String,
+        epoch: u64,
+        chunk_id: u64,
+        receipt_nonce: String,
+    },
+    CutoffComplete {
+        version: u8,
+        session_id: String,
+        epoch: u64,
+        cutoff_id: u64,
+        receipt_nonce: String,
+        all: bool,
+    },
+    Cancel,
     UserStartedSpeaking,
     UserStoppedSpeaking {
         #[serde(default)]
@@ -56,6 +107,59 @@ pub fn decode(packet: Packet, input_rate: u32) -> Result<ClientInput, AgentError
             let control: Control = serde_json::from_str(&message.data)
                 .map_err(|_| AgentError::Protocol("invalid client control message"))?;
             match control {
+                Control::PlaybackV2Accept {
+                    version,
+                    session_id,
+                    chunk_receipts,
+                    cutoff_receipts,
+                    flush_on_disconnect,
+                } => {
+                    receipt_token(&session_id)?;
+                    return Ok(ClientInput::V2(V2Control::Accept {
+                        version,
+                        session_id,
+                        chunk_receipts,
+                        cutoff_receipts,
+                        flush_on_disconnect,
+                    }));
+                }
+                Control::ChunkComplete {
+                    version,
+                    session_id,
+                    epoch,
+                    chunk_id,
+                    receipt_nonce,
+                } => {
+                    receipt_token(&session_id)?;
+                    receipt_token(&receipt_nonce)?;
+                    return Ok(ClientInput::V2(V2Control::ChunkComplete {
+                        version,
+                        session_id,
+                        epoch,
+                        chunk_id,
+                        receipt_nonce,
+                    }));
+                }
+                Control::CutoffComplete {
+                    version,
+                    session_id,
+                    epoch,
+                    cutoff_id,
+                    receipt_nonce,
+                    all,
+                } => {
+                    receipt_token(&session_id)?;
+                    receipt_token(&receipt_nonce)?;
+                    return Ok(ClientInput::V2(V2Control::CutoffComplete {
+                        version,
+                        session_id,
+                        epoch,
+                        cutoff_id,
+                        receipt_nonce,
+                        all,
+                    }));
+                }
+                Control::Cancel => return Ok(ClientInput::Cancel),
                 Control::PlaybackComplete { context_id } => {
                     if context_id.is_empty() || context_id.len() > 256 {
                         return Err(AgentError::Protocol("invalid playback context ID"));
@@ -84,6 +188,13 @@ pub fn decode(packet: Packet, input_rate: u32) -> Result<ClientInput, AgentError
     };
     Ok(ClientInput::Frame(Box::new(frame)))
 }
+fn receipt_token(token: &str) -> Result<(), AgentError> {
+    if token.len() != 32 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(AgentError::Protocol("invalid v2 receipt token"));
+    }
+    Ok(())
+}
+
 pub fn message(value: Value) -> Result<Packet, AgentError> {
     packet(Kind::Message(pb::MessageFrame {
         data: value.to_string(),

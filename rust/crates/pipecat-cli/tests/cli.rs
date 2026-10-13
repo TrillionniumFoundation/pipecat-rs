@@ -41,3 +41,36 @@ fn smoke_binary_exercises_the_full_pipeline_without_credentials() {
     assert!(text.contains("PASS:"));
     assert!(text.contains("No paid provider calls"));
 }
+
+#[test]
+fn actual_binary_documents_explicit_v2_and_preserves_legacy_default() {
+    let output = command().arg("--help").output().unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("--playback-protocol"));
+    assert!(text.contains("legacy-v1 (default)"));
+    assert!(text.contains("chunk-v2"));
+}
+
+#[test]
+fn actual_binary_accepts_only_the_two_explicit_protocol_names() {
+    for mode in ["legacy-v1", "chunk-v2"] {
+        let output = command()
+            .args(["--playback-protocol", mode])
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let text = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            text.contains("DEEPGRAM_API_KEY is required"),
+            "{mode}: {text}"
+        );
+    }
+    let output = command()
+        .args(["--playback-protocol", "invented-v3"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(text.contains("legacy-v1 or chunk-v2"));
+}

@@ -10,12 +10,15 @@ name = "pipecat-voice-agent"
 path = "src/main.rs"
 
 [dependencies]
+getrandom = "0.3.4"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["signal"] }
 pipecat-vad = { path = "../pipecat-vad" }
 pipecat-core = { path = "../pipecat-core" }
+pipecat-audio = { path = "../pipecat-audio" }
+pipecat-media-transport = { path = "../pipecat-media-transport", features = ["assistant-history"] }
 pipecat-protocol = { path = "../pipecat-protocol" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-transports = { path = "../pipecat-transports" }

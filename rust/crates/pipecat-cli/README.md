@@ -178,3 +178,133 @@ process a full native inference window inside the synthetic-provider voice pipel
 The test requires an explicit `ORT_DYLIB_PATH` outside the documented dot-host
 runtime location. STT/LLM/TTS replies and remote playback acknowledgement remain
 synthetic; this does not establish microphone, speaker or live-provider acceptance.
+
+## Explicit chunk-v2 shared output
+
+`--playback-protocol chunk-v2` opts into the shared `OutputTransport` and
+`SpokenHistory` boundary. The default remains `legacy-v1`; `--smoke` continues to
+exercise that legacy protocol. A v1 context `playback-complete` cannot unlock a
+v2 PCM chunk. The existing generated browser client does not negotiate or send
+these receipts and must not be described as v2-enabled. Independent video stays
+unsupported: this backend does not opt into `with_live_video`.
+
+Before loading VAD, starting providers or constructing their pipeline, the
+server sends a protobuf MessageFrame containing:
+
+```json
+{"type":"playback-v2-offer","version":2,"session_id":"32-hex-digits","output_rate":24000,"channels":1,"encoding":"pcm_s16le","max_pcm_bytes":49152}
+```
+
+The client must reply within the fixed handshake deadline:
+
+```json
+{"type":"playback-v2-accept","version":2,"session_id":"the-exact-session-id","chunk_receipts":true,"cutoff_receipts":true,"flush_on_disconnect":true}
+```
+
+Acceptance promises all of the following client behavior: never replay a chunk;
+report completion only after the entire identified PCM reaches the client's
+playback boundary; perform the selective/all flush below; stop and discard all
+queued/active session audio on disconnect. This is an application contract with
+the playback client, not a server-observed physical-speaker guarantee.
+
+Output remains binary protobuf `AudioRawFrame`. Its `id` is the monotonic chunk
+ID, and its `name` is a JSON descriptor with `version:2`, `session_id`, `epoch`,
+`chunk_id`, `receipt_nonce`, `pcm_bytes` and `interruptible`. The audio field is
+actual PCM16LE. The descriptor binds the exact transformed chunk, including tail
+padding, rather than a TTS context or original provider frame. All numeric IDs
+are bounded to JavaScript's exact integer range, 1 through 2^53-1. Session IDs
+and nonces are 128-bit OS randomness; entropy failure fails closed.
+
+After the whole chunk completes, the client echoes its exact identity:
+
+```json
+{"type":"chunk-complete","version":2,"session_id":"...","epoch":1,"chunk_id":1,"receipt_nonce":"..."}
+```
+
+Only an existing registered chunk, successful local network-queue admission and
+that exact client report together produce `Played`. Queue admission is not
+socket-write completion. An exact report racing local enqueue resumption is
+held until enqueue succeeds; a failed/revoked enqueue cannot be promoted.
+Unknown, future, duplicate, wrong-session, wrong-epoch and wrong-nonce reports
+cannot unlock another chunk or extend any deadline.
+
+A server `playback-cutoff` control contains `version:2`, `session_id`, `epoch`,
+`cutoff_id`, `receipt_nonce` and `all`. The client stops/discards every earlier-
+epoch interruptible chunk when `all:false`; it preserves uninterruptible chunks
+and their existing exact receipt identities. When `all:true`, it stops/discards
+all earlier-epoch audio. It permanently rejects affected late old-epoch packets.
+Only after performing that flush may it return `cutoff-complete` with all the
+same fields. A selective-to-all upgrade has a fresh cutoff ID and nonce; the old
+selective report cannot satisfy the stronger request. An all-audio cutoff also
+sets a permanent rejected-epoch floor: newly registered uninterruptible media
+cannot reuse such an old epoch while a media gate still delays advancement.
+
+Dropping an unfinished backend playback future reliably signals the existing
+session owner to perform a cutoff. Dropping `SessionSender::send` or deleting a
+receipt does not revoke admitted PCM. New interruptible audio is barred until
+both the exact client cutoff and two ordered private control markers through
+the real shared media queue complete. The first marker only observes; only the
+latest second marker can reopen admission after another media-worker interruption
+check. These internal controls never travel over the wire. Old queued interruptible calls are discarded,
+not relabeled with a new epoch. Already registered uninterruptible receipts
+remain valid under their original tuple. The v2 input path explicitly inserts a
+core Interruption before a nonempty text or VAD-start frame; subsequent
+aggregator-generated interruptions are independently fenced.
+
+`playback-v2-context-committed` reports a monotonically increasing
+`committed_contexts` count only after the real shared history ledger has committed
+whole-context playback. It is an observation, not an additional client ACK.
+The server uses the existing assistant history adapter; no parallel legacy
+playback output is installed.
+
+`end` closes ordinary input immediately while existing receipts and cutoff
+management continue under one fixed drain deadline. End has one reserved ordered
+slot even when ordinary input capacity is full. `cancel`, disconnection,
+backpressure exhaustion and any deadline failure retire the session and release
+pending waiters. Ordinary input after End is an error. Invalid receipts and
+repeated End never extend drain. One owned bounded input pump keeps receipt
+reception independent of pipeline input backpressure; no per-frame tasks are
+spawned. The PCM ledger permits one pending chunk (48 KiB maximum); transport
+packets are 64 KiB maximum, and network-originated normal input retains at most eight frames / 256
+KiB including in-flight admission, plus one reserved ordered End flag. Transport
+queues and the shared output queue have separate finite budgets. Socket cutoff
+also discards old interruptible input still queued in the input pump or awaiting
+core admission before admitting a new interruption. This does not cancel an
+already-admitted core System callback: wire InputAudio/InputText retain their
+core System-lane semantics, and a held System callback delays later System
+work until it returns or the pipeline terminates.
+
+Public test/application entry points are `ReceiptSession::negotiate`, `backend`,
+`run`, and `close`, plus `ReceiptOutput::new` to delegate to real shared output
+while publishing the precise queue-cutoff marker. `ReceiptConfig` exposes
+nonzero validated handshake/chunk/enqueue/cutoff/drain durations (at most 60s);
+defaults are 5s/5s/2s/5s/15s. Tests can inject short durations without changing the
+absolute-deadline semantics. Normal cooperating run/close paths explicitly await core and transport
+completion. The End deadline bounds media/receipt drain and final-notice queue
+admission. Subsequent transport finish/cancel uses the existing SessionConfig
+per-write and close timeouts; total socket closure can exceed drain_timeout.
+The close future remains owned and awaited rather than being dropped to make a
+wall-clock deadline appear satisfied.
+
+Failure cleanup has one additional fixed drain_timeout budget. If an
+uncooperative pipeline exceeds it, run returns “v2 pipeline cleanup deadline
+exceeded; join is unverified” after cancelling the transport; core completion is
+not claimed. Emergency outer-future Drop likewise fails closed without proving
+an async client flush or task join. Ctrl+C still exits serve if cleanup fails;
+a typed shutdown error preserves that failure rather than a successful report.
+
+The CLI configures its transport's 64 KiB packet and eight-packet queue limits
+before acceptance. The public negotiate API receives an already-created
+WebSocketSession and cannot shrink that transport's existing receive buffers;
+callers must configure their own packet/queue limits. Its post-receive check is
+not a retrospective allocation cap.
+
+Qualification is limited to real loopback protocol/PCM, shared pipeline/history,
+client-reported completion, cancellation and ownership. It does not establish
+browser audio callbacks, live providers, physical speaker output or video I/O.
+
+`ReceiptRunConfig.initial_frames` is a trusted native startup API. Its frame
+count is bounded, but arbitrary caller-supplied metadata, native continuations
+or other startup payload allocations are outside the network ingress byte
+budget. The configured CLI supplies only a payload-free `LlmRun`; this API is
+not an alternative untrusted client input channel.
