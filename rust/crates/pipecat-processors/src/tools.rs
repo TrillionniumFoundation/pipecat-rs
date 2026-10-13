@@ -2,9 +2,9 @@
 use futures_util::FutureExt;
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FrameProcessor, FunctionCall,
-    FunctionCallInProgressFrame, LlmContinuationBlock, NativeLlmContinuation, NativeToolCallBatch,
-    ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason, ToolCallReceipt,
-    ToolOutcomeAdmission, ToolOutcomePublisher,
+    FunctionCallInProgressFrame, LlmContinuationBlock, LocalToolFunction, NativeLlmContinuation,
+    NativeToolCallBatch, ProcessorContext, ProcessorError, ToolCallEffectStatus, ToolCallEndReason,
+    ToolCallReceipt, ToolOutcomeAdmission, ToolOutcomePublisher,
 };
 use serde_json::Value;
 use std::{
@@ -58,11 +58,17 @@ impl CancellableRegisteredTool {
         }
     }
 }
+#[derive(Clone)]
+struct RegistrationRow {
+    callback: CancellableToolCallback,
+    timeout: Option<Duration>,
+    cancel_on_interruption: bool,
+}
 /// An immutable callback inventory captured from validated registrations.
 /// It retains callback/options only; admission limits and outcome history remain
 /// owned by the executor that processes a batch with this snapshot.
 #[derive(Clone)]
-pub struct ToolRegistrationSnapshot(Arc<BTreeMap<String, CancellableRegisteredTool>>);
+pub struct ToolRegistrationSnapshot(Arc<BTreeMap<String, RegistrationRow>>);
 impl ToolRegistrationSnapshot {
     /// Select only these validated registrations, preserving their callbacks
     /// and options. Unknown names reject the selection without changing either
@@ -135,7 +141,7 @@ impl ToolOutcomeJournal {
 /// Every admitted identity first reserves a finite journal slot. Full pipeline
 /// lanes fail the session closed; inspect `outcomes()` for undelivered receipts.
 pub struct ToolExecutor {
-    tools: BTreeMap<String, CancellableRegisteredTool>,
+    tools: BTreeMap<String, RegistrationRow>,
     slots: Arc<Semaphore>,
     settlement_slots: Arc<Semaphore>,
     seen: Arc<Mutex<History>>,
@@ -209,7 +215,53 @@ impl ToolExecutor {
                 "invalid or duplicate tool registration",
             ));
         }
-        self.tools.insert(name, tool);
+        self.tools.insert(
+            name,
+            RegistrationRow {
+                callback: tool.callback,
+                timeout: Some(tool.timeout),
+                cancel_on_interruption: tool.cancel_on_interruption,
+            },
+        );
+        Ok(())
+    }
+    /// Register a schema handler's immutable call contract. Handler deadlines
+    /// override this default; two absent deadlines mean no execution timeout.
+    /// Cleanup remains the owning pipeline's responsibility and is never invoked
+    /// or recorded by this method.
+    pub fn register_direct(
+        &mut self,
+        name: impl Into<String>,
+        handler: LocalToolFunction,
+        default_timeout: Option<Duration>,
+    ) -> Result<(), ProcessorError> {
+        let name = name.into();
+        let options = handler.options();
+        if name.is_empty()
+            || self.tools.contains_key(&name)
+            || default_timeout.is_some_and(|timeout| timeout.is_zero())
+            || options.timeout.is_some_and(|timeout| timeout.is_zero())
+        {
+            return Err(ProcessorError::new(
+                "invalid or duplicate direct tool registration",
+            ));
+        }
+        self.tools.insert(
+            name,
+            RegistrationRow {
+                callback: Arc::new(move |call| {
+                    let handler = handler.clone();
+                    Box::pin(async move {
+                        handler
+                            .call_cancellable(call.arguments)
+                            .await
+                            .map(|result| result.map_err(|error| error.to_string()))
+                    })
+                }),
+                timeout: options.timeout.or(default_timeout),
+                cancel_on_interruption: options.cancel_on_interruption,
+            },
+        );
         Ok(())
     }
     /// Capture the current validated inventory without copying executor history.
@@ -235,7 +287,7 @@ impl ToolExecutor {
         signed: Option<Arc<NativeLlmContinuation>>,
         group_id: &str,
         ctx: &ProcessorContext,
-        registrations: &BTreeMap<String, CancellableRegisteredTool>,
+        registrations: &BTreeMap<String, RegistrationRow>,
     ) -> Result<Vec<ActiveLease>, ProcessorError> {
         let mut seen = self
             .seen
@@ -392,7 +444,7 @@ impl ToolExecutor {
         mut lease: ActiveLease,
         ctx: &ProcessorContext,
         admission: Option<pipecat_core::NativeSpeculation>,
-        registrations: &BTreeMap<String, CancellableRegisteredTool>,
+        registrations: &BTreeMap<String, RegistrationRow>,
     ) -> Result<(), ProcessorError> {
         let Some(tool) = registrations.get(&lease.call.function_name).cloned() else {
             lease.complete(
@@ -434,7 +486,11 @@ impl ToolExecutor {
                     None => Some(callback.await),
                 }
             };
-            match tokio::time::timeout(tool.timeout, guarded).await {
+            let outcome = match tool.timeout {
+                Some(timeout) => tokio::time::timeout(timeout, guarded).await.map_err(|_| ()),
+                None => Ok(guarded.await),
+            };
+            match outcome {
                 Ok(Some(Ok(Some(result)))) => {
                     let reason = if result.is_ok() {
                         ToolCallEndReason::CallbackReturned
@@ -500,7 +556,7 @@ impl ToolExecutor {
         mut frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
-        registrations: &BTreeMap<String, CancellableRegisteredTool>,
+        registrations: &BTreeMap<String, RegistrationRow>,
     ) -> Result<(), ProcessorError> {
         if frame.native_tool_batch()?.is_some() {
             return ctx.push(frame, direction).await;

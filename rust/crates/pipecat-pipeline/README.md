@@ -243,11 +243,75 @@ be older after a switch; a full fresh context is the safe conversation handoff.
 Native tool execution belongs to one shared downstream
 `pipecat_processors::tools::ToolExecutor`, not each provider. Register callbacks
 and their explicit timeout/cancellation options once there; they remain available
-for every selected LLM and share duplicate-call tracking. Source Python decorators,
-`register_direct_function`, automatic executable `ToolSet::Direct` registration,
-and provider-specific arbitrary `**kwargs` are not simulated. Unsupported direct
-handler schemas fail explicitly rather than losing behavior or executing hidden
-callbacks. Supply ordinary tool schemas plus registered native callbacks.
+for every selected LLM and share duplicate-call tracking. For executable context
+schemas, use the opt-in `DirectToolBinding` described below. Bare native LLMs still
+reject direct handlers instead of silently discarding their execution behavior.
+Source Python decorators, `register_direct_function` and provider-specific
+arbitrary `**kwargs` are not simulated.
+
+### Advertised application handlers
+
+`DirectToolBinding::new(llm)` accepts the ordinary native `LlmProcessor`;
+`DirectToolBinding::new_switcher(switcher)` accepts the existing `LlmSwitcher`.
+Both return one owner with `stages()`: incoming projection, native inference,
+shared execution, and reverse projection. Keep these stages together in that
+order, with the conversation's user/assistant aggregators outside the binding.
+
+```rust,no_run
+use pipecat_core::{DirectFunction, Frame, FrameData, LocalToolFunction, ToolDefinition, ToolSet};
+use pipecat_pipeline::DirectToolBinding;
+use pipecat_services::LlmProcessor;
+use std::sync::Arc;
+# fn example(llm: Arc<LlmProcessor>, definition: ToolDefinition) -> Result<(), Box<dyn std::error::Error>> {
+let function = DirectFunction {
+    schema: definition,
+    handler: LocalToolFunction::new(|arguments| async move { Ok(arguments) }),
+};
+let binding = DirectToolBinding::new(llm)?;
+let pipeline = pipecat_core::Pipeline::new(binding.stages());
+let tools = Frame::new(FrameData::LlmSetTools(ToolSet::Direct(vec![function])));
+// Send tools or a detailed context carrying these handlers to the running pipeline.
+# let _ = (pipeline, tools);
+# Ok(()) }
+```
+
+The initial callback selection is empty. Each ordinary detailed context or
+`LlmSetTools` frame atomically replaces it with exactly the advertised `Direct`
+handlers, then forwards plain definitions to the LLM. Handler-free declarations,
+empty tool sets and `NotGiven` prune selections. A later schema can re-advertise
+the same handler or replace it with a new application callback. Both directions
+support this update; the far bookend forwards the projected frame without pruning
+again. Legacy `LlmContext` frames carry no executable handlers and prune selections
+after full native validation, without rewriting the frame. Full native context
+conversion and tool validation precede publication.
+Custom/grouped schemas and sealed/speculative authority changes reject before
+altering handlers; capabilities are never stripped or resealed.
+
+The single executor keeps admitted callbacks, their timeout/interruption options,
+the settlement journal exposed by `outcomes()`, and its recent duplicate identities
+across every update and model switch. Provider requests crossing an update use the
+selection current when their tool batch is admitted. Cancellation-aware handlers
+return `None` through `LocalToolFunction::new_cancellable`; successful JSON null
+and callback errors retain their separate native outcomes.
+
+`DirectToolBindingConfig` defaults to 16 in-flight calls, a 1,024-ID duplicate
+window, 64 KiB argument/identity limits, 128 advertised tools and 1,024 retained
+cleanup hooks. Handler deadlines override `default_timeout`; both absent means no
+execution deadline. Optional deadlines must be positive. Hooks attached with
+`with_cleanup` are deduplicated by callback identity and retained even after
+pruning or rebinding. Pipeline cleanup permanently closes the owner, stops future
+dispatch and awaits recorded hooks within its shutdown budget, continuing after
+failures and returning the first error. Core's Stop contract still retains
+resources until explicit owner-stage cleanup.
+
+Each call settles with one final result or cancellation. `cancel_on_interruption`
+controls the native owned-task policy; it does not add Python's immediate async
+developer-message continuation, intermediate tool updates or LLM-generated
+`cancel_<name>` tools. Cleanup runs within the owning pipeline's shutdown budget:
+hook errors and panics continue to later hooks while retaining the first error.
+If that outer deadline cancels cleanup, the owner requests abort of the currently
+awaited hook and drops hooks not yet started. That abort request does not await
+the active hook's completion or establish that its resources have closed.
 
 `run_inference(context, InferenceOptions)` makes an explicit out-of-pipeline
 provider request using the member selected when first polled. It snapshots that

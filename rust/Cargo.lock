@@ -4026,6 +4026,7 @@ dependencies = [
  "pipecat-core",
  "pipecat-processors",
  "pipecat-services",
+ "pipecat-turns",
  "serde_json",
  "tokio",
 ]

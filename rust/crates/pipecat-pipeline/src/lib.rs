@@ -12,7 +12,9 @@ use std::time::Duration;
 use tokio::sync::{watch, Notify};
 use tokio::task::{JoinHandle, JoinSet};
 
+mod direct_tools;
 mod switching;
+pub use direct_tools::{DirectToolBinding, DirectToolBindingConfig};
 pub use switching::{
     LlmSwitcher, ServiceSelection, ServiceSwitcher, ServiceSwitcherStrategy, SwitchReason,
 };

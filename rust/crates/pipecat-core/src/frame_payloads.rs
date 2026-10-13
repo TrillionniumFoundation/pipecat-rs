@@ -797,9 +797,13 @@ impl Default for VadUserStoppedSpeakingFrame {
     }
 }
 
+#[path = "frame_payloads/local_tool_function.rs"]
+mod local_tool_function;
+pub use local_tool_function::LocalToolOptions;
+
 #[derive(Clone)]
 pub struct LocalToolFunction(
-    Arc<dyn Fn(Value) -> ToolFuture + Send + Sync>,
+    Arc<local_tool_function::ToolFunctionState>,
     LocalToolFunctionIdentity,
 );
 /// Retaining this token pins identity without retaining the callback or its captures.
@@ -810,23 +814,9 @@ impl LocalToolFunctionIdentity {
         Arc::as_ptr(&self.0) as usize
     }
 }
-type ToolFuture = Pin<Box<dyn Future<Output = Result<Value, ProcessorError>> + Send>>;
 impl LocalToolFunction {
     pub(crate) fn local_identity(&self) -> &LocalToolFunctionIdentity {
         &self.1
-    }
-    pub fn new<F, Fut>(handler: F) -> Self
-    where
-        F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value, ProcessorError>> + Send + 'static,
-    {
-        Self(
-            Arc::new(move |arguments| Box::pin(handler(arguments))),
-            LocalToolFunctionIdentity(Arc::new(())),
-        )
-    }
-    pub async fn call(&self, arguments: Value) -> Result<Value, ProcessorError> {
-        (self.0)(arguments).await
     }
 }
 local_reference!(LocalToolFunction);

@@ -8,10 +8,11 @@ rust-version.workspace = true
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
+pipecat-processors = { path = "../pipecat-processors" }
 tokio.workspace = true
 
 [dev-dependencies]
-pipecat-processors = { path = "../pipecat-processors" }
+pipecat-turns = { path = "../pipecat-turns" }
 serde_json.workspace = true
 
 [lints]
