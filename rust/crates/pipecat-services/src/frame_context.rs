@@ -1,11 +1,11 @@
 //! Loss-aware conversion from the core's universal context frames.
 use crate::{
-    Content, ContentPart, Context, Message, Role, ServiceError, ToolCall, ToolChoice,
+    Content, ContentPart, Context, Message, Provider, Role, ServiceError, ToolCall, ToolChoice,
     ToolDefinition,
 };
 use pipecat_core::{
-    ChatMessage, ChatRole, ContextMessage, LlmContextData, LlmContextFrame, MessageContent,
-    MessagePart, StandardTool, ToolSet,
+    AdapterType, ChatMessage, ChatRole, ContextMessage, LlmContextData, LlmContextFrame,
+    MessageContent, MessagePart, StandardTool, ToolSet,
 };
 
 pub fn tool_choice(choice: &pipecat_core::ToolChoice) -> ToolChoice {
@@ -24,11 +24,18 @@ fn definition(tool: &pipecat_core::ToolDefinition) -> ToolDefinition {
     }
 }
 pub fn tools(tools: &ToolSet) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
-    convert_tools(tools, false)
+    convert_tools(tools, false, None)
+}
+pub(crate) fn tools_for_provider(
+    tools: &ToolSet,
+    provider: Provider,
+) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
+    convert_tools(tools, false, Some(provider))
 }
 fn convert_tools(
     tools: &ToolSet,
     advertise_handlers: bool,
+    provider: Option<Provider>,
 ) -> Result<Option<Vec<ToolDefinition>>, ServiceError> {
     match tools {
         ToolSet::NotGiven => Ok(None),
@@ -37,7 +44,14 @@ fn convert_tools(
             if schema
                 .custom_tools
                 .as_ref()
-                .is_some_and(|tools| tools.values().any(|tools| !tools.is_empty()))
+                .is_some_and(|tools| match provider {
+                    // The source OpenAI adapter selects only its own entries.
+                    // Those entries still need an implemented wire contract.
+                    Some(Provider::OpenAi) => tools
+                        .get(&AdapterType::Openai)
+                        .is_some_and(|tools| !tools.is_empty()),
+                    _ => tools.values().any(|tools| !tools.is_empty()),
+                })
             {
                 return Err(ServiceError::Unsupported(
                     "provider-specific custom tool schemas".into(),
@@ -70,15 +84,25 @@ fn convert_tools(
     }
 }
 pub fn context(context: &LlmContextData) -> Result<Context, ServiceError> {
-    convert_context(context, false)
+    convert_context(context, false, None)
+}
+pub(crate) fn context_for_provider(
+    context: &LlmContextData,
+    provider: Provider,
+) -> Result<Context, ServiceError> {
+    convert_context(context, false, Some(provider))
 }
 /// Out-of-band inference advertises tools but has no execution lifecycle.
-pub(crate) fn inference_context(context: &LlmContextData) -> Result<Context, ServiceError> {
-    convert_context(context, true)
+pub(crate) fn inference_context_for_provider(
+    context: &LlmContextData,
+    provider: Provider,
+) -> Result<Context, ServiceError> {
+    convert_context(context, true, Some(provider))
 }
 fn convert_context(
     context: &LlmContextData,
     advertise_handlers: bool,
+    provider: Option<Provider>,
 ) -> Result<Context, ServiceError> {
     let result = Context {
         messages: context
@@ -86,7 +110,7 @@ fn convert_context(
             .iter()
             .map(message)
             .collect::<Result<_, _>>()?,
-        tools: convert_tools(&context.tools, advertise_handlers)?,
+        tools: convert_tools(&context.tools, advertise_handlers, provider)?,
         tool_choice: context.tool_choice.as_ref().map(tool_choice),
     };
     result.validate()?;

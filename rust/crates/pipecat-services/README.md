@@ -215,6 +215,16 @@ Unsupported features are not labeled as implemented integrations:
 - Other Pipecat service families; compatible request presets do not imply those
   providers' STT, TTS, realtime, or SDK-specific features are implemented
 
+Ordinary native `Provider::OpenAi` context frames, tool setters and out-of-band
+inference select only the OpenAI entry in a `ToolsSchema` custom map, matching
+the Python OpenAI adapter. Other adapters' declarations are ignored while the
+standard function definitions and tool choice remain intact. A nonempty OpenAI
+custom entry still returns `Unsupported`; this does not add opaque tool request
+or response support. Ordinary Direct handlers still require an executor, while
+inference only advertises their definitions. Public provider-agnostic conversion,
+other providers and speculative/confirmed-owner context paths keep their existing
+strict behavior. Message and image conversion are unchanged.
+
 Primary wire references:
 [OpenAI Chat](https://developers.openai.com/api/reference/resources/chat),
 [Anthropic streaming](https://platform.claude.com/docs/en/build-with-claude/streaming),

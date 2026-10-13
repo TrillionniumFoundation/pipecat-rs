@@ -224,8 +224,12 @@ impl LlmProcessor {
                     .speculation
                     .as_ref()
                     .and_then(pipecat_core::NativeSpeculation::confirmed_context);
-                next.request.context =
-                    frame_context::context(committed.as_ref().unwrap_or(&context.context))?;
+                let native_context = committed.as_ref().unwrap_or(&context.context);
+                next.request.context = if context.speculation || committed.is_some() {
+                    frame_context::context(native_context)?
+                } else {
+                    frame_context::context_for_provider(native_context, self.client.provider())?
+                };
                 true
             }
             FrameData::LlmRun => return Ok(Consumption::Run(Box::new(next))),
@@ -263,7 +267,8 @@ impl LlmProcessor {
                 messages.run_llm.unwrap_or(false)
             }
             FrameData::LlmSetTools(tools) => {
-                next.request.context.tools = frame_context::tools(tools)?;
+                next.request.context.tools =
+                    frame_context::tools_for_provider(tools, self.client.provider())?;
                 false
             }
             FrameData::LlmSetToolChoice(choice) => {
@@ -545,7 +550,8 @@ impl LlmInference for LlmProcessor {
             ));
         }
         let mut request = self.request_snapshot()?;
-        request.context = frame_context::inference_context(&context)?;
+        request.context =
+            frame_context::inference_context_for_provider(&context, self.client.provider())?;
         settings::merge_settings(&mut request.settings, &options.settings);
         let mut stream = self.client.stream(request)?;
         let mut text = String::new();
