@@ -3901,6 +3901,7 @@ dependencies = [
  "http",
  "pipecat-agent-workers",
  "pipecat-core",
+ "pipecat-pipeline",
  "pipecat-processors",
  "pipecat-services",
  "pipecat-turns",

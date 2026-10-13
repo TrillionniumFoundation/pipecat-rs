@@ -78,8 +78,7 @@ advertisement, but this executor executes only the bound MCP names; it does not
 register arbitrary application functions. Realtime sealed and speculative
 executable contexts are explicitly rejected when projection is needed: their capabilities are never
 stripped or resealed. Custom/grouped provider schemas retain the native LLM's
-unsupported behavior. The binding does not provide LLM-switcher propagation or
-successful live-provider qualification.
+unsupported behavior. These checks do not establish live-provider qualification.
 
 For explicit runtime refresh, retain the handle returned by `tools.bind_llm(llm)`:
 
@@ -113,7 +112,7 @@ No publication lock is held across an await.
 Cleanup permanently closes this binding before awaiting MCP teardown. An explicit
 client reopen cannot reactivate it. This API provides caller-driven refresh of one
 MCP inventory; it does not implement automatic server notification handling,
-general advertised-handler synchronization, arbitrary resources, or LLM switchers.
+general advertised-handler synchronization or arbitrary resources.
 The same sealed/speculative and custom/grouped restrictions apply.
 
 Use `tools.bind_llm_auto(llm)?` when the advertised schema should select the
@@ -139,7 +138,20 @@ keeps its MCP cleanup owner when every automatic handler has been pruned and clo
 at pipeline teardown. Explicit `bind_llm`, fixed `llm_stages` and `register_into`
 remain inventory-based and do not prune omitted names. This mode is limited to
 ordinary schema handlers from one bound MCP inventory, without arbitrary callback
-registration, server notification handling or LLM-switcher support.
+registration or server notification handling.
+
+For the existing native `pipecat_pipeline::LlmSwitcher`, use
+`tools.bind_llm_switcher(switcher)?` or
+`tools.bind_llm_switcher_auto(switcher)?`, then insert `binding.stages()` together
+in the same order. The switcher's existing routing propagates projected tool
+declarations to active and inactive members. All members share this binding's
+single MCP executor, selected callback inventory, duplicate history and cleanup
+owner. A model switch keeps the MCP session open; pipeline teardown awaits one
+close. Its normal root interruption cancels admitted interruptible tool callbacks.
+Wait for the switcher's actual metadata boundary and submit a new context or
+`LlmRun` for subsequent inference; switching does not replay earlier requests.
+The same inventory/auto-selection and sealed/speculative restrictions apply.
+Out-of-band `switcher.run_inference` retains its inference-only behavior.
 
 ## Agent-worker registry
 

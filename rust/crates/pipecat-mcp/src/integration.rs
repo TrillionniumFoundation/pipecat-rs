@@ -109,9 +109,24 @@ impl McpTools {
     ) -> Result<McpLlmBinding, ProcessorError> {
         self.bind_llm_mode(llm, true)
     }
+    /// Bind the existing native LLM switcher to one shared MCP executor and
+    /// cleanup owner. Its own routing propagates projected tools to all members.
+    pub fn bind_llm_switcher(
+        &self,
+        llm: Arc<pipecat_pipeline::LlmSwitcher>,
+    ) -> Result<McpLlmBinding, ProcessorError> {
+        self.bind_llm_mode(llm, false)
+    }
+    /// Schema-selected MCP handlers with the existing native LLM switcher.
+    pub fn bind_llm_switcher_auto(
+        &self,
+        llm: Arc<pipecat_pipeline::LlmSwitcher>,
+    ) -> Result<McpLlmBinding, ProcessorError> {
+        self.bind_llm_mode(llm, true)
+    }
     fn bind_llm_mode(
         &self,
-        llm: Arc<pipecat_services::LlmProcessor>,
+        llm: Arc<dyn FrameProcessor>,
         auto: bool,
     ) -> Result<McpLlmBinding, ProcessorError> {
         let mut executor = self.executor()?;
@@ -227,7 +242,7 @@ impl McpTools {
 pub struct McpLlmBinding {
     client: McpClient,
     state: Arc<RwLock<McpBindingState>>,
-    llm: Arc<pipecat_services::LlmProcessor>,
+    llm: Arc<dyn FrameProcessor>,
     executor: Arc<McpToolExecutor>,
     auto: bool,
 }

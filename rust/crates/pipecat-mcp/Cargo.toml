@@ -13,6 +13,7 @@ native-fixtures = []
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
+pipecat-pipeline = { path = "../pipecat-pipeline" }
 pipecat-processors = { path = "../pipecat-processors" }
 pipecat-agent-workers = { path = "../pipecat-agent-workers" }
 rmcp = { version = "=3.3.0", default-features = false, features = ["client", "transport-streamable-http-client"] }

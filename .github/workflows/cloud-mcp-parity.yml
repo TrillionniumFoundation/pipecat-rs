@@ -23,8 +23,8 @@ jobs:
       - name: Install workspace Rust toolchain
         run: rustup toolchain install 1.99.0 --profile minimal --component clippy --component rustfmt && rustup default 1.99.0
       - name: Check affected package formatting
-        run: cargo fmt -p pipecat-mcp -p pipecat-services -p pipecat-processors -- --check
+        run: cargo fmt -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -- --check
       - name: Native MCP HTTP, stdio and affected package regressions
-        run: cargo test -p pipecat-mcp -p pipecat-services -p pipecat-processors --features pipecat-mcp/native-fixtures --locked
+        run: cargo test -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline --features pipecat-mcp/native-fixtures --locked
       - name: Strict affected package checks
-        run: cargo clippy -p pipecat-mcp -p pipecat-services -p pipecat-processors --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
+        run: cargo clippy -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
