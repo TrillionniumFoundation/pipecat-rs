@@ -554,6 +554,21 @@ budget releases context. `wait_for_transcript=false` releases immediately on
 COMPLETE. Model latency never starts a fresh STT wait, and an interim hypothesis
 revokes prior finalization without extending the physical-stop deadline.
 
+For model-gated no-VAD transcript fallback, the first accepted nonempty segment
+starts the remaining STT inactivity wait, even when that segment is finalized.
+A later nonempty finalized segment releases an already-established fallback;
+a later nonfinalized segment refreshes the wait. With an 800 ms STT budget and
+explicitly zero VAD stop duration, final segments at 0 and 100 ms commit together
+once at 100 ms, rather than restarting the wait until 900 ms. This matches the
+public finalized-segment path of Python `TurnAnalyzerUserTurnStopStrategy` at
+`af9f9da9` and native explicit `turn_analyzer(true)`. The Smart Turn wrapper sets
+the scalar speech floor to zero; standalone scalar configurations still honor
+their nonzero speech floor. Resumed VAD requires a current acoustic verdict, and
+each later user turn establishes its own initial fallback. The focused
+`final_transcript_fallback` tests use no audio or model execution; this bounded
+timing compatibility makes no claim about deployed call impact or Python's
+background-task lifecycle.
+
 Resumed speech cancels and invalidates stale inference while preserving the
 utterance buffer for reanalysis. Silence completion, no-VAD transcript fallback,
 external stops, mute, watchdog, End, and Cancel all have explicit lifecycle

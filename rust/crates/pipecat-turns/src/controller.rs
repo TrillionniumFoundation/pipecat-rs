@@ -392,23 +392,30 @@ impl UserTurnController {
                     self.interim_pending = false;
                     self.finalized |= finalized;
                     self.touch(now);
-                    if finalized {
-                        self.stt_deadline = Some(now);
-                    }
                     if !self.speaking
                         && self.vad_stopped_at.is_none()
                         && self.external_stop.is_none()
                     {
+                        // The first no-VAD segment establishes an STT fallback.
+                        // A later final releases it; a nonfinal refreshes it.
+                        // Observe the old deadline before finalization overwrites it.
+                        let fallback_pending = self.stt_deadline.is_some();
                         self.speech_deadline = Some(now.saturating_add(self.config.speech_timeout));
-                        self.stt_deadline = Some(if self.config.require_model_completion {
-                            now.saturating_add(
-                                self.config
-                                    .stt_timeout
-                                    .saturating_sub(self.config.vad_stop_duration),
-                            )
-                        } else {
-                            now
-                        });
+                        self.stt_deadline = Some(
+                            if self.config.require_model_completion
+                                && !(fallback_pending && finalized)
+                            {
+                                now.saturating_add(
+                                    self.config
+                                        .stt_timeout
+                                        .saturating_sub(self.config.vad_stop_duration),
+                                )
+                            } else {
+                                now
+                            },
+                        );
+                    } else if finalized {
+                        self.stt_deadline = Some(now);
                     }
                 }
             }
