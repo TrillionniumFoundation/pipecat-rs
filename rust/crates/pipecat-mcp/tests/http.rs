@@ -1100,3 +1100,67 @@ async fn closing_mcp_session_settles_pipeline_call_as_one_native_cancellation() 
     client.close().await.unwrap();
     assert_eq!(server.state.lock().unwrap().deletes, 1);
 }
+
+#[tokio::test]
+async fn reference_connection_closed_code_invalidates_only_failed_tool_session_without_replay() {
+    let server = Server::start("connection-closed-code").await;
+    let client = client_for(&server);
+    let tools = client.tools().await.unwrap();
+    let schema = tools.schema();
+    let handler = |name| {
+        schema
+            .standard_tools
+            .iter()
+            .find_map(|tool| match tool {
+                StandardTool::Direct(tool) if tool.schema.name == name => {
+                    Some(tool.handler.clone())
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let failure = handler("failure");
+    let echo = handler("echo");
+    let result = failure.call(Value::Null).await.unwrap();
+    assert_eq!(
+        result,
+        Value::String(format!(
+            "Error calling mcp tool: {}",
+            McpError::Remote(-32000)
+        ))
+    );
+    assert!(!result.to_string().contains("secret-token"));
+    assert!(result.as_str().unwrap().len() <= 256);
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    // Recovery is a separate invocation through the original native handler.
+    assert!(echo
+        .call(json!({"value":"recovered"}))
+        .await
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("recovered"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert_eq!(server.state.lock().unwrap().initializes, 2);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    server.state.lock().unwrap().mode.clear();
+    let error = client.call("failure", Value::Null).await.unwrap_err();
+    assert_eq!(error, McpError::Remote(-32602));
+    assert!(!format!("{error:?} {error}").contains("secret-token"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 3);
+    assert_eq!(server.state.lock().unwrap().initializes, 2);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    assert!(echo
+        .call(json!({"value":"same-session"}))
+        .await
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("same-session"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 4);
+    assert_eq!(server.state.lock().unwrap().initializes, 2);
+    client.close().await.unwrap();
+    assert_eq!(server.state.lock().unwrap().deletes, 2);
+}

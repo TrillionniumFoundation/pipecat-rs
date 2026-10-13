@@ -256,7 +256,12 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         }
     }
     let response = if name == "failure" {
-        json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":-32602,"message":"secret-token","data":{"password":"secret-token"}}})
+        let code = if mode == "connection-closed-code" {
+            -32000
+        } else {
+            -32602
+        };
+        json!({"jsonrpc":"2.0","id":message["id"],"error":{"code":code,"message":"secret-token","data":{"password":"secret-token"}}})
     } else {
         json!({"jsonrpc":"2.0","id":message["id"],"result":result})
     };

@@ -375,6 +375,12 @@ impl McpClient {
                 cancel,
             )
             .await;
+        // The reference client's locked Python SDK uses -32000 for
+        // CONNECTION_CLOSED, including remote tools/call errors. Keep the
+        // public Remote(code) error while dropping only this generation.
+        if matches!(result, Err(McpError::Remote(-32000))) {
+            self.drop_failed(&session).await;
+        }
         let result = self.handle_failure(&session, result).await?;
         let ServerResult::CallToolResult(result) = result else {
             return Err(McpError::Protocol);

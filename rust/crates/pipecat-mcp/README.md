@@ -151,6 +151,13 @@ errors remain failures; explicit pipeline interruption/cancel commands retain
 their native cancellation receipts.
 Server-provided error messages/data are deliberately not copied into errors.
 
+Tool-call JSON-RPC error `-32000` also invalidates the exact failed session,
+matching the source's locked `mcp-types` 2.1.1 `CONNECTION_CLOSED` constant. This
+is Python SDK compatibility, not a universal MCP transport-error interpretation.
+The public error remains `Remote(-32000)`, and the failed invocation is never
+replayed. A separate invocation may reconnect; other remote codes and discovery
+errors retain their existing behavior.
+
 ## Bounds and privacy
 
 Default limits: 8 in-flight requests, 1 MiB per JSON message/raw SSE event,
