@@ -1304,3 +1304,330 @@ async fn inference_emitted_context_preserves_completed_gemini_signature_prefix()
         );
     }
 }
+
+// Real loopback completion regression. The earlier 19-test prefix is unchanged.
+// This is an unsigned text reply to an image input, not a live vision-quality test.
+#[derive(Debug, Default)]
+struct DefaultImageHttpLog {
+    connections: usize,
+    requests: Vec<(String, Vec<u8>)>,
+    errors: Vec<String>,
+}
+
+async fn default_image_http_request(
+    socket: &mut tokio::net::TcpStream,
+) -> Result<(String, Vec<u8>), String> {
+    use tokio::io::AsyncReadExt;
+    const LIMIT: usize = 64 * 1024;
+    let mut bytes = Vec::new();
+    let mut chunk = [0; 4096];
+    let header_end = loop {
+        let n = socket.read(&mut chunk).await.map_err(|e| e.to_string())?;
+        if n == 0 || bytes.len() + n > LIMIT {
+            return Err("incomplete or oversized HTTP request headers".into());
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+        if let Some(pos) = bytes.windows(4).position(|s| s == b"\r\n\r\n") {
+            break pos + 4;
+        }
+    };
+    let headers = String::from_utf8(bytes[..header_end].to_vec()).map_err(|e| e.to_string())?;
+    let length = headers
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        .ok_or("HTTP request has no Content-Length")?
+        .1
+        .trim()
+        .parse::<usize>()
+        .map_err(|e| e.to_string())?;
+    if length > LIMIT - header_end {
+        return Err("oversized HTTP request body".into());
+    }
+    while bytes.len() < header_end + length {
+        let n = socket.read(&mut chunk).await.map_err(|e| e.to_string())?;
+        if n == 0 || bytes.len() + n > LIMIT {
+            return Err("incomplete or oversized HTTP request body".into());
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+    }
+    Ok((headers, bytes[header_end..header_end + length].to_vec()))
+}
+
+async fn default_image_http_reply(socket: &mut tokio::net::TcpStream) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    socket
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n")
+        .await
+        .map_err(|e| e.to_string())?;
+    // Two separately framed HTTP chunks carry two SSE events; only the second
+    // ends the Gemini response. No timer is used as evidence of consumption.
+    for event in [
+        json!({"candidates":[{"content":{"role":"model","parts":[{"text":"a red "}]}}]}),
+        json!({"candidates":[{"content":{"role":"model","parts":[{"text":"pixel"}]},"finishReason":"STOP"}]}),
+    ] {
+        let event = format!("data: {event}\n\n");
+        socket
+            .write_all(format!("{:x}\r\n{event}\r\n", event.len()).as_bytes())
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    socket
+        .write_all(b"0\r\n\r\n")
+        .await
+        .map_err(|e| e.to_string())?;
+    socket.shutdown().await.map_err(|e| e.to_string())
+}
+
+#[tokio::test]
+async fn default_encoded_upload_completes_one_real_http_request_and_commits_reply() {
+    use pipecat::services::{ClientConfig, Context, LlmClient, LlmProcessor};
+    const WAIT: Duration = Duration::from_secs(5);
+    const REPLY: &str = "a red pixel";
+    const FAKE_KEY: &str = "synthetic-default-image-key";
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind the loopback fixture");
+    let address = listener.local_addr().unwrap();
+    let mut config = ClientConfig::new(Provider::Gemini, FAKE_KEY);
+    config.endpoint =
+        format!("http://{address}/v1beta/models/{{model}}:streamGenerateContent?alt=sse");
+    config.request_timeout = WAIT;
+    config.idle_timeout = WAIT;
+    config.connect_timeout = WAIT;
+    let context = SharedContext::default();
+    let pipeline = Pipeline::new(vec![
+        Arc::new(RtviProcessor::new(RtviConfig::default()).unwrap()),
+        Arc::new(LlmProcessor::new(
+            LlmClient::new(config).unwrap(),
+            CompletionRequest::new("wire-fixture", Context::default()),
+        )),
+        Arc::new(LLMAssistantAggregator::new(
+            context.clone(),
+            Default::default(),
+        )),
+    ]);
+    let peer_log = Arc::new(std::sync::Mutex::new(DefaultImageHttpLog::default()));
+    let server_log = peer_log.clone();
+    let (stop_peer, mut stopping) = tokio::sync::oneshot::channel();
+    let mut peer = tokio::spawn(async move {
+        // Keep accepting and replying until the pipeline has drained and joined.
+        // A duplicate request must be counted, never hidden by a one-shot server.
+        loop {
+            let accepted = tokio::select! {
+                _ = &mut stopping => break,
+                accepted = listener.accept() => accepted,
+            };
+            let mut socket = match accepted {
+                Ok((socket, _)) => socket,
+                Err(error) => {
+                    server_log.lock().unwrap().errors.push(error.to_string());
+                    break;
+                }
+            };
+            server_log.lock().unwrap().connections += 1;
+            let exchange = async {
+                let request = default_image_http_request(&mut socket).await?;
+                server_log.lock().unwrap().requests.push(request);
+                default_image_http_reply(&mut socket).await
+            };
+            // Finish an accepted exchange before consuming stop at the accept
+            // boundary. Normal shutdown must not race a completed response's
+            // final socket shutdown; incomplete requests still hit this deadline.
+            let result = tokio::time::timeout(WAIT, exchange).await;
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => server_log.lock().unwrap().errors.push(error),
+                Err(_) => server_log
+                    .lock()
+                    .unwrap()
+                    .errors
+                    .push("HTTP exchange deadline".into()),
+            }
+        }
+    });
+    // No assertions or early returns after spawning the peer until both owners
+    // have been stopped/joined. Keep operation and cleanup failures distinct.
+    let mut frames = Vec::new();
+    let mut failures = Vec::new();
+    let mut report = None;
+    match pipeline
+        .start(PipelineConfig {
+            startup_timeout: WAIT,
+            shutdown_timeout: Duration::from_secs(3),
+            ..Default::default()
+        })
+        .await
+    {
+        Ok(mut worker) => {
+            let operation = tokio::time::timeout(WAIT, async {
+                worker.sender().send(
+                    Frame::new(FrameData::InputTransportMessage(json!({
+                        "label":"rtvi-ai", "id":"default-image-http", "type":"send-file",
+                        "data": {
+                            "content":"inspect",
+                            "file":{"format":"image/png","source":{"type":"bytes","bytes":PNG_BASE64}}
+                        }
+                    }))),
+                    Direction::Downstream,
+                ).await.map_err(|e| e.to_string())?;
+                // The assistant consumes raw response frames. Its downstream
+                // turn receipt is emitted only after committing the reply. Wait
+                // for that positive receipt before End can flush pending text.
+                while let Some(frame) = worker.recv().await {
+                    let receipt = frame.direction == Direction::Downstream
+                        && matches!(&frame.frame.data, FrameData::LlmContextAssistantTurn(turn) if turn.text == REPLY);
+                    let error = matches!(&frame.frame.data, FrameData::Error(_));
+                    frames.push(frame);
+                    if error {
+                        return Err("pipeline emitted an error before the reply receipt".to_string());
+                    }
+                    if receipt {
+                        return Ok(());
+                    }
+                }
+                Err("pipeline closed before the expected reply receipt".to_string())
+            }).await;
+            match operation {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => failures.push(error),
+                Err(_) => {
+                    failures.push("reply receipt deadline (not a zero-request result)".into())
+                }
+            }
+            let end = tokio::time::timeout(WAIT, worker.end()).await;
+            if !matches!(&end, Ok(Ok(()))) {
+                failures.push(format!("pipeline End: {end:?}"));
+                let cancelled =
+                    tokio::time::timeout(WAIT, worker.cancel("HTTP fixture End failed")).await;
+                if !matches!(&cancelled, Ok(Ok(()))) {
+                    failures.push(format!("pipeline cancel after End failure: {cancelled:?}"));
+                }
+            }
+            let drain = tokio::time::timeout(WAIT, async {
+                while let Some(frame) = worker.recv().await {
+                    frames.push(frame);
+                }
+            })
+            .await;
+            if drain.is_err() {
+                failures.push("pipeline output drain deadline".into());
+                let cancelled =
+                    tokio::time::timeout(WAIT, worker.cancel("HTTP fixture drain failed")).await;
+                if !matches!(&cancelled, Ok(Ok(()))) {
+                    failures.push(format!(
+                        "pipeline cancel after drain failure: {cancelled:?}"
+                    ));
+                }
+            }
+            match tokio::time::timeout(WAIT, worker.join()).await {
+                Ok(Ok(joined)) => report = Some(joined),
+                Ok(Err(error)) => failures.push(format!("pipeline join: {error}")),
+                Err(_) => {
+                    failures.push("pipeline join deadline".into());
+                    let cancelled =
+                        tokio::time::timeout(WAIT, worker.cancel("HTTP fixture join failed")).await;
+                    if !matches!(&cancelled, Ok(Ok(()))) {
+                        failures.push(format!("pipeline cancel after join failure: {cancelled:?}"));
+                    }
+                    match tokio::time::timeout(WAIT, worker.join()).await {
+                        Ok(Ok(joined)) => report = Some(joined),
+                        other => failures.push(format!("pipeline fallback join: {other:?}")),
+                    }
+                }
+            }
+        }
+        Err(error) => failures.push(format!("pipeline startup: {error}")),
+    }
+    let _ = stop_peer.send(());
+    match tokio::time::timeout(WAIT, &mut peer).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => failures.push(format!("HTTP peer join: {error}")),
+        Err(_) => {
+            failures.push("HTTP peer join deadline".into());
+            peer.abort();
+            let aborted = tokio::time::timeout(WAIT, &mut peer).await;
+            if !matches!(&aborted, Ok(Err(error)) if error.is_cancelled()) {
+                failures.push(format!("HTTP peer abort/join: {aborted:?}"));
+            }
+        }
+    }
+    let log = peer_log.lock().unwrap();
+    let rich = context.snapshot_rich();
+    assert!(failures.is_empty(), "fixture failures={failures:?}; peer={log:?}; frames={frames:?}; report={report:?}; history={rich:?}");
+    assert!(log.errors.is_empty(), "{log:?}");
+    assert_eq!(log.connections, 1, "{log:?}");
+    assert_eq!(log.requests.len(), 1, "{log:?}");
+    let (headers, bytes) = &log.requests[0];
+    assert_eq!(
+        headers.lines().next(),
+        Some("POST /v1beta/models/wire-fixture:streamGenerateContent?alt=sse HTTP/1.1")
+    );
+    let header = |name: &str| -> Vec<&str> {
+        headers
+            .lines()
+            .filter_map(|line| line.split_once(':'))
+            .filter(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.trim())
+            .collect()
+    };
+    assert_eq!(header("host"), vec![address.to_string()]);
+    assert_eq!(header("x-goog-api-key"), vec![FAKE_KEY]);
+    assert_eq!(header("accept"), vec!["text/event-stream"]);
+    assert_eq!(header("content-type"), vec!["application/json"]);
+    assert_eq!(header("content-length"), vec![bytes.len().to_string()]);
+    assert!(header("authorization").is_empty());
+    let body: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+    assert_eq!(
+        body,
+        json!({"contents":[{"role":"user","parts":[
+            {"text":"inspect"}, {"inlineData":{"mimeType":"image/png","data":PNG_BASE64}}
+        ]}]})
+    );
+    let rich = rich.unwrap();
+    assert_eq!(
+        rich.messages,
+        vec![
+            inference_png_message(),
+            ChatMessage::new(ChatRole::Assistant, REPLY).into(),
+        ]
+    );
+    assert_eq!(
+        pipecat::services::frame_context::context(&rich).unwrap(),
+        context.snapshot().unwrap()
+    );
+    let returned: Vec<_> = frames
+        .iter()
+        .filter_map(|frame| {
+            if let FrameData::LlmContextDetailed(value) = &frame.frame.data {
+                Some((frame.direction, value))
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(returned.len(), 1, "returned contexts: {returned:?}");
+    assert_eq!(returned[0].0, Direction::Downstream);
+    assert!(!returned[0].1.speculation);
+    assert_eq!(returned[0].1.context, rich);
+    let replies: Vec<_> = frames
+        .iter()
+        .filter_map(|frame| match &frame.frame.data {
+            FrameData::LlmContextAssistantTurn(turn)
+                if frame.direction == Direction::Downstream =>
+            {
+                Some(turn.text.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(replies, vec![REPLY]);
+    assert!(!frames.iter().any(|frame| matches!(
+        frame.frame.data,
+        FrameData::Error(_) | FrameData::UserImage(_)
+    )));
+    let report = report.expect("the stopped pipeline must have a join report");
+    assert_eq!(report.state, WorkerState::Ended, "{report:?}");
+    assert!(report.errors.is_empty(), "{report:?}");
+    assert_eq!(report.total_errors, 0, "{report:?}");
+}
