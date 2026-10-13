@@ -382,11 +382,11 @@ impl LLMAssistantAggregator {
             }) || (!passive
                 && !matches!(
                     image.image.format.as_deref(),
-                    Some("image/png" | "image/jpeg" | "RGB")
+                    Some("image/png" | "image/jpeg" | "RGB" | "L")
                 ))
             {
                 return Err(ProcessorError::new(
-                    "raw image/file context conversion is not supported; submit encoded rich context messages",
+                    "raw image/file context conversion requires exact RGB or L, or encoded PNG/JPEG, without tool/callback authority",
                 ));
             }
             if self.realtime.enabled()? || state.signed_history.is_some() {
