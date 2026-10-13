@@ -253,10 +253,20 @@ Ordinary Gemini context frames, setters and inference accept exactly
 `{"google_search": {}}` as a custom declaration. The locked Python google-genai
 2.25.0 SDK maps it to `{"googleSearch": {}}` and moves the merged standard
 function group after built-in tools. Native requests follow that declaration
-mapping and order, preserving the existing standard-function conversion.
+mapping and order, retaining the source adapter's standard-schema adaptation.
 This does not establish full SDK request equality or live model support for a
 search/function combination. Nonempty search options, other tool keys, Vertex
 tools and arbitrary dictionary forwarding remain unsupported.
+
+Gemini native standard-function declarations also canonicalize recognized
+Schema `type` enums to their locked SDK representation, such as `OBJECT`,
+`ARRAY` and `STRING`. This runs only at Schema nodes and their `properties`,
+`items` and `anyOf` descendants, including adapted union members. Property names,
+enum values, default data and other text are retained. The public
+`adapt_gemini_tool_schema` helper still returns the source adapter's SDK-input
+schema and notes; universal input, other providers and unknown type strings keep
+their existing behavior. This mapping does not establish server acceptance or
+extend search configuration, built-ins, Vertex or managed-tool response support.
 
 The additive `GeminiToolDeclarations` and `GeminiDeclaredRequest` types and client
 `request_body_gemini_declared`, `stream_gemini_declared` and

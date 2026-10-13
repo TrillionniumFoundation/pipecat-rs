@@ -317,12 +317,12 @@ fn gemini_tools_follow_source_recursive_schema_adaptations_without_erasing_param
     let body = adapters::request_body(Provider::Gemini, &request).unwrap();
     assert_eq!(
         body["tools"][0]["functionDeclarations"][0]["parameters"],
-        json!({"type":"object",
+        json!({"type":"OBJECT",
         "properties": {
-            "x-request-id": {"anyOf":[{"type":"string"},{"type":"null"}], "enum":["one","two"]},
-            "additionalProperties": {"type":"integer"},
-            "nested": {"type":"array", "items":{"type":"object", "properties":{"flag":{"type":"boolean"}}, "required":["flag"]}},
-            "choice": {"anyOf":[{"type":"string"},{"type":"number"}]}
+            "x-request-id": {"anyOf":[{"type":"STRING"},{"type":"NULL"}], "enum":["one","two"]},
+            "additionalProperties": {"type":"INTEGER"},
+            "nested": {"type":"ARRAY", "items":{"type":"OBJECT", "properties":{"flag":{"type":"BOOLEAN"}}, "required":["flag"]}},
+            "choice": {"anyOf":[{"type":"STRING"},{"type":"NUMBER"}]}
         }, "required":["x-request-id"], "description":"retain"})
     );
     assert_eq!(

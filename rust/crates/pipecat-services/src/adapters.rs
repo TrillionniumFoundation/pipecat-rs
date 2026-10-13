@@ -624,7 +624,7 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
         body["tools"] = if tools.is_empty() {
             json!([])
         } else {
-            json!([{"functionDeclarations":tools.iter().map(|t|json!({"name":t.name,"description":t.description,"parameters":adapt_gemini_tool_schema(&t.parameters).0})).collect::<Vec<_>>()}])
+            json!([{"functionDeclarations":tools.iter().map(|t|json!({"name":t.name,"description":t.description,"parameters":gemini_native_wire_schema(&t.parameters)})).collect::<Vec<_>>()}])
         };
     }
     if let Some(choice) = &request.context.tool_choice {
@@ -723,6 +723,47 @@ pub(crate) fn gemini_requires_tool_signature(model: &str) -> bool {
         .strip_prefix("models/")
         .unwrap_or(model)
         .starts_with("gemini-3")
+}
+
+fn gemini_native_wire_schema(schema: &Value) -> Value {
+    fn canonicalize(schema: &mut Value) {
+        let Some(object) = schema.as_object_mut() else {
+            return;
+        };
+        if let Some(Value::String(kind)) = object.get_mut("type") {
+            if let Some(canonical) = [
+                "TYPE_UNSPECIFIED",
+                "STRING",
+                "NUMBER",
+                "INTEGER",
+                "BOOLEAN",
+                "ARRAY",
+                "OBJECT",
+                "NULL",
+            ]
+            .into_iter()
+            .find(|canonical| kind.eq_ignore_ascii_case(canonical))
+            {
+                *kind = canonical.to_string();
+            }
+        }
+        if let Some(Value::Object(properties)) = object.get_mut("properties") {
+            for property in properties.values_mut() {
+                canonicalize(property);
+            }
+        }
+        if let Some(items) = object.get_mut("items") {
+            canonicalize(items);
+        }
+        if let Some(Value::Array(members)) = object.get_mut("anyOf") {
+            for member in members {
+                canonicalize(member);
+            }
+        }
+    }
+    let (mut schema, _) = adapt_gemini_tool_schema(schema);
+    canonicalize(&mut schema);
+    schema
 }
 
 /// Adapt the source adapter's known JSON Schema incompatibilities and report

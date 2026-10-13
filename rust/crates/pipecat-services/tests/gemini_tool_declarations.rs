@@ -134,7 +134,7 @@ fn processor(server: &Server, provider: Provider) -> Arc<LlmProcessor> {
     ))
 }
 fn assert_wire(request: &Value, owning: bool) {
-    let mut tools = json!([{"functionDeclarations":[{"name":"echo","description":"Echo value","parameters":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}}]}]);
+    let mut tools = json!([{"functionDeclarations":[{"name":"echo","description":"Echo value","parameters":{"type":"OBJECT","properties":{"value":{"type":"STRING"}},"required":["value"]}}]}]);
     if owning {
         // The locked SDK normalizes tools by moving the merged function group
         // after the built-in declarations, then maps google_search to googleSearch.
@@ -151,6 +151,148 @@ fn assert_wire(request: &Value, owning: bool) {
     assert!(!request.to_string().contains("tool_search"));
     assert!(!request.to_string().contains("google_search"));
     assert!(request.get("tool_choice").is_none());
+}
+
+#[tokio::test]
+async fn gemini_function_schema_types_match_locked_sdk_native_serialization() {
+    let server = Server::start().await;
+    let processor = processor(&server, Provider::Gemini);
+    let mut schema = owning_schema();
+    let parameters = json!({
+        "type":"object", "description":"object array string",
+        "default":{"type":"object","marker":"string"},
+        "properties":{
+            "type":{"type":"string","enum":["object","array","null"]},
+            "names":{"type":"array","items":{"type":["string","null"]}},
+            "nested":{"type":"object","properties":{
+                "flag":{"type":"boolean"},"number":{"type":"number"},"integer":{"type":"integer"}
+            }}
+        },"required":["type"]
+    });
+    let core::StandardTool::Function(function) = &mut schema.standard_tools[0] else {
+        unreachable!()
+    };
+    function.parameters = parameters.clone();
+    // The public adapter mirrors Pipecat's SDK input; native serialization is
+    // a separate step performed by the locked SDK's Schema/Type model.
+    let adapted = pipecat_services::adapters::adapt_gemini_tool_schema(&parameters).0;
+    assert_eq!(adapted["type"], "object");
+    assert_eq!(
+        adapted["properties"]["names"]["items"]["anyOf"][0]["type"],
+        "string"
+    );
+    let input = context(schema);
+    assert_eq!(
+        processor
+            .run_inference(input.clone(), InferenceOptions::default())
+            .await
+            .unwrap(),
+        Some("declared".into())
+    );
+    let requests = server.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["tools"][0], json!({"googleSearch":{}}));
+    assert_eq!(
+        requests[0]["tools"][1]["functionDeclarations"][0]["parameters"],
+        json!({
+            "type":"OBJECT", "description":"object array string",
+            "default":{"type":"object","marker":"string"},
+            "properties":{
+                "type":{"type":"STRING","enum":["object","array","null"]},
+                "names":{"type":"ARRAY","items":{"anyOf":[{"type":"STRING"},{"type":"NULL"}]}},
+                "nested":{"type":"OBJECT","properties":{
+                    "flag":{"type":"BOOLEAN"},"number":{"type":"NUMBER"},"integer":{"type":"INTEGER"}
+                }}
+            },"required":["type"]
+        }),
+        "SDK Schema Type values must be canonical only at native schema nodes"
+    );
+    let core::ToolSet::Schema(retained) = input.tools else {
+        unreachable!()
+    };
+    let core::StandardTool::Function(retained) = &retained.standard_tools[0] else {
+        unreachable!()
+    };
+    assert_eq!(retained.parameters, parameters);
+    assert!(processor
+        .request_snapshot()
+        .unwrap()
+        .context
+        .tools
+        .is_none());
+}
+
+#[test]
+fn gemini_schema_native_type_normalization_preserves_source_and_other_providers() {
+    let parameters = json!({"type":"object","properties":{
+        "case":{"type":"sTrInG","description":"string","enum":["object","STRING"],"default":{"type":"object"}},
+        "unspecified":{"type":"type_unspecified"},
+        "already":{"type":"OBJECT"},
+        "unknown":{"type":"vendor-type"},
+        "literal":{"type":"object","default":{
+            "properties":{"kind":{"type":"string"}},"items":{"type":"array"},"anyOf":[{"type":"number"}]
+        }}
+    }});
+    let mut request = CompletionRequest::new("fixture", Context::default());
+    request.context.tools = Some(vec![pipecat_services::ToolDefinition {
+        name: "echo".into(),
+        description: "fixture".into(),
+        parameters: parameters.clone(),
+    }]);
+    for provider in [Provider::OpenAi, Provider::Anthropic, Provider::Gemini] {
+        let body = pipecat_services::adapters::request_body(provider, &request).unwrap();
+        let native = match provider {
+            Provider::OpenAi => &body["tools"][0]["function"]["parameters"],
+            Provider::Anthropic => &body["tools"][0]["input_schema"],
+            Provider::Gemini => &body["tools"][0]["functionDeclarations"][0]["parameters"],
+        };
+        if provider == Provider::Gemini {
+            assert_eq!(native["type"], "OBJECT");
+            assert_eq!(native["properties"]["case"]["type"], "STRING");
+            assert_eq!(
+                native["properties"]["unspecified"]["type"],
+                "TYPE_UNSPECIFIED"
+            );
+            assert_eq!(native["properties"]["already"]["type"], "OBJECT");
+            assert_eq!(native["properties"]["unknown"]["type"], "vendor-type");
+            assert_eq!(
+                native["properties"]["case"]["enum"],
+                parameters["properties"]["case"]["enum"]
+            );
+            assert_eq!(native["properties"]["case"]["description"], "string");
+            assert_eq!(
+                native["properties"]["case"]["default"],
+                parameters["properties"]["case"]["default"]
+            );
+            assert_eq!(
+                native["properties"]["literal"]["default"],
+                parameters["properties"]["literal"]["default"]
+            );
+        } else {
+            assert_eq!(native, &parameters);
+        }
+    }
+    assert_eq!(request.context.tools.unwrap()[0].parameters, parameters);
+    assert_eq!(
+        pipecat_services::adapters::adapt_gemini_tool_schema(&parameters),
+        (parameters, vec![])
+    );
+    let (adapted, notes) = pipecat_services::adapters::adapt_gemini_tool_schema(&json!({
+        "type":["string","null"],"enum":["a",1],"additionalProperties":false,"x-note":true
+    }));
+    assert_eq!(
+        adapted,
+        json!({"anyOf":[{"type":"string"},{"type":"null"}]})
+    );
+    assert_eq!(
+        notes,
+        vec![
+            "converted a union 'type' to 'anyOf'",
+            "dropped a non-string 'enum', losing its constraint",
+            "dropped unsupported key 'additionalProperties'",
+            "dropped unsupported key 'x-note'"
+        ]
+    );
 }
 fn owning_schema() -> core::ToolsSchema {
     let mut schema = schema();
