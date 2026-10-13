@@ -89,7 +89,7 @@ client-server = ["dep:pipecat-client-server"]
 pgmq = ["pipecat-network-bus/pgmq"]
 webrtc = ["dep:pipecat-webrtc"]
 realtime = ["dep:pipecat-realtime"]
-responses = ["dep:pipecat-responses"]
+responses = ["dep:pipecat-responses", "pipecat-pipeline/responses"]
 
 [dev-dependencies]
 tokio.workspace = true

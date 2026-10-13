@@ -5,6 +5,8 @@ use pipecat_core::{
     ProcessorContext, ProcessorError, StandardTool, ToolSet, ToolsSchema,
 };
 use pipecat_processors::tools::{ToolExecutor, ToolOutcomeJournal, ToolRegistrationSnapshot};
+#[cfg(feature = "responses")]
+use pipecat_responses::ResponsesProcessor;
 use pipecat_services::{frame_context, Context, LlmProcessor};
 use std::{
     sync::{Arc, RwLock},
@@ -52,7 +54,21 @@ impl DirectToolBinding {
         config: DirectToolBindingConfig,
     ) -> Result<Self, ProcessorError> {
         let native = llm.clone();
-        Self::build(llm, config, Some(native))
+        Self::build(llm, config, Some(Preflight::Common(native)))
+    }
+    /// Bind native Responses inference to the same owned application-tool lifecycle.
+    #[cfg(feature = "responses")]
+    pub fn new_responses(llm: Arc<ResponsesProcessor>) -> Result<Self, ProcessorError> {
+        Self::with_responses_config(llm, DirectToolBindingConfig::default())
+    }
+    /// Responses request validation precedes schema, callback and cleanup publication.
+    #[cfg(feature = "responses")]
+    pub fn with_responses_config(
+        llm: Arc<ResponsesProcessor>,
+        config: DirectToolBindingConfig,
+    ) -> Result<Self, ProcessorError> {
+        let native = llm.clone();
+        Self::build(llm, config, Some(Preflight::Responses(native)))
     }
     pub fn new_switcher(llm: Arc<LlmSwitcher>) -> Result<Self, ProcessorError> {
         Self::with_switcher_config(llm, DirectToolBindingConfig::default())
@@ -66,7 +82,7 @@ impl DirectToolBinding {
     fn build(
         llm: Arc<dyn FrameProcessor>,
         config: DirectToolBindingConfig,
-        native: Option<Arc<LlmProcessor>>,
+        native: Option<Preflight>,
     ) -> Result<Self, ProcessorError> {
         if config.max_tools == 0
             || config.max_cleanup_hooks == 0
@@ -130,10 +146,15 @@ struct BindingState {
     cleanups: Vec<LocalAsyncCallback>,
     closed: bool,
 }
+enum Preflight {
+    Common(Arc<LlmProcessor>),
+    #[cfg(feature = "responses")]
+    Responses(Arc<ResponsesProcessor>),
+}
 struct DirectExecutor {
     executor: ToolExecutor,
     config: DirectToolBindingConfig,
-    native: Option<Arc<LlmProcessor>>,
+    native: Option<Preflight>,
     state: RwLock<BindingState>,
 }
 impl DirectExecutor {
@@ -172,20 +193,32 @@ impl DirectExecutor {
         }
         let (projected, handlers) = project(tools, self.config.max_tools)?;
         match &frame.data {
-            FrameData::LlmContext(context) => frame_context::legacy_context(context)
-                .validate()
-                .map_err(|error| ProcessorError::new(error.to_string()))?,
+            FrameData::LlmContext(context) => {
+                frame_context::legacy_context(context)
+                    .validate()
+                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+                #[cfg(feature = "responses")]
+                if let Some(Preflight::Responses(native)) = &self.native {
+                    native
+                        .preflight_legacy_context(context)
+                        .map_err(|error| ProcessorError::new(error.to_string()))?;
+                }
+            }
             FrameData::LlmContextDetailed(context) => {
                 let mut context = context.context.clone();
                 context.tools = projected.clone();
                 match &self.native {
-                    Some(native) => native.preflight_context(&context),
+                    Some(Preflight::Common(native)) => native.preflight_context(&context),
+                    #[cfg(feature = "responses")]
+                    Some(Preflight::Responses(native)) => native.preflight_context(&context),
                     None => frame_context::context(&context).map(|_| ()),
                 }
                 .map_err(|error| ProcessorError::new(error.to_string()))?;
             }
             _ => match &self.native {
-                Some(native) => native.preflight_tools(&projected),
+                Some(Preflight::Common(native)) => native.preflight_tools(&projected),
+                #[cfg(feature = "responses")]
+                Some(Preflight::Responses(native)) => native.preflight_tools(&projected),
                 None => frame_context::tools(&projected).and_then(|tools| {
                     Context {
                         tools,

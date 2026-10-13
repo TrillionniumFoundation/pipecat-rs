@@ -108,9 +108,15 @@ Input audio, typed refusal history, hosted tools/output (web search, computer
 use, image generation, etc.), arbitrary raw provider items, background responses,
 server conversation storage, externally managed continuation IDs, automatic
 ambiguous retries, speculative context, runtime prompt-cache policy and context
-transform frames return explicit unsupported errors. Custom tool schemas and
-direct handler registrations need an external executor. There is no live provider
-validation, credential discovery, file downloading, tool execution, or claim of
+transform frames return explicit unsupported errors. Custom tool schemas remain
+unsupported. Standalone client streams do not execute application handlers. Ordinary Direct
+handlers can use `pipecat-pipeline` with its `responses` feature and
+`DirectToolBinding::new_responses`; the facade's `responses` feature enables both.
+This typed binding owns selection, execution, cancellation, terminal receipts and
+cleanup through the existing native executor. Provider preflight runs before
+handler changes for detailed contexts, legacy contexts and tool setters; the
+processor's standalone invocation remains inference only. There is no live
+provider validation, credential discovery, file downloading or claim of
 whole-provider parity.
 
 ## Validation provenance

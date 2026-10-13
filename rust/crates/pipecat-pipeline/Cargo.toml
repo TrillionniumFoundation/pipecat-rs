@@ -9,7 +9,11 @@ rust-version.workspace = true
 pipecat-core = { path = "../pipecat-core" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-processors = { path = "../pipecat-processors" }
+pipecat-responses = { path = "../pipecat-responses", optional = true }
 tokio.workspace = true
+
+[features]
+responses = ["dep:pipecat-responses"]
 
 [dev-dependencies]
 pipecat-turns = { path = "../pipecat-turns" }

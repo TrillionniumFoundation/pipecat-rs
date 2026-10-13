@@ -92,6 +92,53 @@ impl ResponsesProcessor {
             .request
             .clone())
     }
+    /// Validate ordinary handler-free context using current Responses settings.
+    /// This performs no I/O, state mutation or callback invocation. Frame owners
+    /// must check sealed/speculative authority first; this snapshot is not a
+    /// transaction across separate pipeline stages.
+    pub fn preflight_context(&self, context: &LlmContextData) -> Result<(), ServiceError> {
+        let context = ResponsesContext::from_core(context)?;
+        let state = self.state.lock().map_err(|_| state_error())?;
+        self.preflight_owned_context(&state.request, context)
+    }
+    /// Validate the legacy context with the same conversion as normal consumption.
+    /// This performs no I/O or mutation and retains the current request settings.
+    pub fn preflight_legacy_context(
+        &self,
+        context: &pipecat_core::LlmContextFrame,
+    ) -> Result<(), ServiceError> {
+        let context =
+            ResponsesContext::try_from(&pipecat_services::frame_context::legacy_context(context))?;
+        let state = self.state.lock().map_err(|_| state_error())?;
+        self.preflight_owned_context(&state.request, context)
+    }
+    /// Validate handler-free tools against current items, choice and settings.
+    /// No state is committed, and no callback or transport is invoked. Frame
+    /// owners must check sealed/speculative authority before selecting handlers.
+    pub fn preflight_tools(&self, tools: &pipecat_core::ToolSet) -> Result<(), ServiceError> {
+        let tools = pipecat_services::frame_context::tools(tools)?;
+        let state = self.state.lock().map_err(|_| state_error())?;
+        let context = ResponsesContext {
+            items: state.request.context.items.clone(),
+            tools,
+            tool_choice: state.request.context.tool_choice.clone(),
+        };
+        self.preflight_owned_context(&state.request, context)
+    }
+    // The caller retains one state lock so items, choice and settings all belong
+    // to the same snapshot. Replacing context never clones the old item payloads.
+    fn preflight_owned_context(
+        &self,
+        current: &ResponsesRequest,
+        context: ResponsesContext,
+    ) -> Result<(), ServiceError> {
+        self.client.validate(&ResponsesRequest {
+            model: current.model.clone(),
+            context,
+            settings: current.settings.clone(),
+            response_schema: current.response_schema.clone(),
+        })
+    }
     pub fn update_settings(&self, delta: &ResponsesSettings) -> Result<(), ServiceError> {
         let mut state = self.state.lock().map_err(|_| state_error())?;
         let mut request = state.request.clone();

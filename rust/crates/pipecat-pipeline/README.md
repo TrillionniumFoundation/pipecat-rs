@@ -294,6 +294,21 @@ sealed/speculative authority changes reject before altering handlers or recordin
 cleanup hooks; capabilities are never stripped or resealed. Switcher bindings
 keep provider-agnostic strict custom-schema validation.
 
+With the `responses` feature, `DirectToolBinding::new_responses` and
+`with_responses_config` accept an `Arc<pipecat_responses::ResponsesProcessor>`.
+They use the same selected-handler owner and settlement journal. Ordinary
+Responses function calls execute the selected application handler. Default
+interruptible results return as `function_call_output` on the next Responses
+request; non-interruptible async calls retain the existing developer-message
+protocol. Detailed contexts, legacy contexts and tool setters undergo
+the actual Responses client's preflight before registration or cleanup publication;
+valid encrypted reasoning history retains its existing Responses representation.
+The preflight reads current settings without I/O or mutation, and does not create
+a transaction across pipeline stages. Standalone Responses inference does not
+execute callbacks. Custom declarations, hosted tools and protected context remain
+subject to their existing rejection rules. This binding does not qualify a live
+provider or alter Responses continuation and retry policy.
+
 The single executor keeps admitted callbacks, their timeout/interruption options,
 the settlement journal exposed by `outcomes()`, and its recent duplicate identities
 across every update and model switch. Provider requests crossing an update use the

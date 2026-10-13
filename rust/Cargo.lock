@@ -4025,6 +4025,7 @@ version = "0.1.0"
 dependencies = [
  "pipecat-core",
  "pipecat-processors",
+ "pipecat-responses",
  "pipecat-services",
  "pipecat-turns",
  "serde_json",

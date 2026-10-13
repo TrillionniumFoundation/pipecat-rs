@@ -26,12 +26,14 @@ jobs:
       - name: Install pinned native Smart Turn test runtime
         run: /usr/bin/python3 -m pip install --disable-pip-version-check --no-deps --target /tmp/pipecat-onnx onnxruntime==1.21.0
       - name: Check affected package formatting
-        run: cargo fmt -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat -- --check
+        run: cargo fmt -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat-responses -p pipecat -- --check
       - name: Native MCP HTTP, stdio and affected package regressions
-        run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns --features pipecat-mcp/native-fixtures --locked
+        run: cargo test -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat-responses --features pipecat-mcp/native-fixtures,pipecat-pipeline/responses --locked
       - name: Native Gemini RTVI and Direct result lifecycle integration
-        run: cargo test -p pipecat --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --locked
+        run: cargo test -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --locked
       - name: Strict affected package checks
-        run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns --all-targets --features pipecat-mcp/native-fixtures --locked -- -D warnings
+        run: cargo clippy -p pipecat-core -p pipecat-mcp -p pipecat-services -p pipecat-processors -p pipecat-pipeline -p pipecat-protocol -p pipecat-rtvi -p pipecat-turns -p pipecat-responses --all-targets --features pipecat-mcp/native-fixtures,pipecat-pipeline/responses --locked -- -D warnings
       - name: Strict native Gemini and Direct integration checks
-        run: cargo clippy -p pipecat --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --locked -- -D warnings
+        run: cargo clippy -p pipecat --features responses --test gemini_rtvi_search --test direct_result_policy --test direct_live_progress --test direct_context_updated --test direct_progress_context_updated --test responses_direct_tools --locked -- -D warnings
+      - name: Strict default Direct binding feature check
+        run: cargo clippy -p pipecat-pipeline --all-targets --no-default-features --locked -- -D warnings
