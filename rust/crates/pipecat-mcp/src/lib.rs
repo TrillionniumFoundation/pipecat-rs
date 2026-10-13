@@ -72,6 +72,29 @@ struct Inner {
 pub struct McpClient {
     inner: Arc<Inner>,
 }
+/// Issued only for a validated discovery entry. The embedded client fixes the
+/// resource origin; no public caller can authorize an arbitrary tool name.
+pub(crate) struct SnapshotTool {
+    client: McpClient,
+    name: String,
+}
+impl SnapshotTool {
+    pub(crate) async fn call_text(&self, arguments: Value) -> Result<String, McpError> {
+        self.client
+            .call_text_scoped(&self.name, arguments, CallScope::RetainedSnapshot)
+            .await
+    }
+}
+#[derive(Clone, Copy)]
+enum CallScope {
+    CurrentDiscovery,
+    RetainedSnapshot,
+}
+impl CallScope {
+    fn discovery_name(self, name: &str) -> Option<&str> {
+        matches!(self, Self::CurrentDiscovery).then_some(name)
+    }
+}
 impl fmt::Debug for McpClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("McpClient")
@@ -311,7 +334,17 @@ impl McpClient {
             return Err(McpError::NotConnected);
         }
         state.schemas = indexed;
-        Ok(McpTools::new(self.clone(), schemas))
+        let entries = schemas
+            .into_iter()
+            .map(|definition| {
+                let tool = SnapshotTool {
+                    client: self.clone(),
+                    name: definition.name.clone(),
+                };
+                (definition, tool)
+            })
+            .collect();
+        Ok(McpTools::new(self.clone(), entries))
     }
     /// Dispatches at most one tools/call. No automatic replay, elicitation,
     /// sampling, nested tool execution, resource reads, or OAuth is performed.
@@ -325,7 +358,9 @@ impl McpClient {
         arguments: Value,
         cancel: CancellationToken,
     ) -> Result<ToolResponse, McpError> {
-        let mut result = self.call_unfiltered(name, arguments, cancel).await?;
+        let mut result = self
+            .call_unfiltered(name, arguments, cancel, CallScope::CurrentDiscovery)
+            .await?;
         result.text = self.filter_text(name, result.text)?;
         Ok(result)
     }
@@ -334,6 +369,7 @@ impl McpClient {
         name: &str,
         arguments: Value,
         cancel: CancellationToken,
+        scope: CallScope,
     ) -> Result<ToolResponse, McpError> {
         if cancel.is_cancelled() {
             return Err(McpError::Cancelled);
@@ -346,7 +382,11 @@ impl McpClient {
             if !state.requested {
                 return Err(McpError::NotConnected);
             }
-            if !self.inner.config.allowed(name) || !state.schemas.contains_key(name) {
+            if !self.inner.config.allowed(name)
+                || scope
+                    .discovery_name(name)
+                    .is_some_and(|name| !state.schemas.contains_key(name))
+            {
                 return Err(McpError::UnknownTool);
             }
         }
@@ -365,7 +405,7 @@ impl McpClient {
         {
             return Err(McpError::Limit("tool arguments"));
         }
-        let session = tokio::select! { biased; _ = cancel.cancelled() => return Err(McpError::Cancelled), result = self.session_for_tool(false, Some(name)) => result? };
+        let session = tokio::select! { biased; _ = cancel.cancelled() => return Err(McpError::Cancelled), result = self.session_for_tool(false, scope.discovery_name(name)) => result? };
         let request =
             CallToolRequest::new(CallToolRequestParams::new(name.to_owned()).with_arguments(args));
         let result = self
@@ -421,8 +461,17 @@ impl McpClient {
     /// cancellation propagates without running filters or becoming tool text.
     /// Closed clients still return a wiring error instead of reconnecting.
     pub async fn call_text(&self, name: &str, arguments: Value) -> Result<String, McpError> {
+        self.call_text_scoped(name, arguments, CallScope::CurrentDiscovery)
+            .await
+    }
+    async fn call_text_scoped(
+        &self,
+        name: &str,
+        arguments: Value,
+        scope: CallScope,
+    ) -> Result<String, McpError> {
         let (text, error) = match self
-            .call_unfiltered(name, arguments, CancellationToken::new())
+            .call_unfiltered(name, arguments, CancellationToken::new(), scope)
             .await
         {
             Ok(result) => (result.text, None),

@@ -234,6 +234,12 @@ async fn handle(mut socket: TcpStream, shared: Arc<Mutex<Recorded>>) {
         }
     }
     if operation == "tools/list" {
+        if mode == "without-echo" {
+            result["tools"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|tool| tool["name"] != "echo");
+        }
         if mode == "pages" {
             if message["params"]["cursor"].is_null() {
                 result["tools"].as_array_mut().unwrap().truncate(1);

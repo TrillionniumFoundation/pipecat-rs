@@ -179,6 +179,16 @@ Discovery failures are atomic and fail closed instead of silently skipping malfo
 tools. Call `tools()` explicitly to refresh schemas; list-change notifications do
 not trigger unsolicited discovery.
 
+Public `call()` / `call_text()` use the latest discovered names. Retained schema,
+pipeline-executor and worker-registry handlers keep private authorization for
+their successfully discovered snapshot names, matching the source callback
+lifetime across a later discovery refresh. They may still attempt that name on
+the same configured resource; the server can reject a retired tool. Refresh does
+not implicitly unregister previously installed handlers. Immutable name filters,
+request bounds and cancellation still apply, and explicit close revokes calls
+until an owner explicitly reopens the client. No public API can mint snapshot
+authorization for an arbitrary name or another client.
+
 `call()` returns `ToolResponse` with joined text, original typed content blocks,
 `structured_content`, and `is_error`. Image/audio/resource-link blocks are
 preserved without fetching linked resources or passing them off as text.

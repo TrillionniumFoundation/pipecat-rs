@@ -1164,3 +1164,177 @@ async fn reference_connection_closed_code_invalidates_only_failed_tool_session_w
     client.close().await.unwrap();
     assert_eq!(server.state.lock().unwrap().deletes, 2);
 }
+
+#[tokio::test]
+async fn retained_snapshot_handlers_dispatch_after_refresh_but_close_revokes_them() {
+    let server = Server::start("").await;
+    let mut config = config_for(&server);
+    config.tools_filter = Some(BTreeSet::from(["echo".into()]));
+    let client = McpClient::new(config).unwrap();
+    let tools = client.tools().await.unwrap();
+    let schema = tools.schema();
+    let StandardTool::Direct(echo) = &schema.standard_tools[0] else {
+        panic!("discovery must attach an executable handler");
+    };
+    let mut worker = Pipeline::new(vec![Arc::new(tools.executor().unwrap())])
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    server.state.lock().unwrap().mode = "without-echo".into();
+    let refreshed = client.tools().await.unwrap();
+    assert!(refreshed.definitions().is_empty());
+    for name in ["echo", "other", "never-discovered"] {
+        assert_eq!(
+            client.call(name, Value::Null).await.unwrap_err(),
+            McpError::UnknownTool
+        );
+    }
+    assert!(server.state.lock().unwrap().calls.is_empty());
+    let result = echo
+        .handler
+        .call(json!({"value":"retained-schema"}))
+        .await
+        .unwrap();
+    assert!(result.as_str().unwrap().contains("retained-schema"));
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![FunctionCall {
+                function_name: "echo".into(),
+                tool_call_id: "retained-executor".into(),
+                arguments: json!({"value":"retained-executor"}),
+            }])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(3), async {
+        while let Some(frame) = worker.recv().await {
+            if let FrameData::FunctionCallResult(result) = frame.frame.data {
+                return result;
+            }
+        }
+        panic!("retained executor must produce a result");
+    })
+    .await
+    .unwrap();
+    assert_eq!(result.tool_call_id, "retained-executor");
+    assert!(result.error.is_none());
+    assert!(result
+        .result
+        .as_str()
+        .unwrap()
+        .contains("retained-executor"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    client.close().await.unwrap();
+    let error = echo.handler.call(Value::Null).await.unwrap_err();
+    assert!(error.to_string().contains("MCP client is closed"));
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::FunctionCallsStarted(vec![FunctionCall {
+                function_name: "echo".into(),
+                tool_call_id: "closed-executor".into(),
+                arguments: json!({}),
+            }])),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    worker.end().await.unwrap();
+    let (frames, report) = worker.collect().await.unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let results: Vec<_> = frames
+        .iter()
+        .filter_map(|frame| match &frame.frame.data {
+            FrameData::FunctionCallResult(result) => Some(result),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].tool_call_id, "closed-executor");
+    assert!(results[0]
+        .error
+        .as_ref()
+        .unwrap()
+        .contains("MCP client is closed"));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 2);
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+}
+
+#[tokio::test]
+async fn retained_worker_registry_handler_runs_after_discovery_removes_its_name() {
+    use pipecat_agent_workers::{LlmWorker, LlmWorkerOptions, IDLE};
+    use pipecat_services::{
+        ClientConfig, CompletionRequest, Context, LlmClient, Message, Provider, Role,
+    };
+    let server = Server::start("").await;
+    let mut config = config_for(&server);
+    config.tools_filter = Some(BTreeSet::from(["echo".into()]));
+    let client = McpClient::new(config).unwrap();
+    let tools = client.tools().await.unwrap();
+    let mut registry = ToolRegistry::new();
+    let lifecycle = tools.register_into(&mut registry).unwrap();
+    server.state.lock().unwrap().mode = "without-echo".into();
+    assert!(client.tools().await.unwrap().definitions().is_empty());
+    assert_eq!(
+        client.call("echo", Value::Null).await.unwrap_err(),
+        McpError::UnknownTool
+    );
+    let provider = Server::start("llm").await;
+    let mut config = ClientConfig::new(Provider::OpenAi, "owned-native-fixture");
+    config.endpoint = provider.url.clone();
+    config.api_key = None;
+    let mut worker = LlmWorker::start_with_output(
+        LlmClient::new(config).unwrap(),
+        CompletionRequest::new("fixture", Context::default()),
+        registry,
+        LlmWorkerOptions::default(),
+        vec![Arc::new(lifecycle)],
+    )
+    .await
+    .unwrap();
+    worker
+        .handle()
+        .append(
+            vec![Message::text(Role::User, "invoke retained echo")],
+            true,
+        )
+        .await
+        .unwrap();
+    let frames = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut frames = vec![];
+        while let Some(frame) = worker.recv().await {
+            let idle = frame.frame.metadata.get(IDLE) == Some(&Value::Bool(true));
+            frames.push(frame.frame);
+            if idle {
+                break;
+            }
+        }
+        frames
+    })
+    .await
+    .unwrap();
+    assert!(frames.iter().any(|frame| matches!(
+        &frame.data, FrameData::FunctionCallResult(result)
+            if result.function_name == "echo" && result.result.as_str().is_some_and(|text| text.contains("agent"))
+    )));
+    assert!(frames.iter().any(|frame| matches!(
+        &frame.data, FrameData::LlmText(text) if text.text == "tool completed"
+    )));
+    assert_eq!(server.state.lock().unwrap().calls.len(), 1);
+    assert_eq!(server.state.lock().unwrap().initializes, 1);
+    assert_eq!(provider.state.lock().unwrap().completions.len(), 2);
+    worker.handle().end().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), worker.join())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(server.state.lock().unwrap().deletes, 1);
+    assert_eq!(
+        client.call("echo", Value::Null).await.unwrap_err(),
+        McpError::NotConnected
+    );
+}

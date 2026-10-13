@@ -1,4 +1,4 @@
-use crate::{McpClient, McpError};
+use crate::{McpClient, McpError, SnapshotTool};
 use pipecat_agent_workers::{AgentError, ToolHandler, ToolOptions, ToolRegistry, ToolResult};
 use pipecat_core::{
     async_trait, DirectFunction, Direction, Frame, FrameData, FrameProcessor, LocalToolFunction,
@@ -19,6 +19,7 @@ pub struct McpTools {
     client: McpClient,
     definitions: Vec<ToolDefinition>,
     cached_schema: ToolsSchema,
+    snapshot_tools: Vec<Arc<SnapshotTool>>,
 }
 impl fmt::Debug for McpTools {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -28,20 +29,23 @@ impl fmt::Debug for McpTools {
     }
 }
 impl McpTools {
-    pub(crate) fn new(client: McpClient, definitions: Vec<ToolDefinition>) -> Self {
+    pub(crate) fn new(client: McpClient, entries: Vec<(ToolDefinition, SnapshotTool)>) -> Self {
+        let (definitions, snapshot_tools): (Vec<_>, Vec<_>) = entries
+            .into_iter()
+            .map(|(definition, tool)| (definition, Arc::new(tool)))
+            .unzip();
         let standard_tools = definitions
             .iter()
-            .map(|schema| {
-                let client = client.clone();
-                let name = schema.name.clone();
+            .zip(&snapshot_tools)
+            .map(|(schema, snapshot_tool)| {
+                let snapshot_tool = snapshot_tool.clone();
                 StandardTool::Direct(DirectFunction {
                     schema: schema.clone(),
                     handler: LocalToolFunction::new(move |args| {
-                        let client = client.clone();
-                        let name = name.clone();
+                        let snapshot_tool = snapshot_tool.clone();
                         async move {
-                            client
-                                .call_text(&name, args)
+                            snapshot_tool
+                                .call_text(args)
                                 .await
                                 .map(Value::String)
                                 .map_err(|error| ProcessorError::new(error.to_string()))
@@ -57,6 +61,7 @@ impl McpTools {
                 standard_tools,
                 custom_tools: None,
             },
+            snapshot_tools,
         }
     }
     pub fn definitions(&self) -> &[ToolDefinition] {
@@ -90,20 +95,19 @@ impl McpTools {
     /// processor to the owning pipeline to close MCP at pipeline teardown.
     pub fn register_into(&self, registry: &mut ToolRegistry) -> Result<McpLifecycle, AgentError> {
         let mut pending = registry.clone();
-        for schema in &self.definitions {
+        for (schema, snapshot_tool) in self.definitions.iter().zip(&self.snapshot_tools) {
             let definition = pipecat_services::ToolDefinition {
                 name: schema.name.clone(),
                 description: schema.description.clone(),
                 parameters: schema.parameters.clone(),
             };
-            let client = self.client.clone();
-            let name = schema.name.clone();
+            let snapshot_tool = snapshot_tool.clone();
             let handler = ToolHandler::new(definition, move |args, ctx| {
-                let client = client.clone(); let name = name.clone();
+                let snapshot_tool = snapshot_tool.clone();
                 async move {
                     tokio::select! { biased;
                         _ = ctx.cancelled() => Err(AgentError::Cancelled),
-                        result = client.call_text(&name, args) => result.map(|text| ToolResult::new(Value::String(text))).map_err(|error| match error {
+                        result = snapshot_tool.call_text(args) => result.map(|text| ToolResult::new(Value::String(text))).map_err(|error| match error {
                             McpError::Cancelled => AgentError::Cancelled,
                             error => AgentError::Failed(error.to_string()),
                         }),
@@ -121,14 +125,12 @@ impl McpTools {
         let limits = &self.client.inner.config.limits;
         let mut executor =
             ToolExecutor::new(limits.max_in_flight, 1024, limits.max_argument_bytes)?;
-        for schema in &self.definitions {
-            let client = self.client.clone();
-            let name = schema.name.clone();
+        for (schema, snapshot_tool) in self.definitions.iter().zip(&self.snapshot_tools) {
+            let snapshot_tool = snapshot_tool.clone();
             let mut tool = CancellableRegisteredTool::new(Arc::new(move |call| {
-                let client = client.clone();
-                let name = name.clone();
+                let snapshot_tool = snapshot_tool.clone();
                 Box::pin(async move {
-                    match client.call_text(&name, call.arguments).await {
+                    match snapshot_tool.call_text(call.arguments).await {
                         Err(McpError::Cancelled) => None,
                         result => {
                             Some(result.map(Value::String).map_err(|error| error.to_string()))
