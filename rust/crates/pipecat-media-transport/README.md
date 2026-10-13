@@ -44,6 +44,8 @@ including partial startup failure.
 - The default destination's filter runs first, then volume × gain, then its mixer
 - Filter/mixer controls and volume/gain changes run in audio order; a control
   flushes the preceding partial PCM before changing state
+- Downstream mixer controls are consumed by the selected output destination,
+  including destinations without a mixer; upstream controls pass through unchanged
 - Filter-empty audio skips both the mixer and device write
 - Generated background audio, end silence and DTMF bypass the speech filter and
   gain; generated background does not cause bot-speaking events

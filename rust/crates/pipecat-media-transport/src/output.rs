@@ -908,7 +908,7 @@ impl Sender {
                     };
                     result?;
                 }
-                self.forward(frame, epoch).await
+                Ok(())
             }
             FrameData::Volume(v) | FrameData::VolumeGain(v) => {
                 if !v.is_finite() {
