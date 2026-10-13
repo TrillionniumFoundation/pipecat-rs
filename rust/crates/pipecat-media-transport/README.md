@@ -76,6 +76,41 @@ bundled native PCM16 tones. Urgent keypad frames enter ahead of waiting media,
 after the currently in-flight operation; ordinary keypad frames preserve queue
 order. Both paths are interruption-aware and do not claim the bot spoke.
 
+### Urgent transport messages
+
+After readiness, downstream `OutputTransportMessageUrgent` calls the configured
+backend's `send_message` directly, preserving the original frame and consuming
+it without downstream forwarding. The destination must be registered. Upstream
+urgent messages retain native passthrough behavior; unlike the pinned Python
+implementation, they do not invoke the backend.
+
+The call runs in the processor's existing System invocation, with no detached
+task or retry. It bypasses the media sender's pause, PCM backlog, timestamp waits
+and playback fences. It may overlap audio/image/ordinary-message operations on
+the same backend `Arc`; implementations must support that concurrency or provide
+their own serialization. The queued urgent-DTMF and media-fence ordering rules
+are unchanged. This control path cannot preempt an explicitly paused System lane
+or force a busy backend/socket to make progress.
+
+The destination queue's ending/cancelled admission cutoff still applies, even
+between `prepare_end` and the later End/Stop process call. End/Stop drain already
+admitted System writes within the existing shutdown bound. Audio interruption
+epochs and a media sender's graceful exit do not cancel an admitted protocol
+reply. Its cancellation signal belongs to OutputTransport and is set only by
+actual Cancel or cleanup. `write_timeout` bounds each call;
+pipeline cancellation/cleanup can drop its future. A Cancel queued in the same
+System lane can wait for the current send's timeout. Dropping a future does not
+undo a partially transmitted message or prove remote cancellation. Backends must
+not detach work. Failures surface as processor errors with no success forwarding
+and no retry; the existing audio-specific destination write-off policy is unchanged.
+
+There is no new retained media queue or per-message task. Existing core System
+admission remains count-bounded, not a payload-byte/RSS guarantee. Successful
+`send_message` completion means only that the configured backend hook completed,
+not that a remote Genesys session received or accepted the reply. Public facade
+tests exercise real AudioHookSerializer frames against recording backends, not
+live provider sessions or physical devices.
+
 ### Image output
 
 `OutputImage`, `OutputImageDetailed`, `UrlImage`, and `AssistantImage` use the
@@ -477,10 +512,12 @@ unchanged.
 After the deadline, marked PTS is explicitly rebased to destination-relative time
 before forwarding/backend access. Pre-origin overdue timestamps become zero;
 checked arithmetic prevents wraparound. Unmarked legacy PTS retains its existing
-destination-relative interpretation. Both forms reject future delays beyond
+destination-relative interpretation. For queued media, both forms reject future delays beyond
 `max_future_pts` (60 seconds by default) before queue admission, so an untrusted
 wire timestamp cannot indefinitely hold a graceful terminal. This extreme-future
 rejection is deliberate hardening; ordinary legacy wire fixtures are unchanged.
+Direct urgent transport-message dispatch preserves PTS unchanged and does not
+schedule or rebase it; the serializer's independent clock-origin contract still applies.
 Direct serialization of pipeline-clock-marked frames fails; callers bypassing
 output must explicitly rebase them rather than silently lose their clock origin.
 
@@ -511,8 +548,9 @@ queued work and latency requirements.
 Normal compact and detailed `pipecat.flows` flush markers use the same policy.
 They acquire room in every destination atomically, without publishing partial
 fences. A closed destination, oversized marker or deadline expiration fails
-the fence. Urgent/system controls retain nonwaiting admission and cannot jump
-an admitted fence.
+the fence. Urgent/system controls admitted to the media queue, including urgent
+DTMF, retain nonwaiting admission and cannot jump an admitted fence. Direct
+urgent transport-message dispatch is separate from this playback ordering.
 
 Flush metadata keys, JSON values, container storage and spare capacities are
 charged conservatively, as are routing strings, nonstandard origins and excess

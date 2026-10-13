@@ -38,6 +38,11 @@ pub trait OutputBackend: Send + Sync {
     async fn send_dtmf(&self, _frame: &Frame) -> Result<bool, ProcessorError> {
         Ok(false)
     }
+    /// Send one transport control message. Downstream urgent messages may call
+    /// this concurrently with media operations on the same backend. Completion
+    /// attests this hook only, not remote receipt. A timeout or shutdown can drop
+    /// the future but cannot undo bytes already sent; do not detach work or rely
+    /// on retries. The shared output never retries an ambiguous message send.
     async fn send_message(&self, _frame: &Frame) -> Result<(), ProcessorError> {
         Err(ProcessorError::new(
             "backend does not support transport messages",
@@ -152,6 +157,7 @@ pub struct OutputTransport {
     format: Mutex<Option<PcmFormat>>,
     started: AtomicBool,
     cleaned: AtomicBool,
+    urgent_cancelled: tokio::sync::watch::Sender<bool>,
     spoken_history: Option<SpokenHistory>,
 }
 impl OutputTransport {
@@ -209,6 +215,7 @@ impl OutputTransport {
             format: Mutex::new(None),
             started: AtomicBool::new(false),
             cleaned: AtomicBool::new(false),
+            urgent_cancelled: tokio::sync::watch::channel(false).0,
             spoken_history: None,
         })
     }
@@ -376,6 +383,7 @@ impl FrameProcessor for OutputTransport {
                 ctx.push(frame, direction).await
             }
             FrameData::Cancel(_) | FrameData::CancelDetailed(_) => {
+                self.urgent_cancelled.send_replace(true);
                 for destination in self.control.destinations.values() {
                     destination.queue.cancel();
                 }
@@ -418,6 +426,44 @@ impl FrameProcessor for OutputTransport {
                 .destination(frame.transport_destination.as_deref())?
                 .queue
                 .push_front(frame),
+            FrameData::OutputTransportMessageUrgent(_) if direction == Direction::Downstream => {
+                if !self.control.is_ready() || self.cleaned.load(Ordering::SeqCst) {
+                    return Err(ProcessorError::new("output transport is not ready"));
+                }
+                let destination = self
+                    .control
+                    .destination(frame.transport_destination.as_deref())?;
+                // This snapshot shares the queue's lock with end/cancel. An
+                // admitted control write belongs to this System invocation;
+                // prepare_end closes later admission, without discarding it.
+                let signal = destination.queue.signal();
+                if signal.ending || signal.cancelled {
+                    return Err(ProcessorError::new("media queue is closed"));
+                }
+                // Protocol replies bypass media pause/backlog/PTS and playback
+                // fences. They are System traffic: an audio interruption must
+                // not drop them merely because the Frame defaults interruptible.
+                // A media Sender's graceful Drop also cancels its queue. That
+                // is not cancellation of this already-admitted protocol write:
+                // only the output's actual Cancel/cleanup signal owns it.
+                let mut cancelled = self.urgent_cancelled.subscribe();
+                let sending = bounded(self.config.write_timeout, self.backend.send_message(&frame));
+                tokio::pin!(sending);
+                loop {
+                    if *cancelled.borrow_and_update() {
+                        return Ok(());
+                    }
+                    tokio::select! {
+                        biased;
+                        changed = cancelled.changed() => {
+                            if changed.is_err() {
+                                return Ok(());
+                            }
+                        },
+                        result = &mut sending => return result,
+                    }
+                }
+            }
             _ if direction == Direction::Upstream || frame.is_system() => {
                 ctx.push(frame, direction).await
             }
@@ -495,6 +541,7 @@ impl FrameProcessor for OutputTransport {
         if self.cleaned.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        self.urgent_cancelled.send_replace(true);
         self.control.ready.store(false, Ordering::SeqCst);
         if let Some(history) = &self.spoken_history {
             history.invalidate_reason("output closed with incomplete contexts");
@@ -1392,6 +1439,332 @@ async fn wait_delivery(queue: &MediaQueue, epoch: u64, interruptible: bool) -> b
         }
         if changed.changed().await.is_err() {
             return false;
+        }
+    }
+}
+
+#[cfg(test)]
+mod urgent_control_lifecycle_tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use tokio::sync::Semaphore;
+
+    const WAIT: Duration = Duration::from_secs(5);
+    type TestResult<T> = Result<T, String>;
+
+    async fn bounded_test<T, E: std::fmt::Display>(
+        label: &str,
+        future: impl Future<Output = Result<T, E>>,
+    ) -> TestResult<T> {
+        tokio::time::timeout(WAIT, future)
+            .await
+            .map_err(|_| format!("{label}: deadline"))?
+            .map_err(|error| format!("{label}: {error}"))
+    }
+    struct Backend {
+        entered: Semaphore,
+        release: Semaphore,
+        calls: Mutex<Vec<Frame>>,
+        completed: Mutex<Vec<Frame>>,
+        dropped: AtomicUsize,
+        active: AtomicUsize,
+        stopped: AtomicUsize,
+    }
+    impl Backend {
+        fn new() -> Self {
+            Self {
+                entered: Semaphore::new(0),
+                release: Semaphore::new(0),
+                calls: Mutex::new(vec![]),
+                completed: Mutex::new(vec![]),
+                dropped: AtomicUsize::new(0),
+                active: AtomicUsize::new(0),
+                stopped: AtomicUsize::new(0),
+            }
+        }
+    }
+    struct Active<'a> {
+        backend: &'a Backend,
+        completed: bool,
+    }
+    impl Drop for Active<'_> {
+        fn drop(&mut self) {
+            self.backend.active.fetch_sub(1, Ordering::SeqCst);
+            if !self.completed {
+                self.backend.dropped.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
+    #[async_trait]
+    impl OutputBackend for Backend {
+        async fn start(&self, _: PcmFormat, _: &[Option<String>]) -> Result<(), ProcessorError> {
+            Ok(())
+        }
+        async fn play_audio(&self, _: &Frame) -> Result<PlaybackReceipt, ProcessorError> {
+            Ok(PlaybackReceipt::Discarded)
+        }
+        async fn interrupt(&self, _: Option<&str>) -> Result<(), ProcessorError> {
+            Ok(())
+        }
+        async fn send_message(&self, frame: &Frame) -> Result<(), ProcessorError> {
+            self.active.fetch_add(1, Ordering::SeqCst);
+            let mut active = Active {
+                backend: self,
+                completed: false,
+            };
+            self.calls.lock().unwrap().push(frame.clone());
+            self.entered.add_permits(1);
+            self.release.acquire().await.map_err(error)?.forget();
+            self.completed.lock().unwrap().push(frame.clone());
+            active.completed = true;
+            Ok(())
+        }
+        async fn stop(&self) -> Result<(), ProcessorError> {
+            self.stopped.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+    struct ContextOutput {
+        output: Arc<OutputTransport>,
+        context: Mutex<Option<ProcessorContext>>,
+    }
+    #[async_trait]
+    impl FrameProcessor for ContextOutput {
+        fn name(&self) -> &str {
+            self.output.name()
+        }
+        async fn setup(
+            &self,
+            start: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            *self.context.lock().unwrap() = Some(ctx.clone());
+            self.output.setup(start, ctx).await
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            self.output.process(frame, direction, ctx).await
+        }
+        async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+            self.output.prepare_end(ctx).await
+        }
+        async fn cleanup(&self) -> Result<(), ProcessorError> {
+            self.output.cleanup().await
+        }
+    }
+    async fn start(
+        backend: Arc<Backend>,
+    ) -> (PipelineWorker, Arc<OutputTransport>, ProcessorContext) {
+        let output = Arc::new(
+            OutputTransport::new(
+                "urgent-lifecycle-output",
+                OutputTransportConfig {
+                    sample_rate: Some(8000),
+                    auto_silence: false,
+                    end_silence: Duration::ZERO,
+                    write_timeout: Duration::from_secs(2),
+                    ..Default::default()
+                },
+                backend,
+                None,
+                BTreeMap::new(),
+            )
+            .unwrap(),
+        );
+        let processor = Arc::new(ContextOutput {
+            output: output.clone(),
+            context: Mutex::new(None),
+        });
+        let mut worker = bounded_test(
+            "start",
+            Pipeline::new(vec![processor.clone()]).start(PipelineConfig::default()),
+        )
+        .await
+        .unwrap();
+        let ready = bounded_test("ready", async {
+            loop {
+                let item = worker.recv().await.ok_or("output closed before ready")?;
+                if item.direction == Direction::Upstream
+                    && matches!(item.frame.data, FrameData::OutputTransportReady)
+                {
+                    return Ok::<(), &str>(());
+                }
+            }
+        })
+        .await;
+        if let Err(problem) = ready {
+            let _ = bounded_test("startup fallback cancel", worker.cancel(problem.clone())).await;
+            let _ = finish(worker, true).await;
+            panic!("{problem}");
+        }
+        let context = processor
+            .context
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("setup captures context");
+        (worker, output, context)
+    }
+    async fn enter(
+        future: &mut (impl Future<Output = Result<(), ProcessorError>> + Unpin),
+        backend: &Backend,
+    ) -> TestResult<()> {
+        bounded_test("message entered", async {
+            tokio::select! {
+                biased;
+                result = future => Err(ProcessorError::new(format!("send returned before release: {result:?}"))),
+                permit = backend.entered.acquire() => {
+                    permit.map_err(error)?.forget();
+                    Ok(())
+                }
+            }
+        }).await
+    }
+    async fn finish(
+        mut worker: PipelineWorker,
+        terminal_requested: bool,
+    ) -> TestResult<WorkerReport> {
+        let ended = if terminal_requested {
+            Ok(())
+        } else {
+            bounded_test("end", worker.end()).await
+        };
+        if ended.is_err() {
+            let _ = bounded_test("fallback cancel", worker.cancel("end failed")).await;
+        }
+        let drained = bounded_test("drain", async {
+            while worker.recv().await.is_some() {}
+            Ok::<(), String>(())
+        })
+        .await;
+        if drained.is_err() {
+            let _ = bounded_test("fallback cancel", worker.cancel("drain failed")).await;
+        }
+        let joined = bounded_test("join", worker.join()).await;
+        if joined.is_err() {
+            let _ = bounded_test("fallback cancel", worker.cancel("join failed")).await;
+            let _ = bounded_test("fallback join", worker.join()).await;
+        }
+        let report = joined?;
+        ended?;
+        drained?;
+        Ok(report)
+    }
+    fn urgent() -> Frame {
+        Frame::new(FrameData::OutputTransportMessageUrgent(
+            serde_json::json!({"type":"lifecycle-control"}),
+        ))
+    }
+
+    #[tokio::test]
+    async fn admitted_urgent_survives_observed_media_sender_drop() {
+        let backend = Arc::new(Backend::new());
+        let (worker, output, ctx) = start(backend.clone()).await;
+        let expected = urgent();
+        // Keep this public-method future locally pinned: after entry it is not
+        // polled again until the real pipeline-owned media Sender has dropped.
+        let mut sending = Box::pin(output.process(expected.clone(), Direction::Downstream, &ctx));
+        let entered = enter(&mut sending, &backend).await;
+        let observed_drop = if entered.is_ok() {
+            let queue = output.control.destination(None).unwrap().queue.clone();
+            let mut changed = queue.changed.subscribe();
+            let prepared = bounded_test("prepare end", output.prepare_end(&ctx)).await;
+            if prepared.is_ok() {
+                bounded_test("actual media Sender drop", async {
+                    changed
+                        .wait_for(|signal| signal.ending && signal.cancelled)
+                        .await
+                        .map(|_| ())
+                        .map_err(error)
+                })
+                .await
+            } else {
+                prepared
+            }
+        } else {
+            Err("send never entered".into())
+        };
+        // No Cancel or cleanup has run. The observed cancelled flag therefore
+        // comes from the actual Sender::drop, not a timer or a synthetic signal.
+        backend.release.add_permits(1);
+        let sent = bounded_test("finish admitted urgent", &mut sending).await;
+        drop(sending);
+        let finished = finish(worker, false).await;
+        assert_eq!(backend.stopped.load(Ordering::SeqCst), 1);
+        entered.unwrap();
+        observed_drop.unwrap();
+        sent.unwrap();
+        let report = finished.unwrap();
+        assert_eq!(report.state, WorkerState::Ended);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(backend.active.load(Ordering::SeqCst), 0);
+        assert_eq!(backend.calls.lock().unwrap().len(), 1);
+        assert_eq!(
+            backend.dropped.load(Ordering::SeqCst),
+            0,
+            "graceful media actor exit must not cancel admitted protocol send"
+        );
+        let completed = backend.completed.lock().unwrap();
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0], expected);
+        assert_eq!(
+            completed[0].observation_token(),
+            expected.observation_token()
+        );
+    }
+
+    #[tokio::test]
+    async fn actual_cancel_and_cleanup_drop_local_urgent_future_without_late_send() {
+        for cancel in [true, false] {
+            let backend = Arc::new(Backend::new());
+            let (worker, output, ctx) = start(backend.clone()).await;
+            let expected = urgent();
+            let mut sending =
+                Box::pin(output.process(expected.clone(), Direction::Downstream, &ctx));
+            let entered = enter(&mut sending, &backend).await;
+            let closed = if cancel {
+                bounded_test(
+                    "actual Cancel",
+                    output.process(Frame::cancel("cancel urgent"), Direction::Downstream, &ctx),
+                )
+                .await
+            } else {
+                bounded_test("actual cleanup", output.cleanup()).await
+            };
+            // The test, not a pipeline actor, owns this future. A core actor
+            // abort cannot satisfy the assertion: the send itself must return
+            // after the real output lifecycle action, without backend release.
+            let sent = bounded_test("cancel owned send", &mut sending).await;
+            drop(sending);
+            let completed_before_release = backend.completed.lock().unwrap().len();
+            backend.release.add_permits(1);
+            let finished = finish(worker, cancel && closed.is_ok()).await;
+            assert_eq!(backend.stopped.load(Ordering::SeqCst), 1);
+            entered.unwrap();
+            closed.unwrap();
+            sent.unwrap();
+            let report = finished.unwrap();
+            assert_eq!(
+                report.state,
+                if cancel {
+                    WorkerState::Cancelled
+                } else {
+                    WorkerState::Ended
+                }
+            );
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert_eq!(backend.active.load(Ordering::SeqCst), 0);
+            assert_eq!(backend.calls.lock().unwrap().len(), 1);
+            assert_eq!(backend.dropped.load(Ordering::SeqCst), 1);
+            assert_eq!(completed_before_release, 0);
+            assert!(
+                backend.completed.lock().unwrap().is_empty(),
+                "released permit must not resurrect a cancelled write"
+            );
         }
     }
 }
