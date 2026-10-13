@@ -31,11 +31,22 @@ assert!(report.errors.is_empty()); // The executor closes its MCP connection.
 ```
 
 `tools.schema()` returns a native `ToolsSchema` whose `StandardTool::Direct`
-entries carry `LocalToolFunction` handlers. Add `tools.lifecycle()` to the owning
-pipeline when using these handlers. Native core's schemas do not have Python's
-`_pipecat_cleanup` callback attribute; retaining only schemas cannot arrange an
-awaited pipeline teardown automatically. Dropping every client, tool snapshot,
-and handler signals asynchronous SDK cleanup, but explicit teardown is preferred.
+entries carry `LocalToolFunction` handlers with typed cancellation, interruption
+cancellation enabled, and a guard deadline equal to the MCP request plus close
+budgets. Each handler carries the same cleanup callback for its client, including
+handlers from later discoveries; distinct clients have distinct cleanup identities.
+
+The ordinary `pipecat_pipeline::DirectToolBinding` consumes these executable
+schemas, honors their options, and records the shared cleanup hook. It retains
+cleanup after refresh or pruning and awaits MCP close at pipeline teardown. The
+hook keeps the resource alive without an ownership cycle. Its deadline overrides
+the general binding's default so the MCP transport can settle its own timeout.
+The MCP-specific bindings below also check discovered schema/handler identity.
+
+Manual callback owners that do not record cleanup metadata still need
+`tools.lifecycle()` or an explicit awaited close. Merely retaining a schema does
+not run its cleanup. Dropping every client, tool snapshot, handler and cleanup
+owner signals asynchronous SDK cleanup.
 
 ## Ordinary native LLM pipeline binding
 
@@ -332,7 +343,8 @@ Implemented: owned session initialization/readiness, tools discovery, native sch
 and executable handler conversion, name filtering, fixed arguments, text output
 filters, typed and model-facing results/errors, task-independent close/reopen,
 generation-safe dropped-session recovery, interruption/cancellation, bounded
-requests, and native pipeline/agent registry integration.
+requests, native pipeline/agent registry integration, and schema-carried options
+and shared cleanup for ordinary Direct bindings.
 
 Not implemented: deprecated standalone HTTP+SSE (`SseServerParameters`), Python
 SDK session injection/types/context managers, deprecated Python registration method

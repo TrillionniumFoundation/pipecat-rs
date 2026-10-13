@@ -2,7 +2,8 @@ use crate::{McpClient, McpError, SnapshotTool};
 use pipecat_agent_workers::{AgentError, ToolHandler, ToolOptions, ToolRegistry, ToolResult};
 use pipecat_core::{
     async_trait, DirectFunction, Direction, Frame, FrameData, FrameProcessor, LocalToolFunction,
-    ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolSet, ToolsSchema,
+    LocalToolOptions, ProcessorContext, ProcessorError, StandardTool, ToolDefinition, ToolSet,
+    ToolsSchema,
 };
 use pipecat_processors::tools::{
     CancellableRegisteredTool, ToolExecutor, ToolRegistrationSnapshot,
@@ -43,16 +44,25 @@ impl McpTools {
                 let snapshot_tool = snapshot_tool.clone();
                 StandardTool::Direct(DirectFunction {
                     schema: schema.clone(),
-                    handler: LocalToolFunction::new(move |args| {
+                    handler: LocalToolFunction::new_cancellable(move |args| {
                         let snapshot_tool = snapshot_tool.clone();
                         async move {
-                            snapshot_tool
-                                .call_text(args)
-                                .await
-                                .map(Value::String)
-                                .map_err(|error| ProcessorError::new(error.to_string()))
+                            match snapshot_tool.call_text(args).await {
+                                Err(McpError::Cancelled) => None,
+                                result => Some(
+                                    result
+                                        .map(Value::String)
+                                        .map_err(|error| ProcessorError::new(error.to_string())),
+                                ),
+                            }
                         }
-                    }),
+                    })
+                    .with_options(LocalToolOptions {
+                        cancel_on_interruption: true,
+                        timeout: Some(client.inner.config.limits.tool_timeout()),
+                    })
+                    .expect("MCP client construction validated positive tool options")
+                    .with_cleanup(client.schema_cleanup.clone()),
                 })
             })
             .collect();
@@ -187,7 +197,7 @@ impl McpTools {
                         }),
                     }
                 }
-            }).with_options(ToolOptions { cancel_on_interruption: true, timeout: Some(self.client.inner.config.limits.request_timeout.saturating_add(self.client.inner.config.limits.close_timeout)) });
+            }).with_options(ToolOptions { cancel_on_interruption: true, timeout: Some(self.client.inner.config.limits.tool_timeout()) });
             pending.register(handler)?;
         }
         *registry = pending;
@@ -212,7 +222,7 @@ impl McpTools {
                     }
                 })
             }));
-            tool.timeout = limits.request_timeout.saturating_add(limits.close_timeout);
+            tool.timeout = limits.tool_timeout();
             executor.register_cancellable(schema.name.clone(), tool)?;
         }
         Ok(McpToolExecutor {

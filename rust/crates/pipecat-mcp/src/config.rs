@@ -99,6 +99,13 @@ impl Default for Limits {
         }
     }
 }
+impl Limits {
+    pub(crate) fn tool_timeout(&self) -> Duration {
+        self.request_timeout
+            .checked_add(self.close_timeout)
+            .expect("MCP client construction validated the combined tool deadline")
+    }
+}
 /// Filters run synchronously and must be fast. A filter error or panic becomes a
 /// redacted tool failure. It is never passed to a model verbatim.
 pub type OutputFilter = Arc<dyn Fn(String) -> Result<String, String> + Send + Sync>;
@@ -128,6 +135,12 @@ impl McpConfig {
     }
     pub(crate) fn validate(&self) -> Result<(), McpError> {
         let l = &self.limits;
+        if l.request_timeout
+            .checked_add(l.close_timeout)
+            .is_none_or(|timeout| std::time::Instant::now().checked_add(timeout).is_none())
+        {
+            return Err(McpError::Config("combined tool timeout must be finite"));
+        }
         if [l.connect_timeout, l.request_timeout, l.close_timeout]
             .iter()
             .any(|d| d.is_zero() || tokio::time::Instant::now().checked_add(*d).is_none())

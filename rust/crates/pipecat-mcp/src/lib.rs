@@ -14,7 +14,7 @@ mod stdio;
 pub use config::{HttpConfig, Limits, McpConfig, OutputFilter, ServerConfig, StdioConfig};
 pub use error::McpError;
 pub use integration::{McpLifecycle, McpLlmBinding, McpToolExecutor, McpTools};
-use pipecat_core::ToolDefinition;
+use pipecat_core::{LocalAsyncCallback, ProcessorError, ToolDefinition};
 pub use rmcp::model::ContentBlock;
 use rmcp::{
     model::{
@@ -71,6 +71,7 @@ struct Inner {
 #[derive(Clone)]
 pub struct McpClient {
     inner: Arc<Inner>,
+    schema_cleanup: LocalAsyncCallback,
 }
 /// Issued only for a validated discovery entry. The embedded client fixes the
 /// resource origin; no public caller can authorize an arbitrary tool name.
@@ -125,12 +126,25 @@ impl McpClient {
     /// spawning a process. No authentication flow is implemented.
     pub fn new(config: McpConfig) -> Result<Self, McpError> {
         config.validate()?;
+        let inner = Arc::new(Inner {
+            slots: Arc::new(Semaphore::new(config.limits.max_in_flight)),
+            config,
+            state: Mutex::new(State::default()),
+        });
+        // Capture the resource, not a client that owns this callback. Inner
+        // never points back to the hook, so retained schema cleanup has no cycle.
+        let cleanup_inner = inner.clone();
+        let schema_cleanup = LocalAsyncCallback::new(move || {
+            let inner = cleanup_inner.clone();
+            async move {
+                Self::close_inner(&inner)
+                    .await
+                    .map_err(|error| ProcessorError::new(error.to_string()))
+            }
+        });
         Ok(Self {
-            inner: Arc::new(Inner {
-                slots: Arc::new(Semaphore::new(config.limits.max_in_flight)),
-                config,
-                state: Mutex::new(State::default()),
-            }),
+            inner,
+            schema_cleanup,
         })
     }
     pub async fn start(&self) -> Result<(), McpError> {
@@ -219,16 +233,18 @@ impl McpClient {
     /// Idempotent and task-independent. A call cannot reopen an explicitly
     /// closed client; a subsequent explicit `start` or `tools` may do so.
     pub async fn close(&self) -> Result<(), McpError> {
-        let mut state = self.inner.state.lock().await;
+        Self::close_inner(&self.inner).await
+    }
+    async fn close_inner(inner: &Inner) -> Result<(), McpError> {
+        let mut state = inner.state.lock().await;
         state.requested = false;
         state.schemas.clear();
-        self.close_locked(&mut state).await
+        Self::close_locked(&mut state, inner.config.limits.close_timeout).await
     }
-    async fn close_locked(&self, state: &mut State) -> Result<(), McpError> {
+    async fn close_locked(state: &mut State, timeout: std::time::Duration) -> Result<(), McpError> {
         if let Some(mut active) = state.active.take() {
             active.handle.cancelled.cancel();
             active.handle.requests.close();
-            let timeout = self.inner.config.limits.close_timeout;
             // Keep the join owner in shared state: cancelling a close caller
             // must not detach teardown or let a replacement session overtake it.
             state.closing = Some(tokio::spawn(async move {
@@ -267,7 +283,7 @@ impl McpClient {
             .is_some_and(|active| active.handle.generation == session.generation)
         {
             // Failure of cleanup must not hide the original call failure.
-            let _ = self.close_locked(&mut state).await;
+            let _ = Self::close_locked(&mut state, self.inner.config.limits.close_timeout).await;
         }
     }
     /// Discovers every bounded page and attaches executable native handlers.
@@ -545,6 +561,9 @@ impl McpClient {
 #[cfg(test)]
 #[path = "../tests/support/mod.rs"]
 mod test_support;
+
+#[cfg(test)]
+mod schema_owner_tests;
 
 #[cfg(test)]
 mod lifecycle_tests {
