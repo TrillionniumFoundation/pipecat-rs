@@ -23,8 +23,9 @@ assert!(result.passed, "{:?}", result.failures);
 ```
 
 The endpoint must admit RTVI `raw-audio` and route it through its own STT/VAD or
-realtime model. **The bundled `EvalBotHost` and CLI scenario parser remain
-text-only.** The constructor does not grant that host audio capability. The
+realtime model. The built-in `EvalBotHost` accepts this input only when explicitly constructed
+with `.with_raw_audio_input(true)`; its default and CLI scenario parser remain
+text-only. The session constructor does not enable host capabilities. The
 local integration fixture demonstrates a genuine WebSocket → `RtviProcessor` →
 PCM recognition fixture → native `RtviObserver` → evaluation assertion path. It
 recognizes fixed sample bytes, not human speech; no live STT/provider/browser or
@@ -66,3 +67,35 @@ and resampling. This slice pins raw-audio framing, 40 ms pacing, tail padding,
 idle silence and queue-before-assertions. Its AST oracle uses controlled
 collaborators; actual networking and ownership are separately tested. Fresh
 sessions own fresh recording state. Native limits reject rather than truncate.
+
+## Built-in host input opt-in
+
+`EvalBotHost::bind(address, config).await?.with_raw_audio_input(true)` admits
+single JSON `raw-audio` commands after readiness. It validates 16 kHz, mono,
+PCM16/base64 before handing them to the existing `RtviProcessor`, which emits
+`InputAudio` into the application's factory pipeline. A factory must provide its
+own STT/VAD/realtime processing for human speech. There is no automatically
+selected provider, model, credential, or resampler. `raw-audio-batch`, binary WS
+packets, other rates/channels and images remain unsupported. Setting the builder
+to false restores the default behavior; no public configuration fields changed.
+
+Only the enabled host advertises `raw_audio_input: true`, `text_only: false` and
+`audio_output: false`. The default capability JSON is unchanged. All host modes
+still configure `skip_tts: true` before initialization finishes and produce text
+events, not audio responses or playback acknowledgments. The first admitted audio
+also closes subsequent context/observer-configuration admission, including silence.
+Configure these controls before starting the recorded session's silence sender.
+
+Audio obeys the existing wire byte/message, queue, session and shutdown budgets.
+Decoded frames additionally obey native per-frame serialized envelope and
+cumulative processor-boundary budgets. A legal base64 wire message may exceed the
+numeric-array frame budget; that closes the session with an error rather than
+truncating PCM. Frame bytes are counted again at every application boundary.
+Normal End, Cancel, disconnect and fresh-session lifecycle use the existing host
+ownership path. The opt-in does not promise delivery after cancellation.
+
+`tests/host_recorded_audio.rs` connects the actual recorded-session client to the
+actual host, with a deterministic PCM recognizer and native assistant observation.
+It separately checks default compatibility, readiness and format rejection,
+context/config ordering and decoded-frame budgets. This is local transport and
+pipeline qualification, not a live speech-recognition quality result.

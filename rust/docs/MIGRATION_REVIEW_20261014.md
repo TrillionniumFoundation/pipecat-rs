@@ -42,6 +42,10 @@ paths (see [usage details](../crates/pipecat-rtvi/USAGE_DETAILS.md) and
 [audio levels](../crates/pipecat-rtvi/AUDIO_LEVELS.md)). Recorded
 user audio now has a bounded library-only client path described in
 [recorded audio](../crates/pipecat-evals/RECORDED_AUDIO.md); this does not resolve YAML audio scenarios,
-the bundled text host, synthesized users, bot-audio transcription/judging, or
-live-provider qualification. These are separate contracts, not a whole-project
+synthesized users, bot-audio transcription/judging, or live-provider qualification.
+The built-in eval host now separately offers opt-in single raw-audio reception
+for that 16 kHz mono library path, while keeping generated-text output. Its actual
+local receiving pipeline is covered by a PCM-byte fixture; human speech still
+requires application-provided STT/VAD or a realtime model. YAML/CLI recording
+loading is not enabled. These are separate contracts, not a whole-project
 completion claim.

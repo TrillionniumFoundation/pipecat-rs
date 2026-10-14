@@ -482,9 +482,9 @@ args: [--port, "{port}", --llm-url, http://127.0.0.1:11434/v1/chat/completions, 
   checks the exact local Host header, rejects all browser Origin headers,
   absolute-form request targets and paths other than `/`
 - `skip_tts=true` is accepted; omitting it still selects mandatory text-only
-  behavior. `false`, unknown/duplicate query keys, audio/image capture and binary
+  output. `false`, unknown/duplicate query keys, audio/image capture and binary
   WebSocket frames are rejected. `trigger_disconnect=true|false` is supported
-- Only `client-ready`, `send-text`, `disconnect-bot`, `eval-context`,
+- By default only `client-ready`, `send-text`, `disconnect-bot`, `eval-context`,
   `eval-configure` and `eval-cancel` are admitted. IDs are required and bounded
 - The host passes `skip_tts=true` to the factory before construction, then waits
   for `LlmConfigureOutput(true)` followed by a native normal-lane flush round trip
@@ -493,7 +493,7 @@ args: [--port, "{port}", --llm-url, http://127.0.0.1:11434/v1/chat/completions, 
 - Seed context replaces only messages, preserving application tool definitions.
   This first slice accepts only role/text-content messages, excluding tool
   history and multimodal content. Seeding never runs inference
-- Context and observer configuration must precede the first admitted text input
+- Context and observer configuration must precede the first admitted input
   or introduction. This restriction prevents queued RTVI commands from racing
   direct control updates. Observer controls update the actual observer's
   function report level, VAD and LLM marker options
@@ -554,4 +554,6 @@ For a compatible audio-capable RTVI endpoint, `RecordedAudio` and
 recordings through paced `raw-audio` messages and existing transcription/text
 assertions. See [RECORDED_AUDIO.md](RECORDED_AUDIO.md) for budgets, ownership,
 source differences and the real native pipeline fixture. This opt-in library
-path does not enable audio in the bundled text host or YAML/CLI parser.
+path can target the built-in host with `EvalBotHost::with_raw_audio_input(true)`;
+YAML/CLI recording loading remains unsupported. The host opt-in only adds single
+`raw-audio` input, preserving generated-text output and mandatory `skip_tts`.

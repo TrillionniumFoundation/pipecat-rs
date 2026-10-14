@@ -6,7 +6,7 @@
 use crate::serializer::{decode_control, EvalControl, ObserverConfig, ReportLevel};
 use crate::Cancellation;
 use pipecat_core::*;
-use pipecat_protocol::rtvi::Envelope;
+use pipecat_protocol::rtvi::{ClientCommand, Envelope};
 use pipecat_rtvi::{
     Observation, RtviConfig, RtviHandle, RtviObserver, RtviObserverParams, RtviProcessor,
 };
@@ -206,6 +206,7 @@ pub struct EvalBotHostReport {
 pub struct EvalBotHost {
     listener: TcpListener,
     config: EvalBotHostConfig,
+    raw_audio_input: bool,
 }
 impl EvalBotHost {
     pub async fn bind(
@@ -227,7 +228,15 @@ impl EvalBotHost {
         Ok(Self {
             listener: socket.listen(1)?,
             config,
+            raw_audio_input: false,
         })
+    }
+    /// Accept single RTVI `raw-audio` messages containing 16 kHz mono PCM16.
+    /// The application factory must supply its own audio processing/STT pipeline.
+    /// Output remains text-only; batch audio and binary WS packets stay unsupported.
+    pub fn with_raw_audio_input(mut self, enabled: bool) -> Self {
+        self.raw_audio_input = enabled;
+        self
     }
     pub fn local_addr(&self) -> Result<SocketAddr, BotHostError> {
         Ok(self.listener.local_addr()?)
@@ -339,7 +348,20 @@ impl EvalBotHost {
             close_socket(socket, config).await?;
             return Err(BotHostError::Limit("application processors"));
         }
-        let rtvi = Arc::new(RtviProcessor::new(RtviConfig { command_capacity: config.transport.queue_capacity.max(2), event_capacity: config.event_capacity, max_message_bytes: config.transport.max_message_bytes, flush_timeout: config.startup_timeout, capabilities: Some(json!({"eval":true,"text_only":true,"context_mode":"generated-text","playback_acknowledgements":false}).as_object().unwrap().clone()), ..Default::default() })?);
+        let mut capabilities = json!({"eval":true,"text_only":true,"context_mode":"generated-text","playback_acknowledgements":false}).as_object().unwrap().clone();
+        if self.raw_audio_input {
+            capabilities.insert("text_only".into(), false.into());
+            capabilities.insert("raw_audio_input".into(), true.into());
+            capabilities.insert("audio_output".into(), false.into());
+        }
+        let rtvi = Arc::new(RtviProcessor::new(RtviConfig {
+            command_capacity: config.transport.queue_capacity.max(2),
+            event_capacity: config.event_capacity,
+            max_message_bytes: config.transport.max_message_bytes,
+            flush_timeout: config.startup_timeout,
+            capabilities: Some(capabilities),
+            ..Default::default()
+        })?);
         let handle = rtvi.handle();
         let observer = Arc::new(RtviObserver::new(
             RtviObserverParams {
@@ -528,11 +550,11 @@ impl EvalBotHost {
                         EvalControl::Cancel => return Ok(EvalBotExit::EvalCancel),
                         EvalControl::Image { .. } => return Err(BotHostError::Invalid("eval images are unsupported by the text host".into())),
                         EvalControl::Context(messages) => {
-                            if !ready || input_admitted { return Err(BotHostError::Invalid("context must precede the first text input or introduction".into())); }
+                            if !ready || input_admitted { return Err(BotHostError::Invalid("context must precede the first input or introduction".into())); }
                             seed_context(&budget.context, messages, config)?;
                         }
                         EvalControl::Configure(options) => {
-                            if !ready || input_admitted { return Err(BotHostError::Invalid("observer configuration must precede the first text input or introduction".into())); }
+                            if !ready || input_admitted { return Err(BotHostError::Invalid("observer configuration must precede the first input or introduction".into())); }
                             configure_observer(observer, options)?;
                         }
                         EvalControl::Rtvi(mut message) => {
@@ -547,8 +569,22 @@ impl EvalBotHost {
                                     budget.context()?;
                                     handle.handle_message(message)?;
                                 }
+                                "raw-audio" if ready && self.raw_audio_input => {
+                                    let ClientCommand::RawAudio(audio) = message.client_command().map_err(crate::EvalError::from)? else {
+                                        return Err(BotHostError::Invalid("expected raw-audio".into()));
+                                    };
+                                    if audio.sample_rate != 16_000 || audio.num_channels != 1 {
+                                        return Err(BotHostError::Invalid("raw audio requires 16 kHz mono PCM16".into()));
+                                    }
+                                    // Validate before closing context/config admission. Wire size is
+                                    // already bounded; native frame budgets apply again downstream.
+                                    audio.decode().map_err(crate::EvalError::from)?;
+                                    input_admitted = true;
+                                    budget.context()?;
+                                    handle.handle_message(message)?;
+                                }
                                 "disconnect-bot" if ready => { tokio::time::timeout(config.transport.write_timeout, worker.end()).await.map_err(|_| BotHostError::Timeout("End admission"))??; }
-                                _ => return Err(BotHostError::Invalid("only client-ready, send-text, disconnect-bot and eval controls are supported".into())),
+                                _ => return Err(BotHostError::Invalid(if self.raw_audio_input { "only client-ready, send-text, raw-audio, disconnect-bot and eval controls are supported" } else { "only client-ready, send-text, disconnect-bot and eval controls are supported" }.into())),
                             }
                         }
                     }
