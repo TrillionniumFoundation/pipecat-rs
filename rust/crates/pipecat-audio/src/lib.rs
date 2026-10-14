@@ -10,6 +10,7 @@ pub mod onset;
 pub mod pcm;
 pub mod resample;
 pub mod stream;
+pub mod volume;
 pub mod wav;
 
 pub use dtmf::{generate_dtmf, load_dtmf_audio, KeypadEntry};
@@ -24,6 +25,7 @@ pub use pcm::{
 };
 pub use resample::{resample_pcm16, SincResampler};
 pub use stream::{PcmChunker, PcmStreamDecoder};
+pub use volume::AudioVolumeTracker;
 pub use wav::{read_pcm16_wav, PcmWav};
 
 /// Invalid audio data or configuration. Errors never silently reinterpret channels.

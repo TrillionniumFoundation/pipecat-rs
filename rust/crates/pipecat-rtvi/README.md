@@ -115,15 +115,14 @@ lifetime; the native numeric-ID FIFO is an explicit bounded adaptation.
 
 This is not complete Python observer parity:
 
-- The core runtime has no automatic global on-push observer registration. Hosts
+- The RTVI observer is not automatically registered with the core runtime. Hosts
   must install taps or call `observe`; frames never crossing those points are not
   observed. There is no fake global observer or automatic playback acknowledgement.
-- BS.1770 rolling audio-level reporting and process-wide system-log forwarding
-  are not implemented. Raw PCM audio is not duplicated onto the RTVI event stream.
+- Process-wide system-log forwarding is not implemented. Raw PCM audio is not duplicated onto the RTVI event stream.
 - User-defined asynchronous bot-output transforms and the deprecated two-argument
   transform signature are not implemented.
 - Metrics map the five current native metric variants. TTFA, TTFAT, optional model
-  names, and extended cache/audio/reasoning token fields require richer core
+  names and audio-token fields require richer core
   metric payloads and are not fabricated.
 - Legacy deprecated `handle_function_call`/`llm-function-call` compatibility is not
   provided; supported tool phases use the current event contracts.
@@ -149,3 +148,9 @@ metadata's cache-read, cache-write and reasoning token fields into the existing
 metrics token item. It is off by default, validates unique/matching base counts,
 and never recalculates totals. See [USAGE_DETAILS.md](USAGE_DETAILS.md) for exact
 schema, fallback, accounting differences and qualification scope.
+
+## Optional rolling audio levels
+
+Bounded mono PCM16 audio levels can be enabled with `with_audio_levels`.
+See [AUDIO_LEVELS.md](AUDIO_LEVELS.md) for the shared BS.1770 meter, supported
+rates, monotonic reporting, validation bounds and fixed-source differences.

@@ -80,6 +80,7 @@ struct PendingSegment {
 struct State {
     params: RtviObserverParams,
     llm_usage_details: bool,
+    audio_levels: Option<crate::audio_levels::AudioLevels>,
     speaking: bool,
     transcription: String,
     pending: VecDeque<PendingSegment>,
@@ -112,6 +113,7 @@ impl RtviObserver {
             state: Mutex::new(State {
                 params,
                 llm_usage_details: false,
+                audio_levels: None,
                 speaking: false,
                 transcription: String::new(),
                 pending: VecDeque::new(),
@@ -129,6 +131,16 @@ impl RtviObserver {
         self.state.lock().unwrap().llm_usage_details = enabled;
         self
     }
+    /// Enable bounded BS.1770 rolling audio levels without changing legacy params.
+    pub fn with_audio_levels(
+        self,
+        config: crate::AudioLevelConfig,
+    ) -> Result<Self, ProcessorError> {
+        config.validate()?;
+        self.state.lock().unwrap().audio_levels =
+            Some(crate::audio_levels::AudioLevels::new(config));
+        Ok(self)
+    }
     pub fn reset(&self) {
         let mut state = self.state.lock().unwrap();
         state.speaking = false;
@@ -137,6 +149,9 @@ impl RtviObserver {
         state.pending_bytes = 0;
         state.seen.clear();
         state.order.clear();
+        if let Some(levels) = &mut state.audio_levels {
+            levels.reset();
+        }
     }
     pub fn observe(
         &self,
@@ -176,30 +191,45 @@ impl RtviObserver {
         if !aggregated && !observation.first_push {
             return Ok(vec![]);
         }
-        if matches!(
+        let raw_audio = matches!(
             frame.data,
             FrameData::InputAudio(_)
                 | FrameData::UserAudio(_)
                 | FrameData::TtsAudio(_)
                 | FrameData::OutputAudio(_)
                 | FrameData::SpeechOutputAudio(_)
-        ) {
+        );
+        if raw_audio
+            && !state
+                .audio_levels
+                .as_ref()
+                .is_some_and(|levels| levels.enabled_for(&frame.data))
+        {
             return Ok(vec![]);
         }
         if state.seen.contains(&frame.id) {
             return Ok(vec![]);
         }
+        if raw_audio {
+            state
+                .audio_levels
+                .as_ref()
+                .expect("enabled audio levels")
+                .validate_frame(&frame.data)?;
+        }
         // Raw images have no RTVI projection. Keep their seen-cache behavior
         // without charging media payloads to the message budget.
-        if !matches!(
-            frame.data,
-            FrameData::InputImage(_)
-                | FrameData::UserImage(_)
-                | FrameData::OutputImage(_)
-                | FrameData::OutputImageDetailed(_)
-                | FrameData::UrlImage(_)
-                | FrameData::AssistantImage(_)
-        ) {
+        if !raw_audio
+            && !matches!(
+                frame.data,
+                FrameData::InputImage(_)
+                    | FrameData::UserImage(_)
+                    | FrameData::OutputImage(_)
+                    | FrameData::OutputImageDetailed(_)
+                    | FrameData::UrlImage(_)
+                    | FrameData::AssistantImage(_)
+            )
+        {
             bounded_size(&frame.data, state.params.max_message_bytes)?;
         }
         state.seen.insert(frame.id);
@@ -211,6 +241,13 @@ impl RtviObserver {
         }
         let mut events = vec![];
         match &frame.data {
+            FrameData::InputAudio(_) | FrameData::UserAudio(_) | FrameData::TtsAudio(_) => {
+                if let Some(levels) = &mut state.audio_levels {
+                    if let Some(event) = levels.observe(&frame.data, std::time::Instant::now())? {
+                        events.push(event);
+                    }
+                }
+            }
             FrameData::UserStartedSpeaking if state.params.user_speaking_enabled => {
                 events.push(ServerEvent::UserStartedSpeaking)
             }

@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+pipecat-audio = { path = "../pipecat-audio" }
 pipecat-core = { path = "../pipecat-core" }
 pipecat-protocol = { path = "../pipecat-protocol" }
 pipecat-text = { path = "../pipecat-text" }

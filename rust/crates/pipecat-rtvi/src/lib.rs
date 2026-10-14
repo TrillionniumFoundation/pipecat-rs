@@ -1,5 +1,7 @@
 //! Native RTVI 2.2 processor and explicit frame-observer taps.
 //! See the README for output-transport timing and observer integration contracts.
+mod audio_levels;
+pub use audio_levels::AudioLevelConfig;
 mod observer;
 mod processor;
 pub use observer::*;

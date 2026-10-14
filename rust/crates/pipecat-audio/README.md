@@ -62,8 +62,8 @@ output.extend(resampler.flush()?);
 
 ## Not implemented
 
-This crate does not implement SOXR/resampy numerical compatibility, BS.1770
-integrated loudness or `AudioVolumeTracker`, Silero/Krisp/Smart Turn models,
+This crate does not implement SOXR/resampy numerical compatibility, arbitrary-duration
+or multichannel BS.1770 integrated loudness, Silero/Krisp/Smart Turn models,
 RNNoise/Koala/AI-Coustics filters, background sound-file mixing, or model inference.
 The silence/onset helpers are energy tests, not substitutes for these features.
 
@@ -76,3 +76,13 @@ cargo fmt -p pipecat-audio --check
 ```
 
 Fixtures and their provenance are in `tests/fixtures/README.md`.
+
+## Bounded mono loudness
+
+`AudioVolumeTracker` is the shared 400 ms mono BS.1770 meter extracted from
+`pipecat-vad`. It supports 8/16/24/48 kHz PCM16 and retains only the latest window.
+The VAD compatibility wrapper still accepts only 8/16 kHz. Measurements preserve
+the libloudness 0.2.0 coefficients and histogram quantization; they are recomputed
+on read, not cached. Coefficient implementation is MIT licensed; see
+[LICENSE-loudness](LICENSE-loudness). Native source-derived numerical tests use
+real loudness 0.2.0 vectors, not RMS approximations.

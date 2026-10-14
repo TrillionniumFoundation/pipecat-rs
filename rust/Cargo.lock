@@ -4159,6 +4159,7 @@ dependencies = [
 name = "pipecat-rtvi"
 version = "0.1.0"
 dependencies = [
+ "pipecat-audio",
  "async-trait",
  "base64 0.22.1",
  "pipecat-core",

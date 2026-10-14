@@ -1,0 +1,906 @@
+{
+  "backend": "real loudness==0.2.0",
+  "cases": [
+    {
+      "amplitude": 0,
+      "direct_volume": 0,
+      "id": "silence_8000_0",
+      "kind": "silence",
+      "pcm_sha256": "56a43ef88ddfcd0f56f7dd973312c0e73d62f59655c01d7b4e59aaa3be8b3fb6",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "constant_8000_1",
+      "kind": "constant",
+      "pcm_sha256": "53789f8fab4dec2aea752f40f99462a01d4cf1859e120a7d034cac776fe70afa",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.6315,
+      "id": "constant_8000_3000",
+      "kind": "constant",
+      "pcm_sha256": "6cfd76f41db73c1e96e475ccbe506535afb64b3b205bc6eca0bd5c4219cd66fb",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.6315
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 0.8315,
+      "id": "constant_8000_30000",
+      "kind": "constant",
+      "pcm_sha256": "34ba6f0e1c2b013b11370e70484df8ff911cac96241e258f05d2ab000ce6f069",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.8315
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "sine_8000_1",
+      "kind": "sine",
+      "pcm_sha256": "bc5f16a6d909cce69a94c7f8c6a4de442c63745ef4f1cec92a53cfeccc696dfb",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0
+    },
+    {
+      "amplitude": 30,
+      "direct_volume": 0.45549999999999996,
+      "id": "sine_8000_30",
+      "kind": "sine",
+      "pcm_sha256": "e025df38015a04c81768c03290efc624ef492b730daf34388030329a859907e7",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.45549999999999996
+    },
+    {
+      "amplitude": 50,
+      "direct_volume": 0.5004999999999998,
+      "id": "sine_8000_50",
+      "kind": "sine",
+      "pcm_sha256": "69bf32963b4332cb947ddc4c01590abc51c23849b05b392f0a4cd650d2cf686d",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.5004999999999998
+    },
+    {
+      "amplitude": 300,
+      "direct_volume": 0.6574999999999999,
+      "id": "sine_8000_300",
+      "kind": "sine",
+      "pcm_sha256": "2bc1166fb0d7b05535020606c2355d12c30e28ac1e8be4d6775c87aff73049e8",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.6574999999999999
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.8575,
+      "id": "sine_8000_3000",
+      "kind": "sine",
+      "pcm_sha256": "e2cf64399e64925c189dcd8703e5a6c71837c3b93e4e975bd83c4c5a3c8f8bbf",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.8575
+    },
+    {
+      "amplitude": 12000,
+      "direct_volume": 0.9775,
+      "id": "sine_8000_12000",
+      "kind": "sine",
+      "pcm_sha256": "a6b02491ec96b940221cefe2a42f44a8ee48f8149ea121718913153eb9a6ded5",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.9775
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 1,
+      "id": "sine_8000_30000",
+      "kind": "sine",
+      "pcm_sha256": "b50f14437214c8eb370c336d9c2db54908689914ef40072e120e65999d81ea1e",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 1
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.9285000000000001,
+      "id": "alternating_8000_3000",
+      "kind": "alternating",
+      "pcm_sha256": "843fb4269990aafb305354f8ddbde46b003d7726a23784d4b6bd2a4259414a38",
+      "rate": 8000,
+      "samples": 3200,
+      "volume": 0.9285000000000001
+    },
+    {
+      "amplitude": 0,
+      "direct_volume": 0,
+      "id": "silence_16000_0",
+      "kind": "silence",
+      "pcm_sha256": "59ec91dcb7dc65b5f928091cb0e25c26729a0a4453ebe7d8244fc1ceae7d9712",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "constant_16000_1",
+      "kind": "constant",
+      "pcm_sha256": "54a829b7ead85ef31792d67993e853dcad7e80795005372b44d875a5fb879988",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.6305,
+      "id": "constant_16000_3000",
+      "kind": "constant",
+      "pcm_sha256": "a1ecf9ab2b0df503927110dca76914ea976f6de2c257122f5b7423c0c101dc79",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.6305
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 0.8305,
+      "id": "constant_16000_30000",
+      "kind": "constant",
+      "pcm_sha256": "31a2075c59b3bce7ec36c748650135acd999fe49aab812b1b97bc119889d916b",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.8305
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "sine_16000_1",
+      "kind": "sine",
+      "pcm_sha256": "ca57a3a2fd17a1fd95586bd917c66f4e90b7c94cb013a0a2c80f80b3854188f2",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0
+    },
+    {
+      "amplitude": 30,
+      "direct_volume": 0.4545,
+      "id": "sine_16000_30",
+      "kind": "sine",
+      "pcm_sha256": "5b13ebbbb50087075ad62d6dff4b82ae36ca15e862349266dbabbd7e424156ea",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.4545
+    },
+    {
+      "amplitude": 50,
+      "direct_volume": 0.4994999999999999,
+      "id": "sine_16000_50",
+      "kind": "sine",
+      "pcm_sha256": "a7c37ca5a8897f298d71f7b4314accc5e4583845e0c645c02c1cc7b44385d2bc",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.4994999999999999
+    },
+    {
+      "amplitude": 300,
+      "direct_volume": 0.6564999999999999,
+      "id": "sine_16000_300",
+      "kind": "sine",
+      "pcm_sha256": "9ddebfdcc747b70a1b65c32420ae138713e2e5eb7d76a30b97c33df74edd4dd2",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.6564999999999999
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.8565,
+      "id": "sine_16000_3000",
+      "kind": "sine",
+      "pcm_sha256": "ab63732bca956f4836cbc6a095ddb5a957b329becb77b57064fc844bdab858e1",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.8565
+    },
+    {
+      "amplitude": 12000,
+      "direct_volume": 0.9765,
+      "id": "sine_16000_12000",
+      "kind": "sine",
+      "pcm_sha256": "9db17ee69ab79638d8522614284da8ab01f895e2e20bb7c3776309fd5ca747f9",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.9765
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 1,
+      "id": "sine_16000_30000",
+      "kind": "sine",
+      "pcm_sha256": "a54c2d27bc52b28743f26420367373d50e2d05c2115498a07ad56ea97c2e019b",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 1
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.9265000000000001,
+      "id": "alternating_16000_3000",
+      "kind": "alternating",
+      "pcm_sha256": "54191e9e505d8ee615d40f4605ead4fc370db5c1cba8e037355d6b6a8802007e",
+      "rate": 16000,
+      "samples": 6400,
+      "volume": 0.9265000000000001
+    },
+    {
+      "amplitude": 0,
+      "direct_volume": 0,
+      "id": "silence_24000_0",
+      "kind": "silence",
+      "pcm_sha256": "17744bb6a4ed1d9d51d85d7eb645cde30352530d494233c434027f9e3193bae4",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "constant_24000_1",
+      "kind": "constant",
+      "pcm_sha256": "2e475ae0f94251d9c67fb09f690110103179e52fb46f34f05ca4c47e5224f31c",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.6295000000000001,
+      "id": "constant_24000_3000",
+      "kind": "constant",
+      "pcm_sha256": "90bc1ff9f32781ea94df3d61b767864fd904a3f2698646fc5674fd8d4ff75e2d",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.6295000000000001
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 0.8295,
+      "id": "constant_24000_30000",
+      "kind": "constant",
+      "pcm_sha256": "e3cbf4e71111603c9f9cb8cf8c4c58bb48e1fccb9bc2c6b3de2f1e7c9fd49238",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.8295
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "sine_24000_1",
+      "kind": "sine",
+      "pcm_sha256": "e4f4d78ab745f4f4379763f4fb0d4485bfe31b5e5a8de7ba9978fcba3222b272",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0
+    },
+    {
+      "amplitude": 30,
+      "direct_volume": 0.45349999999999996,
+      "id": "sine_24000_30",
+      "kind": "sine",
+      "pcm_sha256": "c1663acbef7bc3dbc7038d84f65f10e1487f2ed40c8d7c1d1f8fa87d270a3f29",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.45349999999999996
+    },
+    {
+      "amplitude": 50,
+      "direct_volume": 0.4994999999999999,
+      "id": "sine_24000_50",
+      "kind": "sine",
+      "pcm_sha256": "ee9eac7fe91d36864b316bd223b2266cc5c0dc3e28d89571224d7546160d4c57",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.4994999999999999
+    },
+    {
+      "amplitude": 300,
+      "direct_volume": 0.6555,
+      "id": "sine_24000_300",
+      "kind": "sine",
+      "pcm_sha256": "5cf86bc24f45a6a92e7b3a0204653d17ed52a0f8e6a0c964604c87a783ecc7dc",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.6555
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.8554999999999999,
+      "id": "sine_24000_3000",
+      "kind": "sine",
+      "pcm_sha256": "ddee2a1bd9d68fdec362c0c14af6364efa9958fe440d90e15f864cfe699f6d6a",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.8554999999999999
+    },
+    {
+      "amplitude": 12000,
+      "direct_volume": 0.9765,
+      "id": "sine_24000_12000",
+      "kind": "sine",
+      "pcm_sha256": "73cae147f7b5df41b4e84a477d87aea58709a19c090cda8b91b6e153ce3fafbd",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.9765
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 1,
+      "id": "sine_24000_30000",
+      "kind": "sine",
+      "pcm_sha256": "c9a117a016ad7030834a1e791122fc2ed22f1b83446235ffbd8ab828f2cd0ee0",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 1
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.9265000000000001,
+      "id": "alternating_24000_3000",
+      "kind": "alternating",
+      "pcm_sha256": "e7cee6a2cfd8a7039719364d95a54d7773d70d6dd13f05c41724e1cdf2c47c4c",
+      "rate": 24000,
+      "samples": 9600,
+      "volume": 0.9265000000000001
+    },
+    {
+      "amplitude": 0,
+      "direct_volume": 0,
+      "id": "silence_48000_0",
+      "kind": "silence",
+      "pcm_sha256": "5c9b37300155c1f3338bc88f17d69c51fb248b0de0155630962ca6504d789bba",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "constant_48000_1",
+      "kind": "constant",
+      "pcm_sha256": "0b7dee0916f45cb5e7bd291f4c19c3311cf1451ba65b5853c168d5a9597d4eb0",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.6295000000000001,
+      "id": "constant_48000_3000",
+      "kind": "constant",
+      "pcm_sha256": "cb3450be645c26d69c6abd40d704bcb231706b091e682097e11ec0a1aedac237",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.6295000000000001
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 0.8295,
+      "id": "constant_48000_30000",
+      "kind": "constant",
+      "pcm_sha256": "189a749e98ffb3a7a04f144ac0e085f1e16a4b205467f6398fa9af01af428e37",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.8295
+    },
+    {
+      "amplitude": 1,
+      "direct_volume": 0,
+      "id": "sine_48000_1",
+      "kind": "sine",
+      "pcm_sha256": "edbcf70370b38ae1ff62e122c577d5c084d0fe98336516ad31d109681127ebc4",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0
+    },
+    {
+      "amplitude": 30,
+      "direct_volume": 0.45349999999999996,
+      "id": "sine_48000_30",
+      "kind": "sine",
+      "pcm_sha256": "4673b203caab2f0f59ce2cfccde19840a4404801202b4180092f8647f06ea6a7",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.45349999999999996
+    },
+    {
+      "amplitude": 50,
+      "direct_volume": 0.49849999999999994,
+      "id": "sine_48000_50",
+      "kind": "sine",
+      "pcm_sha256": "21e11bb10c12d4612647c76028dd99c1c9d1f04de5ba681d46149cb5e80e376b",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.49849999999999994
+    },
+    {
+      "amplitude": 300,
+      "direct_volume": 0.6555,
+      "id": "sine_48000_300",
+      "kind": "sine",
+      "pcm_sha256": "84db1311e53906350900146c494472185338f46fe038e22842a75648ef896d6c",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.6555
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.8554999999999999,
+      "id": "sine_48000_3000",
+      "kind": "sine",
+      "pcm_sha256": "029bc3f298737b1d87d2e93ee07090e1e9eb1d2d2c6d583465c245aed48736d5",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.8554999999999999
+    },
+    {
+      "amplitude": 12000,
+      "direct_volume": 0.9754999999999999,
+      "id": "sine_48000_12000",
+      "kind": "sine",
+      "pcm_sha256": "1dbd93f5892bc55fee2be29f263d7fc8b37b9c1660daec348e7a54163af9a185",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.9754999999999999
+    },
+    {
+      "amplitude": 30000,
+      "direct_volume": 1,
+      "id": "sine_48000_30000",
+      "kind": "sine",
+      "pcm_sha256": "2b2f400417b3f89b195c0d59b02235eaac50e02a6aa0a888b899021ed756e0ee",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 1
+    },
+    {
+      "amplitude": 3000,
+      "direct_volume": 0.9255,
+      "id": "alternating_48000_3000",
+      "kind": "alternating",
+      "pcm_sha256": "85ffadb3843cdc45e6367922aacb61d65476525ef7b2e71fbf72a1666441814f",
+      "rate": 48000,
+      "samples": 19200,
+      "volume": 0.9255
+    }
+  ],
+  "historical_fixture_recheck": [
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 0,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 1,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 30,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 50,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 300,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 3000,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 12000,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 30000,
+      "rate": 8000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 0,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 1,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 30,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 50,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 300,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 3000,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 12000,
+      "rate": 16000
+    },
+    {
+      "absolute_difference": 0.0,
+      "amplitude": 30000,
+      "rate": 16000
+    }
+  ],
+  "numpy_version": "2.3.5",
+  "rate_resets": [
+    {
+      "after_fill": 0.8575,
+      "after_rate_change_partial": 0.0,
+      "rate": 8000,
+      "window_bytes": 6400
+    },
+    {
+      "after_fill": 0.8565,
+      "after_rate_change_partial": 0.0,
+      "rate": 16000,
+      "window_bytes": 12800
+    },
+    {
+      "after_fill": 0.8554999999999999,
+      "after_rate_change_partial": 0.0,
+      "rate": 24000,
+      "window_bytes": 19200
+    },
+    {
+      "after_fill": 0.8554999999999999,
+      "after_rate_change_partial": 0.0,
+      "rate": 48000,
+      "window_bytes": 38400
+    },
+    {
+      "after_fill": 0.8575,
+      "after_rate_change_partial": 0.0,
+      "rate": 8000,
+      "window_bytes": 6400
+    }
+  ],
+  "repository": "ProfHepta/pipecat",
+  "revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "rolling": [
+    {
+      "amplitude": 0,
+      "buffer_bytes": 1600,
+      "id": "rolling_8000_0",
+      "kind": "silence",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 3200,
+      "id": "rolling_8000_1",
+      "kind": "sine",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "4ea89877b6e4329df0c3f7014334a5563ef75acb015cb1516f1424769d6c762b"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 4800,
+      "id": "rolling_8000_2",
+      "kind": "sine",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "548003c0830679e3fe4dcc8bbe29df9c1f31a54a7f5fc859230e1c24d7e4d814"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 6400,
+      "id": "rolling_8000_3",
+      "kind": "sine",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.8445,
+      "window_sha256": "21464b20e6c04581656b232099b8b7fc0e66a4f699ca0e03af78a8d3b4d9b635"
+    },
+    {
+      "amplitude": 12000,
+      "buffer_bytes": 6400,
+      "id": "rolling_8000_4",
+      "kind": "constant",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.8504999999999999,
+      "window_sha256": "a9faee2f4f00df2057f5c11a1ab619b9a146c67d819a547d77dd00dec6a02fe4"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 6400,
+      "id": "rolling_8000_5",
+      "kind": "silence",
+      "rate": 8000,
+      "seconds": 0.1,
+      "volume": 0.8405,
+      "window_sha256": "2d38bf1bd1b7531a98b072a39fa7eb0b6b87d538765ffc11a4c813e075b49ca6"
+    },
+    {
+      "amplitude": 30000,
+      "buffer_bytes": 6400,
+      "id": "rolling_8000_6",
+      "kind": "sine",
+      "rate": 8000,
+      "seconds": 0.6,
+      "volume": 1,
+      "window_sha256": "b50f14437214c8eb370c336d9c2db54908689914ef40072e120e65999d81ea1e"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 3200,
+      "id": "rolling_16000_0",
+      "kind": "silence",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "5a312281df4bd8dfbb4d4a94ad0bf44d01bb8cfced1206b90e21b4ca0568cdb1"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 6400,
+      "id": "rolling_16000_1",
+      "kind": "sine",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "023b77849e1235ec6c3104696988d3399b897aa37576274116fdde132c946ca5"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 9600,
+      "id": "rolling_16000_2",
+      "kind": "sine",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "e4e50fb1760b412c5d05f9173ee0fa0a2321975920331d9cd1a96ac5e46bf00c"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 12800,
+      "id": "rolling_16000_3",
+      "kind": "sine",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.8435000000000001,
+      "window_sha256": "57a1783e9ea9d39ca9484a9467a483d2cf628be6e0dc8e0a4c976bf91b383982"
+    },
+    {
+      "amplitude": 12000,
+      "buffer_bytes": 12800,
+      "id": "rolling_16000_4",
+      "kind": "constant",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.8485,
+      "window_sha256": "96025c0f4a134d34241b15f485d9ac1663d507f760b204397cc328b4a0266a01"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 12800,
+      "id": "rolling_16000_5",
+      "kind": "silence",
+      "rate": 16000,
+      "seconds": 0.1,
+      "volume": 0.8395,
+      "window_sha256": "c7e7e164f334382d9904733bc76eb9e2f85cd3e95a30e8626b28c4b231a3803b"
+    },
+    {
+      "amplitude": 30000,
+      "buffer_bytes": 12800,
+      "id": "rolling_16000_6",
+      "kind": "sine",
+      "rate": 16000,
+      "seconds": 0.6,
+      "volume": 1,
+      "window_sha256": "a54c2d27bc52b28743f26420367373d50e2d05c2115498a07ad56ea97c2e019b"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 4800,
+      "id": "rolling_24000_0",
+      "kind": "silence",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "24ddaa4710480313757f965c38d60208a334556cb244f830d5006a893edd8da7"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 9600,
+      "id": "rolling_24000_1",
+      "kind": "sine",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "0db7c0944da8484b9310519d08a915f7f4b8b376e0e92b59179aaf3f4c3d213f"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 14400,
+      "id": "rolling_24000_2",
+      "kind": "sine",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "df0dbc1ea329d86402d774f31c3ab271fae7ef44405e49e9db58aa31dbdf759a"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 19200,
+      "id": "rolling_24000_3",
+      "kind": "sine",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.8435000000000001,
+      "window_sha256": "0290411f4a96393d51d4170cbd54425b2dfec40e8e93c090953b68b2f64b23e2"
+    },
+    {
+      "amplitude": 12000,
+      "buffer_bytes": 19200,
+      "id": "rolling_24000_4",
+      "kind": "constant",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.8485,
+      "window_sha256": "7cc7a09dedaac9ced38d6a0cd9ee335d0b3514c9a67561eeedb2af9c2c2ae482"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 19200,
+      "id": "rolling_24000_5",
+      "kind": "silence",
+      "rate": 24000,
+      "seconds": 0.1,
+      "volume": 0.8395,
+      "window_sha256": "e5edbe887ebf47cb5aa96e15dbbca0051717db01656b3e4ffa8310ad5811f19e"
+    },
+    {
+      "amplitude": 30000,
+      "buffer_bytes": 19200,
+      "id": "rolling_24000_6",
+      "kind": "sine",
+      "rate": 24000,
+      "seconds": 0.6,
+      "volume": 1,
+      "window_sha256": "c6c4ee4a2712496d4464d6f43c8c5159566b7b75bf6e984cfce789d6661c3cd2"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 9600,
+      "id": "rolling_48000_0",
+      "kind": "silence",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "e9a15a094703faaea3fdf53af7e04da21717008ab4bb228799712b2fced03c65"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 19200,
+      "id": "rolling_48000_1",
+      "kind": "sine",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "1534f3c68beade0ef880b82432929ca91a8742e7d9f0cdfffd4bb7974c6a2bb1"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 28800,
+      "id": "rolling_48000_2",
+      "kind": "sine",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.0,
+      "window_sha256": "2bdac0975315135d9960ad26a6b6cb86ae7ebc78aa751b8d3a81976f2c83fb2d"
+    },
+    {
+      "amplitude": 3000,
+      "buffer_bytes": 38400,
+      "id": "rolling_48000_3",
+      "kind": "sine",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.8425,
+      "window_sha256": "9d762a3ba57c446f05ae6694d6a3d9ae7151feaa348c6640dcaee53f09c470f1"
+    },
+    {
+      "amplitude": 12000,
+      "buffer_bytes": 38400,
+      "id": "rolling_48000_4",
+      "kind": "constant",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.8485,
+      "window_sha256": "1abd438cc5cc3d63bb5a9fb54bd55949e6b97a5f3fe41e371309a75c2caeba5b"
+    },
+    {
+      "amplitude": 0,
+      "buffer_bytes": 38400,
+      "id": "rolling_48000_5",
+      "kind": "silence",
+      "rate": 48000,
+      "seconds": 0.1,
+      "volume": 0.8385000000000001,
+      "window_sha256": "79c364c527f53c3632467a5913c27bad26b48f6b07a920d9fcd35c19f465051f"
+    },
+    {
+      "amplitude": 30000,
+      "buffer_bytes": 38400,
+      "id": "rolling_48000_6",
+      "kind": "sine",
+      "rate": 48000,
+      "seconds": 0.6,
+      "volume": 1,
+      "window_sha256": "b30ef73bac5ea2178b849f6af021dc229b0d4d7e80bd6171bf6eaa6f3fb2c0d5"
+    }
+  ],
+  "source_boundaries": [
+    {
+      "error": "ValueError",
+      "id": "odd_bytes",
+      "message": "buffer size must be a multiple of element size"
+    },
+    {
+      "error": "ValueError",
+      "id": "short_gating_block",
+      "message": "audio too short: need at least 400.000000 ms, got 399.875000 ms"
+    },
+    {
+      "error": "ValueError",
+      "id": "zero_rate",
+      "message": "Requested value not within allowed range"
+    },
+    {
+      "error": "ValueError",
+      "id": "negative_rate",
+      "message": "audio too short: need at least 400.000000 ms, got -0.000000 ms"
+    }
+  ]
+}
