@@ -1,0 +1,265 @@
+{
+  "audio_passthrough_disabled": {
+    "buffered": 0,
+    "frames": [],
+    "last_audio_time": 0,
+    "muted": true,
+    "pending_usage_seconds": 0.0,
+    "provider": [],
+    "speaker": ""
+  },
+  "inflight_results_after_mute": {
+    "after": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0400",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "original-speaker"
+        },
+        {
+          "audio_hex": "0500",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        },
+        {
+          "direction": "downstream",
+          "finalized": false,
+          "text": "inflight interim",
+          "type": "InterimTranscriptionFrame",
+          "user_id": "original-speaker"
+        },
+        {
+          "direction": "downstream",
+          "finalized": false,
+          "text": "inflight final",
+          "type": "TranscriptionFrame",
+          "user_id": "original-speaker"
+        }
+      ],
+      "last_audio_time": 100.0,
+      "muted": true,
+      "pending_usage_seconds": 0.0,
+      "provider": [
+        {
+          "stub_audio_hex": "0400"
+        }
+      ],
+      "speaker": "original-speaker"
+    },
+    "before": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0400",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "original-speaker"
+        },
+        {
+          "audio_hex": "0500",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        }
+      ],
+      "last_audio_time": 100.0,
+      "muted": true,
+      "pending_usage_seconds": 6.25e-05,
+      "provider": [
+        {
+          "stub_audio_hex": "0400"
+        }
+      ],
+      "speaker": "original-speaker"
+    },
+    "metrics": [
+      {
+        "audio_seconds": 6.25e-05
+      }
+    ]
+  },
+  "mute_resume_downstream": {
+    "after_mute": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        }
+      ],
+      "last_audio_time": 0,
+      "muted": true,
+      "pending_usage_seconds": 0.0,
+      "provider": [],
+      "speaker": ""
+    },
+    "after_resume": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        },
+        {
+          "audio_hex": "0200",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "resumed-speaker"
+        }
+      ],
+      "last_audio_time": 100.0,
+      "muted": false,
+      "pending_usage_seconds": 6.25e-05,
+      "provider": [
+        {
+          "stub_audio_hex": "0200"
+        }
+      ],
+      "speaker": "resumed-speaker"
+    },
+    "initial": {
+      "buffered": 0,
+      "frames": [],
+      "last_audio_time": 0,
+      "muted": false,
+      "pending_usage_seconds": 0.0,
+      "provider": [],
+      "speaker": ""
+    }
+  },
+  "mute_resume_upstream": {
+    "after_mute": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        }
+      ],
+      "last_audio_time": 0,
+      "muted": true,
+      "pending_usage_seconds": 0.0,
+      "provider": [],
+      "speaker": ""
+    },
+    "after_resume": {
+      "buffered": 0,
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "muted-speaker"
+        },
+        {
+          "audio_hex": "0200",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "resumed-speaker"
+        }
+      ],
+      "last_audio_time": 100.0,
+      "muted": false,
+      "pending_usage_seconds": 6.25e-05,
+      "provider": [
+        {
+          "stub_audio_hex": "0200"
+        }
+      ],
+      "speaker": "resumed-speaker"
+    },
+    "initial": {
+      "buffered": 0,
+      "frames": [],
+      "last_audio_time": 0,
+      "muted": false,
+      "pending_usage_seconds": 0.0,
+      "provider": [],
+      "speaker": ""
+    }
+  },
+  "reconnect_buffer_precedes_mute_guard": {
+    "replayed_after_unmute": {
+      "buffered": 1,
+      "frames": [
+        {
+          "audio_hex": "0600",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "buffered-speaker"
+        }
+      ],
+      "last_audio_time": 100.0,
+      "muted": false,
+      "pending_usage_seconds": 6.25e-05,
+      "provider": [
+        {
+          "stub_audio_hex": "0600"
+        }
+      ],
+      "speaker": "buffered-speaker"
+    },
+    "while_muted": {
+      "buffered": 1,
+      "frames": [
+        {
+          "audio_hex": "0600",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "buffered-speaker"
+        }
+      ],
+      "last_audio_time": 0,
+      "muted": true,
+      "pending_usage_seconds": 0.0,
+      "provider": [],
+      "speaker": ""
+    }
+  },
+  "transport_closed": {
+    "buffered": 0,
+    "frames": [
+      {
+        "audio_hex": "0700",
+        "direction": "downstream",
+        "type": "UserAudioRawFrame",
+        "user_id": "speaker"
+      }
+    ],
+    "last_audio_time": 100.0,
+    "muted": false,
+    "pending_usage_seconds": 6.25e-05,
+    "provider": [],
+    "speaker": "speaker"
+  },
+  "transport_send_failure": {
+    "buffered": 0,
+    "frames": [
+      {
+        "direction": "downstream",
+        "error": "Error sending audio: offline simulated send failure",
+        "type": "ErrorFrame"
+      },
+      {
+        "audio_hex": "0700",
+        "direction": "downstream",
+        "type": "UserAudioRawFrame",
+        "user_id": "speaker"
+      }
+    ],
+    "last_audio_time": 100.0,
+    "muted": false,
+    "pending_usage_seconds": 6.25e-05,
+    "provider": [],
+    "speaker": "speaker"
+  }
+}

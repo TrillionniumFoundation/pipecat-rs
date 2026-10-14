@@ -62,6 +62,8 @@ a new client.
   admitted to a failed session is never replayed. Exhausted recovery reports
   unsent buffered audio and makes the provider unusable. An effective settings
   update can restore usability. Initial setup failure is returned to the caller.
+  `SttMute` applies in either direction before the generic upstream bypass.
+  Native control forwarding remains unchanged; see [mute control routing](STT_MUTE.md).
   Both `InputAudio` and `UserAudio` use this path. By default, the latest consumed
   user-audio command supplies the current speaker ID for interim/final results;
   plain input clears it. `with_user_id(...)` remains an explicit fixed override,
@@ -144,7 +146,7 @@ while submitting audio, old-settings drain, and socket recovery within that
 running supervisor. A new supervisor starts from its idle seed, fixed override,
 or empty default. It is not a per-PCM identity association, diarization, or user-isolated resampling: the same
 streaming sinc converter and its Finish tail continue across speaker changes.
-The native ordering, upstream bypass, health-generation reset and retry/drain
+The native ordering, upstream audio bypass, health-generation reset and retry/drain
 behavior remain distinct from Python's callback scheduling. In particular, this
 slice does not reproduce Python's final-callback identity read after awaiting
 usage emission. Identity tests use independently CRC-framed loopback events and

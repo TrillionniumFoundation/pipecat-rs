@@ -1249,3 +1249,181 @@ async fn saturated_fixed_empty_id_empty_audio_keeps_passthrough_disabled() {
 async fn saturated_dynamic_empty_audio_rejects_without_relabeling() {
     assert_saturated_empty_contract(None, true).await;
 }
+
+#[tokio::test]
+async fn upstream_mute_and_resume_control_new_pcm_without_relabeling_late_results() {
+    use futures_util::FutureExt;
+    use std::panic::AssertUnwindSafe;
+    let (listener, config) = fixture().await;
+    let mut peer = tokio::spawn(rotating_peer(
+        listener,
+        ["seed", "muted", "resumed", "muted-again", "restored"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+    ));
+    let created = AssertUnwindSafe(Harness::start(config, None, true))
+        .catch_unwind()
+        .await;
+    let mut harness = match created {
+        Ok(harness) => harness,
+        Err(panic) => {
+            peer.abort();
+            let _ = peer.await;
+            std::panic::resume_unwind(panic);
+        }
+    };
+    let tag = LocalFrameTag::new();
+    let mut controls = vec![];
+    let observed = tokio::time::timeout(
+        DEADLINE,
+        AssertUnwindSafe(async {
+            harness
+                .data(audio(vec![1, 0], Some("alice")))
+                .await
+                .unwrap();
+            harness.rotate();
+            harness.pair().await;
+            for value in [true, true] {
+                let frame = envelope(FrameData::SttMute(value), &tag);
+                controls.push((frame.clone(), Direction::Upstream));
+                harness.send(frame, Direction::Upstream).await.unwrap();
+            }
+            for data in [
+                audio(vec![2, 0], Some("muted-bob")),
+                audio(vec![3, 0], None),
+                audio(vec![], Some("muted-empty")),
+            ] {
+                harness.data(data).await.unwrap();
+            }
+            harness.rotate();
+            harness.pair().await;
+            for value in [false, false] {
+                let frame = envelope(FrameData::SttMute(value), &tag);
+                controls.push((frame.clone(), Direction::Upstream));
+                harness.send(frame, Direction::Upstream).await.unwrap();
+            }
+            harness
+                .data(audio(vec![4, 0], Some("carol")))
+                .await
+                .unwrap();
+            harness.rotate();
+            harness.pair().await;
+            let frame = envelope(FrameData::SttMute(true), &tag);
+            controls.push((frame.clone(), Direction::Downstream));
+            harness.send(frame, Direction::Downstream).await.unwrap();
+            harness
+                .data(audio(vec![5, 0], Some("muted-dave")))
+                .await
+                .unwrap();
+            harness.rotate();
+            harness.pair().await;
+            let frame = envelope(FrameData::SttMute(false), &tag);
+            controls.push((frame.clone(), Direction::Downstream));
+            harness.send(frame, Direction::Downstream).await.unwrap();
+            harness.data(audio(vec![6, 0], None)).await.unwrap();
+            harness.rotate();
+            harness.pair().await;
+        })
+        .catch_unwind(),
+    )
+    .await;
+    // Always settle both owners before reporting assertions, including the
+    // deliberately failing pre-fix replay. A deadline never detaches a handle.
+    let normal = matches!(observed, Ok(Ok(())));
+    let mut cleanup_errors = vec![];
+    let admission = tokio::time::timeout(DEADLINE, async {
+        if normal {
+            harness.worker.end().await
+        } else {
+            harness
+                .worker
+                .cancel("mute fixture observation failed")
+                .await
+        }
+    })
+    .await;
+    if !matches!(admission, Ok(Ok(()))) {
+        cleanup_errors.push(format!("terminal admission: {admission:?}"));
+        let _ = harness
+            .worker
+            .cancel("mute fixture admission deadline")
+            .await;
+    }
+    let joined = match tokio::time::timeout(DEADLINE, async {
+        while let Some(frame) = harness.worker.recv().await {
+            harness.frames.push(frame);
+        }
+        harness.worker.join().await
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => {
+            cleanup_errors.push(format!("join deadline: {error}"));
+            let _ = harness.worker.cancel("mute fixture join deadline").await;
+            harness.worker.join().await
+        }
+    };
+    let packets = match tokio::time::timeout(DEADLINE, &mut peer).await {
+        Ok(result) => result.map_err(|e| e.to_string()),
+        Err(error) => {
+            peer.abort();
+            let _ = peer.await;
+            Err(format!("peer deadline, aborted and joined: {error}"))
+        }
+    };
+    assert!(normal, "observation failed after owners settled");
+    assert!(cleanup_errors.is_empty(), "{cleanup_errors:?}");
+    let report = joined.unwrap();
+    assert_eq!(report.state, WorkerState::Ended);
+    assert_eq!(report.total_errors, 0, "{:?}", report.errors);
+    assert_eq!(
+        packets.unwrap(),
+        vec![
+            vec![vec![1, 0]],
+            vec![],
+            vec![vec![4, 0]],
+            vec![],
+            vec![vec![6, 0]]
+        ]
+    );
+    assert_pairs(
+        &harness.frames,
+        &[
+            ("seed", "alice", "en-US"),
+            ("muted", "alice", "en-GB"),
+            ("resumed", "carol", "en-US"),
+            ("muted-again", "carol", "en-GB"),
+            ("restored", "", "en-US"),
+        ],
+    );
+    assert_eq!(usage(&harness.frames), vec![1.0 / 16_000.0; 3]);
+    for (original, direction) in controls {
+        let found: Vec<_> = harness
+            .frames
+            .iter()
+            .filter(|f| f.frame.id == original.id)
+            .collect();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].direction, direction);
+        assert_eq!(found[0].frame, original);
+        assert!(tag.contains(&found[0].frame));
+    }
+}
+
+#[test]
+fn pinned_source_mute_precedes_speaker_usage_and_provider_send() {
+    let source: Value =
+        serde_json::from_str(include_str!("fixtures/python_aws_mute_source.json")).unwrap();
+    for direction in ["mute_resume_downstream", "mute_resume_upstream"] {
+        let muted = &source[direction]["after_mute"];
+        assert_eq!(muted["muted"], true);
+        assert_eq!(muted["provider"], json!([]));
+        assert_eq!(muted["speaker"], "");
+        assert_eq!(muted["pending_usage_seconds"], 0.0);
+        let resumed = &source[direction]["after_resume"];
+        assert_eq!(resumed["provider"], json!([{"stub_audio_hex":"0200"}]));
+        assert_eq!(resumed["speaker"], "resumed-speaker");
+    }
+}

@@ -283,6 +283,7 @@ impl FrameProcessor for TranscribeSttProcessor {
                 self.update_settings(&delta).map_err(settings_error)?;
                 return Ok(());
             }
+            FrameData::SttMute(mute) => self.mute.store(*mute, Ordering::Release),
             _ if direction == Direction::Upstream => return ctx.push(frame, direction).await,
             FrameData::VadUserStartedSpeaking(_) | FrameData::VadUserStartedSpeakingDetailed(_)
                 if ctx.is_usable() =>
@@ -309,7 +310,6 @@ impl FrameProcessor for TranscribeSttProcessor {
                     .try_send(Command::Speaking(false), false)
                     .map_err(processor_error)?
             }
-            FrameData::SttMute(mute) => self.mute.store(*mute, Ordering::Release),
             FrameData::Cancel(_) | FrameData::CancelDetailed(_) => {
                 if let Ok(input) = self.input() {
                     input.cancel.cancel();
