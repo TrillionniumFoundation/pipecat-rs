@@ -40,3 +40,8 @@ pub enum VadError {
     Inference(#[from] ort::Error),
 }
 pub type Result<T> = std::result::Result<T, VadError>;
+
+#[cfg(feature = "http-smart-turn")]
+pub mod http_smart_turn;
+#[cfg(feature = "http-smart-turn")]
+pub use http_smart_turn::{HttpSmartTurnConfig, HttpSmartTurnPredictor};

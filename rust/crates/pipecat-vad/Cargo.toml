@@ -5,6 +5,9 @@ edition.workspace = true
 license = "BSD-2-Clause AND Apache-2.0 AND MIT"
 rust-version.workspace = true
 
+[features]
+http-smart-turn = ["dep:reqwest", "dep:serde_json"]
+
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 async-trait.workspace = true
@@ -14,6 +17,8 @@ ort = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dyn
 ort-sys = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic"] }
 ndarray = "0.16"
 rustfft = "6.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"], optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

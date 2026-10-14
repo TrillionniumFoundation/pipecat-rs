@@ -4352,6 +4352,7 @@ dependencies = [
  "ort-sys",
  "pipecat-audio",
  "pipecat-core",
+ "reqwest",
  "rustfft",
  "serde_json",
  "thiserror 2.0.21",

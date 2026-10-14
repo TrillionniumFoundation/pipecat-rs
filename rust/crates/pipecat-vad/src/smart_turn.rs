@@ -220,12 +220,13 @@ fn endpoint_window(samples: &[i16]) -> Vec<f32> {
     waveform
 }
 
-/// Sigmoid output from the Smart Turn v3 graph.
+/// Smart Turn prediction shared by local and explicitly configured predictors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmartTurnPrediction {
     /// Model probability that the speaker's turn is complete.
     pub probability: f32,
-    /// True only when `probability > 0.5`, matching the Python analyzer.
+    /// Completion decision. The local ONNX model uses `probability > 0.5`;
+    /// remote predictors may instead use an authoritative server decision.
     pub complete: bool,
 }
 

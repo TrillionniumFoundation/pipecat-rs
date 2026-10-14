@@ -2,8 +2,10 @@
 
 Native Rust Silero voice activity detection and Smart Turn v3 CPU inference.
 The executable code uses Rust DSP/state machines and the native ONNX Runtime C
-API through `ort`. No Python interpreter, Python wrapper, HTTP inference service,
-or speech-energy substitute is used at runtime.
+API through `ort`. The default local path uses no Python interpreter, Python
+wrapper, HTTP inference service, or speech-energy substitute. The optional
+`http-smart-turn` feature adds an explicit, IP-addressed remote endpoint predictor;
+see [HTTP_SMART_TURN.md](HTTP_SMART_TURN.md) for its restricted contract.
 
 ## Runtime and assets
 
@@ -13,7 +15,7 @@ and has been exercised with ONNX Runtime 1.21.0. Cargo builds use `load-dynamic`
 with binary downloads disabled; they do not require the runtime to be installed.
 Inference requires it. Missing runtime/model files are errors.
 
-Production constructors require **both paths explicitly**. There are no implicit
+Local model constructors require **both paths explicitly**. There are no implicit
 model searches, downloads, or writes. The runtime is process-global: initialize
 this crate before other `ort` consumers and use the same runtime library for all
 models. An incompatible native library can leave the dependency's global loader
