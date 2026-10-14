@@ -249,3 +249,8 @@ pub use full_response::{
 
 #[cfg(feature = "voicemail")]
 pub mod voicemail;
+
+pub mod text_transformer;
+pub use text_transformer::{
+    AsyncTextTransform, StatelessTextTransformer, StatelessTextTransformerConfig,
+};

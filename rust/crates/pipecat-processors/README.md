@@ -239,3 +239,84 @@ Callback admission closes once graceful shutdown starts. Source cleanup's
 unbounded wait is replaced by owned cancellation and cooperative deadlines. No
 assistant-stopped callback bridge, latest-context notifier gate, generic event
 system, provider integration, or audible playback parity is implied.
+
+## Stateless text transformation
+
+`StatelessTextTransformer::new_sync(config, transform)` accepts a synchronous
+`Fn(String) -> Result<String, ProcessorError>`;
+`new_async(config, AsyncTextTransform)` accepts an owned async callback. Both are
+available through `pipecat::processors` without an optional feature. This is an
+application-supplied hook, not a provider call or an automatic content policy.
+
+The pinned contract is `ProfHepta/pipecat` commit
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`src/pipecat/processors/text_transformer.py` lines 15–50, blob
+`dffee7ac4bc3155f8f8997aa66e3057869ee1949`. Its `isinstance(TextFrame)` includes
+Text, LLMText, VisionText, AggregatedText, TTSText, Transcription, Interim/Eager
+Transcription, Translation, and InputTextRaw. Rust maps these ten Python classes
+to fourteen enum variants, including the four detailed transcript forms.
+The checked-in `tests/fixtures/text_transformer_source.json` derives the class
+set from the pinned frames.py AST (blob
+`79dea3e32f5097a048d03b49f48031811fa1eca6`), not from searching for fields named
+`text`. The offline generator checks that exact blob; Rust tests/runtime do not
+invoke Python.
+
+Every matching input invokes the callback, including empty input. Every success
+creates a **new ordinary TextFrame downstream**, including an empty string and
+an upstream input. This deliberately resets ID, metadata, PTS, routing hints,
+subclass and text flags to source defaults: skip_tts=None,
+includes_inter_frame_spaces=false, append_to_context=true. Position this hook
+with care: applying it to TTS/transcription output changes its frame semantics.
+Non-text frames retain their identity, payload and direction. LLM thought text,
+markers, TTSSpeak, AggregatedTextProgress and native prepared TtsTextInput are
+not TextFrame descendants and are not transformed. OpenClawText is likewise a
+DataFrame in pinned services/openclaw/frames.py (blob
+648f4a6b22eb60e41d7db23a5d445234b454188b), so it passes through. The hook cannot return a
+non-string/null value; use an empty String for the source's empty-output case.
+
+Native semantic carriers on matching input are rejected before calling the
+hook, using the existing continuation/eager/speculation/tool guard. They cannot
+be silently stripped into apparently ordinary text. Nonmatching frames keep
+those carriers while passing through. Successful derived output uses the
+original ProcessorContext, so an interrupted old invocation cannot acquire a
+fresh causal generation by constructing a new Frame.
+
+Default limits are 1 MiB input and output UTF-8 bytes and a ten-second callback
+deadline. Configurable byte limits are 1..=16 MiB and the deadline is positive
+and at most sixty seconds. Over-limit input is rejected before the callback;
+over-limit output is rejected whole, without truncation. These are accepted
+string-size bounds, not a bound on memory allocated by application callbacks.
+Callback errors propagate as supplied; timeout and caught panic use nonfatal
+native processor errors, with no transformed output or automatic retry. The
+core's configured error policy still decides whether to continue, end or cancel. Callback factory
+and poll panics are converted to a fixed diagnostic; the global Rust panic hook
+can still log the original payload. Panicking destructors are unsupported.
+
+No task is spawned. The callback future belongs to the original process-frame
+invocation and is dropped when that invocation is cancelled. Deadlines and
+cancellation are cooperative: a synchronous callback or future that blocks its
+polling thread cannot be preempted by this timer. Callbacks must yield, must not
+detach work, and receive no ProcessorContext. Cancellation cannot undo external
+effects already performed. Graceful End/Stop preserve the core's ordered-drain
+contract and can wait for the bounded current callback; urgent Cancel and
+interruption follow core cancellation semantics. These bounded/native-authority
+rules are explicit differences from the unbounded Python callback.
+
+### Slice 54 verification, 2026-10-14 UTC
+
+Selected local checks use actual native Pipeline workers and injected application
+callbacks, with no provider accounts or browser. Twelve focused tests cover the
+source-derived class set, both directions, new identity/default fields, literal
+UTF-8 and empty results, non-text passthrough, sync/async errors and factory/poll
+panics, exact byte budgets, cooperative timeout and owned-future Drop,
+interruption/Cancel/owner drop, system InputText causal fencing, End/Stop ordered
+drain, and native speculation rejection before hook effects. The facade export
+has a separate passing test. The processor package's all-feature suite passes
+147 tests; strict all-target Clippy and selected formatting also pass.
+
+An initial test incorrectly expected Stop to discard a pending callback and
+hit its observation deadline. That test assumption was corrected to the core's
+graceful ordered-drain contract; the processor implementation did not need a
+Stop-specific behavior change. The final focused and package suites pass.
+The source-AST fixture was independently regenerated and compared byte-for-byte.
+These are selected source-bound checks, not a new full-workspace qualification.

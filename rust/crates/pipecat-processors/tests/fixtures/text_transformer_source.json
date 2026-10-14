@@ -1,0 +1,26 @@
+{
+  "source_repository": "ProfHepta/pipecat",
+  "source_commit": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_path": "src/pipecat/frames/frames.py",
+  "source_blob": "79dea3e32f5097a048d03b49f48031811fa1eca6",
+  "transformer_path": "src/pipecat/processors/text_transformer.py",
+  "transformer_blob": "dffee7ac4bc3155f8f8997aa66e3057869ee1949",
+  "source_classes": [
+    "AggregatedTextFrame",
+    "EagerTranscriptionFrame",
+    "InputTextRawFrame",
+    "InterimTranscriptionFrame",
+    "LLMTextFrame",
+    "TTSTextFrame",
+    "TextFrame",
+    "TranscriptionFrame",
+    "TranslationFrame",
+    "VisionTextFrame"
+  ],
+  "source_semantics": {
+    "text_direction": "Downstream",
+    "new_plain_text_frame": true,
+    "empty_output_is_forwarded": true,
+    "non_text_identity_and_direction_preserved": true
+  }
+}
