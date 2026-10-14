@@ -1,0 +1,704 @@
+{
+  "provenance": {
+    "source": "src/pipecat/services/speechify/tts.py",
+    "git_blob": "8af3abc008195182d26afe5105300831a8d9908d",
+    "reference_checkout": "python-af9f9d",
+    "generation": "Python ast extraction and execution of unmodified _mark_span, _SpeechMarkAccumulator, _parse_sse_event, _output_format_from_sample_rate; no reimplemented oracle. First seven cases reproduce tests/test_speechify_tts.py examples; later cases are synthetic Unicode/fallback edge inputs. HTTP and PCM fixtures remain synthetic."
+  },
+  "word_cases": [
+    {
+      "name": "source_milliseconds",
+      "text": "Hello world.",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "Hello",
+            "start_time": 0,
+            "end_time": 469,
+            "start": 0,
+            "end": 5
+          },
+          {
+            "type": "word",
+            "value": "world.",
+            "start_time": 469,
+            "end_time": 1152,
+            "start": 6,
+            "end": 12
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "Hello",
+            0.0
+          ],
+          [
+            "world.",
+            0.469
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "Hello",
+          0.0
+        ],
+        [
+          "world.",
+          0.469
+        ]
+      ],
+      "expected_end_seconds": 1.152
+    },
+    {
+      "name": "source_time_offset",
+      "text": "Hello world.",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "Hello",
+            "start_time": 0,
+            "end_time": 469,
+            "start": 0,
+            "end": 5
+          },
+          {
+            "type": "word",
+            "value": "world.",
+            "start_time": 469,
+            "end_time": 1152,
+            "start": 6,
+            "end": 12
+          }
+        ]
+      ],
+      "reference_time_offset": 2.5,
+      "expected_batches": [
+        [
+          [
+            "Hello",
+            2.5
+          ],
+          [
+            "world.",
+            2.969
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "Hello",
+          2.5
+        ],
+        [
+          "world.",
+          2.969
+        ]
+      ],
+      "expected_end_seconds": 1.152
+    },
+    {
+      "name": "source_apostrophe",
+      "text": "you’d like",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "you'd",
+            "start_time": 0,
+            "end_time": 0,
+            "start": 0,
+            "end": 5
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "you’d",
+            0.0
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "you’d",
+          0.0
+        ]
+      ],
+      "expected_end_seconds": 0.0
+    },
+    {
+      "name": "source_split_word",
+      "text": "I like text-to-speech systems.",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "text",
+            "start_time": 500,
+            "end_time": 800,
+            "start": 7,
+            "end": 11
+          },
+          {
+            "type": "word",
+            "value": "-",
+            "start_time": 900,
+            "end_time": 950,
+            "start": 11,
+            "end": 12
+          },
+          {
+            "type": "word",
+            "value": "to",
+            "start_time": 0,
+            "end_time": 0,
+            "start": 12,
+            "end": 14
+          },
+          {
+            "type": "word",
+            "value": "-",
+            "start_time": 0,
+            "end_time": 0,
+            "start": 14,
+            "end": 15
+          }
+        ],
+        [
+          {
+            "type": "word",
+            "value": "speech",
+            "start_time": 1000,
+            "end_time": 1100,
+            "start": 15,
+            "end": 21
+          },
+          {
+            "type": "word",
+            "value": "systems.",
+            "start_time": 1200,
+            "end_time": 1450,
+            "start": 22,
+            "end": 30
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [],
+        [
+          [
+            "text-to-speech",
+            0.5
+          ],
+          [
+            "systems.",
+            1.2
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "text-to-speech",
+          0.5
+        ],
+        [
+          "systems.",
+          1.2
+        ]
+      ],
+      "expected_end_seconds": 1.45
+    },
+    {
+      "name": "source_pending_flush",
+      "text": "I like text-to-speech systems.",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "text",
+            "start_time": 500,
+            "end_time": 800,
+            "start": 7,
+            "end": 11
+          },
+          {
+            "type": "word",
+            "value": "-",
+            "start_time": 900,
+            "end_time": 950,
+            "start": 11,
+            "end": 12
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        []
+      ],
+      "expected_tail": [
+        [
+          "text-",
+          0.5
+        ]
+      ],
+      "expected_words": [
+        [
+          "text-",
+          0.5
+        ]
+      ],
+      "expected_end_seconds": 0.95
+    },
+    {
+      "name": "source_skips_non_word",
+      "text": "Hello world.",
+      "mark_chunks": [
+        [
+          {
+            "type": "sentence",
+            "start": 0,
+            "end": 12,
+            "start_time": 0,
+            "end_time": 99999
+          },
+          {
+            "type": "word",
+            "value": "Hello",
+            "start_time": 0,
+            "end_time": 469,
+            "start": 0,
+            "end": 5
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "Hello",
+            0.0
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "Hello",
+          0.0
+        ]
+      ],
+      "expected_end_seconds": 0.469
+    },
+    {
+      "name": "source_bad_offsets",
+      "text": "Hello world.",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "missing",
+            "start_time": 0,
+            "end_time": 0
+          },
+          {
+            "type": "word",
+            "value": "past",
+            "start_time": 0,
+            "end_time": 0,
+            "start": 6,
+            "end": 99
+          },
+          {
+            "type": "word",
+            "value": "empty",
+            "start_time": 0,
+            "end_time": 0,
+            "start": 6,
+            "end": 6
+          },
+          {
+            "type": "word",
+            "value": "string",
+            "start_time": 0,
+            "end_time": 0,
+            "start": "6",
+            "end": "12"
+          },
+          {
+            "type": "word",
+            "value": "negative",
+            "start_time": 0,
+            "end_time": 0,
+            "start": -1,
+            "end": 3
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "missing",
+            0.0
+          ],
+          [
+            "past",
+            0.0
+          ],
+          [
+            "empty",
+            0.0
+          ],
+          [
+            "string",
+            0.0
+          ],
+          [
+            "negative",
+            0.0
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "missing",
+          0.0
+        ],
+        [
+          "past",
+          0.0
+        ],
+        [
+          "empty",
+          0.0
+        ],
+        [
+          "string",
+          0.0
+        ],
+        [
+          "negative",
+          0.0
+        ]
+      ],
+      "expected_end_seconds": 0.0
+    },
+    {
+      "name": "unicode_codepoints",
+      "text": "你🙂’d élan",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "normalized",
+            "start_time": 1,
+            "end_time": 4,
+            "start": 0,
+            "end": 2
+          },
+          {
+            "type": "word",
+            "value": "'d",
+            "start_time": 4,
+            "end_time": 10,
+            "start": 2,
+            "end": 4
+          }
+        ],
+        [
+          {
+            "type": "word",
+            "value": "elan",
+            "start_time": 10,
+            "end_time": 20,
+            "start": 5,
+            "end": 10
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "你🙂’d",
+            0.001
+          ]
+        ],
+        [
+          [
+            "élan",
+            0.01
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "你🙂’d",
+          0.001
+        ],
+        [
+          "élan",
+          0.01
+        ]
+      ],
+      "expected_end_seconds": 0.02
+    },
+    {
+      "name": "fallback_flush",
+      "text": "text-to go",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "text",
+            "start_time": 1,
+            "end_time": 5,
+            "start": 0,
+            "end": 4
+          },
+          {
+            "type": "word",
+            "value": " fallback ",
+            "start_time": 2,
+            "end_time": 8
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "text",
+            0.001
+          ],
+          [
+            "fallback",
+            0.002
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "text",
+          0.001
+        ],
+        [
+          "fallback",
+          0.002
+        ]
+      ],
+      "expected_end_seconds": 0.008
+    },
+    {
+      "name": "none_empty_marks",
+      "text": "Hello world.",
+      "mark_chunks": [
+        null,
+        [],
+        [
+          {}
+        ],
+        [
+          {
+            "type": "word",
+            "value": ""
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [],
+        [],
+        [],
+        []
+      ],
+      "expected_tail": [],
+      "expected_words": [],
+      "expected_end_seconds": 0.0
+    },
+    {
+      "name": "python_bool_offsets",
+      "text": "a b",
+      "mark_chunks": [
+        [
+          {
+            "type": "word",
+            "value": "a",
+            "start_time": 0,
+            "end_time": 1,
+            "start": false,
+            "end": true
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "a",
+            0.0
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "a",
+          0.0
+        ]
+      ],
+      "expected_end_seconds": 0.001
+    },
+    {
+      "name": "python_information_separator_whitespace",
+      "text": "one\u001ctwo",
+      "mark_chunks": [
+        [
+          {
+            "value": "one",
+            "start": 0,
+            "end": 3,
+            "start_time": 0,
+            "end_time": 10
+          }
+        ],
+        [
+          {
+            "value": "\u001f fallback \u001c",
+            "start_time": 10,
+            "end_time": 20
+          }
+        ]
+      ],
+      "reference_time_offset": 0,
+      "expected_batches": [
+        [
+          [
+            "one",
+            0.0
+          ]
+        ],
+        [
+          [
+            "fallback",
+            0.01
+          ]
+        ]
+      ],
+      "expected_tail": [],
+      "expected_words": [
+        [
+          "one",
+          0.0
+        ],
+        [
+          "fallback",
+          0.01
+        ]
+      ],
+      "expected_end_seconds": 0.02
+    }
+  ],
+  "sse_cases": [
+    {
+      "block": "event: speech.chunk\ndata: {\"audio\":\"SUQzBAA=\",\"speech_marks\":[]}",
+      "expected": [
+        "speech.chunk",
+        {
+          "audio": "SUQzBAA=",
+          "speech_marks": []
+        }
+      ]
+    },
+    {
+      "block": "event: speech.done\ndata: {\"audio_duration_ms\":\ndata: 4350}",
+      "expected": [
+        "speech.done",
+        {
+          "audio_duration_ms": 4350
+        }
+      ]
+    },
+    {
+      "block": ": keep-alive\nevent: speech.done\ndata: {}",
+      "expected": [
+        "speech.done",
+        {}
+      ]
+    },
+    {
+      "block": "event: speech.something-new\ndata: {}",
+      "expected": [
+        "speech.something-new",
+        {}
+      ]
+    }
+  ],
+  "rates": [
+    {
+      "requested": 8000,
+      "expected": [
+        "pcm_8000",
+        8000
+      ]
+    },
+    {
+      "requested": 16000,
+      "expected": [
+        "pcm_16000",
+        16000
+      ]
+    },
+    {
+      "requested": 22050,
+      "expected": [
+        "pcm_22050",
+        22050
+      ]
+    },
+    {
+      "requested": 24000,
+      "expected": [
+        "pcm_24000",
+        24000
+      ]
+    },
+    {
+      "requested": 44100,
+      "expected": [
+        "pcm_44100",
+        44100
+      ]
+    },
+    {
+      "requested": 48000,
+      "expected": [
+        "pcm_48000",
+        48000
+      ]
+    },
+    {
+      "requested": 32000,
+      "expected": [
+        "pcm_24000",
+        24000
+      ]
+    }
+  ]
+}

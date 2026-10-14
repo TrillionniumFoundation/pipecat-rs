@@ -302,3 +302,12 @@ SpeechmaticsSynthesisRequest}` and `HttpTtsBackend::Speechmatics`. The facade's
 alongside its existing Agent STT module. No new dependencies enter the default
 closure. See [SPEECHMATICS.md](SPEECHMATICS.md) for the pinned source mapping,
 retry/format policy and qualification limits.
+
+## Optional Speechify timestamped HTTP synthesis
+
+Enable `pipecat-speech/speechify` (or the facade's `speechify` feature) for
+`speechify::{SpeechifyHttpClient, SpeechifySynthesisRequest, SpeechifyEvent}` and
+`HttpTtsBackend::Speechify`. It preserves cross-event original-text words, PCM
+and terminal audio duration through the existing TTS pipeline. The feature is
+default-off with no new dependencies. See [SPEECHIFY.md](SPEECHIFY.md) for the
+fixed source, bounded native profile, timeline adaptation and loopback acceptance.

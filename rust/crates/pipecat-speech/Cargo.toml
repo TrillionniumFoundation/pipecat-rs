@@ -6,6 +6,7 @@ license.workspace = true
 
 [features]
 speechmatics = []
+speechify = []
 
 [dependencies]
 pipecat-audio = { path = "../pipecat-audio" }

@@ -388,7 +388,30 @@ impl TtsAlignment {
         now_ns: u64,
         previous_pts: u64,
     ) -> Result<Vec<TtsAlignmentEvent>, TtsAlignmentError> {
+        self.finish_success_with_audio_offset(now_ns, previous_pts, None)
+    }
+    /// Opt in to a provider-reported terminal audio offset relative to this
+    /// context's first audio. Include trailing silence and mark end times in
+    /// this offset. It advances the boundary, never creates a word or playback
+    /// receipt. Without observed audio the offset is validated but not applied.
+    /// `None` preserves the legacy last-word/synthesis-completion boundary.
+    pub fn finish_success_with_audio_offset(
+        &mut self,
+        now_ns: u64,
+        previous_pts: u64,
+        audio_offset_seconds: Option<f64>,
+    ) -> Result<Vec<TtsAlignmentEvent>, TtsAlignmentError> {
         self.apply(|s| {
+            let audio_offset_ns = audio_offset_seconds.map(Self::seconds_to_ns).transpose()?;
+            if let (Some(baseline), Some(offset)) = (s.baseline, audio_offset_ns) {
+                let terminal = baseline
+                    .checked_add(offset)
+                    .ok_or(TtsAlignmentError::TimestampOverflow)?;
+                terminal
+                    .checked_add(1)
+                    .ok_or(TtsAlignmentError::TimestampOverflow)?;
+                s.last_pts = s.last_pts.max(terminal);
+            }
             if s.baseline.is_none() {
                 s.baseline = Some(now_ns.max(previous_pts));
                 s.last_pts = s.baseline.unwrap();

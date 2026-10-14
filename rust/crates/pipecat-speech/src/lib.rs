@@ -9,6 +9,8 @@ pub mod deepgram;
 pub mod elevenlabs;
 mod openai;
 pub mod processor;
+#[cfg(feature = "speechify")]
+pub mod speechify;
 #[cfg(feature = "speechmatics")]
 pub mod speechmatics;
 pub mod stt_processor;
@@ -61,6 +63,10 @@ impl SpeechConfig {
     }
     pub fn cartesia(api_key: impl Into<String>) -> Self {
         Self::provider("https://api.cartesia.ai", api_key)
+    }
+    #[cfg(feature = "speechify")]
+    pub fn speechify(api_key: impl Into<String>) -> Self {
+        Self::provider("https://api.speechify.ai", api_key)
     }
     #[cfg(feature = "speechmatics")]
     pub fn speechmatics(api_key: impl Into<String>) -> Self {

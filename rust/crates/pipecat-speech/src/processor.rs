@@ -27,12 +27,20 @@ use std::sync::{
 #[cfg(feature = "speechmatics")]
 use crate::speechmatics::{SpeechmaticsHttpClient, SpeechmaticsSynthesisRequest};
 
+#[cfg(feature = "speechify")]
+use crate::speechify::{SpeechifyEvent, SpeechifyHttpClient, SpeechifySynthesisRequest};
+
 static NEXT_TTS_CONTEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Immutable provider settings copied for every accepted complete utterance.
 /// The request's text field is overwritten with the incoming frame's text.
 #[derive(Clone)]
 pub enum HttpTtsBackend {
+    #[cfg(feature = "speechify")]
+    Speechify {
+        client: SpeechifyHttpClient,
+        request: SpeechifySynthesisRequest,
+    },
     #[cfg(feature = "speechmatics")]
     Speechmatics {
         client: SpeechmaticsHttpClient,
@@ -58,6 +66,8 @@ pub enum HttpTtsBackend {
 impl HttpTtsBackend {
     pub fn sample_rate(&self) -> u32 {
         match self {
+            #[cfg(feature = "speechify")]
+            Self::Speechify { request, .. } => request.output_sample_rate(),
             #[cfg(feature = "speechmatics")]
             Self::Speechmatics { request, .. } => request.sample_rate,
             Self::OpenAi { .. } => 24000,
@@ -66,8 +76,21 @@ impl HttpTtsBackend {
             Self::Cartesia { request, .. } => request.sample_rate,
         }
     }
+    fn reporting(&self) -> TokenReporting {
+        match self {
+            #[cfg(feature = "speechify")]
+            Self::Speechify { .. } => TokenReporting::WordTimestamps,
+            _ => TokenReporting::SynthesisCompletion,
+        }
+    }
     fn validate(&self) -> Result<(), SpeechError> {
         match self {
+            #[cfg(feature = "speechify")]
+            Self::Speechify { request, .. } => {
+                let mut request = request.clone();
+                request.text = "validation".into();
+                request.validate()
+            }
             #[cfg(feature = "speechmatics")]
             Self::Speechmatics { request, .. } => {
                 let mut request = request.clone();
@@ -110,6 +133,12 @@ impl HttpTtsBackend {
         let mut candidate = self.clone();
         let mut changed = false;
         match &mut candidate {
+            #[cfg(feature = "speechify")]
+            Self::Speechify { request, .. } => {
+                changed |= required(&mut request.model, &delta.base.model)?;
+                changed |= required(&mut request.voice, &delta.voice)?;
+                changed |= optional(&mut request.language, &delta.language)?;
+            }
             #[cfg(feature = "speechmatics")]
             Self::Speechmatics { request, .. } => {
                 if !matches!(delta.base.model, Setting::NotGiven)
@@ -168,6 +197,12 @@ impl HttpTtsBackend {
     }
     fn synthesize(&self, text: String) -> Result<AudioStream, SpeechError> {
         match self {
+            #[cfg(feature = "speechify")]
+            Self::Speechify { client, request } => {
+                let mut request = request.clone();
+                request.text = text;
+                client.synthesize(request).map(AudioStream::Speechify)
+            }
             #[cfg(feature = "speechmatics")]
             Self::Speechmatics { client, request } => {
                 let mut request = request.clone();
@@ -198,22 +233,59 @@ impl HttpTtsBackend {
     }
 }
 enum AudioStream {
+    #[cfg(feature = "speechify")]
+    Speechify(crate::ResponseStream<SpeechifyEvent>),
     Raw(SpeechStream),
     ElevenLabs(ElevenLabsStream),
+}
+enum AudioEvent {
+    Audio(SpeechChunk),
+    #[cfg(feature = "speechify")]
+    Word {
+        word: String,
+        offset_seconds: f64,
+    },
+    #[cfg(feature = "speechify")]
+    Done {
+        duration_seconds: f64,
+    },
 }
 impl AudioStream {
     fn source_audio_observed(&self) -> bool {
         match self {
+            #[cfg(feature = "speechify")]
+            Self::Speechify(stream) => stream.source_audio_observed(),
             Self::Raw(stream) => stream.source_audio_observed(),
             Self::ElevenLabs(stream) => stream.source_audio_observed(),
         }
     }
-    async fn next(&mut self) -> Option<Result<SpeechChunk, SpeechError>> {
+    async fn next(&mut self) -> Option<Result<AudioEvent, SpeechError>> {
         match self {
-            Self::Raw(stream) => stream.next().await,
+            #[cfg(feature = "speechify")]
+            Self::Speechify(stream) => stream.next().await.map(|event| {
+                event.map(|event| match event {
+                    SpeechifyEvent::Audio(audio) => AudioEvent::Audio(audio),
+                    SpeechifyEvent::Word {
+                        word,
+                        offset_seconds,
+                    } => AudioEvent::Word {
+                        word,
+                        offset_seconds,
+                    },
+                    SpeechifyEvent::Done { duration_seconds } => {
+                        AudioEvent::Done { duration_seconds }
+                    }
+                })
+            }),
+            Self::Raw(stream) => stream
+                .next()
+                .await
+                .map(|chunk| chunk.map(AudioEvent::Audio)),
             Self::ElevenLabs(stream) => loop {
                 match stream.next().await {
-                    Some(Ok(ElevenLabsEvent::Audio(audio))) => return Some(Ok(audio)),
+                    Some(Ok(ElevenLabsEvent::Audio(audio))) => {
+                        return Some(Ok(AudioEvent::Audio(audio)))
+                    }
                     Some(Ok(ElevenLabsEvent::Alignment { .. })) => continue,
                     Some(Err(error)) => return Some(Err(error)),
                     None => return None,
@@ -232,19 +304,22 @@ struct State {
     backend: HttpTtsBackend,
     pending: Vec<Pending>,
     failure: Arc<AtomicBool>,
+    // Replace on Speechify interruption instead of resetting a shared atomic:
+    // retiring tasks must never advance a new generation's baseline.
+    timeline: Arc<AtomicU64>,
 }
 /// Synthesizes downstream complete utterances, including three-channel `TtsTextInput`.
 /// Normal downstream frames wait behind accepted utterances; explicit skipped
 /// incremental text, system and upstream frames bypass synthesis. Requests are
 /// sequential, bounded and owned by
 /// the core runtime. End drains requests; interruption/Cancel discard stale audio.
-/// Emits lifecycle, PCM, source anchors and completion diagnostics, never spoken text.
-/// Character-alignment events remain available through the ElevenLabs client API.
+/// Emits lifecycle, PCM, source anchors and completion diagnostics. Speechify
+/// additionally emits provider-reported word timing; none of these are playback
+/// receipts. Character alignment remains available through the ElevenLabs client API.
 pub struct HttpTtsProcessor {
     health: ProcessorHealth,
     max_pending: usize,
     state: Mutex<State>,
-    timeline: Arc<AtomicU64>,
     audio_watchdog: TtsAudioWatchdog,
 }
 impl HttpTtsProcessor {
@@ -256,12 +331,12 @@ impl HttpTtsProcessor {
         Ok(Self {
             health: ProcessorHealth::default(),
             max_pending,
-            timeline: Arc::default(),
             audio_watchdog: TtsAudioWatchdog::default(),
             state: Mutex::new(State {
                 backend,
                 pending: vec![],
                 failure: Arc::default(),
+                timeline: Arc::default(),
             }),
         })
     }
@@ -298,6 +373,10 @@ impl HttpTtsProcessor {
             }
         });
         state.failure = Arc::default();
+        #[cfg(feature = "speechify")]
+        if matches!(state.backend, HttpTtsBackend::Speechify { .. }) {
+            state.timeline = Arc::default();
+        }
         Ok(())
     }
     fn enqueue(&self, command: Command, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
@@ -375,7 +454,7 @@ impl HttpTtsProcessor {
         let backend = state.backend.clone();
         let generation = ctx.health().generation();
         let audio_watchdog = self.audio_watchdog.clone();
-        let timeline = self.timeline.clone();
+        let timeline = state.timeline.clone();
         let ctx_output = ctx.clone();
         let failure = state.failure.clone();
         let interruptible = !matches!(
@@ -479,17 +558,28 @@ impl FrameProcessor for HttpTtsProcessor {
         config: &StartFrame,
         _ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        let rate = self
+        #[allow(unused_mut)]
+        let mut state = self
             .state
             .lock()
-            .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?
-            .backend
-            .sample_rate();
-        if config.audio_out_sample_rate != rate {
+            .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
+        let compatible = config.audio_out_sample_rate == state.backend.sample_rate();
+        #[cfg(feature = "speechify")]
+        let compatible = compatible
+            || matches!(
+                &state.backend,
+                HttpTtsBackend::Speechify { request, .. }
+                    if config.audio_out_sample_rate == request.sample_rate
+            );
+        if !compatible {
             return Err(ProcessorError::fatal(
                 "pipeline output sample rate differs from HTTP TTS configuration",
             )
             .with_category(ErrorCategory::InvalidRequest));
+        }
+        #[cfg(feature = "speechify")]
+        if matches!(state.backend, HttpTtsBackend::Speechify { .. }) {
+            state.timeline = Arc::default();
         }
         Ok(())
     }
@@ -674,7 +764,7 @@ async fn synthesize(
     let mut alignment = match TtsAlignment::new(
         revision,
         input.append_to_context,
-        TokenReporting::SynthesisCompletion,
+        backend.reporting(),
         None,
         limits,
     ) {
@@ -712,6 +802,8 @@ async fn synthesize(
     let mut first_audio = true;
     let mut source_audio = false;
     let mut succeeded = true;
+    #[allow(unused_mut)]
+    let mut audio_offset_seconds = None;
     let mut start = Frame::new(FrameData::TtsStarted(TtsStartedFrame {
         context_id: Some(context_id.clone()),
         append_to_context: input.append_to_context,
@@ -737,7 +829,7 @@ async fn synthesize(
             break;
         };
         match chunk {
-            Ok(chunk) => {
+            Ok(AudioEvent::Audio(chunk)) => {
                 if first_audio && ctx.configuration().enable_metrics {
                     ctx.push(
                         Frame::new(FrameData::Metrics(vec![Metric::Ttfb {
@@ -778,7 +870,28 @@ async fn synthesize(
                     .insert("source_frame_id".into(), input.source_id.into());
                 ctx.push(frame, Direction::Downstream).await?;
             }
-            Err(SpeechError::EmptyAudio) => break,
+            #[cfg(feature = "speechify")]
+            Ok(AudioEvent::Word {
+                word,
+                offset_seconds,
+            }) => {
+                let events = alignment.word(&word, offset_seconds, false);
+                if !emit_alignment(events, &mut mapper, &input, &ctx, &failure, revision).await? {
+                    succeeded = false;
+                    break;
+                }
+            }
+            #[cfg(feature = "speechify")]
+            Ok(AudioEvent::Done { duration_seconds }) => {
+                // The provider client emits this once, after EOF and all late
+                // marks. It is request-relative, never a cumulative timestamp.
+                audio_offset_seconds = Some(duration_seconds);
+            }
+            Err(SpeechError::EmptyAudio)
+                if backend.reporting() == TokenReporting::SynthesisCompletion =>
+            {
+                break
+            }
             Err(error) => {
                 failure.store(true, Ordering::Release);
                 succeeded = false;
@@ -790,9 +903,10 @@ async fn synthesize(
     source_audio |= stream.source_audio_observed();
     drop(stream);
     if succeeded {
-        let events = alignment.finish_success(
+        let events = alignment.finish_success_with_audio_offset(
             ctx.observer_clock().now_ns(),
             timeline.load(Ordering::Acquire),
+            audio_offset_seconds,
         );
         succeeded = emit_alignment(events, &mut mapper, &input, &ctx, &failure, revision).await?;
     }
