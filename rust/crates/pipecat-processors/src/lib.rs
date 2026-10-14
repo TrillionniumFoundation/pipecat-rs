@@ -275,3 +275,6 @@ pub use frame_subscription::{
     AsyncFramePredicate, ConsumerProcessor, ConsumerSubscriptionSnapshot, FrameSubscriptionConfig,
     FrameSubscriptionProducer, FrameTransformer, ProducerProcessor, ProducerSubscriptionSnapshot,
 };
+
+pub mod wake_notifier;
+pub use wake_notifier::{AsyncWakeNotification, WakeNotifierFilter, WakeNotifierFilterConfig};

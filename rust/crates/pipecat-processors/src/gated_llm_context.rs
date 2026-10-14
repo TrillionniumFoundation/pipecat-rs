@@ -55,6 +55,9 @@ struct State {
     consumed: u64,
     sequence: u64,
     slot: Option<Retained>,
+    // Latest real Start/Interruption invocation, never a setup context. Weak
+    // origins do not extend a runtime owner's lifetime.
+    notification_scope: Option<InvocationFence>,
 }
 struct Session {
     state: Mutex<State>,
@@ -73,6 +76,7 @@ impl Session {
                 consumed: 0,
                 sequence: 0,
                 slot: None,
+                notification_scope: None,
             }),
             changed: Notify::new(),
             drained: Notify::new(),
@@ -165,6 +169,27 @@ impl GatedLlmContextNotifier {
         self.session.changed.notify_waiters();
         Ok(())
     }
+    // Capture before an asynchronous predicate. A later target interruption
+    // changes only future tickets; it cannot refresh an old callback's scope.
+    pub(crate) fn notification_ticket(
+        &self,
+        source: &InvocationFence,
+    ) -> Result<GatedNotificationTicket, ProcessorError> {
+        let target = {
+            let state = self.session.lock();
+            if state.closed || !state.owned {
+                return Err(ProcessorError::new("gated LLM context session is closed"));
+            }
+            state
+                .notification_scope
+                .clone()
+                .ok_or_else(|| ProcessorError::new("gated LLM context has not processed Start"))?
+        };
+        Ok(GatedNotificationTicket {
+            session: self.session.clone(),
+            combined: source.intersection(&target)?,
+        })
+    }
     pub fn snapshot(&self) -> GatedLlmContextSnapshot {
         let state = self.session.lock();
         GatedLlmContextSnapshot {
@@ -173,6 +198,36 @@ impl GatedLlmContextNotifier {
             notification_pending: state.pending,
             notifications_consumed: state.consumed,
             supervisor_running: state.owned,
+        }
+    }
+}
+
+// One admission attempt, tied to both original invocations and this fixed
+// session. The signal itself retains no source fence: once admitted it has the
+// existing coalescing semantics, including consumption while the slot is empty.
+pub(crate) struct GatedNotificationTicket {
+    session: Arc<Session>,
+    combined: InvocationFence,
+}
+impl GatedNotificationTicket {
+    pub(crate) fn notify(self) -> Result<(), ProcessorError> {
+        let admitted = self.combined.with_current(|| {
+            let mut state = self.session.lock();
+            if state.closed || !state.owned {
+                return Err(ProcessorError::new("gated LLM context session is closed"));
+            }
+            state.pending = true;
+            Ok(())
+        });
+        // A synchronous waker may reenter routing. Release both runtime
+        // admission and session locks before waking the supervisor.
+        match admitted {
+            Some(Ok(())) => {
+                self.session.changed.notify_waiters();
+                Ok(())
+            }
+            Some(Err(error)) => Err(error),
+            None => Ok(()), // A stale source/target never signals another epoch.
         }
     }
 }
@@ -344,6 +399,15 @@ impl FrameProcessor for GatedLlmContextAggregator {
             return ctx.push(frame, direction).await;
         }
         let session = self.session();
+        if frame.data.is_start() || matches!(frame.data, FrameData::Interruption) {
+            let scope = ctx.invocation_fence()?;
+            scope.with_current(|| {
+                let mut state = session.lock();
+                if !state.closed {
+                    state.notification_scope = Some(scope.clone());
+                }
+            });
+        }
         if matches!(frame.data, FrameData::Interruption) {
             session.discard_stale();
             return ctx.push(frame, direction).await;

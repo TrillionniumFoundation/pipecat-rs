@@ -53,7 +53,11 @@ subscriber's edits cannot affect another or original passthrough. Identity
 transforms retain logical frame ID and native observation identity. Rust's typed
 transformer returns a frame or an error; `None` is not a drop protocol.
 
-Callbacks run outside runtime and local state locks, serially per consumer.
+Callbacks run outside runtime and local state locks. Only the consumer-owned
+worker serializes its consumer transformer across subscribed envelopes. Producer
+predicates and producer transformers can run concurrently on normal/system
+lanes; fanout order is registration order within one invocation, with no global
+ordering guarantee between invocations.
 Timeouts and cancellation are cooperative. Synchronous blocking, detached work,
 panicking destructors and side effects inside callbacks cannot be preempted or
 rolled back. Construction/poll panics produce fixed errors; the global panic

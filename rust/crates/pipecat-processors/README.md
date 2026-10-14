@@ -661,3 +661,12 @@ read-only filtering and owned Text/PCM transforms. See
 [FRAME_SUBSCRIPTION.md](FRAME_SUBSCRIPTION.md) for the fixed Python contract,
 dual-runtime causal admission, partial fanout, resource budgets, ownership and
 explicit native differences.
+
+## Frame-driven wake notifications
+
+`WakeNotifierFilter` adds an explicit selector → asynchronous predicate →
+notification → original-frame forwarding adapter, plus a fixed-session,
+dual-fenced `GatedLlmContextNotifier` constructor. Existing `FunctionFilter`
+closures could already express basic notifications. See
+[WAKE_NOTIFIER.md](WAKE_NOTIFIER.md) for source ordering, lifecycle behavior,
+cooperative cancellation and the limits of asynchronous side-effect rollback.
