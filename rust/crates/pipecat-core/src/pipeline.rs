@@ -116,6 +116,7 @@ pub struct WorkerReport {
 }
 
 pub struct Pipeline {
+    idle: Option<crate::WorkerIdleConfig>,
     heartbeats: Option<crate::HeartbeatConfig>,
     processors: Vec<Arc<dyn FrameProcessor>>,
     observers: Vec<crate::observer::ObserverRegistration>,
@@ -128,11 +129,19 @@ impl Pipeline {
         Self {
             processors,
             heartbeats: None,
+            idle: None,
             observers: vec![],
             observer_clock: Arc::new(MonotonicObserverClock::default()),
             inherited_observers: None,
             lifecycle_owner: None,
         }
+    }
+    /// Enable an explicit root-wide idle policy. Existing pipelines remain off.
+    /// The configured default cancels this root after 300 seconds without a
+    /// selected first-push activity; use NotifyOnly for non-cancelling monitoring.
+    pub fn with_idle_timeout(mut self, config: crate::WorkerIdleConfig) -> Self {
+        self.idle = Some(config);
+        self
     }
     /// Enable bounded traversal diagnostics for this root pipeline only.
     /// Configuration validates at start; defaults remain disabled. This does not
@@ -190,6 +199,14 @@ impl Pipeline {
         self
     }
     pub async fn start(mut self, config: PipelineConfig) -> Result<PipelineWorker, PipelineError> {
+        if let Some(idle) = self.idle {
+            idle.validate()?;
+            if self.lifecycle_owner.is_some() || self.inherited_observers.is_some() {
+                return Err(PipelineError::InvalidConfiguration(
+                    "idle policy must be configured on the root pipeline".into(),
+                ));
+            }
+        }
         if let Some(heartbeats) = self.heartbeats {
             heartbeats.validate()?;
             if self.lifecycle_owner.is_some() || self.inherited_observers.is_some() {
@@ -255,7 +272,14 @@ impl Pipeline {
             .map(|owner| owner.runtime.upgrade().ok_or(PipelineError::Closed))
             .transpose()?;
         let lifecycle = owner.as_ref().map_or_else(
-            || Arc::new(LifecycleGroup::new(runtime_id, self.heartbeats)),
+            || {
+                Arc::new(LifecycleGroup::new(
+                    runtime_id,
+                    self.heartbeats,
+                    self.idle
+                        .map(|config| (config, crate::observer::next_observation_domain_id())),
+                ))
+            },
             |parent| parent.lifecycle.clone(),
         );
         let admission = lifecycle.admission.clone();
@@ -668,6 +692,17 @@ impl PipelineWorker {
             .cloned()
             .collect()
     }
+    /// Bounded idle-policy snapshots, available only on the configured root.
+    pub fn idle_monitor(&self) -> Option<crate::WorkerIdleMonitor> {
+        if self.runtime.lifecycle_owner.is_some() {
+            return None;
+        }
+        self.runtime
+            .lifecycle
+            .idle
+            .as_ref()
+            .map(|idle| idle.lock().unwrap().monitor())
+    }
     /// Latest-value diagnostics; only a configured root exposes this handle.
     pub fn heartbeat_monitor(&self) -> Option<crate::HeartbeatMonitor> {
         if self.runtime.lifecycle_owner.is_some() {
@@ -777,6 +812,41 @@ pub(crate) struct Runtime {
     health_observations: Mutex<Vec<Arc<crate::health::HealthObservation>>>,
 }
 impl Runtime {
+    fn start_idle(&self) {
+        if self.lifecycle_owner.is_none() {
+            let _admission = self.admission.lock().unwrap();
+            if let Some(idle) = &self.lifecycle.idle {
+                idle.lock().unwrap().start(Instant::now());
+            }
+        }
+    }
+    fn drive_idle(&self) {
+        if self.lifecycle_owner.is_some() || self.lifecycle.idle.is_none() {
+            return;
+        }
+        let _admission = self.admission.lock().unwrap();
+        let mut idle = self.lifecycle.idle.as_ref().unwrap().lock().unwrap();
+        if self.state.borrow().is_finished()
+            || !self.accepting.load(Ordering::SeqCst)
+            || self.lifecycle.sealed.load(Ordering::SeqCst)
+        {
+            idle.close();
+            return;
+        }
+        let cancel = idle.tick(Instant::now());
+        drop(idle);
+        if cancel && !self.policy_terminal_requested.swap(true, Ordering::SeqCst) {
+            self.close_input();
+            let mut pending = self.pending_policy.lock().unwrap();
+            if pending.is_none() {
+                *pending = Some(DirectedFrame::new(
+                    Frame::cancel("idle timeout"),
+                    Direction::Downstream,
+                ));
+                self.policy_changed.notify_one();
+            }
+        }
+    }
     fn drive_heartbeats(&self) {
         if self.lifecycle_owner.is_some() || self.lifecycle.heartbeats.is_none() {
             return;
@@ -846,10 +916,13 @@ impl Runtime {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return Ok(());
         }
+        let push_domains = (self.observers.enabled() || self.lifecycle.idle.is_some())
+            .then(|| frame.observed_runtimes.clone());
+        let idle_activity =
+            self.lifecycle.idle.is_some() && crate::idle::IdleState::selected(&frame.data);
         let observation = self.observers.enabled().then(|| {
             (
                 ObservedFrame::capture(&frame),
-                frame.observed_runtimes.clone(),
                 self.observers.clock.now_ns(),
                 self.observers.capture_push(
                     &frame,
@@ -883,12 +956,23 @@ impl Runtime {
             self.deliver(frame, direction, generation)
         };
         if result.is_ok() {
-            if let Some((frame, runtimes, timestamp_ns, captures)) = observation {
-                let first_push = runtimes
-                    .get_or_init(Default::default)
-                    .lock()
-                    .unwrap()
-                    .insert(self.observers.id);
+            let first_push = push_domains.is_some_and(|domains| {
+                if let Some(idle) = &self.lifecycle.idle {
+                    idle.lock().unwrap().observe_push(
+                        &domains,
+                        idle_activity,
+                        self.observers.id,
+                        self.observers.enabled(),
+                    )
+                } else {
+                    domains
+                        .get_or_init(Default::default)
+                        .lock()
+                        .unwrap()
+                        .insert(self.observers.id)
+                }
+            });
+            if let Some((frame, timestamp_ns, captures)) = observation {
                 self.observers.emit_captured(
                     PipelineObservation::Push {
                         source: self.processor_info[from].clone(),
@@ -1160,6 +1244,14 @@ impl Runtime {
     }
     /// Caller holds admission so no external capacity retry can cross this fence.
     fn close_input(&self) {
+        if let Some(idle) = self
+            .lifecycle
+            .idle
+            .as_ref()
+            .filter(|_| self.lifecycle_owner.is_none())
+        {
+            idle.lock().unwrap().close();
+        }
         self.accepting.store(false, Ordering::SeqCst);
         self.ending.lock().unwrap().get_or_insert_with(Instant::now);
         for queue in &self.queues {
@@ -1628,6 +1720,9 @@ struct OutputCloseGuard(Arc<Runtime>);
 impl Drop for OutputCloseGuard {
     fn drop(&mut self) {
         if self.0.lifecycle_owner.is_none() {
+            if let Some(idle) = &self.0.lifecycle.idle {
+                idle.lock().unwrap().close();
+            }
             if let Some(heartbeats) = &self.0.lifecycle.heartbeats {
                 heartbeats.lock().unwrap().close();
             }
@@ -1651,6 +1746,7 @@ async fn supervise(
     contexts: Vec<ProcessorContext>,
 ) -> Result<WorkerReport, PipelineError> {
     let _output_guard = OutputCloseGuard(runtime.clone());
+    runtime.start_idle();
     let mut actors = JoinSet::new();
     for (processor, ctx) in processors.iter().zip(&contexts) {
         let processor = processor.clone();
@@ -1679,6 +1775,7 @@ async fn supervise(
             },
         }
         runtime.drive_heartbeats();
+        runtime.drive_idle();
     }
     for node in &runtime.nodes {
         node.cancel_background();

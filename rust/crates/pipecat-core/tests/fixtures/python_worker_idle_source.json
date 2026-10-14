@@ -1,0 +1,442 @@
+{
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "defaults": {
+    "idle_timeout_secs": 300,
+    "idle_timeout_frames": [
+      "BotSpeakingFrame",
+      "InterimTranscriptionFrame",
+      "TranscriptionFrame",
+      "UserSpeakingFrame",
+      "UserStartedSpeakingFrame"
+    ],
+    "cancel_on_idle_timeout": true,
+    "cancel_runner_on_idle_timeout": true
+  },
+  "observer": {
+    "base_observer_options": {
+      "observe_every_push": false
+    },
+    "direction_selection_matrix": [
+      [
+        "upstream",
+        "StartFrame",
+        true
+      ],
+      [
+        "upstream",
+        "BotSpeakingFrame",
+        true
+      ],
+      [
+        "upstream",
+        "InterimTranscriptionFrame",
+        true
+      ],
+      [
+        "upstream",
+        "TranscriptionFrame",
+        true
+      ],
+      [
+        "upstream",
+        "UserSpeakingFrame",
+        true
+      ],
+      [
+        "upstream",
+        "UserStartedSpeakingFrame",
+        true
+      ],
+      [
+        "upstream",
+        "HeartbeatFrame",
+        false
+      ],
+      [
+        "upstream",
+        "TextFrame",
+        false
+      ],
+      [
+        "upstream",
+        "InputAudioRawFrame",
+        false
+      ],
+      [
+        "downstream",
+        "StartFrame",
+        true
+      ],
+      [
+        "downstream",
+        "BotSpeakingFrame",
+        true
+      ],
+      [
+        "downstream",
+        "InterimTranscriptionFrame",
+        true
+      ],
+      [
+        "downstream",
+        "TranscriptionFrame",
+        true
+      ],
+      [
+        "downstream",
+        "UserSpeakingFrame",
+        true
+      ],
+      [
+        "downstream",
+        "UserStartedSpeakingFrame",
+        true
+      ],
+      [
+        "downstream",
+        "HeartbeatFrame",
+        false
+      ],
+      [
+        "downstream",
+        "TextFrame",
+        false
+      ],
+      [
+        "downstream",
+        "InputAudioRawFrame",
+        false
+      ]
+    ],
+    "custom_heartbeat_selected": true,
+    "start_selected_with_custom_tuple": true,
+    "dispatch_boundary": "First-push option executed; upstream dispatcher/dedup not executed."
+  },
+  "disabled_start_helpers": [
+    {
+      "timeout": null,
+      "created": []
+    },
+    {
+      "timeout": 0,
+      "created": []
+    }
+  ],
+  "startup": {
+    "trace": [
+      [
+        "create_task",
+        "_idle_monitor_handler#1"
+      ],
+      [
+        "construct_start"
+      ],
+      [
+        "create_start_metadata"
+      ],
+      [
+        "pipeline_queue",
+        "StartFrame"
+      ],
+      [
+        "wait_for_pipeline_start",
+        false
+      ],
+      [
+        "pipeline_cleanup_stub",
+        true
+      ]
+    ],
+    "monitor_scheduled": false,
+    "start_wait_result_is_stub": true,
+    "direct_repeated_helper_creates_two_handles": [
+      "_idle_monitor_handler#1",
+      "_idle_monitor_handler#2"
+    ]
+  },
+  "notify_only": {
+    "monitor_exit": {
+      "exit": "bounded_stop"
+    },
+    "timeout_return": true,
+    "event_set_calls": 6,
+    "event_clear_calls": 3,
+    "trace": [
+      [
+        "event_set",
+        "idle",
+        0
+      ],
+      [
+        "event_set",
+        "idle",
+        0
+      ],
+      [
+        "wait_begin",
+        0,
+        300,
+        true
+      ],
+      [
+        "wait_event",
+        0,
+        "already_set"
+      ],
+      [
+        "event_clear",
+        "idle",
+        0
+      ],
+      [
+        "wait_begin",
+        0,
+        300,
+        false
+      ],
+      [
+        "event_set",
+        "idle",
+        120
+      ],
+      [
+        "event_set",
+        "idle",
+        120
+      ],
+      [
+        "event_set",
+        "idle",
+        120
+      ],
+      [
+        "wait_event",
+        120,
+        "scripted_activity"
+      ],
+      [
+        "event_clear",
+        "idle",
+        120
+      ],
+      [
+        "wait_begin",
+        120,
+        300,
+        false
+      ],
+      [
+        "wait_timeout",
+        420
+      ],
+      [
+        "warning",
+        "Idle timeout detected."
+      ],
+      [
+        "notify",
+        "on_idle_timeout",
+        420
+      ],
+      [
+        "wait_begin",
+        420,
+        300,
+        false
+      ],
+      [
+        "wait_timeout",
+        720
+      ],
+      [
+        "warning",
+        "Idle timeout detected."
+      ],
+      [
+        "notify",
+        "on_idle_timeout",
+        720
+      ],
+      [
+        "wait_begin",
+        720,
+        300,
+        false
+      ],
+      [
+        "event_set",
+        "idle",
+        765
+      ],
+      [
+        "wait_event",
+        765,
+        "scripted_activity"
+      ],
+      [
+        "event_clear",
+        "idle",
+        765
+      ],
+      [
+        "wait_begin",
+        765,
+        300,
+        false
+      ],
+      [
+        "wait_timeout",
+        1065
+      ],
+      [
+        "warning",
+        "Idle timeout detected."
+      ],
+      [
+        "notify",
+        "on_idle_timeout",
+        1065
+      ],
+      [
+        "bounded_stop",
+        1065
+      ]
+    ]
+  },
+  "already_cancelled": {
+    "timeout_return": false,
+    "trace": [
+      [
+        "wait_begin",
+        0,
+        300,
+        false
+      ],
+      [
+        "wait_timeout",
+        300
+      ]
+    ]
+  },
+  "cancellation": [
+    {
+      "cancel_runner": false,
+      "timeout_return": false,
+      "monitor_exit": {
+        "exit": "returned",
+        "value": null
+      },
+      "trace": [
+        [
+          "wait_begin",
+          0,
+          300,
+          false
+        ],
+        [
+          "wait_timeout",
+          300
+        ],
+        [
+          "warning",
+          "Idle timeout detected."
+        ],
+        [
+          "notify",
+          "on_idle_timeout",
+          300
+        ],
+        [
+          "warning",
+          "Idle pipeline detected, cancelling pipeline worker..."
+        ],
+        [
+          "debug",
+          "Cancelling pipeline worker worker"
+        ],
+        [
+          "event_set",
+          "pipeline_start",
+          300
+        ],
+        [
+          "worker_queue",
+          "CancelFrame",
+          "idle timeout"
+        ]
+      ]
+    },
+    {
+      "cancel_runner": true,
+      "timeout_return": false,
+      "monitor_exit": {
+        "exit": "returned",
+        "value": null
+      },
+      "trace": [
+        [
+          "wait_begin",
+          0,
+          300,
+          false
+        ],
+        [
+          "wait_timeout",
+          300
+        ],
+        [
+          "warning",
+          "Idle timeout detected."
+        ],
+        [
+          "notify",
+          "on_idle_timeout",
+          300
+        ],
+        [
+          "warning",
+          "Idle pipeline detected, cancelling pipeline worker..."
+        ],
+        [
+          "debug",
+          "Cancelling pipeline worker worker"
+        ],
+        [
+          "event_set",
+          "pipeline_start",
+          300
+        ],
+        [
+          "worker_queue",
+          "CancelFrame",
+          "idle timeout"
+        ],
+        [
+          "warning",
+          "...and cancelling the runner."
+        ],
+        [
+          "base_worker_cancel",
+          "idle timeout"
+        ]
+      ]
+    }
+  ],
+  "cleanup": {
+    "trace": [
+      [
+        "cancel_task",
+        "existing_process_push"
+      ],
+      [
+        "heartbeat_cleanup_stub"
+      ],
+      [
+        "cancel_task",
+        "_idle_monitor_handler#1"
+      ]
+    ],
+    "handles_cleared": true,
+    "repeat_idle_cleanup_noop": true
+  }
+}

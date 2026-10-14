@@ -5,6 +5,7 @@ mod frame_contract;
 mod frame_payloads;
 mod health;
 mod heartbeat;
+mod idle;
 pub use heartbeat::{HeartbeatConfig, HeartbeatMonitor, HeartbeatSnapshot};
 mod llm_continuation;
 mod realtime_context;
@@ -30,3 +31,5 @@ pub use queue::{FrameQueue, QueueError};
 pub use realtime_context::*;
 pub use speculation::*;
 pub use tool_outcome::*;
+
+pub use idle::{IdleTimeoutAction, WorkerIdleConfig, WorkerIdleMonitor, WorkerIdleSnapshot};

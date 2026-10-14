@@ -325,9 +325,8 @@ impl ObserverHub {
                 }
             })
             .collect();
-        static NEXT_HUB_ID: AtomicU64 = AtomicU64::new(1);
         Self {
-            id: NEXT_HUB_ID.fetch_add(1, Ordering::Relaxed),
+            id: next_observation_domain_id(),
             clock,
             proxies,
         }
@@ -457,3 +456,10 @@ mod lifecycle_recovery_tests;
 
 #[cfg(test)]
 mod lifecycle_review_tests;
+
+// Private observation consumers reserve IDs from the same namespace without
+// borrowing a hub's first-push identity.
+pub(crate) fn next_observation_domain_id() -> u64 {
+    static NEXT_DOMAIN_ID: AtomicU64 = AtomicU64::new(1);
+    NEXT_DOMAIN_ID.fetch_add(1, Ordering::Relaxed)
+}

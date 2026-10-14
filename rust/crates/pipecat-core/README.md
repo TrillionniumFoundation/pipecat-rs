@@ -31,6 +31,15 @@ with `worker.heartbeat_monitor()`. Timeouts report stalled traversal without
 cancelling business work. See [HEARTBEATS.md](HEARTBEATS.md) for pressure behavior,
 composition limits, source differences and a credential-free runnable example.
 
+## Root-wide idle policy
+
+`Pipeline::with_idle_timeout(WorkerIdleConfig)` explicitly enables selected-frame
+inactivity monitoring across the owned composition. Existing pipelines remain
+unchanged. The enabled config defaults to cancelling this root after 300 seconds;
+choose `IdleTimeoutAction::NotifyOnly` for repeated notifications without cancellation.
+See [WORKER_IDLE.md](WORKER_IDLE.md) for first-push identity, coverage bounds,
+startup/shutdown differences and the runnable example.
+
 ## Processing and shutdown
 
 Implement `FrameProcessor` with `async_trait`. Its `process` method receives an

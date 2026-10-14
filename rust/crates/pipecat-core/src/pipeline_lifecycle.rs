@@ -13,16 +13,22 @@ pub(super) struct LifecycleGroup {
     pub(super) sealed: AtomicBool,
     pub(super) failure: Mutex<Option<PipelineError>>,
     root: u64,
+    pub(super) idle: Option<Mutex<crate::idle::IdleState>>,
     pub(super) heartbeats: Option<Mutex<crate::heartbeat::HeartbeatState>>,
 }
 impl LifecycleGroup {
-    pub(super) fn new(root: u64, heartbeats: Option<HeartbeatConfig>) -> Self {
+    pub(super) fn new(
+        root: u64,
+        heartbeats: Option<HeartbeatConfig>,
+        idle: Option<(crate::WorkerIdleConfig, u64)>,
+    ) -> Self {
         Self {
             admission: Arc::new(Mutex::new(())),
             members: Mutex::new(vec![]),
             sealed: AtomicBool::new(false),
             failure: Mutex::new(None),
             root,
+            idle: idle.map(|(config, id)| Mutex::new(crate::idle::IdleState::new(config, id))),
             heartbeats: heartbeats
                 .map(crate::heartbeat::HeartbeatState::new)
                 .map(Mutex::new),

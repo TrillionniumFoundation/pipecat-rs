@@ -209,7 +209,7 @@ and causal routing contracts. Service-specific gating still requires each adapte
 implementation; these contracts do not establish full runtime parity.
 
 - Python event-handler aliases and before/after callbacks; external tracing adapters and automatic rich metrics instrumentation of every service. Native global observation and explicit measured metric streams are provided by `pipecat-observers`.
-- Python-style idle-worker policy and readiness callback/decorator parity (native opt-in heartbeat traversal diagnostics are documented below). Native registry watches and readiness waits are provided separately by [`pipecat-workers`](../pipecat-workers/README.md)
+- Python worker readiness callback/decorator parity and cross-runner idle cancellation. Native opt-in [root idle policy](WORKER_IDLE.md) and heartbeat traversal diagnostics have explicit bounded contracts. Native registry watches and readiness waits are provided separately by [`pipecat-workers`](../pipecat-workers/README.md)
 - Applying summarization, tools, prompt-caching, service-setting, mixer/filter and other domain-specific frames is not done by the generic core runtime
 - Stop preserves processor-owned resources but does not provide a resume/re-attach API; owners must eventually clean up retained resources
 - Flush does not establish quiescence of arbitrary detached provider work or coordinate distributed workers. Tracked work is drained by End/Stop
