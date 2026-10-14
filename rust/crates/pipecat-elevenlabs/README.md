@@ -52,10 +52,14 @@ still owns its sender; use `finish()` explicitly.
 
 ## Realtime STT input audio and speaker identity
 
+Realtime STT `SttMute` controls apply in both directions before the generic
+upstream bypass. The original native control forwarding remains unchanged.
+See [STT mute routing](STT_MUTE.md) for source boundaries and verification.
+
 The realtime processor accepts both `InputAudio` and `UserAudio`. The original
 downstream frame envelope is forwarded unchanged when audio passthrough is enabled;
 that switch covers both input variants, including muted and unusable input.
-Upstream input retains unconditional forwarding. Upstream, output and TTS audio
+Upstream audio retains unconditional forwarding. Upstream, output and TTS audio
 do not enter the provider input path. Valid nonempty PCM
 uses the existing mono/rate validation, base64 JSON wire format and usage metrics.
 
