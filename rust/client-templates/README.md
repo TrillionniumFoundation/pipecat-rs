@@ -111,6 +111,14 @@ To connect without requesting microphone permission, serve this configuration:
 }
 ```
 
+The standard `pipecat-browser-agent --assets DIRECTORY` command replaces this
+file in memory. For that host, add `--text-input` instead of editing the bundle:
+`pipecat-browser-agent --assets client-templates/dist --text-input --no-intro`.
+Without the flag, the host preserves its voice default, even if the file requests
+text. The flag requires assets and rejects `--webrtc`; it does not change provider
+credentials or STT initialization. Direct configuration above applies to custom
+static/proxy hosting.
+
 Omitted `input_mode` defaults to `voice`; explicit `voice` keeps both existing
 transports. Unknown modes and text mode with SmallWebRTC or mixed transports fail
 configuration validation before Connect. WebRTC receive-only negotiation is not

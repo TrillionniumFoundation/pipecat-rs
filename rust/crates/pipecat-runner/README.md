@@ -26,6 +26,28 @@ five allowlisted browser build files and replaces their public `config.json`
 in memory with a WebSocket-only configuration. Provider credentials never enter
 that configuration. Without `--assets`, HTTP lifecycle routes still work.
 
+For microphone-free WebSocket text input, explicitly opt in:
+
+```sh
+cargo run -p pipecat-runner --bin pipecat-browser-agent -- \
+  --assets client-templates/dist --text-input --no-intro
+```
+
+`--text-input` requires `--assets` and rejects `--webrtc`, in either flag order,
+before credential lookup or listener creation. The host replaces the supplied
+`config.json` completely in memory: CLI selection wins, and asset configuration
+is never merged. The new flag publishes `input_mode: "text"` with WebSocket only.
+Without it the existing voice configuration and transport choices remain unchanged,
+even if the supplied file asks for text mode. Build files are never rewritten.
+
+This wires the browser's existing microphone-free policy into the standard
+native host. Custom static/proxy hosting may still configure `input_mode` directly.
+Text mode retains bot audio replies and generated-text history. Provider/STT
+initialization and required credentials are unchanged; it neither disables
+server audio admission nor promises fewer provider connections or lower cost.
+WebRTC receive-only, browser image/receipt bridges and actual browser
+permission/capture/autoplay validation remain outside this entry change.
+
 `--help` reads no credentials. `--bind` selects a literal loopback address;
 `--no-intro` waits for user speech. Optional Silero requires both `--vad-model`
 and `--onnx-runtime` paths. Optional environment settings match the native CLI:

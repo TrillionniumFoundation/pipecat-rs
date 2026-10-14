@@ -2,11 +2,14 @@
 #[allow(dead_code)]
 #[path = "support/mod.rs"]
 mod common;
+#[allow(dead_code)] // Shared child fixture has exit-only cases in its other harness.
+#[path = "support/browser_host.rs"]
+mod host;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pipecat_browser_client::{
     client_ready, protocol,
     text_entry::{TextEntry, TextPayload},
-    websocket_endpoint, Config, InputMode, Transport,
+    websocket_endpoint, InputMode, Transport,
 };
 use pipecat_client_server::server::{serve_with_api, ServerConfig};
 use pipecat_runner::{NativeRunner, Options, ProviderConfig, RunnerConfig};
@@ -586,14 +589,13 @@ async fn run(mode: Transport, sessions: usize) {
 }
 #[tokio::test]
 async fn actual_websocket_text_entry_exact_context_fresh_session_and_disconnect() {
-    // Exercise the actual parsed input-mode/transport selection with real native
-    // provider I/O. This does not execute browser permission or capture APIs.
-    let config: Config = serde_json::from_value(json!({
-        "project_name":"Text input", "start_endpoint":"/api/start",
-        "transports":["websocket"], "input_mode":"text"
-    }))
-    .unwrap();
-    config.validate("http://127.0.0.1:8080/").unwrap();
+    // Consume actual child HTTP configuration, then exercise the native runner
+    // with injected loopback providers. No browser or binary provider override.
+    let config = host::hosted(&["--text-input"])
+        .await
+        .expect("owned actual child HTTP probe")
+        .into_config()
+        .expect("actual hosted configuration and child shutdown");
     assert_eq!(config.input_mode, InputMode::Text);
     assert!(!config.input_mode.captures_microphone());
     run(config.transports[0], 2).await;
