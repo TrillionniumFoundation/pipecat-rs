@@ -125,3 +125,61 @@ cleanup assertions. They remain unexecuted under the previously recorded ordinar
 launch blocker. There is no new launch retry or sandbox workaround. Fresh WASM
 and static packaging is a build/identity gate only; browser permissions/autoplay,
 physical devices, WAN/TURN and the image/receipt bridge remain unqualified.
+
+## Slice 51 explicit image input recovery, 2026-10-14 UTC
+
+This candidate was rebuilt from published slice 50 (`b626d482bd19d1e69ac294983d584404a266c3d4`)
+after replacement of the earlier execution environment. No uncommitted slice 51
+source or old build result was assumed recovered. Tooling was restored from
+Rust's official 1.99.0 distribution with wasm32 target and wasm-bindgen 0.2.129
+(the upstream archive hash recorded above matched again). CMake 3.31.6 came from
+the standard PyPI package to build the native Opus dependency. System ONNX Runtime
+1.21.0 and tracked models support the native runner witnesses.
+
+New native policy tests exercise exact readiness, cancelled/stale tickets,
+MIME/signature and raw-size limits, original PNG/baseline/progressive/subsampled
+JPEG bytes, dimensions and literal captions, exact WebRTC wire budget and one
+over, base64/escaping overhead, checked transport backpressure, malformed CRC,
+Adler, compressed tails, extra decoded scanlines, truncation and PNG animation.
+The shared golden contract is checked against both browser encoders and the
+native RTVI UserImage projection, without reencoding. Default-off vendor JPEG
+strictness separately tests real entropy-bit consumption, padding, restart,
+complete progressive scans, coefficient/refinement bounds and valid controls.
+
+The extended native runner `text_flow` fixture executes both actual protobuf
+WebSocket and native paired SmallWebRTC send-file paths, two fresh sessions each.
+The exact browser-generated JPEG data URL and caption reach a loopback synthetic
+OpenAI HTTP request; generated reply text and native TTS audio return, and the
+final session history retains the original image Parts. The second session uses
+explicit peer disconnect. The original two text tests remain controls. All four
+passed, with joined provider/server/peer owners and no cleanup errors. These are
+real local transport/provider-protocol observations, not calls to public provider
+accounts and not browser FileReader/DOM execution.
+
+A fresh normally sandboxed Chromium launch in the replacement environment still
+failed before `about:blank`: process-singleton `socket() failed: Operation not
+permitted`. No sandbox flag, permission change or alternate host was used to
+work around that failure. Thus the expanded acceptance fixture is syntax checked
+only; image controls, actual FileReader timing, layout/screenshots and browser
+permissions/autoplay remain unexecuted. It includes both transport sends,
+selection-only non-send, repeated clicks, raw and malformed-file rejection,
+selection/caption/clear invalidation, instrumented delayed reads, busy/send
+failure retention and disconnect/reconnect no replay. Its assertions are a
+retained future qualification gate, not a current passing result.
+
+Fresh selected checks for this rebuilt candidate (not a full native workspace
+qualification):
+
+- Browser `cargo test --locked`: 31 passed, none ignored or failed.
+- Native `cargo test --locked -p pipecat-rtvi -p pipecat-images`: 117 passed,
+  none ignored or failed.
+- Native `cargo test --locked -p pipecat-runner --features webrtc --test text_flow
+  -- --test-threads=1`: four passed, each exercising two sessions.
+- Vendored JPEG library's direct Rust 2021 `--test` build with
+  `--cfg 'feature="platform_independent"'`: 17 passed.
+- Native selected packages (`pipecat-runner`, `pipecat-rtvi`, `pipecat-images`),
+  all targets, runner `webrtc` feature: strict Clippy passed.
+- Browser native all-target and wasm32 strict Clippy passed; release WASM and
+  wasm-bindgen static packaging passed; browser format check passed.
+- Expanded Python browser fixture passed `py_compile`; Chromium runtime gate
+  remains blocked as stated above.

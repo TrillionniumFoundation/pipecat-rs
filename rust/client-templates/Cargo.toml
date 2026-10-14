@@ -16,6 +16,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 prost = "0.13.5"
 url = "2"
+base64 = "0.22"
+png = "=0.18.1"
+crc32fast = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+jpeg-decoder = { version = "=0.3.2", path = "../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "=0.2.129"
@@ -23,6 +28,7 @@ wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"
 web-sys = { version = "=0.3.106", features = [
   "Window", "Document", "Element", "Node", "Event", "EventTarget", "DomTokenList",
+  "Blob", "File", "FileList", "FileReader", "DomException", "HtmlInputElement",
   "HtmlTextAreaElement", "HtmlElement", "HtmlButtonElement", "HtmlSelectElement", "HtmlAudioElement", "HtmlMediaElement",
   "Navigator", "MediaDevices", "MediaStream", "MediaStreamTrack", "MediaStreamConstraints",
   "Request", "RequestInit", "Response", "Headers", "AbortController", "AbortSignal", "Location",

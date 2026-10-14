@@ -58,17 +58,24 @@ pub async fn openai_expected(
     introduction: bool,
     expected_user: &str,
 ) -> Result<(), AgentError> {
+    let (role, content) = if introduction {
+        ("developer", json!("Please introduce yourself to the user."))
+    } else {
+        ("user", json!(expected_user))
+    };
+    openai_expected_content(listener, role, content).await
+}
+pub async fn openai_expected_content(
+    listener: &TcpListener,
+    role: &str,
+    content: Value,
+) -> Result<(), AgentError> {
     let (mut socket, _) = listener.accept().await?;
     let body = read_http_json(&mut socket).await?;
-    let (role, text) = if introduction {
-        ("developer", "Please introduce yourself to the user.")
-    } else {
-        ("user", expected_user)
-    };
     let message_present = body["messages"].as_array().is_some_and(|messages| {
         messages
             .iter()
-            .any(|m| m["role"] == role && m["content"] == text)
+            .any(|m| m["role"] == role && m["content"] == content)
     });
     if body["stream"] != true
         || !message_present

@@ -62,7 +62,7 @@ text and may contain conversation content; avoid recording it without consent.
 | WebSocket | `/start`, token-aware socket URL, actual binary Pipecat protobuf framing, mono PCM16 capture, mono/stereo PCM16 playback, interruption flush | Only protobuf serializer, not provider-specific telephony protocols; no compressed-codec negotiation |
 | `@pipecat-ai/client-js` RTVI events | Version 2.2.0 `client-ready`, `bot-ready`, all RTVI event JSON, final user transcription and segment-updating `bot-output` | Legacy bot-transcription-only servers need an adapter; advanced client-message/function/tool APIs are not exposed |
 | Next.js `/api/start` and session routes | Separate `pipecat-client-server` Rust crate, fixed-upstream proxy and loopback host | Production authentication, session ownership, reverse proxy and deployment policy are host responsibilities |
-| React/Vite and Next console components | Core voice session controls and conversation/events purpose covered by the shared static Rust UI | React/shadcn component APIs, metrics charts, camera/video, screen sharing, device picker, DTMF, codec picker, attachments and session-info panels are not ported |
+| React/Vite and Next console components | Core voice session controls and conversation/events purpose covered by the shared static Rust UI | React/shadcn component APIs, metrics charts, camera/video, screen sharing, device picker, DTMF, codec picker, general attachments and session-info panels are not ported; bounded PNG/JPEG send-file is supported |
 | Daily and LiveKit transports | Explicit configuration error before session creation | No Daily/LiveKit adapter; neither is simulated or silently mapped to another transport |
 
 This is a runnable core voice-client scaffold, **not complete parity with the
@@ -96,7 +96,7 @@ allowed and gets a fresh session-scoped request ID. Status describes only local
 transport queue acceptance: it is not a server acknowledgement, committed user
 history, or playback receipt. No confirmed conversation row is fabricated from
 Send success. This RTVI path does not implement the separate CLI chunk-v2 audio
-receipt or image-channel protocols, and has no image canvas/browser bridge.
+receipt or image-channel protocols, and has no image canvas bridge. Explicit encoded-image send-file is documented below.
 
 ## Microphone-free text input
 
@@ -210,3 +210,42 @@ The actual child-hosted configuration is tested separately from its consumption
 by a native client with loopback provider services. The rebuilt WASM and updated
 Chromium fixture do not establish executed browser permission or autoplay behavior;
 that environment remains blocked as recorded in VALIDATION.md.
+
+## Explicit PNG/JPEG image input
+
+After the current session's exact RTVI `bot-ready`, choose one PNG or JPEG,
+optionally enter a caption, then click **Send image**. File selection never
+uploads by itself. This uses the existing `send-file` protocol over binary
+protobuf WebSocket or SmallWebRTC JSON. The file's MIME type and signature must
+match. The original encoded bytes are preserved exactly: local decoding only
+validates, and does not create a canvas, resize, recompress or strip metadata.
+Therefore embedded image metadata is sent along with the image. Choose files
+whose contents and metadata you intend to share with the configured bot.
+
+- Raw file: WebSocket 64 KiB; WebRTC 8 KiB.
+- Caption: 16 KiB UTF-8, preserved literally. Empty captions are accepted.
+- Whole encoded request, including base64, caption escaping and envelope:
+  WebSocket 128 KiB; WebRTC 16 KiB. The wire limit can reject an otherwise valid
+  caption/file pair. Existing 256 KiB combined transport-buffer budget applies.
+- PNG: at most 4096 pixels on either side and 1,048,576 pixels total, bounded
+  decoding, every chunk CRC, Adler checksum, exact compressed stream consumption
+  and exact decoded scanline length. Animation and trailing data are rejected.
+- JPEG: 8-bit baseline/extended sequential or complete progressive DCT; 1, 3 or 4
+  components with 1–2 horizontal/vertical sampling factors. A conservative
+  16 MiB work budget charges 64 bytes per pixel after 16×16 padding (at most
+  262,144 padded pixels). Incomplete entropy/scans and trailing data are rejected.
+  Intentional partial progressive or lossless files are outside this profile.
+
+One owned FileReader belongs to the current session and a unique request ticket.
+Clear / Cancel, changing the file or caption, and disconnect detach its callback
+before aborting it. Completion rechecks session, readiness, ticket, selection,
+caption, current open transport, raw bytes and current backpressure. A pending
+read disables repeat submission. Failed validation or queueing preserves the
+selection for an explicit retry; success clears it, and neither success nor
+reconnect creates replay work. A successful send means only local transport
+queue acceptance, not server delivery, model vision support, user-history commit,
+or playback. No confirmed transcript row is fabricated.
+
+Browser execution of these controls is not yet qualified on this host; see the
+current `VALIDATION.md` entry. Native policy, wire and server-projection checks
+must not be mistaken for executed FileReader/DOM or real-provider acceptance.

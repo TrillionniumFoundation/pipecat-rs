@@ -2,6 +2,7 @@
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
 #[cfg(target_arch = "wasm32")]
 mod browser;
+pub mod image_entry;
 pub mod lifecycle;
 pub mod protocol;
 pub mod text_entry;
@@ -49,7 +50,7 @@ impl Transport {
 }
 
 /// Browser input acquisition policy. Text mode retains bot audio output and uses
-/// WebSocket only; it does not change native provider/STT initialization.
+/// WebSocket or receive-only WebRTC; native provider/STT initialization is unchanged.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum InputMode {

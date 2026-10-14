@@ -1,4 +1,5 @@
 //! Browser APIs are called directly from Rust. Generated wasm-bindgen glue only marshals values.
+use crate::image_entry::ImageEntry;
 use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
 use crate::text_entry::{TextEntry, TextPayload};
 use crate::{
@@ -31,6 +32,8 @@ struct App {
 struct Session {
     input_mode: InputMode,
     text_entry: TextEntry,
+    image_entry: ImageEntry,
+    image_read: Option<ImageRead>,
     mic: bool,
     media: Option<MediaStream>,
     context: AudioContext,
@@ -46,7 +49,40 @@ struct Session {
     playback: VecDeque<(f64, AudioBufferSourceNode)>,
     next_audio: f64,
 }
+struct ImageRead {
+    reader: FileReader,
+    _callback: Callback,
+}
+impl Drop for ImageRead {
+    fn drop(&mut self) {
+        self.reader.set_onloadend(None);
+        if self.reader.ready_state() == FileReader::LOADING {
+            self.reader.abort();
+        }
+    }
+}
 impl Session {
+    fn cancel_image(&mut self) {
+        self.image_entry.cancel();
+        self.image_read.take();
+    }
+    fn image_transport(&self) -> Result<(Transport, u64), JsValue> {
+        if let Some(data) = self
+            .data
+            .as_ref()
+            .filter(|d| d.ready_state() == RtcDataChannelState::Open)
+        {
+            Ok((Transport::SmallWebRtc, u64::from(data.buffered_amount())))
+        } else if let Some(ws) = self
+            .ws
+            .as_ref()
+            .filter(|w| w.ready_state() == WebSocket::OPEN)
+        {
+            Ok((Transport::WebSocket, u64::from(ws.buffered_amount())))
+        } else {
+            Err(error("Transport is disconnected; image kept"))
+        }
+    }
     fn clear_playback(&mut self) {
         for (_, node) in self.playback.drain(..) {
             let _ = node.unchecked_ref::<AudioScheduledSourceNode>().stop();
@@ -56,6 +92,8 @@ impl Session {
     }
     fn close(&mut self) {
         self.text_entry.close();
+        self.image_entry.close();
+        self.image_read.take();
         self.abort.abort();
         if let Some((timer, _)) = self.heartbeat.take() {
             window().clear_interval_with_handle(timer);
@@ -144,6 +182,157 @@ impl Drop for Session {
         self.close();
     }
 }
+
+fn begin_image(app: &Shared) -> Result<(), JsValue> {
+    let input: HtmlInputElement = element("image-input").unchecked_into();
+    let files = input
+        .files()
+        .ok_or_else(|| error("Choose one PNG or JPEG image"))?;
+    if files.length() != 1 {
+        return Err(error("Choose exactly one PNG or JPEG image"));
+    }
+    let file = files
+        .get(0)
+        .ok_or_else(|| error("Image file is unavailable"))?;
+    let size = file.size();
+    if !size.is_finite() || size <= 0. || size > u32::MAX as f64 {
+        return Err(error("Invalid image size"));
+    }
+    let mime = file.type_();
+    let caption = element("image-caption")
+        .unchecked_into::<HtmlTextAreaElement>()
+        .value();
+    if caption.len() > crate::text_entry::MAX_TEXT_BYTES {
+        return Err(error("Image caption exceeds 16 KiB UTF-8"));
+    }
+    let selected_file = file.clone();
+    let reader = FileReader::new()?;
+    let (epoch, ticket, transport) = {
+        let mut state = app.borrow_mut();
+        if state.lifecycle.state != State::Connected {
+            return Err(error(
+                "Connect and wait for bot-ready before sending an image",
+            ));
+        }
+        let epoch = state.lifecycle.generation;
+        let session = state
+            .session
+            .as_mut()
+            .ok_or_else(|| error("Transport is disconnected"))?;
+        let (transport, _) = session.image_transport()?;
+        let ticket = session
+            .image_entry
+            .begin(size as u64, &mime, transport)
+            .map_err(|e| error(&e))?;
+        (epoch, ticket, transport)
+    };
+    let weak = Rc::downgrade(app);
+    let completed = reader.clone();
+    let callback = Closure::wrap(Box::new(move |_: Event| {
+        let Some(app) = weak.upgrade() else {
+            return;
+        };
+        // Fence before touching the result or UI. A replaced selection and an
+        // old session must never clear or submit the current user's selection.
+        let mut state = app.borrow_mut();
+        if !state.lifecycle.accepts(epoch) || state.lifecycle.state != State::Connected {
+            return;
+        }
+        let Some(session) = state
+            .session
+            .as_mut()
+            .filter(|s| s.image_entry.is_current(ticket))
+        else {
+            return;
+        };
+        let outcome = (|| -> Result<String, JsValue> {
+            if completed.error().is_some() || completed.ready_state() != FileReader::DONE {
+                return Err(error("Image read failed; choose or retry explicitly"));
+            }
+            let selection = element("image-input")
+                .unchecked_into::<HtmlInputElement>()
+                .files()
+                .and_then(|files| files.get(0));
+            if !selection.is_some_and(|f| js_sys::Object::is(f.as_ref(), selected_file.as_ref()))
+                || element("image-caption")
+                    .unchecked_into::<HtmlTextAreaElement>()
+                    .value()
+                    != caption
+            {
+                return Err(error(
+                    "Image selection or caption changed; retry explicitly",
+                ));
+            }
+            let result = completed.result()?;
+            if !result.is_instance_of::<js_sys::ArrayBuffer>() {
+                return Err(error("Image read did not produce bytes"));
+            }
+            let array = Uint8Array::new(&result);
+            if u64::from(array.length()) != size as u64 {
+                return Err(error("Image size changed during read"));
+            }
+            let (current_transport, buffered) = session.image_transport()?;
+            if current_transport != transport {
+                return Err(error("Image transport changed during read"));
+            }
+            let request = session
+                .image_entry
+                .prepare(
+                    ticket,
+                    &array.to_vec(),
+                    &mime,
+                    &caption,
+                    transport,
+                    buffered,
+                )
+                .map_err(|e| error(&e))?;
+            match request.payload {
+                TextPayload::WebRtc(json) => session.data.as_ref().unwrap().send_with_str(&json)?,
+                TextPayload::WebSocket(bytes) => {
+                    session.ws.as_ref().unwrap().send_with_u8_array(&bytes)?
+                }
+            }
+            Ok(request.id)
+        })();
+        session.cancel_image();
+        match outcome {
+            Ok(id) => {
+                element("image-input")
+                    .unchecked_into::<HtmlInputElement>()
+                    .set_value("");
+                element("image-status").set_text_content(Some("Queued original image bytes locally; server acceptance and playback are not confirmed."));
+                element("image-caption")
+                    .unchecked_into::<HtmlTextAreaElement>()
+                    .set_value("");
+                event("image-submitted", &id);
+            }
+            Err(err) => {
+                element("image-status").set_text_content(Some(&js_error(err)));
+            }
+        }
+        update(&state);
+    }) as Box<dyn FnMut(Event)>);
+    reader.set_onloadend(Some(callback.as_ref().unchecked_ref()));
+    {
+        let mut state = app.borrow_mut();
+        state.session.as_mut().unwrap().image_read = Some(ImageRead {
+            reader: reader.clone(),
+            _callback: callback,
+        });
+        update(&state);
+    }
+    if let Err(err) = reader.read_as_array_buffer(&file) {
+        let mut state = app.borrow_mut();
+        state.session.as_mut().unwrap().cancel_image();
+        update(&state);
+        return Err(err);
+    }
+    element("image-status").set_text_content(Some(
+        "Reading selected image. Clear / Cancel stops a pending read.",
+    ));
+    Ok(())
+}
+
 fn window() -> Window {
     web_sys::window().expect("browser window")
 }
@@ -223,6 +412,18 @@ fn update(app: &App) {
     element("message-input")
         .unchecked_into::<HtmlTextAreaElement>()
         .set_disabled(!text_ready);
+    element("image-caption")
+        .unchecked_into::<HtmlTextAreaElement>()
+        .set_disabled(!text_ready);
+    element("image-input")
+        .unchecked_into::<HtmlInputElement>()
+        .set_disabled(!text_ready);
+    element("image-send-btn")
+        .unchecked_into::<HtmlButtonElement>()
+        .set_disabled(!text_ready || app.session.as_ref().is_some_and(|s| s.image_read.is_some()));
+    element("image-clear-btn")
+        .unchecked_into::<HtmlButtonElement>()
+        .set_disabled(!text_ready);
     element("send-btn")
         .unchecked_into::<HtmlButtonElement>()
         .set_disabled(!text_ready);
@@ -259,6 +460,15 @@ fn disconnect(app: &Shared, reason: &str) {
     let mut app = app.borrow_mut();
     app.lifecycle.cancel();
     app.session.take();
+    element("image-input")
+        .unchecked_into::<HtmlInputElement>()
+        .set_value("");
+    element("image-caption")
+        .unchecked_into::<HtmlTextAreaElement>()
+        .set_value("");
+    element("image-status").set_text_content(Some(
+        "Choose an image after bot-ready; sending is explicit.",
+    ));
     element("message-input")
         .unchecked_into::<HtmlTextAreaElement>()
         .set_value("");
@@ -343,11 +553,10 @@ fn message(app: &Shared, epoch: u64, text: &str) {
         &crate::diagnostic_data(value.get("data").unwrap_or(&Value::Null)).to_string(),
     );
     let mut app = app.borrow_mut();
-    if app
-        .session
-        .as_mut()
-        .is_some_and(|s| s.text_entry.accept_ready(&value))
-    {
+    if app.session.as_mut().is_some_and(|s| {
+        s.image_entry.accept_ready(&value);
+        s.text_entry.accept_ready(&value)
+    }) {
         element("message-status").set_text_content(Some(
             "Ready. Send queues text locally; it is not a delivery receipt.",
         ));
@@ -508,6 +717,8 @@ fn begin_connect(app: &Shared) {
         app.session = Some(Session {
             input_mode,
             text_entry: TextEntry::new(epoch),
+            image_entry: ImageEntry::new(epoch),
+            image_read: None,
             mic: input_mode.captures_microphone(),
             media: None,
             context,
@@ -1046,9 +1257,63 @@ async fn initialize() -> Result<(), JsValue> {
     }) as Box<dyn FnMut(Event)>);
     element("message-form")
         .add_event_listener_with_callback("submit", submit.as_ref().unchecked_ref())?;
-    app.borrow_mut()
-        .ui_callbacks
-        .extend([click, mic, unload, submit]);
+    let weak = Rc::downgrade(&app);
+    let image_send = Closure::wrap(Box::new(move |evt: Event| {
+        evt.prevent_default();
+        if let Some(app) = weak.upgrade() {
+            if let Err(err) = begin_image(&app) {
+                element("image-status").set_text_content(Some(&js_error(err)));
+            }
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("image-send-btn")
+        .add_event_listener_with_callback("click", image_send.as_ref().unchecked_ref())?;
+    let weak = Rc::downgrade(&app);
+    let image_change = Closure::wrap(Box::new(move |_: Event| {
+        if let Some(app) = weak.upgrade() {
+            let mut app = app.borrow_mut();
+            if let Some(session) = app.session.as_mut() {
+                session.cancel_image();
+            }
+            element("image-status").set_text_content(Some(
+                "Selection changed. Click Send image to submit; no file has been sent.",
+            ));
+            update(&app);
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("image-input")
+        .add_event_listener_with_callback("change", image_change.as_ref().unchecked_ref())?;
+    element("image-caption")
+        .add_event_listener_with_callback("input", image_change.as_ref().unchecked_ref())?;
+    let weak = Rc::downgrade(&app);
+    let image_clear = Closure::wrap(Box::new(move |_: Event| {
+        if let Some(app) = weak.upgrade() {
+            let mut app = app.borrow_mut();
+            if let Some(session) = app.session.as_mut() {
+                session.cancel_image();
+            }
+            element("image-input")
+                .unchecked_into::<HtmlInputElement>()
+                .set_value("");
+            element("image-caption")
+                .unchecked_into::<HtmlTextAreaElement>()
+                .set_value("");
+            element("image-status")
+                .set_text_content(Some("Image selection and pending read cleared."));
+            update(&app);
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("image-clear-btn")
+        .add_event_listener_with_callback("click", image_clear.as_ref().unchecked_ref())?;
+    app.borrow_mut().ui_callbacks.extend([
+        click,
+        mic,
+        unload,
+        submit,
+        image_send,
+        image_change,
+        image_clear,
+    ]);
     update(&app.borrow());
     element("conversation-log").set_text_content(Some("Connect to start talking with your bot"));
     event("initialized", "Rust/WASM browser client ready");

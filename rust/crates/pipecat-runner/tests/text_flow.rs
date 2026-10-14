@@ -7,13 +7,15 @@ mod common;
 mod host;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pipecat_browser_client::{
-    client_ready, protocol,
+    client_ready,
+    image_entry::ImageEntry,
+    protocol,
     text_entry::{TextEntry, TextPayload},
     websocket_endpoint, InputMode, Transport,
 };
 use pipecat_client_server::server::{serve_with_api, ServerConfig};
 use pipecat_runner::{NativeRunner, Options, ProviderConfig, RunnerConfig};
-use pipecat_services::Content;
+use pipecat_services::{Content, ContentPart};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
 #[cfg(feature = "webrtc")]
 use pipecat_webrtc::{
@@ -214,7 +216,17 @@ impl Peer {
         Ok(())
     }
 }
+const IMAGE_BYTES: &[u8] = include_bytes!("../../../client-templates/tests/fixtures/baseline.jpg");
+fn image_content() -> Content {
+    Content::Parts(vec![
+        ContentPart::Text { text: TYPED.into() },
+        ContentPart::ImageUrl {
+            url: format!("data:image/jpeg;base64,{}", STANDARD.encode(IMAGE_BYTES)),
+        },
+    ])
+}
 struct Fixture {
+    image: bool,
     runner: Arc<NativeRunner>,
     reports: broadcast::Receiver<pipecat_runner::SessionSummary>,
     origin: String,
@@ -225,7 +237,7 @@ struct Fixture {
     endpoints: Vec<String>,
 }
 impl Fixture {
-    async fn new(mode: Transport, sessions: usize) -> Outcome<Self> {
+    async fn new(mode: Transport, sessions: usize, image: bool) -> Outcome<Self> {
         // Before the first spawn, owned listeners/runners drop normally on setup failure.
         let dg = get!(TcpListener::bind("127.0.0.1:0").await);
         let llm = get!(TcpListener::bind("127.0.0.1:0").await);
@@ -298,7 +310,15 @@ impl Fixture {
             }),
             tokio::spawn(async move {
                 for _ in 0..sessions {
-                    get!(common::openai_expected(&llm, false, TYPED).await);
+                    if image {
+                        let content = json!([
+                            {"type":"text","text":TYPED},
+                            {"type":"image_url","image_url":{"url":format!("data:image/jpeg;base64,{}",STANDARD.encode(IMAGE_BYTES))}}
+                        ]);
+                        get!(common::openai_expected_content(&llm, "user", content).await);
+                    } else {
+                        get!(common::openai_expected(&llm, false, TYPED).await);
+                    }
                 }
                 Ok(())
             }),
@@ -310,6 +330,7 @@ impl Fixture {
             }),
         ];
         Ok(Self {
+            image,
             runner,
             reports,
             origin,
@@ -409,6 +430,13 @@ impl Fixture {
         }
         let peer = self.peer.as_mut().ok_or("missing owned peer")?;
         let mut entry = TextEntry::new(epoch);
+        let mut image_entry = ImageEntry::new(epoch);
+        check!(
+            image_entry
+                .begin(IMAGE_BYTES.len() as u64, "image/jpeg", mode)
+                .is_err(),
+            "early image accepted"
+        );
         check!(
             entry.prepare(TYPED, mode, 0).is_err(),
             "early text accepted"
@@ -418,13 +446,23 @@ impl Fixture {
             if let Incoming::Message(ready) = peer.recv().await? {
                 if ready["type"] == "bot-ready" {
                     check!(entry.accept_ready(&ready), "mismatched actual bot-ready");
+                    check!(
+                        image_entry.accept_ready(&ready),
+                        "mismatched actual image bot-ready"
+                    );
                     break;
                 }
             }
         }
-        let request = entry.prepare(TYPED, mode, 0)?;
+        let request = if self.image {
+            let ticket = image_entry.begin(IMAGE_BYTES.len() as u64, "image/jpeg", mode)?;
+            image_entry.prepare(ticket, IMAGE_BYTES, "image/jpeg", TYPED, mode, 0)?
+        } else {
+            entry.prepare(TYPED, mode, 0)?
+        };
+        let prefix = if self.image { "image" } else { "text" };
         check!(
-            request.id == format!("text-{epoch}-1"),
+            request.id == format!("{prefix}-{epoch}-1"),
             "replayed request ID"
         );
         peer.text(request.payload).await?;
@@ -501,6 +539,13 @@ impl Fixture {
                 "runner receive-only media counters"
             );
         }
+        image_entry.close();
+        check!(
+            image_entry
+                .begin(IMAGE_BYTES.len() as u64, "image/jpeg", mode)
+                .is_err(),
+            "post-close image accepted"
+        );
         entry.close();
         check!(
             entry.prepare("late", mode, 0).is_err(),
@@ -530,7 +575,12 @@ impl Fixture {
             "wrong generated context length"
         );
         check!(
-            report.generated_context.messages[0].content == Some(Content::Text(TYPED.into())),
+            report.generated_context.messages[0].content
+                == Some(if self.image {
+                    image_content()
+                } else {
+                    Content::Text(TYPED.into())
+                }),
             "exact typed user context missing"
         );
         check!(
@@ -592,7 +642,10 @@ impl Fixture {
     }
 }
 async fn run(mode: Transport, sessions: usize) {
-    let mut fixture = Fixture::new(mode, sessions)
+    run_input(mode, sessions, false).await;
+}
+async fn run_input(mode: Transport, sessions: usize, image: bool) {
+    let mut fixture = Fixture::new(mode, sessions, image)
         .await
         .expect("fixture setup before owners spawned");
     let observation = tokio::time::timeout(Duration::from_secs(35), async {
@@ -641,4 +694,14 @@ async fn actual_native_webrtc_text_entry_and_generated_reply() {
         .find(|mode| **mode == Transport::SmallWebRtc)
         .expect("actual host must advertise RTC");
     run(mode, 2).await;
+}
+
+#[tokio::test]
+async fn browser_image_wire_over_real_websocket_reaches_exact_provider_and_history() {
+    run_input(Transport::WebSocket, 2, true).await;
+}
+#[cfg(feature = "webrtc")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn browser_image_wire_over_real_webrtc_reaches_exact_provider_and_history() {
+    run_input(Transport::SmallWebRtc, 2, true).await;
 }

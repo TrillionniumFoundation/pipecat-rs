@@ -100,6 +100,7 @@ pub enum ColorTransform {
 /// JPEG decoder
 pub struct Decoder<R> {
     reader: R,
+    strict_mode: bool,
 
     frame: Option<FrameInfo>,
     dc_huffman_tables: Vec<Option<HuffmanTable>>,
@@ -134,6 +135,7 @@ impl<R: Read> Decoder<R> {
     pub fn new(reader: R) -> Decoder<R> {
         Decoder {
             reader,
+            strict_mode: false,
             frame: None,
             dc_huffman_tables: vec![None, None, None, None],
             ac_huffman_tables: vec![None, None, None, None],
@@ -151,6 +153,21 @@ impl<R: Read> Decoder<R> {
             coefficients_finished: [0; MAX_COMPONENTS],
             decoding_buffer_size_limit: usize::MAX,
         }
+    }
+
+    /// Enable the local bounded strict DCT validation profile (off by default).
+    ///
+    /// Requires complete, correctly ordered coefficient scans through bit zero,
+    /// exact entropy consumption and all-one alignment padding. Lossless JPEGs
+    /// are rejected in this mode. Set this before `decode`; `read_info` alone
+    /// never validates the image. This is deliberately stricter than JPEG files
+    /// that intentionally omit progressive refinement scans.
+    ///
+    /// The reader stops immediately after EOI. To reject trailing bytes, pass
+    /// `&mut std::io::Cursor` and compare its position with the input length after
+    /// dropping the decoder. Apply input and output size limits separately.
+    pub fn set_strict_mode(&mut self, strict: bool) {
+        self.strict_mode = strict;
     }
 
     /// Colour transform to use when decoding the image. App segments relating to colour transforms
@@ -314,6 +331,9 @@ impl<R: Read> Decoder<R> {
         let mut previous_marker = Marker::SOI;
         let mut pending_marker = None;
         let mut scans_processed = 0;
+        // -1 means unseen. Each coefficient can have one initial scan followed
+        // by at most 13 decreasing refinements, bounding accepted scan count.
+        let mut strict_coefficients = [[-1i8; 64]; MAX_COMPONENTS];
         let mut planes = vec![
             Vec::<u8>::new();
             self.frame
@@ -396,6 +416,27 @@ impl<R: Read> Decoder<R> {
 
                     let frame = self.frame.clone().unwrap();
                     let scan = parse_sos(&mut self.reader, &frame)?;
+
+                    if self.strict_mode {
+                        if frame.coding_process == CodingProcess::Lossless {
+                            return Err(Error::Format("strict mode supports DCT JPEG only".to_owned()));
+                        }
+                        for &component in &scan.component_indices {
+                            if scan.spectral_selection.start > 0 && strict_coefficients[component][0] < 0 {
+                                return Err(Error::Format("AC scan before DC scan".to_owned()));
+                            }
+                            for coefficient in scan.spectral_selection.clone() {
+                                let previous = &mut strict_coefficients[component][coefficient as usize];
+                                let high = scan.successive_approximation_high;
+                                if (high == 0 && *previous != -1)
+                                    || (high != 0 && *previous != high as i8)
+                                {
+                                    return Err(Error::Format("duplicate or out-of-order coefficient scan".to_owned()));
+                                }
+                                *previous = scan.successive_approximation_low as i8;
+                            }
+                        }
+                    }
 
                     if frame.coding_process == CodingProcess::DctProgressive
                         && self.coefficients.is_empty()
@@ -561,7 +602,7 @@ impl<R: Read> Decoder<R> {
                 Marker::RST(..) => {
                     // Some encoders emit a final RST marker after entropy-coded data, which
                     // decode_scan does not take care of. So if we encounter one, we ignore it.
-                    if previous_marker != Marker::SOS {
+                    if self.strict_mode || previous_marker != Marker::SOS {
                         return Err(Error::Format(
                             "RST found outside of entropy-coded data".to_owned(),
                         ));
@@ -607,6 +648,11 @@ impl<R: Read> Decoder<R> {
         }
 
         let frame = self.frame.as_ref().unwrap();
+        if self.strict_mode && strict_coefficients[..frame.components.len()]
+            .iter().any(|component| component.iter().any(|&bit| bit != 0))
+        {
+            return Err(Error::Format("incomplete coefficient scans at EOI".to_owned()));
+        }
         let preference = Self::select_worker(frame, PreferWorkerKind::Multithreaded);
 
         worker_scope.get_or_init_worker(preference, |worker| {
@@ -769,7 +815,11 @@ impl<R: Read> Decoder<R> {
             // libjpeg allows this though and there are images in the wild utilising it, so we are
             // forced to support this behavior.
             // Sony Ericsson P990i is an example of a device which produce this sort of JPEGs.
-            while read_u8(&mut self.reader)? != 0xFF {}
+            while read_u8(&mut self.reader)? != 0xFF {
+                if self.strict_mode {
+                    return Err(Error::Format("extraneous data between markers".to_owned()));
+                }
+            }
 
             // Section B.1.1.2
             // All markers are assigned two-byte codes: an X’FF’ byte followed by a
@@ -784,6 +834,9 @@ impl<R: Read> Decoder<R> {
                 byte = read_u8(&mut self.reader)?;
             }
 
+            if self.strict_mode && byte == 0x00 {
+                return Err(Error::Format("stuffed byte outside entropy scan".to_owned()));
+            }
             if byte != 0x00 && byte != 0xFF {
                 return Ok(Marker::from_u8(byte).unwrap());
             }
@@ -844,6 +897,12 @@ impl<R: Read> Decoder<R> {
             ));
         }
 
+        if self.strict_mode && self.dc_huffman_tables.iter().chain(&self.ac_huffman_tables)
+            .flatten().any(HuffmanTable::has_all_ones_code)
+        {
+            return Err(Error::Format("all-one Huffman code conflicts with scan padding".to_owned()));
+        }
+
         // Prepare the worker thread for the work to come.
         for (i, component) in components.iter().enumerate() {
             if finished[i] {
@@ -864,6 +923,7 @@ impl<R: Read> Decoder<R> {
         let is_interleaved = components.len() > 1;
         let mut dummy_block = [0i16; 64];
         let mut huffman = HuffmanDecoder::new();
+        huffman.set_strict_mode(self.strict_mode);
         let mut dc_predictors = [0i16; MAX_COMPONENTS];
         let mut mcus_left_until_restart = self.restart_interval;
         let mut expected_rst_num = 0;
@@ -919,6 +979,9 @@ impl<R: Read> Decoder<R> {
 
                 if self.restart_interval > 0 {
                     if mcus_left_until_restart == 0 {
+                        if self.strict_mode && eob_run != 0 {
+                            return Err(Error::Format("EOB run crosses restart boundary".to_owned()));
+                        }
                         match huffman.take_marker(&mut self.reader)? {
                             Some(Marker::RST(n)) => {
                                 if n != expected_rst_num {
@@ -1060,7 +1123,13 @@ impl<R: Read> Decoder<R> {
             }
         }
 
+        if self.strict_mode && eob_run != 0 {
+            return Err(Error::Format("EOB run exceeds scan".to_owned()));
+        }
         let mut marker = huffman.take_marker(&mut self.reader)?;
+        if self.strict_mode && matches!(marker, Some(Marker::RST(_))) {
+            return Err(Error::Format("unexpected restart marker after scan".to_owned()));
+        }
         while let Some(Marker::RST(_)) = marker {
             marker = self.read_marker().ok();
         }
@@ -1131,6 +1200,9 @@ fn decode_block<R: Read>(
             index += run;
 
             if index >= spectral_selection.end {
+                if huffman.is_strict() {
+                    return Err(Error::Format("AC run exceeds spectral selection".to_owned()));
+                }
                 break;
             }
 
@@ -1143,8 +1215,16 @@ fn decode_block<R: Read>(
 
             if s == 0 {
                 match r {
-                    15 => index += 16, // Run length of 16 zero coefficients.
+                    15 => {
+                        index += 16;
+                        if huffman.is_strict() && index > spectral_selection.end {
+                            return Err(Error::Format("zero run exceeds spectral selection".to_owned()));
+                        }
+                    }, // Run length of 16 zero coefficients.
                     _ => {
+                        if huffman.is_strict() && spectral_selection.start == 0 && r != 0 {
+                            return Err(Error::Format("progressive EOB run in sequential scan".to_owned()));
+                        }
                         *eob_run = (1 << r) - 1;
 
                         if r > 0 {
@@ -1158,6 +1238,9 @@ fn decode_block<R: Read>(
                 index += r;
 
                 if index >= spectral_selection.end {
+                    if huffman.is_strict() {
+                        return Err(Error::Format("AC run exceeds spectral selection".to_owned()));
+                    }
                     break;
                 }
 
@@ -1294,6 +1377,9 @@ fn refine_non_zeroes<R: Read>(
         }
     }
 
+    if huffman.is_strict() && zrl != 64 {
+        return Err(Error::Format("refinement run exceeds spectral selection".to_owned()));
+    }
     Ok(last)
 }
 
@@ -1505,4 +1591,55 @@ fn stbi_f2f(x: f32) -> i32 {
 
 fn clamp_fixed_point(value: i32) -> u8 {
     (value >> FIXED_POINT_OFFSET).min(255).max(0) as u8
+}
+
+#[cfg(test)]
+mod strict_entropy_tests {
+    use super::*;
+    use crate::huffman::HuffmanTableClass;
+
+    fn single_ac(symbol: u8) -> HuffmanTable {
+        let mut counts = [0; 16];
+        counts[0] = 1;
+        HuffmanTable::new(&counts, &[symbol], HuffmanTableClass::AC).unwrap()
+    }
+
+    #[test]
+    fn strict_ac_zero_run_exact_boundary_and_overrun() {
+        let table = single_ac(0xf0);
+        for (end, expected_ok) in [(17, true), (16, false)] {
+            let mut huffman = HuffmanDecoder::new();
+            huffman.set_strict_mode(true);
+            let mut reader = &[0x7f, 0xff, 0xd9][..];
+            let result = decode_block(&mut reader, &mut [0; 64], &mut huffman,
+                None, Some(&table), 1..end, 0, &mut 0, &mut 0);
+            assert_eq!(result.is_ok(), expected_ok);
+        }
+    }
+
+    #[test]
+    fn strict_ac_nonzero_run_exact_boundary_and_overrun() {
+        let table = single_ac(0xf1);
+        for (end, expected_ok) in [(17, true), (16, false)] {
+            let mut huffman = HuffmanDecoder::new();
+            huffman.set_strict_mode(true);
+            let mut reader = &[0x7f, 0xff, 0xd9][..];
+            let result = decode_block(&mut reader, &mut [0; 64], &mut huffman,
+                None, Some(&table), 1..end, 0, &mut 0, &mut 0);
+            assert_eq!(result.is_ok(), expected_ok);
+        }
+    }
+
+    #[test]
+    fn strict_refinement_run_requires_target_unless_eob() {
+        for (end, zrl, expected_ok) in [(17, 15, true), (16, 15, false),
+                                       (16, 64, true), (2, 0, true), (2, 1, false)] {
+            let mut huffman = HuffmanDecoder::new();
+            huffman.set_strict_mode(true);
+            let mut reader = &[][..];
+            let result = refine_non_zeroes(&mut reader, &mut [0; 64], &mut huffman,
+                1..end, zrl, 1);
+            assert_eq!(result.is_ok(), expected_ok);
+        }
+    }
 }

@@ -557,3 +557,28 @@ async fn embedded_non_image_data_url_is_preserved_verbatim() {
     );
     finish(worker).await;
 }
+
+/// The browser workspace independently asserts both real wire encoders produce
+/// this shared fixture. This test qualifies native projection, not a live browser.
+#[tokio::test]
+async fn browser_original_image_fixture_crosses_rtvi_without_reencoding() {
+    let value: Value = serde_json::from_str(include_str!(
+        "../../../client-templates/tests/fixtures/send-file.json"
+    ))
+    .unwrap();
+    let (mut worker, _) = start(RtviConfig::default()).await;
+    send(&worker, value.clone()).await;
+    let frame = until(&mut worker, |d| matches!(d, FrameData::UserImage(_))).await;
+    let FrameData::UserImage(image) = frame.data else {
+        unreachable!()
+    };
+    assert_eq!(
+        image.image.image,
+        include_bytes!("../../../client-templates/tests/fixtures/baseline.jpg")
+    );
+    assert_eq!(image.image.size, (17, 13));
+    assert_eq!(image.image.format.as_deref(), Some("image/jpeg"));
+    assert_eq!(image.text.as_deref(), value["data"]["content"].as_str());
+    assert_eq!(image.run_llm, Some(true));
+    finish(worker).await;
+}

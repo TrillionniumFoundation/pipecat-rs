@@ -3,6 +3,7 @@
 Test-only JavaScript supplies a remote WebRTC peer and API instrumentation; shipped
 application logic remains Rust. Requires aiohttp and playwright, uses system Chromium.
 """
+import base64
 import asyncio
 import json
 import math
@@ -50,7 +51,7 @@ def audio_frame():
     return blob(2, blob(3, pcm) + varint(4 * 8) + varint(16000) + varint(5 * 8) + varint(1))
 
 async def main():
-    state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': [], 'texts': [], 'pending_ready': None}
+    state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': [], 'texts': [], 'images': [], 'pending_ready': None}
     peer_page = None
     async def config(request):
         transports = ['websocket', 'smallwebrtc']
@@ -98,9 +99,9 @@ async def main():
                 await ws.send_bytes(audio_frame())
             elif data[:1] == b'\x22':
                 value = decode_message(data)
-                assert value['type'] == 'send-text' and value['label'] == 'rtvi-ai'
+                assert value['type'] in ('send-text', 'send-file') and value['label'] == 'rtvi-ai'
                 assert value['data']['options'] == {'audio_response': True, 'run_immediately': True}
-                state['texts'].append(value)
+                state['images' if value['type'] == 'send-file' else 'texts'].append(value)
             elif data[:1] == b'\x12':
                 state['audio'] += 1
         return ws
@@ -182,6 +183,90 @@ async def main():
                 await page.evaluate("document.querySelector('#message-form').requestSubmit()")
                 assert len(state['texts']) == before
                 await page.wait_for_function("window.capturedStreams.every(s=>s.getTracks().every(t=>t.readyState==='ended')) && window.audioContexts.every(c=>c.state==='closed')")
+            async def image_checks(transport):
+                async def received():
+                    if transport == 'websocket': return state['images']
+                    return await peer_page.evaluate("window.signals.filter(v=>v.type==='send-file')")
+                fixture = (ROOT / 'tests' / 'fixtures' / 'baseline.jpg').read_bytes()
+                selection = {'name': 'image.jpg', 'mimeType': 'image/jpeg', 'buffer': fixture}
+                before = len(await received())
+                await page.set_input_files('#image-input', selection)
+                await page.fill('#image-caption', '  图片 🦀 \" \\  ')
+                await page.wait_for_timeout(50)
+                assert len(await received()) == before  # selection is never an upload
+                await page.evaluate("document.querySelector('#image-send-btn').click(); document.querySelector('#image-send-btn').click()")
+                for _ in range(100):
+                    if len(await received()) == before + 1: break
+                    await asyncio.sleep(.02)
+                values = await received()
+                assert len(values) == before + 1
+                image = values[-1]
+                assert base64.b64decode(image['data']['file']['source']['bytes']) == fixture
+                assert image['data']['file']['source']['width'] == 17
+                assert image['data']['file']['source']['height'] == 13
+                assert image['data']['content'].startswith('  图片 🦀')
+                assert await page.input_value('#image-caption') == ''
+                assert await page.evaluate("document.querySelector('#image-input').files.length") == 0
+                before += 1
+                # Encoded input is checked before FileReader starts reading.
+                await page.set_input_files('#image-input', {'name':'too-large.jpg','mimeType':'image/jpeg','buffer':bytes(65537 if transport=='websocket' else 8193)})
+                await page.click('#image-send-btn')
+                assert 'limit' in await page.locator('#image-status').inner_text()
+                assert len(await received()) == before
+                await page.set_input_files('#image-input', {'name':'bad.jpg','mimeType':'image/jpeg','buffer':b'not a JPEG'})
+                await page.click('#image-send-btn')
+                await page.wait_for_function("!document.querySelector('#image-send-btn').disabled")
+                assert len(await received()) == before
+                assert await page.evaluate("document.querySelector('#image-input').files.length") == 1
+                # Actual synchronous cancellation of a started native FileReader.
+                await page.set_input_files('#image-input', selection)
+                await page.evaluate("document.querySelector('#image-send-btn').click(); document.querySelector('#image-clear-btn').click()")
+                await page.wait_for_timeout(50)
+                assert len(await received()) == before
+                # Instrument only read timing: selection/caption changes invalidate
+                # the owner before a deliberately late native result can appear.
+                await page.evaluate("window.originalImageRead=FileReader.prototype.readAsArrayBuffer; window.delayedImageReads=[]; FileReader.prototype.readAsArrayBuffer=function(blob){window.delayedImageReads.push(()=>window.originalImageRead.call(this,blob));}")
+                for action in ['caption', 'selection', 'clear']:
+                    await page.set_input_files('#image-input', selection)
+                    await page.click('#image-send-btn')
+                    if action == 'caption': await page.fill('#image-caption', 'newer caption')
+                    elif action == 'selection': await page.set_input_files('#image-input', selection)
+                    else: await page.click('#image-clear-btn')
+                    await page.evaluate("window.delayedImageReads.splice(0).forEach(read=>read())")
+                    await page.wait_for_timeout(50)
+                    assert len(await received()) == before
+                await page.evaluate("FileReader.prototype.readAsArrayBuffer=window.originalImageRead")
+                await page.click('#image-clear-btn')
+                if transport == 'websocket':
+                    await page.set_input_files('#image-input', selection)
+                    await page.evaluate("Object.defineProperty(window.openSockets.at(-1), 'bufferedAmount', {configurable:true,get:()=>300000})")
+                    await page.click('#image-send-btn')
+                    await page.wait_for_function("document.querySelector('#image-status').textContent.includes('busy')")
+                    assert len(await received()) == before
+                    assert await page.evaluate("document.querySelector('#image-input').files.length") == 1
+                    await page.evaluate("delete window.openSockets.at(-1).bufferedAmount; window.savedImageSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture image send failure')}")
+                    await page.click('#image-send-btn')
+                    await page.wait_for_function("document.querySelector('#image-status').textContent.includes('fixture image send failure')")
+                    assert len(await received()) == before
+                    await page.evaluate("window.openSockets.at(-1).send=window.savedImageSend")
+                    await page.click('#image-send-btn')
+                    for _ in range(100):
+                        if len(await received()) == before + 1: break
+                        await asyncio.sleep(.02)
+                    assert len(await received()) == before + 1
+                    before += 1
+                    await page.set_input_files('#image-input', selection)
+                    await page.evaluate("window.delayedImageReads=[]; FileReader.prototype.readAsArrayBuffer=function(blob){window.delayedImageReads.push(()=>window.originalImageRead.call(this,blob));}")
+                    await page.click('#image-send-btn')
+                    await page.click('#connect-btn')
+                    await cleanup()
+                    await connect()
+                    await page.wait_for_function("!document.querySelector('#image-send-btn').disabled")
+                    await page.evaluate("window.delayedImageReads.splice(0).forEach(read=>read()); FileReader.prototype.readAsArrayBuffer=window.originalImageRead")
+                    await page.wait_for_timeout(50)
+                    assert len(await received()) == before
+                    assert await page.evaluate("document.querySelector('#image-input').files.length") == 0
+                checks.append(f'Actual {transport} image input: explicit send, original JPEG bytes, dimensions/caption, rapid click, size/signature failures, cancellation and instrumented stale reads; WS queue/send failure keeps selection')
             await initialized()
             checks.append('WASM bootstrap, JSON configuration and original-layout controls render')
             assert await page.locator('#message-input').is_disabled()
@@ -194,6 +279,10 @@ async def main():
             assert await page.locator('#send-btn').is_disabled()
             await page.evaluate("document.querySelector('#message-input').value='early'; document.querySelector('#message-form').requestSubmit()")
             assert not state['texts']
+            assert await page.locator('#image-send-btn').is_disabled()
+            await page.set_input_files('#image-input', {'name':'early.jpg','mimeType':'image/jpeg','buffer':(ROOT/'tests'/'fixtures'/'baseline.jpg').read_bytes()})
+            await page.evaluate("document.querySelector('#image-send-btn').dispatchEvent(new Event('click'))")
+            assert not state['images']
             ws, ready_id = state['pending_ready']
             await ws.send_bytes(rtvi('bot-ready', {'version': '2.2.0'}, ready_id))
             state['mode'] = 'normal'
@@ -246,6 +335,7 @@ async def main():
                 await asyncio.sleep(.02)
             assert len(state['texts']) == 2
             assert state['texts'][0]['id'] != state['texts'][1]['id']
+            await image_checks('websocket')
             checks.append('Actual form/WS text: exact current ready, Chinese literal payload, newline, rapid-submit single send, UTF-8 cap; instrumented bufferedAmount/send failure preserves draft; local queue success is not a conversation row')
             await page.click('#mic-btn')
             await asyncio.sleep(.15)
@@ -334,6 +424,7 @@ async def main():
             received = await peer_page.evaluate("window.signals.filter(v=>v.type==='send-text')")
             assert len(received) == 1 and received[0]['data']['content'] == 'WebRTC 你好 🦀'
             assert received[0]['data']['options'] == {'audio_response': True, 'run_immediately': True}
+            await image_checks('smallwebrtc')
             checks.append('Actual browser WebRTC form emits the bounded RTVI send-text JSON on the paired data channel')
             await page.click('#mic-btn')
             await peer_page.wait_for_function("window.signals.some(v=>v.type==='signalling' && v.message.type==='trackStatus' && v.message.enabled===false)")

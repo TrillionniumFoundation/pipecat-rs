@@ -50,6 +50,18 @@
           </div>
           <span id="message-status" role="status" aria-live="polite">Connect and wait for bot-ready to send text</span>
         </form>
+        <div class="message-form">
+          <label for="image-input">Send an image</label>
+          <input id="image-input" type="file" accept="image/png,image/jpeg" aria-describedby="image-help image-status" disabled />
+          <label for="image-caption">Optional image caption</label>
+          <textarea id="image-caption" rows="2" maxlength="16385" aria-describedby="image-help image-status" disabled></textarea>
+          <span id="image-help">PNG/JPEG originals only. WebSocket: 64 KiB; WebRTC: 8 KiB. No automatic upload.</span>
+          <div class="message-actions">
+            <button id="image-send-btn" type="button" class="control" disabled>Send image</button>
+            <button id="image-clear-btn" type="button" class="control" disabled>Clear / Cancel</button>
+          </div>
+          <span id="image-status" role="status" aria-live="polite">Choose an image after bot-ready; sending is explicit.</span>
+        </div>
       </section>
 
       <section class="panel events-panel">

@@ -3618,7 +3618,12 @@ dependencies = [
 name = "pipecat-browser-client"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "crc32fast",
+ "flate2",
+ "jpeg-decoder",
  "js-sys",
+ "png",
  "prost 0.13.5",
  "serde",
  "serde_json",

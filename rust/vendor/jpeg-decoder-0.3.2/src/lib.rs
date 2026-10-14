@@ -64,3 +64,6 @@ fn read_u16_from_be<R: io::Read>(reader: &mut R) -> io::Result<u16> {
     reader.read_exact(&mut buf)?;
     Ok(u16::from_be_bytes(buf))
 }
+
+#[cfg(test)]
+mod strict_tests;

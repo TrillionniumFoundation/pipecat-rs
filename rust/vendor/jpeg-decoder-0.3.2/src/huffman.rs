@@ -15,6 +15,8 @@ pub struct HuffmanDecoder {
     bits: u64,
     num_bits: u8,
     marker: Option<Marker>,
+    strict: bool,
+    real_bits: u8,
 }
 
 impl HuffmanDecoder {
@@ -23,8 +25,16 @@ impl HuffmanDecoder {
             bits: 0,
             num_bits: 0,
             marker: None,
+            strict: false,
+            real_bits: 0,
         }
     }
+
+    pub fn set_strict_mode(&mut self, strict: bool) {
+        self.strict = strict;
+    }
+
+    pub fn is_strict(&self) -> bool { self.strict }
 
     // Section F.2.2.3
     // Figure F.16
@@ -36,7 +46,7 @@ impl HuffmanDecoder {
         let (value, size) = table.lut[self.peek_bits(LUT_BITS) as usize];
 
         if size > 0 {
-            self.consume_bits(size);
+            self.consume_bits(size)?;
             Ok(value)
         }
         else {
@@ -46,7 +56,7 @@ impl HuffmanDecoder {
                 let code = (bits >> (15 - i)) as i32;
 
                 if code <= table.maxcode[i as usize] {
-                    self.consume_bits(i + 1);
+                    self.consume_bits(i + 1)?;
 
                     let index = (code + table.delta[i as usize]) as usize;
                     return Ok(table.values[index]);
@@ -69,7 +79,7 @@ impl HuffmanDecoder {
                 let run = run_size >> 4;
                 let size = run_size & 0x0f;
 
-                self.consume_bits(size);
+                self.consume_bits(size)?;
                 return Ok(Some((value, run)));
             }
         }
@@ -84,7 +94,7 @@ impl HuffmanDecoder {
         }
 
         let bits = self.peek_bits(count);
-        self.consume_bits(count);
+        self.consume_bits(count)?;
 
         Ok(bits)
     }
@@ -98,10 +108,22 @@ impl HuffmanDecoder {
     pub fn reset(&mut self) {
         self.bits = 0;
         self.num_bits = 0;
+        self.real_bits = 0;
     }
 
     pub fn take_marker<R: Read>(&mut self, reader: &mut R) -> Result<Option<Marker>> {
-        self.read_bits(reader).map(|_| self.marker.take())
+        self.read_bits(reader)?;
+        if self.strict {
+            // Lookahead may contain synthetic zero bits, but only the real bits
+            // count toward the (at most seven) all-one byte-alignment padding.
+            if self.marker.is_none() || self.real_bits > 7
+                || (self.real_bits != 0
+                    && self.peek_bits(self.real_bits) != (1u16 << self.real_bits) - 1)
+            {
+                return Err(Error::Format("extra entropy data or invalid scan padding".to_owned()));
+            }
+        }
+        Ok(self.marker.take())
     }
 
     #[inline]
@@ -113,11 +135,16 @@ impl HuffmanDecoder {
     }
 
     #[inline]
-    fn consume_bits(&mut self, count: u8) {
+    fn consume_bits(&mut self, count: u8) -> Result<()> {
+        if self.strict && count > self.real_bits {
+            return Err(Error::Format("truncated entropy-coded scan".to_owned()));
+        }
+        self.real_bits = self.real_bits.saturating_sub(count);
         debug_assert!(self.num_bits >= count);
 
         self.bits <<= count as usize;
         self.num_bits -= count;
+        Ok(())
     }
 
     fn read_bits<R: Read>(&mut self, reader: &mut R) -> Result<()> {
@@ -152,6 +179,7 @@ impl HuffmanDecoder {
                 }
             }
 
+            if self.marker.is_none() { self.real_bits += 8; }
             self.bits |= (byte as u64) << (56 - self.num_bits);
             self.num_bits += 8;
         }
@@ -188,6 +216,10 @@ pub struct HuffmanTable {
 }
 
 impl HuffmanTable {
+    pub fn has_all_ones_code(&self) -> bool {
+        self.maxcode.iter().enumerate().any(|(i, &code)| code == (1i32 << (i + 1)) - 1)
+    }
+
     pub fn new(bits: &[u8; 16], values: &[u8], class: HuffmanTableClass) -> Result<HuffmanTable> {
         let (huffcode, huffsize) = derive_huffman_codes(bits)?;
 

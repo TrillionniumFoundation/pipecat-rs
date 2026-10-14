@@ -1,0 +1,21 @@
+{
+  "id": "image-7-1",
+  "label": "rtvi-ai",
+  "type": "send-file",
+  "data": {
+    "content": "  图片 🦀\n\"literal\"  ",
+    "file": {
+      "format": "image/jpeg",
+      "source": {
+        "type": "bytes",
+        "bytes": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAANABEDAREAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCCaz0+wlhsbERRaREPtF9Lb7/3boCTEQOCBjdjnngAFOZo4nLszi6tWHLVfux5bR0b+K2138N2tuuqtGKdXLsUsyp/DWdoRtom7dXtza8uq05tOWzLF2z2s/8AwlVslu7ykW1lZOhRiNxwzAZzgNuY5A3HAI3CtKeX4qN8HhKvPFe87u0vRXtF6bPTS75dNazOjCDjWoaQetZq795r4uy5mlFaLWzak3Jkvl+Kv+gtqv8A4Gv/APFV0/7Z/wBA0fvp/wCZ0/6zZb/z7h/4Cv8AIraUsWsLY+Hb1GeK8VL26uPMbzJW3MFBPfDLuOc5O305qboYlyxtalFyi7Lo9ElurPZ2tfRfK05PN4vCVXU+H4Elpy2s7rs1pbpa6d07BZak9quq3zqZ7fT3+xW9pK3yLlhGzZGOp+Y98YGeAa8zOspnlNGlVoVXao1e61+Fy32drWWltb23vy8MVHj6VPA1dq0W5tbtNN28tNE+m9tWZ/8AYd1/0MfiD/wOauT/AFqrf8+Yf+An1v8AqXlP8j+6H/yB/9k=",
+        "width": 17,
+        "height": 13
+      }
+    },
+    "options": {
+      "run_immediately": true,
+      "audio_response": true
+    }
+  }
+}
