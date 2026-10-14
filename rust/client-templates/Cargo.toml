@@ -23,7 +23,7 @@ wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"
 web-sys = { version = "=0.3.106", features = [
   "Window", "Document", "Element", "Node", "Event", "EventTarget", "DomTokenList",
-  "HtmlElement", "HtmlButtonElement", "HtmlSelectElement", "HtmlAudioElement", "HtmlMediaElement",
+  "HtmlTextAreaElement", "HtmlElement", "HtmlButtonElement", "HtmlSelectElement", "HtmlAudioElement", "HtmlMediaElement",
   "Navigator", "MediaDevices", "MediaStream", "MediaStreamTrack", "MediaStreamConstraints",
   "Request", "RequestInit", "Response", "Headers", "AbortController", "AbortSignal", "Location",
   "WebSocket", "BinaryType", "MessageEvent", "CloseEvent",

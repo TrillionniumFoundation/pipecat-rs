@@ -4,6 +4,7 @@
 mod browser;
 pub mod lifecycle;
 pub mod protocol;
+pub mod text_entry;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

@@ -309,3 +309,10 @@ select.control {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Text entry stays outside the scrollable conversation and uses text-only DOM APIs. */
+.message-form { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.75rem; border-top: 1px solid var(--border); }
+.message-form textarea { resize: vertical; min-height: 4rem; max-height: 12rem; width: 100%; padding: 0.5rem; font: inherit; color: inherit; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius); }
+.message-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+#message-help, #message-status { font-size: 0.75rem; color: var(--muted-foreground); }
+.message-form textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.message-form textarea:disabled { opacity: 0.6; }

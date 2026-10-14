@@ -153,6 +153,15 @@ impl NativeRunner {
         config: RunnerConfig,
         providers: cascade::SessionProviders,
     ) -> Result<Self, RunnerError> {
+        if config.options.playback_protocol
+            != pipecat_cli::receipt_output::PlaybackProtocol::LegacyV1
+            || config.options.image_channel.is_some()
+            || config.options.initial_image.is_some()
+        {
+            return Err(RunnerError::CascadeConfiguration(
+                "browser RTVI does not support CLI playback receipts or image channels",
+            ));
+        }
         if !config.bind_ip.is_loopback()
             || config.max_sessions == 0
             || config.max_sessions > 1024

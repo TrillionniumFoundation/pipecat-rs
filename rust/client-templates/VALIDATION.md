@@ -78,3 +78,15 @@ mute, queue limits, transcript safety, and browser resource cleanup.
 Live providers, physical devices, TURN/WAN traversal, autoplay restrictions and
 other browser engines remain separate acceptance gates even after that fixture
 passes.
+
+## Slice 45 host boundary, 2026-10-14 UTC
+
+A fresh ordinary headless Chromium launch and one approved ordinary escalated
+launch both failed before `about:blank` at the process-singleton socket with
+`Operation not permitted`. Neither disabled the browser sandbox or changed
+security settings. No browser application assertions, DOM interaction, screenshots,
+physical media or browser end-to-end execution are claimed for this slice.
+The updated acceptance fixture explicitly enables the Chromium sandbox and adds
+real-form text cases for both transports; it remains unexecuted on this host.
+Native shared-controller and real native transport/provider tests are separate
+from browser acceptance. The complete image/receipt browser bridge is not present.

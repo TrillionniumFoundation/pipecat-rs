@@ -408,3 +408,17 @@ Soniox per-stream event lane can fail closed before explicit shutdown. The nativ
 fixture checks incomplete bounded provider progress, a failed session report,
 freed admission, terminal socket closure and joined provider owners. It is not
 a claim that an overflowing session remains usable or that queued audio played.
+
+## Browser text input and incompatible CLI options
+
+The Rust/WASM template exposes RTVI `send-text` over both existing browser
+transports after matching `bot-ready`. Typed content follows the same native
+RTVI interruption/flush, LLM user-context and TTS path; local browser queueing is
+not a playback acknowledgement. Generated context remains generation-based.
+
+`NativeRunner` reuses the public CLI `Options` type but is an RTVI runner, not the
+CLI receipt/image endpoint. All constructors reject `playback_protocol=ChunkV2`,
+`image_channel`, or `initial_image` before creating a session or starting providers.
+This also applies to the Soniox, Whisper and WebRTC compositions. Default legacy
+options are unchanged. Use the explicitly opted-in voice-agent CLI/native APIs
+for those separate protocols; browser image/receipt integration remains open.

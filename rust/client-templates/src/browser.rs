@@ -1,5 +1,6 @@
 //! Browser APIs are called directly from Rust. Generated wasm-bindgen glue only marshals values.
 use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
+use crate::text_entry::{TextEntry, TextPayload};
 use crate::{
     client_ready, offer_endpoint, protocol, transcript, websocket_endpoint, Config, Transport,
 };
@@ -27,6 +28,7 @@ struct App {
     conversation: VecDeque<(Option<String>, Element)>,
 }
 struct Session {
+    text_entry: TextEntry,
     mic: bool,
     media: Option<MediaStream>,
     context: AudioContext,
@@ -51,6 +53,7 @@ impl Session {
         self.next_audio = self.context.current_time();
     }
     fn close(&mut self) {
+        self.text_entry.close();
         self.abort.abort();
         if let Some((timer, _)) = self.heartbeat.take() {
             window().clear_interval_with_handle(timer);
@@ -91,6 +94,34 @@ impl Session {
         let _ = self.context.close();
         self.audio_callback.take();
         self.callbacks.clear();
+    }
+    fn send_text(&mut self, text: &str) -> Result<String, JsValue> {
+        let (transport, buffered) = if let Some(data) = self
+            .data
+            .as_ref()
+            .filter(|d| d.ready_state() == RtcDataChannelState::Open)
+        {
+            (Transport::SmallWebRtc, u64::from(data.buffered_amount()))
+        } else if let Some(ws) = self
+            .ws
+            .as_ref()
+            .filter(|w| w.ready_state() == WebSocket::OPEN)
+        {
+            (Transport::WebSocket, u64::from(ws.buffered_amount()))
+        } else {
+            return Err(error("Transport is disconnected; draft kept"));
+        };
+        let request = self
+            .text_entry
+            .prepare(text, transport, buffered)
+            .map_err(|e| error(&e))?;
+        match request.payload {
+            TextPayload::WebRtc(json) => self.data.as_ref().unwrap().send_with_str(&json)?,
+            TextPayload::WebSocket(bytes) => {
+                self.ws.as_ref().unwrap().send_with_u8_array(&bytes)?
+            }
+        }
+        Ok(request.id)
     }
     fn send(&self, value: &Value) -> Result<(), JsValue> {
         if let Some(data) = &self.data {
@@ -170,6 +201,17 @@ fn update(app: &App) {
     button.set_disabled(app.lifecycle.state != State::Connected);
     let _ = button.class_list().toggle_with_force("on", mic);
     element("mic-status").set_text_content(Some(if mic { "Mic on" } else { "Mic off" }));
+    let text_ready = app.lifecycle.state == State::Connected
+        && app
+            .session
+            .as_ref()
+            .is_some_and(|s| s.text_entry.is_ready());
+    element("message-input")
+        .unchecked_into::<HtmlTextAreaElement>()
+        .set_disabled(!text_ready);
+    element("send-btn")
+        .unchecked_into::<HtmlButtonElement>()
+        .set_disabled(!text_ready);
 }
 fn event(name: &str, data: &str) {
     let row = document().create_element("div").unwrap();
@@ -203,6 +245,10 @@ fn disconnect(app: &Shared, reason: &str) {
     let mut app = app.borrow_mut();
     app.lifecycle.cancel();
     app.session.take();
+    element("message-input")
+        .unchecked_into::<HtmlTextAreaElement>()
+        .set_value("");
+    element("message-status").set_text_content(Some("Connect and wait for bot-ready to send text"));
     update(&app);
     event("disconnected", reason);
 }
@@ -283,6 +329,16 @@ fn message(app: &Shared, epoch: u64, text: &str) {
         &crate::diagnostic_data(value.get("data").unwrap_or(&Value::Null)).to_string(),
     );
     let mut app = app.borrow_mut();
+    if app
+        .session
+        .as_mut()
+        .is_some_and(|s| s.text_entry.accept_ready(&value))
+    {
+        element("message-status").set_text_content(Some(
+            "Ready. Send queues text locally; it is not a delivery receipt.",
+        ));
+        update(&app);
+    }
     if matches!(kind, "user-started-speaking" | "bot-interrupted") {
         if let Some(s) = app.session.as_mut() {
             s.clear_playback();
@@ -429,6 +485,7 @@ fn begin_connect(app: &Shared) {
             *segment = None;
         }
         app.session = Some(Session {
+            text_entry: TextEntry::new(epoch),
             mic: true,
             media: None,
             context,
@@ -892,7 +949,46 @@ async fn initialize() -> Result<(), JsValue> {
         }
     }) as Box<dyn FnMut(Event)>);
     window().add_event_listener_with_callback("pagehide", unload.as_ref().unchecked_ref())?;
-    app.borrow_mut().ui_callbacks.extend([click, mic, unload]);
+    let weak = Rc::downgrade(&app);
+    let submit = Closure::wrap(Box::new(move |evt: Event| {
+        evt.prevent_default();
+        let Some(app) = weak.upgrade() else {
+            return;
+        };
+        let input: HtmlTextAreaElement = element("message-input").unchecked_into();
+        let draft = input.value();
+        let outcome = {
+            let mut app = app.borrow_mut();
+            if app.lifecycle.state != State::Connected {
+                Err(error("Connect and wait for bot-ready before sending text"))
+            } else if let Some(session) = app.session.as_mut() {
+                session.send_text(&draft)
+            } else {
+                Err(error("Transport is disconnected"))
+            }
+        };
+        match outcome {
+            Ok(id) => {
+                // No asynchronous step: a second rapid submit sees the empty draft.
+                // A local socket queue success is not a confirmed conversation row.
+                input.set_value("");
+                element("message-status").set_text_content(Some(
+                    "Queued to transport; server acceptance and playback are not confirmed.",
+                ));
+                event("text-submitted", &id);
+            }
+            Err(err) => {
+                let message = js_error(err);
+                element("message-status").set_text_content(Some(&message));
+                event("text-not-sent", &message);
+            }
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("message-form")
+        .add_event_listener_with_callback("submit", submit.as_ref().unchecked_ref())?;
+    app.borrow_mut()
+        .ui_callbacks
+        .extend([click, mic, unload, submit]);
     update(&app.borrow());
     element("conversation-log").set_text_content(Some("Connect to start talking with your bot"));
     event("initialized", "Rust/WASM browser client ready");

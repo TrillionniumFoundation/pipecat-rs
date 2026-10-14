@@ -41,6 +41,15 @@
       <section class="panel conversation-panel">
         <h2 class="panel-title">Conversation</h2>
         <div id="conversation-log" class="panel-content"></div>
+        <form id="message-form" class="message-form">
+          <label for="message-input">Message your bot</label>
+          <textarea id="message-input" rows="3" maxlength="16385" aria-describedby="message-help message-status" placeholder="Connect and wait for bot-ready" disabled></textarea>
+          <div class="message-actions">
+            <span id="message-help">Up to 16 KiB UTF-8; WebRTC also counts its JSON envelope. Enter adds a new line.</span>
+            <button id="send-btn" type="submit" class="control" disabled>Send</button>
+          </div>
+          <span id="message-status" role="status" aria-live="polite">Connect and wait for bot-ready to send text</span>
+        </form>
       </section>
 
       <section class="panel events-panel">

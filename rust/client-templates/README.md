@@ -61,12 +61,41 @@ text and may contain conversation content; avoid recording it without consent.
 | WebSocket | `/start`, token-aware socket URL, actual binary Pipecat protobuf framing, mono PCM16 capture, mono/stereo PCM16 playback, interruption flush | Only protobuf serializer, not provider-specific telephony protocols; no compressed-codec negotiation |
 | `@pipecat-ai/client-js` RTVI events | Version 2.2.0 `client-ready`, `bot-ready`, all RTVI event JSON, final user transcription and segment-updating `bot-output` | Legacy bot-transcription-only servers need an adapter; advanced client-message/function/tool APIs are not exposed |
 | Next.js `/api/start` and session routes | Separate `pipecat-client-server` Rust crate, fixed-upstream proxy and loopback host | Production authentication, session ownership, reverse proxy and deployment policy are host responsibilities |
-| React/Vite and Next console components | Core voice session controls and conversation/events purpose covered by the shared static Rust UI | React/shadcn component APIs, metrics charts, camera/video, screen sharing, device picker, text input, DTMF, codec picker, attachments and session-info panels are not ported |
+| React/Vite and Next console components | Core voice session controls and conversation/events purpose covered by the shared static Rust UI | React/shadcn component APIs, metrics charts, camera/video, screen sharing, device picker, DTMF, codec picker, attachments and session-info panels are not ported |
 | Daily and LiveKit transports | Explicit configuration error before session creation | No Daily/LiveKit adapter; neither is simulated or silently mapped to another transport |
 
 This is a runnable core voice-client scaffold, **not complete parity with the
 React consoles or every provider SDK**, and not an automatically integrated
 replacement for the Python CLI's generated templates.
+
+## Text messages
+
+After Connect and an exact current-session RTVI 2.2.0 `bot-ready`, type in the
+message box and click Send. Enter and Shift+Enter add newlines; IME composition
+is not intercepted. Both WebSocket protobuf and SmallWebRTC JSON use the existing
+`send-text` command with immediate generation and an audio response. Connect
+still requests microphone access, even when you intend to type; there is no
+microphone-free text-only connection mode in this template yet.
+
+Text is preserved literally, including Chinese, emoji and surrounding whitespace.
+Blank messages and messages above 16 KiB UTF-8 are rejected rather than truncated.
+The editor bounds huge drafts at 16,385 UTF-16 code units, one over the raw
+ASCII ceiling, so truncated oversized pastes cannot become valid submissions.
+All accepted text is preserved exactly. Each encoded request is capped at
+128 KiB for WebSocket or 16 KiB for WebRTC, matching the existing receiver limits.
+WebRTC therefore accepts less text when its JSON envelope or escaping consumes
+that budget. The selected open transport's current
+buffer plus the full encoded request must fit within 256 KiB. A busy or failed
+send preserves the draft for an explicit retry. There is no application send
+queue, automatic retry or reconnect replay. Disconnect clears the draft.
+
+A successful Send clears the box synchronously, so rapid repeated submission
+cannot resend the cleared draft. Intentionally typing the same text again is
+allowed and gets a fresh session-scoped request ID. Status describes only local
+transport queue acceptance: it is not a server acknowledgement, committed user
+history, or playback receipt. No confirmed conversation row is fabricated from
+Send success. This RTVI path does not implement the separate CLI chunk-v2 audio
+receipt or image-channel protocols, and has no image canvas/browser bridge.
 
 ## Ownership and bounds
 
@@ -119,7 +148,8 @@ written under ignored `target/`.
 
 Unit tests cover wire-compatible protobuf golden bytes, PCM conversion and
 validation, URL/token handling, config/adapter validation, RTVI projection,
-connection generations, cancellation/reconnection, and audio-flow limits.
+connection generations and exhaustion, cancellation/reconnection, audio-flow limits,
+and the exact shared text readiness, UTF-8, request-ID and encoded-byte budgets.
 See `VALIDATION.md` for the recorded passed checks and blocked browser stage.
 Browser acceptance must be reported separately from live-provider, physical
 microphone/speaker, WAN TURN traversal, multi-browser, autoplay-restriction and

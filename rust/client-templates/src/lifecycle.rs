@@ -20,7 +20,7 @@ impl Lifecycle {
         if self.state != State::Idle {
             return None;
         }
-        self.generation = self.generation.wrapping_add(1);
+        self.generation = self.generation.checked_add(1)?;
         self.state = State::Connecting;
         Some(self.generation)
     }
@@ -40,7 +40,7 @@ impl Lifecycle {
 
     /// Invalidate pending permission, start, offer, and transport callbacks.
     pub fn cancel(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
+        self.generation = self.generation.saturating_add(1);
         self.state = State::Idle;
     }
 }
@@ -61,6 +61,24 @@ pub fn playback_allowed(now: f64, queued_until: f64, duration: f64, nodes: usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exhausted_generations_fail_closed_without_reuse() {
+        let mut session = Lifecycle {
+            generation: u64::MAX - 1,
+            state: State::Idle,
+        };
+        let last = session.begin().unwrap();
+        assert_eq!(last, u64::MAX);
+        assert!(session.connected(last));
+        session.cancel();
+        assert!(!session.accepts(last));
+        assert_eq!(session.begin(), None);
+        session.cancel();
+        assert_eq!(session.begin(), None);
+        assert_eq!(session.generation, u64::MAX);
+        assert_eq!(session.state, State::Idle);
+    }
 
     #[test]
     fn repeated_connect_never_overlaps() {

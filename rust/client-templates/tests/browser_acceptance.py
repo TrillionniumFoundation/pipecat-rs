@@ -25,9 +25,24 @@ def varint(value):
 def blob(tag, body):
     return varint(tag * 8 + 2) + varint(len(body)) + body
 
-def rtvi(kind, data):
-    value = json.dumps({'label': 'rtvi-ai', 'type': kind, 'data': data}).encode()
+def rtvi(kind, data, request_id=None):
+    value = json.dumps({'label': 'rtvi-ai', 'type': kind, 'data': data, 'id': request_id}).encode()
     return blob(4, blob(1, value))
+
+def decode_message(data):
+    def number(offset):
+        value = 0
+        for shift in range(0, 70, 7):
+            byte = data[offset]; offset += 1
+            value |= (byte & 127) << shift
+            if byte < 128: return value, offset
+        raise AssertionError('oversized fixture varint')
+    assert len(data) <= 128 * 1024
+    tag, pos = number(0); assert tag == 34
+    length, pos = number(pos); assert pos + length == len(data)
+    tag, pos = number(pos); assert tag == 10
+    length, pos = number(pos); assert pos + length == len(data)
+    return json.loads(data[pos:])
 
 def audio_frame():
     # One second allows interruption to exercise an actually scheduled source.
@@ -35,7 +50,7 @@ def audio_frame():
     return blob(2, blob(3, pcm) + varint(4 * 8) + varint(16000) + varint(5 * 8) + varint(1))
 
 async def main():
-    state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': []}
+    state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': [], 'texts': [], 'pending_ready': None}
     peer_page = None
     async def config(request):
         return web.json_response({'project_name': 'Rust Pipecat acceptance', 'start_endpoint': '/api/start', 'transports': ['websocket', 'smallwebrtc'] if state['mode'] != 'unsupported' else ['daily']})
@@ -62,12 +77,22 @@ async def main():
             if data[:1] == b'\x22' and b'client-ready' in data:
                 state['ready'] += 1
                 assert b'2.2.0' in data
-                await ws.send_bytes(rtvi('bot-ready', {'version': '2.2.0'}))
+                ready_id = decode_message(data)['id']
+                if state['mode'] == 'hold_ready':
+                    state['pending_ready'] = (ws, ready_id)
+                    await ws.send_bytes(rtvi('bot-ready', {'version': '2.2.0'}, 'stale-session'))
+                else:
+                    await ws.send_bytes(rtvi('bot-ready', {'version': '2.2.0'}, ready_id))
                 await ws.send_bytes(rtvi('user-transcription', {'text': 'partial-should-not-appear', 'final': False}))
                 await ws.send_bytes(rtvi('user-transcription', {'text': 'Hello from user', 'final': True}))
                 await ws.send_bytes(rtvi('bot-output', {'text': 'Initial output', 'segment_id': 42, 'spoken_status': 'new'}))
                 await ws.send_bytes(rtvi('bot-output', {'text': '<img src=x onerror=alert(1)> Final output', 'segment_id': 42, 'spoken_status': 'completed'}))
                 await ws.send_bytes(audio_frame())
+            elif data[:1] == b'\x22':
+                value = decode_message(data)
+                assert value['type'] == 'send-text' and value['label'] == 'rtvi-ai'
+                assert value['data']['options'] == {'audio_response': True, 'run_immediately': True}
+                state['texts'].append(value)
             elif data[:1] == b'\x12':
                 state['audio'] += 1
         return ws
@@ -89,7 +114,7 @@ async def main():
               if (data === 'ping') { window.pings++; return; }
               const value = JSON.parse(data); window.signals.push(value);
               if (value.type === 'client-ready') {
-                channel.send(JSON.stringify({label:'rtvi-ai',type:'bot-ready',data:{version:'2.2.0'}}));
+                channel.send(JSON.stringify({label:'rtvi-ai',id:value.id,type:'bot-ready',data:{version:'2.2.0'}}));
                 channel.send(JSON.stringify({label:'rtvi-ai',type:'bot-output',data:{text:'WebRTC fixture transcript',segment_id:99}}));
               }
             };
@@ -115,7 +140,7 @@ async def main():
     checks = []
     try:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, args=['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
+            browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, chromium_sandbox=True, args=[ '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
             context = await browser.new_context(viewport={'width': 1200, 'height': 800})
             await context.add_init_script('''
               window.capturedStreams=[]; window.audioContexts=[]; window.audioStarted=0; window.audioStopped=0; window.openSockets=[];
@@ -141,10 +166,28 @@ async def main():
                 await page.wait_for_function("document.querySelector('#transport-state').textContent === 'Connected'")
             async def cleanup():
                 await idle()
+                assert await page.locator('#send-btn').is_disabled()
+                assert await page.input_value('#message-input') == ''
+                before = len(state['texts'])
+                await page.evaluate("document.querySelector('#message-form').requestSubmit()")
+                assert len(state['texts']) == before
                 await page.wait_for_function("window.capturedStreams.every(s=>s.getTracks().every(t=>t.readyState==='ended')) && window.audioContexts.every(c=>c.state==='closed')")
             await initialized()
             checks.append('WASM bootstrap, JSON configuration and original-layout controls render')
+            assert await page.locator('#message-input').is_disabled()
+            state['mode'] = 'hold_ready'
             await connect()
+            for _ in range(100):
+                if state['pending_ready']: break
+                await asyncio.sleep(.02)
+            assert state['pending_ready']
+            assert await page.locator('#send-btn').is_disabled()
+            await page.evaluate("document.querySelector('#message-input').value='early'; document.querySelector('#message-form').requestSubmit()")
+            assert not state['texts']
+            ws, ready_id = state['pending_ready']
+            await ws.send_bytes(rtvi('bot-ready', {'version': '2.2.0'}, ready_id))
+            state['mode'] = 'normal'
+            await page.wait_for_function("!document.querySelector('#send-btn').disabled")
             await page.wait_for_function("document.querySelector('#conversation-log').textContent.includes('Final output')")
             assert await page.locator('.conversation-message').count() == 2
             assert await page.locator('#conversation-log img').count() == 0
@@ -156,6 +199,44 @@ async def main():
             assert state['audio'] > 2 and state['ready'] == 1
             checks.append('Real WebSocket open, encoded token/query, protobuf client-ready, fake-microphone PCM capture and scheduled PCM playback')
             checks.append('RTVI v2 final transcript projection, segment upsert and text-only injection-safe rendering')
+            typed = '  你好，世界！🦀\n"literal" <script> & '
+            await page.fill('#message-input', typed)
+            await page.press('#message-input', 'Enter')
+            draft = await page.input_value('#message-input')
+            assert not state['texts']  # Enter/IME text is not a submit shortcut.
+            await page.evaluate("document.querySelector('#message-form').requestSubmit(); document.querySelector('#message-form').requestSubmit()")
+            for _ in range(100):
+                if state['texts']: break
+                await asyncio.sleep(.02)
+            assert len(state['texts']) == 1 and state['texts'][0]['data']['content'] == draft
+            assert await page.input_value('#message-input') == ''
+            assert await page.locator('.conversation-message').count() == 2
+            assert await page.locator('#message-input').get_attribute('maxlength') == '16385'
+            await page.fill('#message-input', 'x' * 16385)
+            await page.click('#send-btn')
+            assert await page.input_value('#message-input') == 'x' * 16385
+            assert len(state['texts']) == 1
+            await page.fill('#message-input', '中' * 6000)
+            await page.click('#send-btn')
+            assert await page.input_value('#message-input') == '中' * 6000
+            assert len(state['texts']) == 1
+            await page.fill('#message-input', 'retry explicitly')
+            await page.evaluate("Object.defineProperty(window.openSockets.at(-1), 'bufferedAmount', {configurable:true,get:()=>300000})")
+            await page.click('#send-btn')
+            assert await page.input_value('#message-input') == 'retry explicitly'
+            assert len(state['texts']) == 1
+            await page.evaluate("delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}")
+            await page.click('#send-btn')
+            assert await page.input_value('#message-input') == 'retry explicitly'
+            assert len(state['texts']) == 1
+            await page.evaluate("window.openSockets.at(-1).send=window.savedSend")
+            await page.click('#send-btn')
+            for _ in range(100):
+                if len(state['texts']) == 2: break
+                await asyncio.sleep(.02)
+            assert len(state['texts']) == 2
+            assert state['texts'][0]['id'] != state['texts'][1]['id']
+            checks.append('Actual form/WS text: exact current ready, Chinese literal payload, newline, rapid-submit single send, UTF-8 cap; instrumented bufferedAmount/send failure preserves draft; local queue success is not a conversation row')
             await page.click('#mic-btn')
             await asyncio.sleep(.15)
             muted = state['audio']
@@ -236,6 +317,14 @@ async def main():
             await peer_page.wait_for_function('window.pings > 0')
             assert len(state['offers']) == 2
             assert 'm=audio' in state['offers'][0]['sdp']
+            await page.wait_for_function("!document.querySelector('#send-btn').disabled")
+            await page.fill('#message-input', 'WebRTC 你好 🦀')
+            await page.click('#send-btn')
+            await peer_page.wait_for_function("window.signals.some(v=>v.type==='send-text')")
+            received = await peer_page.evaluate("window.signals.filter(v=>v.type==='send-text')")
+            assert len(received) == 1 and received[0]['data']['content'] == 'WebRTC 你好 🦀'
+            assert received[0]['data']['options'] == {'audio_response': True, 'run_immediately': True}
+            checks.append('Actual browser WebRTC form emits the bounded RTVI send-text JSON on the paired data channel')
             await page.click('#mic-btn')
             await peer_page.wait_for_function("window.signals.some(v=>v.type==='signalling' && v.message.type==='trackStatus' && v.message.enabled===false)")
             await page.screenshot(path=str(ROOT / 'target' / 'browser-acceptance.png'))

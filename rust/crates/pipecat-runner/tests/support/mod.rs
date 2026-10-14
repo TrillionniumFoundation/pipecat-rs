@@ -51,12 +51,19 @@ pub async fn deepgram(listener: &TcpListener, expect_audio: bool) -> Result<(), 
     Ok(())
 }
 pub async fn openai(listener: &TcpListener, introduction: bool) -> Result<(), AgentError> {
+    openai_expected(listener, introduction, USER).await
+}
+pub async fn openai_expected(
+    listener: &TcpListener,
+    introduction: bool,
+    expected_user: &str,
+) -> Result<(), AgentError> {
     let (mut socket, _) = listener.accept().await?;
     let body = read_http_json(&mut socket).await?;
     let (role, text) = if introduction {
         ("developer", "Please introduce yourself to the user.")
     } else {
-        ("user", USER)
+        ("user", expected_user)
     };
     let message_present = body["messages"].as_array().is_some_and(|messages| {
         messages
