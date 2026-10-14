@@ -1,0 +1,515 @@
+{
+  "source_blob": "d9cd8e83f2a58a98669707b9794cc1b527b5ef07",
+  "qualification": "Unchanged run_tts method with explicit in-memory collaborators only; not Pipecat setup/base-class execution, source pytest, network behavior, native validation, or live provider qualification.",
+  "results": [
+    {
+      "case": "init_audio_final",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "one_complete_audio_at_eof",
+      "pcm_hex": [],
+      "formats": [],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "two_complete_audio_at_eof",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "final_aggregate_followed_by_sentinel",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "first_packet_error_ignored",
+      "pcm_hex": [],
+      "formats": [],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "audio_with_error_status_still_emitted",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "status_zero_audio_still_emitted",
+      "pcm_hex": [
+        "0000"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "empty_audio_and_null_data",
+      "pcm_hex": [],
+      "formats": [],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "whitespace_hex",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "invalid_hex_then_valid",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "odd_pcm_is_emitted",
+      "pcm_hex": [
+        "01"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "final_without_extra_info_is_audio",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case": "bytewise_init_audio_final",
+      "pcm_hex": [
+        "00000100"
+      ],
+      "formats": [
+        [
+          16000,
+          1,
+          "context-a"
+        ]
+      ],
+      "error_count": 0,
+      "request": {
+        "url": "http://fixture.invalid/v1/t2a_v2?GroupId=synthetic",
+        "headers": {
+          "accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer synthetic"
+        },
+        "json": {
+          "stream": true,
+          "voice_setting": {
+            "voice_id": "Calm_Woman",
+            "speed": 1.0,
+            "vol": 1.0,
+            "pitch": 0,
+            "text_normalization": false,
+            "latex_read": false
+          },
+          "audio_setting": {
+            "bitrate": 128000,
+            "format": "pcm",
+            "channel": 1,
+            "sample_rate": 16000
+          },
+          "model": "speech-2.8-turbo",
+          "text": "Hello"
+        }
+      }
+    }
+  ]
+}

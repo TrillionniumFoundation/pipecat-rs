@@ -23,7 +23,7 @@ impl HttpClient {
     pub fn new(config: SpeechConfig) -> Result<Self, SpeechError> {
         Self::with_direct_policy(config, false)
     }
-    #[cfg(any(feature = "speechmatics", feature = "speechify"))]
+    #[cfg(any(feature = "speechmatics", feature = "speechify", feature = "minimax"))]
     pub fn direct(config: SpeechConfig) -> Result<Self, SpeechError> {
         Self::with_direct_policy(config, true)
     }

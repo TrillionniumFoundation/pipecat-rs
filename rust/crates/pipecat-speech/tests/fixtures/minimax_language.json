@@ -1,0 +1,341 @@
+{
+  "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "qualification": "Unchanged three AST definitions, stdlib StrEnum and no-op logger; not Pipecat base-service/settings integration, source pytest, native validation, or live provider support.",
+  "base_mapping": [
+    {
+      "enum": "AF",
+      "input": "af",
+      "output": "Afrikaans"
+    },
+    {
+      "enum": "AR",
+      "input": "ar",
+      "output": "Arabic"
+    },
+    {
+      "enum": "BG",
+      "input": "bg",
+      "output": "Bulgarian"
+    },
+    {
+      "enum": "CA",
+      "input": "ca",
+      "output": "Catalan"
+    },
+    {
+      "enum": "CS",
+      "input": "cs",
+      "output": "Czech"
+    },
+    {
+      "enum": "DA",
+      "input": "da",
+      "output": "Danish"
+    },
+    {
+      "enum": "DE",
+      "input": "de",
+      "output": "German"
+    },
+    {
+      "enum": "EL",
+      "input": "el",
+      "output": "Greek"
+    },
+    {
+      "enum": "EN",
+      "input": "en",
+      "output": "English"
+    },
+    {
+      "enum": "ES",
+      "input": "es",
+      "output": "Spanish"
+    },
+    {
+      "enum": "FA",
+      "input": "fa",
+      "output": "Persian"
+    },
+    {
+      "enum": "FI",
+      "input": "fi",
+      "output": "Finnish"
+    },
+    {
+      "enum": "FIL",
+      "input": "fil",
+      "output": "Filipino"
+    },
+    {
+      "enum": "FR",
+      "input": "fr",
+      "output": "French"
+    },
+    {
+      "enum": "HE",
+      "input": "he",
+      "output": "Hebrew"
+    },
+    {
+      "enum": "HI",
+      "input": "hi",
+      "output": "Hindi"
+    },
+    {
+      "enum": "HR",
+      "input": "hr",
+      "output": "Croatian"
+    },
+    {
+      "enum": "HU",
+      "input": "hu",
+      "output": "Hungarian"
+    },
+    {
+      "enum": "ID",
+      "input": "id",
+      "output": "Indonesian"
+    },
+    {
+      "enum": "IT",
+      "input": "it",
+      "output": "Italian"
+    },
+    {
+      "enum": "JA",
+      "input": "ja",
+      "output": "Japanese"
+    },
+    {
+      "enum": "KO",
+      "input": "ko",
+      "output": "Korean"
+    },
+    {
+      "enum": "MS",
+      "input": "ms",
+      "output": "Malay"
+    },
+    {
+      "enum": "NB",
+      "input": "nb",
+      "output": "Norwegian"
+    },
+    {
+      "enum": "NN",
+      "input": "nn",
+      "output": "Nynorsk"
+    },
+    {
+      "enum": "NL",
+      "input": "nl",
+      "output": "Dutch"
+    },
+    {
+      "enum": "PL",
+      "input": "pl",
+      "output": "Polish"
+    },
+    {
+      "enum": "PT",
+      "input": "pt",
+      "output": "Portuguese"
+    },
+    {
+      "enum": "RO",
+      "input": "ro",
+      "output": "Romanian"
+    },
+    {
+      "enum": "RU",
+      "input": "ru",
+      "output": "Russian"
+    },
+    {
+      "enum": "SK",
+      "input": "sk",
+      "output": "Slovak"
+    },
+    {
+      "enum": "SL",
+      "input": "sl",
+      "output": "Slovenian"
+    },
+    {
+      "enum": "SV",
+      "input": "sv",
+      "output": "Swedish"
+    },
+    {
+      "enum": "TA",
+      "input": "ta",
+      "output": "Tamil"
+    },
+    {
+      "enum": "TH",
+      "input": "th",
+      "output": "Thai"
+    },
+    {
+      "enum": "TR",
+      "input": "tr",
+      "output": "Turkish"
+    },
+    {
+      "enum": "UK",
+      "input": "uk",
+      "output": "Ukrainian"
+    },
+    {
+      "enum": "VI",
+      "input": "vi",
+      "output": "Vietnamese"
+    },
+    {
+      "enum": "YUE",
+      "input": "yue",
+      "output": "Chinese,Yue"
+    },
+    {
+      "enum": "ZH",
+      "input": "zh",
+      "output": "Chinese"
+    }
+  ],
+  "regional_cases": [
+    {
+      "enum": "AF_ZA",
+      "input": "af-ZA",
+      "output": "Afrikaans"
+    },
+    {
+      "enum": "AR_SA",
+      "input": "ar-SA",
+      "output": "Arabic"
+    },
+    {
+      "enum": "DE_DE",
+      "input": "de-DE",
+      "output": "German"
+    },
+    {
+      "enum": "EN_US",
+      "input": "en-US",
+      "output": "English"
+    },
+    {
+      "enum": "EN_GB",
+      "input": "en-GB",
+      "output": "English"
+    },
+    {
+      "enum": "ES_MX",
+      "input": "es-MX",
+      "output": "Spanish"
+    },
+    {
+      "enum": "FR_CA",
+      "input": "fr-CA",
+      "output": "French"
+    },
+    {
+      "enum": "PT_BR",
+      "input": "pt-BR",
+      "output": "Portuguese"
+    },
+    {
+      "enum": "PT_PT",
+      "input": "pt-PT",
+      "output": "Portuguese"
+    },
+    {
+      "enum": "JA_JP",
+      "input": "ja-JP",
+      "output": "Japanese"
+    },
+    {
+      "enum": "TA_IN",
+      "input": "ta-IN",
+      "output": "Tamil"
+    },
+    {
+      "enum": "ZH_CN",
+      "input": "zh-CN",
+      "output": "Chinese"
+    },
+    {
+      "enum": "ZH_CN_SICHUAN",
+      "input": "zh-CN-sichuan",
+      "output": "Chinese"
+    },
+    {
+      "enum": "ZH_HK",
+      "input": "zh-HK",
+      "output": "Chinese"
+    },
+    {
+      "enum": "ZH_TW",
+      "input": "zh-TW",
+      "output": "Chinese"
+    },
+    {
+      "enum": "YUE_CN",
+      "input": "yue-CN",
+      "output": "Chinese,Yue"
+    }
+  ],
+  "unmapped_enum_fallbacks": [
+    {
+      "enum": "AM_ET",
+      "input": "am-ET",
+      "output": "am"
+    },
+    {
+      "enum": "SR_LATN_RS",
+      "input": "sr-Latn-RS",
+      "output": "sr"
+    },
+    {
+      "enum": "SW_KE",
+      "input": "sw-KE",
+      "output": "sw"
+    },
+    {
+      "enum": "XH",
+      "input": "xh-ZA",
+      "output": "xh"
+    },
+    {
+      "enum": "TL",
+      "input": "tl",
+      "output": "tl"
+    }
+  ],
+  "annotation_unenforced_raw_string_cases": [
+    {
+      "input": "PT-BR",
+      "output": "Portuguese"
+    },
+    {
+      "input": "en-us",
+      "output": "English"
+    },
+    {
+      "input": "xx-ZZ",
+      "output": "xx"
+    },
+    {
+      "input": "pt_BR",
+      "output": "pt_br"
+    },
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "auto",
+      "output": "auto"
+    }
+  ]
+}

@@ -7,6 +7,8 @@ pub mod cartesia;
 mod common;
 pub mod deepgram;
 pub mod elevenlabs;
+#[cfg(feature = "minimax")]
+pub mod minimax;
 mod openai;
 pub mod processor;
 #[cfg(feature = "speechify")]
@@ -60,6 +62,10 @@ impl SpeechConfig {
     }
     pub fn deepgram(api_key: impl Into<String>) -> Self {
         Self::provider("https://api.deepgram.com", api_key)
+    }
+    #[cfg(feature = "minimax")]
+    pub fn minimax(api_key: impl Into<String>) -> Self {
+        Self::provider("https://api.minimax.io", api_key)
     }
     pub fn cartesia(api_key: impl Into<String>) -> Self {
         Self::provider("https://api.cartesia.ai", api_key)

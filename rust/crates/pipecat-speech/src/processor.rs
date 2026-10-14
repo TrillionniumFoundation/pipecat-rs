@@ -30,12 +30,20 @@ use crate::speechmatics::{SpeechmaticsHttpClient, SpeechmaticsSynthesisRequest};
 #[cfg(feature = "speechify")]
 use crate::speechify::{SpeechifyEvent, SpeechifyHttpClient, SpeechifySynthesisRequest};
 
+#[cfg(feature = "minimax")]
+use crate::minimax::{MiniMaxHttpClient, MiniMaxSynthesisRequest};
+
 static NEXT_TTS_CONTEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Immutable provider settings copied for every accepted complete utterance.
 /// The request's text field is overwritten with the incoming frame's text.
 #[derive(Clone)]
 pub enum HttpTtsBackend {
+    #[cfg(feature = "minimax")]
+    MiniMax {
+        client: MiniMaxHttpClient,
+        request: MiniMaxSynthesisRequest,
+    },
     #[cfg(feature = "speechify")]
     Speechify {
         client: SpeechifyHttpClient,
@@ -66,6 +74,8 @@ pub enum HttpTtsBackend {
 impl HttpTtsBackend {
     pub fn sample_rate(&self) -> u32 {
         match self {
+            #[cfg(feature = "minimax")]
+            Self::MiniMax { request, .. } => request.sample_rate,
             #[cfg(feature = "speechify")]
             Self::Speechify { request, .. } => request.output_sample_rate(),
             #[cfg(feature = "speechmatics")]
@@ -85,6 +95,12 @@ impl HttpTtsBackend {
     }
     fn validate(&self) -> Result<(), SpeechError> {
         match self {
+            #[cfg(feature = "minimax")]
+            Self::MiniMax { request, .. } => {
+                let mut request = request.clone();
+                request.text = "validation".into();
+                request.validate()
+            }
             #[cfg(feature = "speechify")]
             Self::Speechify { request, .. } => {
                 let mut request = request.clone();
@@ -133,6 +149,12 @@ impl HttpTtsBackend {
         let mut candidate = self.clone();
         let mut changed = false;
         match &mut candidate {
+            #[cfg(feature = "minimax")]
+            Self::MiniMax { request, .. } => {
+                changed |= required(&mut request.model, &delta.base.model)?;
+                changed |= required(&mut request.voice, &delta.voice)?;
+                changed |= optional(&mut request.language, &delta.language)?;
+            }
             #[cfg(feature = "speechify")]
             Self::Speechify { request, .. } => {
                 changed |= required(&mut request.model, &delta.base.model)?;
@@ -197,6 +219,12 @@ impl HttpTtsBackend {
     }
     fn synthesize(&self, text: String) -> Result<AudioStream, SpeechError> {
         match self {
+            #[cfg(feature = "minimax")]
+            Self::MiniMax { client, request } => {
+                let mut request = request.clone();
+                request.text = text;
+                client.synthesize(request).map(AudioStream::Raw)
+            }
             #[cfg(feature = "speechify")]
             Self::Speechify { client, request } => {
                 let mut request = request.clone();

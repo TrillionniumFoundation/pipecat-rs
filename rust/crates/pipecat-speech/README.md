@@ -311,3 +311,12 @@ Enable `pipecat-speech/speechify` (or the facade's `speechify` feature) for
 and terminal audio duration through the existing TTS pipeline. The feature is
 default-off with no new dependencies. See [SPEECHIFY.md](SPEECHIFY.md) for the
 fixed source, bounded native profile, timeline adaptation and loopback acceptance.
+
+## Optional MiniMax HTTP synthesis
+
+Enable `pipecat-speech/minimax` (or the facade's `minimax` feature) for
+`minimax::{MiniMaxHttpClient, MiniMaxSynthesisRequest}` and
+`HttpTtsBackend::MiniMax`. This default-off adapter decodes bounded streaming
+hex PCM and reuses the existing TTS lifecycle without claiming word timestamps.
+See [MINIMAX.md](MINIMAX.md) for the fixed source, corrected EOF/error behavior,
+final aggregate handling and synthetic loopback qualification.
