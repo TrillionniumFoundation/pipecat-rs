@@ -320,3 +320,99 @@ graceful ordered-drain contract; the processor implementation did not need a
 Stop-specific behavior change. The final focused and package suites pass.
 The source-AST fixture was independently regenerated and compared byte-for-byte.
 These are selected source-bound checks, not a new full-workspace qualification.
+
+## Generic idle-frame monitoring
+
+`IdleFrameProcessor::new(config, filter, callback)` observes frame traffic rather
+than conversational user-turn state. It is separate from `UserIdleTracker` and
+runner session timeouts, and is exported by `pipecat::processors` without an
+optional feature. `IdleCallback` is an owned async `Fn() -> Result<(),
+ProcessorError>` future. A caller can notify its own channel or perform its own
+explicitly configured action; this processor does not invent a bot prompt.
+
+Fixed Python references at `af9f9da9d7afddaa8811c0e0251b32566c980bdf`:
+- `src/pipecat/processors/idle_frame_processor.py`, blob
+  `9426006be4a7b9653e0cfc39882c765ef40476ed`
+- `tests/test_idle_frame_processor.py`, blob
+  `22bfb7595fb49ba0e0e584915d5ae03145f4cbdc`, including the regression preserving
+  activity signalled during a callback
+
+Start starts one monitor even when that frame does not match the filter.
+Repeated Start at the processor boundary does not duplicate or restart it.
+The native Pipeline sender separately rejects duplicate Start ingress. Every frame is submitted for
+forwarding with its original identity, metadata, semantic carriers and direction;
+matching activity is signalled only after that forwarding call succeeds. Core
+queue, stale-frame and shutdown policies still apply; this is not a downstream
+delivery receipt. Either
+direction can reset the timer. The Rust filter is `Option<FramePredicate>`:
+`None` observes all frames. An explicit predicate chooses a subset and must be
+pure, fast and nonblocking. It is evaluated before forwarding (without cloning
+the frame), outside the state lock. Predicate panics follow the native core's
+processor-panic policy. This predicate API does not automatically implement
+Python's `isinstance` class/subclass list. The source's missing or empty type
+list corresponds to `None`, not a predicate that always returns false.
+
+A single pending activity bit coalesces bursts. Consuming activity starts a full
+idle interval; reset timing is consumption time, not a promise about exact
+arrival timestamps. On timeout, one callback is awaited. Callbacks never overlap.
+Only after it finishes does the next full idle interval begin. Activity arriving
+during the callback remains pending and is consumed afterward. Continued silence
+therefore produces repeated callbacks spaced by callback duration plus the idle
+interval, not a fixed-rate schedule. A simultaneous activity/timeout race has no
+promised winner. Callback errors terminate this run's monitor and report through
+the owned task's core error handling using a fixed nonfatal diagnostic (callback
+error payload/category/fatal fields are not propagated); later activity and repeated Start
+do not silently restart a failed callback loop.
+
+The default idle interval is five seconds (positive, at most twenty-four hours);
+the callback deadline is ten seconds (positive, at most sixty seconds). These
+finite bounds are a native safety profile, not limits of the Python float API.
+Callback creation/poll panics use a fixed diagnostic, but the global Rust panic
+hook can still log the original payload. Deadlines and cancellation are
+cooperative; blocking callback code cannot be preempted, and callback/future
+or panic-payload destructors must not panic. Callbacks must not detach work.
+They receive no Frame, ProcessorContext or processor object, an explicit API
+adaptation that avoids granting implicit pipeline-output authority. Cancellation
+does not undo external effects already performed by application code.
+
+Exactly one supervisor is registered with the core task owner. Ordinary
+interruption preserves monitoring; terminal End/Stop, Cancel and cleanup close
+it, including any pending callback. `prepare_end` closes the monitor before the
+core drains tracked tasks, so a recurring timer cannot deadlock graceful End or
+Stop. Stop does not depend on a later cleanup hook. Closure is idempotent and
+cleanup waits for the callback future to be released. These lifecycle rules are
+a deliberate improvement over the Python class, which only explicitly cancels
+its timer in cleanup. They do not turn a lifecycle terminal into an idle event.
+
+Use a separate processor instance for concurrent pipelines. Sequential reuse is
+supported only after the previous worker has been joined; setup creates isolated
+run state, so old task cleanup cannot alter the next run. This explicitly differs
+from the source's retained cancelled-task reference, which prevents restart after
+cleanup. No frame history, unbounded event queue or detached timer is retained.
+
+### Slice 55 verification, 2026-10-14 UTC
+
+Eight real Pipeline integration tests and three ownership tests run with Tokio's
+paused clock for deterministic interval assertions. They cover either-direction
+activity, explicit nonmatches, interruption survival, repeated serial callbacks,
+activity during callback, a full interval after completion, all five terminal
+forms during waiting and active callbacks, callback failure/panic/deadline,
+startup task-budget rejection and clean reuse, native continuation identity,
+initial StartDetailed, internal repeated-start idempotence, unpolled future
+release, and worker-owner drop in both phases. Terminal/reuse paths collect and
+join workers; the owner-drop witness waits for monitor release and core cleanup.
+This is runtime execution with a controlled clock, not a wall-clock latency SLA.
+
+The selected package suites pass 115 default-feature and 158 all-feature tests;
+the facade export has one test. Strict all-target Clippy and selected formatting
+pass. These overlapping counts are not additive and do not qualify the entire
+workspace or external provider/device behavior.
+
+Initial fixture checks exposed three test assumptions: DetailedStart needs an
+explicit payload, duplicate Start is rejected at native sender ingress, and a
+fatal background-task limit fails Pipeline startup before a worker is returned.
+Fixtures were corrected without relaxing these runtime boundaries. Internal
+repeated-start behavior uses a labelled wrapper/private-hook witness instead;
+startup rejection is checked as an error followed by successful clean reuse.
+Final focused and package checks pass; the initial logs remain in the evidence
+archive alongside the corrected runs.

@@ -254,3 +254,6 @@ pub mod text_transformer;
 pub use text_transformer::{
     AsyncTextTransform, StatelessTextTransformer, StatelessTextTransformerConfig,
 };
+
+pub mod idle_frame;
+pub use idle_frame::{IdleCallback, IdleFrameProcessor, IdleFrameProcessorConfig};
