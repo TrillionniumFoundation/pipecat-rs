@@ -3,6 +3,7 @@
 #[cfg(target_arch = "wasm32")]
 mod browser;
 pub mod image_entry;
+pub mod job_groups;
 pub mod lifecycle;
 pub mod protocol;
 pub mod text_entry;

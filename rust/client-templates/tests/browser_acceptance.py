@@ -177,12 +177,50 @@ async def main():
                 await page.wait_for_function("document.querySelector('#transport-state').textContent === 'Connected'")
             async def cleanup():
                 await idle()
+                assert await page.locator("#job-groups .job-group").count() == 0
                 assert await page.locator('#send-btn').is_disabled()
                 assert await page.input_value('#message-input') == ''
                 before = len(state['texts'])
                 await page.evaluate("document.querySelector('#message-form').requestSubmit()")
                 assert len(state['texts']) == before
                 await page.wait_for_function("window.capturedStreams.every(s=>s.getTracks().every(t=>t.readyState==='ended')) && window.audioContexts.every(c=>c.state==='closed')")
+            async def job_checks(transport):
+                async def send(data):
+                    value = {'label':'rtvi-ai', 'type':'ui-job-group', 'data':data}
+                    if transport == 'websocket':
+                        raw = json.dumps(value).encode()
+                        await state['ws'][-1].send_bytes(blob(4, blob(1, raw)))
+                    else:
+                        await peer_page.evaluate('(value)=>window.channel.send(JSON.stringify(value))', value)
+                assert await page.locator('#job-groups .job-group').count() == 0
+                # Retained viewport gate: controls must remain scroll-reachable.
+                await page.fill('#message-input', 'visibility fixture')
+                await page.set_input_files('#image-input', {'name':'visibility.jpg','mimeType':'image/jpeg','buffer':(ROOT/'tests'/'fixtures'/'baseline.jpg').read_bytes()})
+                for height in [720, 480]:
+                    await page.set_viewport_size({'width':960, 'height':height})
+                    for control in ['#send-btn', '#image-send-btn', '#image-clear-btn']:
+                        await page.locator(control).scroll_into_view_if_needed()
+                        await page.locator(control).click(trial=True)
+                await page.click('#image-clear-btn')
+                await page.fill('#message-input', '')
+                literal = '<img src=x onerror="window.jobInjected=true">'
+                await send({'kind':'group_started','job_id':'fixture','label':literal,'workers':['worker']})
+                await send({'kind':'job_update','job_id':'fixture','worker_name':'worker','data':{'text':literal}})
+                await send({'kind':'job_completed','job_id':'fixture','worker_name':'worker','status':'custom result','response':{'ok':True}})
+                await send({'kind':'group_completed','job_id':'fixture'})
+                await send({'kind':'job_update','job_id':'fixture','worker_name':'worker','data':'late must not replace'})
+                await send({'kind':'group_started','job_id':'fixture','label':'must not reopen'})
+                await page.wait_for_function("document.querySelector('#job-groups').textContent.includes('Group completion reported')")
+                assert await page.locator('#job-groups .job-group').count() == 1
+                content = await page.locator('#job-groups').inner_text()
+                assert literal in content and 'custom result' in content
+                assert 'late must not replace' not in content and 'must not reopen' not in content
+                assert await page.locator('#job-groups img').count() == 0
+                assert await page.evaluate('window.jobInjected !== true')
+                await send({'kind':'group_started','job_id':'rejected','workers':['x']*17})
+                await page.wait_for_function("document.querySelector('#job-view-status').textContent.includes('not a complete task history')")
+                checks.append(f'{transport} job-group four-event literal DOM projection, terminal late/reused ID rejection, explicit incomplete warning')
+
             async def image_checks(transport):
                 async def received():
                     if transport == 'websocket': return state['images']
@@ -335,6 +373,7 @@ async def main():
                 await asyncio.sleep(.02)
             assert len(state['texts']) == 2
             assert state['texts'][0]['id'] != state['texts'][1]['id']
+            await job_checks('websocket')
             await image_checks('websocket')
             checks.append('Actual form/WS text: exact current ready, Chinese literal payload, newline, rapid-submit single send, UTF-8 cap; instrumented bufferedAmount/send failure preserves draft; local queue success is not a conversation row')
             await page.click('#mic-btn')
@@ -418,6 +457,7 @@ async def main():
             assert len(state['offers']) == 2
             assert 'm=audio' in state['offers'][0]['sdp']
             await page.wait_for_function("!document.querySelector('#send-btn').disabled")
+            await job_checks('smallwebrtc')
             await page.fill('#message-input', 'WebRTC 你好 🦀')
             await page.click('#send-btn')
             await peer_page.wait_for_function("window.signals.some(v=>v.type==='send-text')")

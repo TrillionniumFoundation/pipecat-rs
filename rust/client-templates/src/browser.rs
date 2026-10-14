@@ -1,5 +1,6 @@
 //! Browser APIs are called directly from Rust. Generated wasm-bindgen glue only marshals values.
 use crate::image_entry::ImageEntry;
+use crate::job_groups::JobGroups;
 use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
 use crate::text_entry::{TextEntry, TextPayload};
 use crate::{
@@ -28,6 +29,7 @@ struct App {
     session: Option<Session>,
     ui_callbacks: Vec<Callback>,
     conversation: VecDeque<(Option<String>, Element)>,
+    jobs: JobGroups,
 }
 struct Session {
     input_mode: InputMode,
@@ -460,6 +462,8 @@ fn disconnect(app: &Shared, reason: &str) {
     let mut app = app.borrow_mut();
     app.lifecycle.cancel();
     app.session.take();
+    app.jobs.close();
+    render_jobs(&app.jobs);
     element("image-input")
         .unchecked_into::<HtmlInputElement>()
         .set_value("");
@@ -518,6 +522,74 @@ fn add_transcript(app: &mut App, item: crate::Transcript) {
     let log: HtmlElement = log.unchecked_into();
     log.set_scroll_top(log.scroll_height());
 }
+// Every remote field is a text node; job payloads never become HTML, URLs or actions.
+fn job_text(parent: &Element, tag: &str, class: &str, text: &str) {
+    let node = document().create_element(tag).unwrap();
+    node.set_class_name(class);
+    node.set_text_content(Some(text));
+    let _ = parent.append_child(&node);
+}
+fn render_jobs(jobs: &JobGroups) {
+    element("job-view-status").set_text_content(Some(if jobs.is_incomplete() {
+        "Limited view: some activity was omitted or removed. This is not a complete task history."
+    } else {
+        "Read-only activity reported in this connection. No cancellation controls."
+    }));
+    let list = element("job-groups");
+    list.set_text_content(None);
+    if jobs.groups().is_empty() {
+        job_text(&list, "p", "job-empty", "No job groups displayed.");
+    }
+    for group in jobs.groups() {
+        let row = document().create_element("section").unwrap();
+        row.set_class_name("job-group");
+        job_text(
+            &row,
+            "h3",
+            "job-label",
+            group.label.as_deref().unwrap_or(&group.job_id),
+        );
+        job_text(&row, "div", "job-id", &format!("Job ID: {}", group.job_id));
+        job_text(
+            &row,
+            "div",
+            "job-completion",
+            if group.completed {
+                "Group completion reported"
+            } else {
+                "No group completion reported"
+            },
+        );
+        for worker in &group.workers {
+            let item = document().create_element("div").unwrap();
+            item.set_class_name("job-worker");
+            job_text(&item, "h4", "job-worker-name", &worker.name);
+            job_text(
+                &item,
+                "div",
+                "job-worker-status",
+                &worker.status.as_ref().map_or_else(
+                    || {
+                        if worker.completed {
+                            "Worker completion reported; result omitted".to_owned()
+                        } else {
+                            "No worker completion reported".to_owned()
+                        }
+                    },
+                    |status| format!("Reported status: {status}"),
+                ),
+            );
+            for (label, value) in [("Update", &worker.data), ("Response", &worker.response)] {
+                if let Some(value) = value {
+                    job_text(&item, "div", "job-value-label", label);
+                    job_text(&item, "pre", "job-value", value);
+                }
+            }
+            let _ = row.append_child(&item);
+        }
+        let _ = list.append_child(&row);
+    }
+}
 fn message(app: &Shared, epoch: u64, text: &str) {
     if !current(app, epoch) {
         return;
@@ -565,6 +637,14 @@ fn message(app: &Shared, epoch: u64, text: &str) {
     if matches!(kind, "user-started-speaking" | "bot-interrupted") {
         if let Some(s) = app.session.as_mut() {
             s.clear_playback();
+        }
+    }
+    match app.jobs.apply(epoch, &value) {
+        Ok(true) => render_jobs(&app.jobs),
+        Ok(false) => {}
+        Err(reason) => {
+            render_jobs(&app.jobs);
+            event("job-view-rejected", &reason);
         }
     }
     if let Some(item) = transcript(&value) {
@@ -714,6 +794,8 @@ fn begin_connect(app: &Shared) {
         for (segment, _) in &mut app.conversation {
             *segment = None;
         }
+        app.jobs.begin(epoch);
+        render_jobs(&app.jobs);
         app.session = Some(Session {
             input_mode,
             text_entry: TextEntry::new(epoch),
@@ -1170,6 +1252,7 @@ async fn initialize() -> Result<(), JsValue> {
         session: None,
         ui_callbacks: vec![],
         conversation: VecDeque::new(),
+        jobs: JobGroups::default(),
     }));
     let weak = Rc::downgrade(&app);
     let click = Closure::wrap(Box::new(move |_: Event| {

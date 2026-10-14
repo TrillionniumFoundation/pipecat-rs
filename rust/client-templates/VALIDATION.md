@@ -183,3 +183,48 @@ qualification):
   wasm-bindgen static packaging passed; browser format check passed.
 - Expanded Python browser fixture passed `py_compile`; Chromium runtime gate
   remains blocked as stated above.
+
+## Slice 53: bounded job activity, 2026-10-14 UTC
+
+The existing four-kind `ui-job-group` contract was checked against Python commit
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`, models.py Git blob
+`cbd081ccd8e3ff7167c9456d438d16c537ddc7e3` (SHA-256
+`2689d3cf72ea8348a20c869e01c868a8838e6068f3a7b5366b225dfc28205dd2`).
+The current native typed envelope agrees with its fields/defaults except the
+already-existing unsigned timestamp profile. This work implements the bounded
+read-only rendering policy documented in README; it does not claim parity with
+an unavailable external React reducer, image/video display, or cancellation.
+
+The browser-independent reducer covers all four events, interleaved groups,
+literal/arbitrary status and JSON, optional/null fields, delivery order (not
+`at` order), stale epochs/closed sessions, terminal workers/groups, repeated IDs,
+completed-group eviction, active-group retention, full ID ledger, exact UTF-8
+and serialized JSON budgets, transactional payload rejection and persistent
+incomplete warnings. Valid completion facts survive result-budget rejection.
+Bounded omitted-completion tombstones prevent previously unseen workers from
+reviving after capacity frees; ledger saturation fails closed for new workers.
+
+The runner's `job_group_flow` fixture serializes native typed RTVI events,
+transports them over actual localhost protobuf WebSocket and paired native
+SmallWebRTC ICE/DTLS/SCTP, decodes the received values and applies the same browser
+model. It checks exact wire values, all lifecycle transitions, isolation and
+late-event rejection. Both endpoints remain owned outside a deadline-bounded
+observation and are explicitly closed/joined before assertions, including setup
+or observation failure. No provider service or external STUN/TURN is used.
+
+Selected checks for this slice:
+- Browser locked tests: 44 passed (including 13 new reducer tests).
+- Runner `--test job_group_flow --features webrtc`: two real transport tests;
+  default-feature execution: one WebSocket control.
+- Browser native all-target and wasm32 strict Clippy; runner WebRTC all-target
+  strict Clippy; browser/runner selected formatting; optimized wasm32 build and
+  wasm-bindgen packaging.
+- Extended browser fixture: Python syntax check only.
+
+A fresh ordinary sandboxed Chromium launch again failed before `about:blank`
+with process-singleton `socket() failed: Operation not permitted`. Therefore
+DOM lifecycle, XSS-as-literal rendering, disconnect clearing and 720/480-pixel
+viewport control reachability are retained fixture assertions, not executed
+passes. Main/conversation scrolling and minimum panel sizes are a conservative
+source-level accessibility mitigation; no screenshot or visual acceptance is
+claimed. Native transport/model results do not establish browser DOM behavior.

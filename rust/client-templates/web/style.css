@@ -316,3 +316,19 @@ select.control {
 #message-help, #message-status { font-size: 0.75rem; color: var(--muted-foreground); }
 .message-form textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .message-form textarea:disabled { opacity: 0.6; }
+
+/* Bounded read-only RTVI job activity. Remote values remain literal text. */
+.jobs-panel { height: 25%; min-height: 9rem; flex-shrink: 0; }
+#job-view-status { margin: 0; padding: 0.4rem 0.75rem; font-size: 0.75rem; }
+#job-groups { padding: 0 0.75rem; overflow-wrap: anywhere; }
+.job-group { border-top: 1px solid var(--border); padding: 0.5rem 0; }
+.job-label, .job-worker-name { margin: 0.25rem 0; font-size: 0.85rem; }
+.job-worker { margin: 0.5rem 0 0.5rem 0.5rem; }
+.job-id, .job-completion, .job-worker-status, .job-value-label, .job-empty { font-size: 0.75rem; }
+.job-value { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.75rem; margin: 0.25rem 0; }
+/* Keep message/image controls reachable when the extra panel reduces height. */
+.main { overflow-y: auto; }
+.conversation-panel { flex: 1 0 34rem; overflow-y: auto; }
+.conversation-panel > .message-form { flex-shrink: 0; }
+#conversation-log { min-height: 8rem; }
+.events-panel { min-height: 10rem; }

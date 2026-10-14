@@ -249,3 +249,45 @@ or playback. No confirmed transcript row is fabricated.
 Browser execution of these controls is not yet qualified on this host; see the
 current `VALIDATION.md` entry. Native policy, wire and server-projection checks
 must not be mistaken for executed FileReader/DOM or real-provider acceptance.
+
+## Read-only job activity
+
+The Job activity panel consumes the existing `ui-job-group` RTVI envelope over
+both transports. Its four events are `group_started`, `job_update`,
+`job_completed`, and `group_completed`. `status` is an arbitrary server string,
+not an inferred success/failure enum. JSON updates/responses and labels are
+literal text, with no HTML, remote image loading, command execution or cancel
+button. A group completion report does not fabricate worker completions.
+
+Wire reference: `ProfHepta/pipecat` commit
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`src/pipecat/processors/frameworks/rtvi/models.py` lines 956–1082,
+Git blob `cbd081ccd8e3ff7167c9456d438d16c537ddc7e3`.
+The outer envelope has no required request ID. This is a bounded Rust view of
+that contract; an external React client's reducer/rendering is not reproduced.
+Timestamps retain the current native Rust protocol's nonnegative `u64` profile
+(Python declares unrestricted `int`) and are metadata, never ordering clocks.
+
+The view applies transport delivery order within a connection. Completion is
+terminal for a worker/group. Repeated group IDs never restart within that
+connection: the wire has no generation field to distinguish reuse from stale
+work. Reconnect/disconnect clears the view and its ledger; old callbacks cannot
+populate the next connection. Missing/null update data clears its preview.
+
+Bounds: eight visible groups, sixteen workers per group, sixty-four distinct
+started IDs per connection; identifiers 128 UTF-8 bytes, labels 512, status 256,
+each serialized JSON preview 4096, whole event 32 KiB, retained display strings
+64 KiB (separate group-ID and omitted-worker-completion ledgers add at most
+8 KiB and 16 KiB of identifier bytes respectively). Only completed
+groups can be evicted, in insertion order; their IDs remain remembered. Active
+groups are never evicted to admit new groups. A full ID ledger rejects new IDs
+until reconnect while existing groups continue. Validation and content-budget
+rejection preserve previously accepted payloads. A fully validated completion
+still seals a worker when its result cannot fit; omitted-worker completion IDs
+are remembered (sixteen per group). If that ledger fills, additional unknown
+workers are refused while already displayed workers continue. Any rejected matching event,
+omission or eviction permanently marks the view as incomplete for that
+connection. The panel never claims that all work is finished or that retained
+rows are a full history. Events remain available in the bounded diagnostic log.
+
+Browser DOM execution remains unqualified on this host; see `VALIDATION.md`.
