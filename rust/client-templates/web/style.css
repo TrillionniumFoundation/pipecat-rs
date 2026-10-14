@@ -332,3 +332,13 @@ select.control {
 .conversation-panel > .message-form { flex-shrink: 0; }
 #conversation-log { min-height: 8rem; }
 .events-panel { min-height: 10rem; }
+
+/* Transient plaintext notifications; no external images or navigation. */
+.notifications-panel { flex: 0 0 auto; max-height: 14rem; }
+.notifications-panel[hidden] { display: none; }
+#notifications { padding: 0.5rem 0.75rem; }
+.notification { padding: 0.5rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.notification-title { font-size: 0.9rem; margin: 0 0 0.25rem; }
+.notification-subtitle, .notification-description { white-space: pre-wrap; font-size: 0.85rem; margin: 0.25rem 0; }
+.notification-note { font-size: 0.75rem; }
+.notification-dismiss { font-size: 0.75rem; margin-top: 0.25rem; }

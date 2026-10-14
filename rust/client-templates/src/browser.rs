@@ -3,6 +3,7 @@ use crate::image_entry::ImageEntry;
 use crate::job_groups::JobGroups;
 use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
 use crate::text_entry::{TextEntry, TextPayload};
+use crate::toasts::Toasts;
 use crate::{
     client_ready, offer_endpoint, protocol, transcript, websocket_endpoint, Config, InputMode,
     Transport,
@@ -30,6 +31,7 @@ struct App {
     ui_callbacks: Vec<Callback>,
     conversation: VecDeque<(Option<String>, Element)>,
     jobs: JobGroups,
+    toasts: Toasts,
 }
 struct Session {
     input_mode: InputMode,
@@ -47,6 +49,7 @@ struct Session {
     audio: Option<HtmlAudioElement>,
     callbacks: Vec<Callback>,
     heartbeat: Option<(i32, Closure<dyn FnMut()>)>,
+    toast_timer: Option<(i32, Closure<dyn FnMut()>)>,
     abort: AbortController,
     playback: VecDeque<(f64, AudioBufferSourceNode)>,
     next_audio: f64,
@@ -97,6 +100,9 @@ impl Session {
         self.image_entry.close();
         self.image_read.take();
         self.abort.abort();
+        if let Some((timer, _)) = self.toast_timer.take() {
+            window().clear_interval_with_handle(timer);
+        }
         if let Some((timer, _)) = self.heartbeat.take() {
             window().clear_interval_with_handle(timer);
         }
@@ -462,6 +468,8 @@ fn disconnect(app: &Shared, reason: &str) {
     let mut app = app.borrow_mut();
     app.lifecycle.cancel();
     app.session.take();
+    app.toasts.close();
+    render_toasts(&app.toasts, app.lifecycle.generation);
     app.jobs.close();
     render_jobs(&app.jobs);
     element("image-input")
@@ -590,6 +598,82 @@ fn render_jobs(jobs: &JobGroups) {
         let _ = list.append_child(&row);
     }
 }
+fn toast_now() -> Result<u64, JsValue> {
+    let now = window()
+        .performance()
+        .ok_or_else(|| error("Monotonic clock unavailable"))?
+        .now();
+    if !now.is_finite() || now < 0. || now >= u64::MAX as f64 {
+        return Err(error("Invalid monotonic clock"));
+    }
+    Ok(now as u64)
+}
+fn render_toasts(toasts: &Toasts, epoch: u64) {
+    let panel = element("notifications-panel");
+    panel
+        .unchecked_ref::<HtmlElement>()
+        .set_hidden(toasts.entries().is_empty());
+    let list = element("notifications");
+    list.set_text_content(None);
+    for toast in toasts.entries() {
+        let row = document().create_element("section").unwrap();
+        row.set_class_name("notification");
+        job_text(&row, "h3", "notification-title", &toast.title);
+        if let Some(subtitle) = &toast.subtitle {
+            job_text(&row, "div", "notification-subtitle", subtitle);
+        }
+        if let Some(description) = &toast.description {
+            job_text(&row, "p", "notification-description", description);
+        }
+        if toast.image_omitted {
+            job_text(
+                &row,
+                "p",
+                "notification-note",
+                "Remote image omitted; no image was loaded.",
+            );
+        }
+        let dismiss = document().create_element("button").unwrap();
+        dismiss.set_class_name("control notification-dismiss");
+        dismiss.set_text_content(Some("Dismiss"));
+        let _ = dismiss.set_attribute("type", "button");
+        let _ = dismiss.set_attribute("data-toast-id", &toast.id.to_string());
+        let _ = dismiss.set_attribute("data-toast-epoch", &epoch.to_string());
+        let _ = row.append_child(&dismiss);
+        let _ = list.append_child(&row);
+    }
+}
+fn start_toast_timer(app: &Shared, epoch: u64) -> Result<(), JsValue> {
+    checked(app, epoch)?;
+    toast_now()?;
+    if app
+        .borrow()
+        .session
+        .as_ref()
+        .is_some_and(|s| s.toast_timer.is_some())
+    {
+        return Ok(());
+    }
+    let weak = Rc::downgrade(app);
+    let callback = Closure::wrap(Box::new(move || {
+        if let Some(app) = weak.upgrade() {
+            if current(&app, epoch) {
+                if let Ok(now) = toast_now() {
+                    let mut app = app.borrow_mut();
+                    if app.toasts.expire(epoch, now) {
+                        render_toasts(&app.toasts, epoch);
+                    }
+                }
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    let timer = window().set_interval_with_callback_and_timeout_and_arguments_0(
+        callback.as_ref().unchecked_ref(),
+        250,
+    )?;
+    app.borrow_mut().session.as_mut().unwrap().toast_timer = Some((timer, callback));
+    Ok(())
+}
 fn message(app: &Shared, epoch: u64, text: &str) {
     if !current(app, epoch) {
         return;
@@ -647,6 +731,27 @@ fn message(app: &Shared, epoch: u64, text: &str) {
             event("job-view-rejected", &reason);
         }
     }
+    if kind == "ui-command" && value["data"]["command"] == "toast" {
+        if app
+            .session
+            .as_ref()
+            .is_some_and(|s| s.toast_timer.is_some())
+        {
+            let result = toast_now()
+                .map_err(js_error)
+                .and_then(|now| app.toasts.apply(epoch, now, &value));
+            match result {
+                Ok(true) => render_toasts(&app.toasts, epoch),
+                Ok(false) => {}
+                Err(reason) => event("notification-rejected", &reason),
+            }
+        } else {
+            event(
+                "notification-rejected",
+                "Notification expiry timer unavailable",
+            );
+        }
+    }
     if let Some(item) = transcript(&value) {
         add_transcript(&mut app, item);
     }
@@ -666,6 +771,9 @@ fn connected(app: &Shared, epoch: u64) {
     if let Err(err) = result {
         fail(app, epoch, err);
     } else {
+        if let Err(err) = start_toast_timer(app, epoch) {
+            event("notification-unavailable", &js_error(err));
+        }
         event("connected", "Transport open; waiting for bot-ready");
     }
 }
@@ -794,6 +902,8 @@ fn begin_connect(app: &Shared) {
         for (segment, _) in &mut app.conversation {
             *segment = None;
         }
+        app.toasts.begin(epoch);
+        render_toasts(&app.toasts, epoch);
         app.jobs.begin(epoch);
         render_jobs(&app.jobs);
         app.session = Some(Session {
@@ -812,6 +922,7 @@ fn begin_connect(app: &Shared) {
             audio: None,
             callbacks: vec![],
             heartbeat: None,
+            toast_timer: None,
             abort,
             playback: VecDeque::new(),
             next_audio: 0.,
@@ -1253,6 +1364,7 @@ async fn initialize() -> Result<(), JsValue> {
         ui_callbacks: vec![],
         conversation: VecDeque::new(),
         jobs: JobGroups::default(),
+        toasts: Toasts::default(),
     }));
     let weak = Rc::downgrade(&app);
     let click = Closure::wrap(Box::new(move |_: Event| {
@@ -1388,6 +1500,34 @@ async fn initialize() -> Result<(), JsValue> {
     }) as Box<dyn FnMut(Event)>);
     element("image-clear-btn")
         .add_event_listener_with_callback("click", image_clear.as_ref().unchecked_ref())?;
+    let weak = Rc::downgrade(&app);
+    let dismiss_toast = Closure::wrap(Box::new(move |evt: Event| {
+        let Some(target) = evt.target().and_then(|t| t.dyn_into::<Element>().ok()) else {
+            return;
+        };
+        let Some(id) = target
+            .get_attribute("data-toast-id")
+            .and_then(|s| s.parse::<u64>().ok())
+        else {
+            return;
+        };
+        let Some(epoch) = target
+            .get_attribute("data-toast-epoch")
+            .and_then(|s| s.parse::<u64>().ok())
+        else {
+            return;
+        };
+        if let Some(app) = weak.upgrade() {
+            if current(&app, epoch) {
+                let mut app = app.borrow_mut();
+                if app.toasts.dismiss(epoch, id) {
+                    render_toasts(&app.toasts, epoch);
+                }
+            }
+        }
+    }) as Box<dyn FnMut(Event)>);
+    element("notifications")
+        .add_event_listener_with_callback("click", dismiss_toast.as_ref().unchecked_ref())?;
     app.borrow_mut().ui_callbacks.extend([
         click,
         mic,
@@ -1396,6 +1536,7 @@ async fn initialize() -> Result<(), JsValue> {
         image_send,
         image_change,
         image_clear,
+        dismiss_toast,
     ]);
     update(&app.borrow());
     element("conversation-log").set_text_content(Some("Connect to start talking with your bot"));

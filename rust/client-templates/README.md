@@ -291,3 +291,46 @@ connection. The panel never claims that all work is finished or that retained
 rows are a full history. Events remain available in the bounded diagnostic log.
 
 Browser DOM execution remains unqualified on this host; see `VALIDATION.md`.
+
+## Plain-text toast notifications
+
+The Notifications panel handles only the existing `ui-command` envelope whose
+`data.command` is `toast`. The pinned Python Toast model has a required string
+`title` and optional/null `subtitle`, `description`, `image_url`, and
+`duration_ms`. It has no notification ID; identical messages are independent
+notifications. The model reference is the same pinned models.py blob cited for
+job activity, lines 1047–1052 and 1098–1114. The literal `toast` command and payload
+are also checked against `tests/test_ui_commands.py` at that commit, blob
+`8a4e198a72b796c58f630b031f7816311eec52b3`.
+
+Only title, subtitle and description become literal DOM text. `image_url` is
+validated for string/byte bounds, then discarded from the notification state;
+the panel instead says the remote image was omitted. It does not load an image,
+create a link, navigate, focus another control or execute any command payload.
+The original wire message can still appear as plain text in the existing
+local diagnostic log. Other `ui-command` names remain unexecuted. This is an
+explicit bounded text-only subset, not a reproduction of external React handlers.
+
+The view holds at most four live notifications, evicting the oldest when a valid
+fifth arrives. Limits are title 512 UTF-8 bytes, subtitle 1024, description 4096,
+image URL 2048, and the entire serialized RTVI event 8 KiB including escaping and
+unknown fields. Invalid input is rejected before expiry, eviction or ID
+allocation. Empty strings are accepted. Missing/null duration uses 5000 ms;
+explicit duration must be a JSON integer in 1..=30000 ms. Zero, negative, floating,
+string and larger durations are rejected rather than clamped or made permanent.
+These are native-profile limits, not all values a Python client might accept.
+
+A session-local checked counter supplies IDs for Dismiss buttons; epoch plus ID
+prevents a stale button or callback from affecting a later connection. Disconnect
+clears the view and destroys its timer; reconnect does not replay notifications.
+One session-owned interval checks expiration every 250 ms using monotonic
+`performance.now()`, never wall-clock `Date.now()`. Pure-model clock regressions
+clamp to the last accepted time and deadline/ID overflow is rejected. Expiration
+removes an item on the next timer execution at or after its deadline; browser
+background throttling or a blocked main thread can delay execution, so this is
+not an exact wall-clock removal guarantee. If timer/clock setup fails, toasts are
+rejected with a diagnostic while the existing conversation remains usable.
+
+DOM rendering, browser timer ownership, dismiss interaction and visual layout
+remain unqualified on this host; see `VALIDATION.md` for the distinction between
+native model/transport tests and the retained browser acceptance fixture.

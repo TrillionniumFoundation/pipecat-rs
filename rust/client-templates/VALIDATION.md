@@ -228,3 +228,42 @@ viewport control reachability are retained fixture assertions, not executed
 passes. Main/conversation scrolling and minimum panel sizes are a conservative
 source-level accessibility mitigation; no screenshot or visual acceptance is
 claimed. Native transport/model results do not establish browser DOM behavior.
+
+## Slice 56: text-only toast notifications, 2026-10-14 UTC
+
+The `ui-command` / `toast` payload was checked against the fixed Python models.py
+blob `cbd081ccd8e3ff7167c9456d438d16c537ddc7e3` and test_ui_commands.py blob
+`8a4e198a72b796c58f630b031f7816311eec52b3`, both from baseline
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Missing/null optional fields are
+accepted; no server notification ID or deduplication semantics are invented.
+The bounded local expiry/display policy is documented in README and does not
+claim external React handler parity.
+
+The shared model has nine new tests covering field/type/UTF-8 limits, the whole
+serialized event budget including escaping, optional/null defaults, independent
+duplicates, four-entry eviction, atomic rejection, checked ID/deadline overflow,
+monotonic regression handling, exact expiry, dismissal and old-session callbacks.
+The native `toast_flow` integration fixture serializes actual typed server RTVI
+envelopes and transports them over real loopback protobuf WebSocket and paired
+SmallWebRTC into the same model. It verifies exact wire values and literal text,
+image URL omission from state, optional-null acceptance, maximum fields, invalid
+input preservation, unrelated command rejection, local ID independence and
+reconnect isolation. Both peers are explicitly closed/joined after the bounded
+observation, including failure paths. No remote provider is involved.
+
+Selected passing checks:
+- Browser locked tests: 53 total, including nine toast-model cases.
+- Runner `--features webrtc --test toast_flow`: two tests; default-feature
+  `--test toast_flow`: one WebSocket control.
+- Browser native all-target and wasm32 strict Clippy; runner WebRTC all-target
+  strict Clippy; selected formatting; release WASM and wasm-bindgen packaging.
+- Extended browser fixture: Python syntax check only.
+
+A fresh normal sandboxed Chromium probe again failed before `about:blank` with
+process-singleton `socket() failed: Operation not permitted`. No sandbox bypass
+or permission change was attempted. Actual toast DOM text/XSS behavior, live
+interval counts, browser expiry/dismissal, no image request/no navigation,
+disconnect clearing and viewport reachability remain unexecuted fixture gates.
+The one-second browser expiry fixture avoids a tiny-duration observation race;
+exact deadline edges are covered natively. The 250 ms timer is subject to browser
+scheduling and background throttling and is not an exact wall-clock guarantee.

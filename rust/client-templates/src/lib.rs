@@ -7,6 +7,7 @@ pub mod job_groups;
 pub mod lifecycle;
 pub mod protocol;
 pub mod text_entry;
+pub mod toasts;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

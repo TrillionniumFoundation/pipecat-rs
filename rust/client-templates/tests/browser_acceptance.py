@@ -152,6 +152,7 @@ async def main():
             browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, chromium_sandbox=True, args=[ '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
             context = await browser.new_context(viewport={'width': 1200, 'height': 800})
             await context.add_init_script('''
+              window.liveIntervals=new Map(); const nativeInterval=window.setInterval.bind(window); const nativeClearInterval=window.clearInterval.bind(window); window.setInterval=(fn,ms,...args)=>{const id=nativeInterval(fn,ms,...args);window.liveIntervals.set(id,ms);return id;}; window.clearInterval=(id)=>{window.liveIntervals.delete(id);nativeClearInterval(id);};
               window.mediaRequests=0; window.captureNodes=0; window.rejectMedia=false; window.capturedStreams=[]; window.audioContexts=[]; window.audioStarted=0; window.audioStopped=0; window.openSockets=[];
               window.openPeers=[]; const NativePeer=window.RTCPeerConnection; window.RTCPeerConnection=class extends NativePeer {constructor(...args){super(...args);window.openPeers.push(this);}};
               const NativeSocket=window.WebSocket; window.WebSocket=class extends NativeSocket {constructor(...args){super(...args);window.openSockets.push(this);}};
@@ -165,6 +166,8 @@ async def main():
             ''')
             page = await context.new_page()
             page.on('pageerror', lambda error: errors.append(str(error)))
+            requested_urls = []
+            page.on('request', lambda request: requested_urls.append(request.url))
             peer_page = await context.new_page()
             await peer_page.goto(f'http://127.0.0.1:{port}/index.html')
             async def idle():
@@ -178,12 +181,55 @@ async def main():
             async def cleanup():
                 await idle()
                 assert await page.locator("#job-groups .job-group").count() == 0
+                assert await page.locator("#notifications .notification").count() == 0
+                assert await page.evaluate("window.liveIntervals.size === 0")
                 assert await page.locator('#send-btn').is_disabled()
                 assert await page.input_value('#message-input') == ''
                 before = len(state['texts'])
                 await page.evaluate("document.querySelector('#message-form').requestSubmit()")
                 assert len(state['texts']) == before
                 await page.wait_for_function("window.capturedStreams.every(s=>s.getTracks().every(t=>t.readyState==='ended')) && window.audioContexts.every(c=>c.state==='closed')")
+            async def toast_checks(transport):
+                assert await page.evaluate("[...window.liveIntervals.values()].filter(ms=>ms===250).length === 1")
+                async def send(payload, command='toast'):
+                    value = {'label':'rtvi-ai', 'type':'ui-command', 'data':{'command':command, 'payload':payload}}
+                    if transport == 'websocket':
+                        raw = json.dumps(value).encode()
+                        await state['ws'][-1].send_bytes(blob(4, blob(1, raw)))
+                    else:
+                        await peer_page.evaluate('(value)=>window.channel.send(JSON.stringify(value))', value)
+                literal = '<img src=x onerror="window.toastInjected=true">'
+                image_url = f'http://127.0.0.1:{port}/notification-image-must-not-load.jpg'
+                payload = {'title':literal, 'subtitle':'原样 🦀', 'description':'Line 1\n<script>literal</script>', 'image_url':image_url, 'duration_ms':30000}
+                await send(payload)
+                await send(payload)
+                await page.wait_for_function("document.querySelectorAll('#notifications .notification').length===2")
+                assert literal in await page.locator('#notifications').inner_text()
+                assert await page.locator('#notifications img, #notifications a, #notifications script').count() == 0
+                assert image_url not in requested_urls
+                assert await page.evaluate('window.toastInjected !== true')
+                ids = await page.locator('#notifications button').evaluate_all('(nodes)=>nodes.map(n=>n.dataset.toastId)')
+                assert len(set(ids)) == 2
+                await page.locator('#notifications button').first.click()
+                assert await page.locator('#notifications .notification').count() == 1
+                before_url = page.url
+                await send({'view':'never-navigate'}, command='navigate')
+                await send({'title':'invalid', 'duration_ms':0})
+                await page.wait_for_timeout(100)
+                assert page.url == before_url
+                assert await page.locator('#notifications .notification').count() == 1
+                await page.locator('#notifications button').click()
+                await send({'title':'expires', 'duration_ms':1000})
+                await page.wait_for_function("document.querySelector('#notifications').textContent.includes('expires')")
+                await page.wait_for_function("document.querySelectorAll('#notifications .notification').length===0")
+                assert await page.locator('#notifications-panel').is_hidden()
+                # A later long notification must not inherit a previously expired timer.
+                await send({'title':'later notification', 'duration_ms':30000})
+                await page.wait_for_function("document.querySelector('#notifications').textContent.includes('later notification')")
+                await page.wait_for_timeout(350)
+                assert await page.locator('#notifications .notification').count() == 1
+                checks.append(f'{transport} literal toast display/dismiss/expiry, independent duplicates, no remote image request or navigation; later toast preserved')
+
             async def job_checks(transport):
                 async def send(data):
                     value = {'label':'rtvi-ai', 'type':'ui-job-group', 'data':data}
@@ -373,6 +419,7 @@ async def main():
                 await asyncio.sleep(.02)
             assert len(state['texts']) == 2
             assert state['texts'][0]['id'] != state['texts'][1]['id']
+            await toast_checks('websocket')
             await job_checks('websocket')
             await image_checks('websocket')
             checks.append('Actual form/WS text: exact current ready, Chinese literal payload, newline, rapid-submit single send, UTF-8 cap; instrumented bufferedAmount/send failure preserves draft; local queue success is not a conversation row')
@@ -457,6 +504,7 @@ async def main():
             assert len(state['offers']) == 2
             assert 'm=audio' in state['offers'][0]['sdp']
             await page.wait_for_function("!document.querySelector('#send-btn').disabled")
+            await toast_checks('smallwebrtc')
             await job_checks('smallwebrtc')
             await page.fill('#message-input', 'WebRTC 你好 🦀')
             await page.click('#send-btn')
