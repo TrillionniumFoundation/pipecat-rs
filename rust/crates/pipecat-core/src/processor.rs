@@ -259,6 +259,13 @@ impl Clone for ProcessorContext {
     }
 }
 impl ProcessorContext {
+    /// Whether this is a locally tagged diagnostic probe from this lifecycle's
+    /// root monitor. This is provenance for bounded composition bookkeeping,
+    /// not an acknowledgement or a security boundary against custom processors.
+    /// Expired probes retain this identity; application/wire heartbeats do not.
+    pub fn is_heartbeat_probe(&self, frame: &Frame) -> bool {
+        self.runtime.is_heartbeat_probe(frame)
+    }
     /// Capture the raw invocation, including inherited origins even when its
     /// own generation is absent. The fence retains no runtime or processor.
     pub fn invocation_fence(&self) -> Result<InvocationFence, ProcessorError> {

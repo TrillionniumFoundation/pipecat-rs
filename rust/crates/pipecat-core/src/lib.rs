@@ -4,6 +4,8 @@
 mod frame_contract;
 mod frame_payloads;
 mod health;
+mod heartbeat;
+pub use heartbeat::{HeartbeatConfig, HeartbeatMonitor, HeartbeatSnapshot};
 mod llm_continuation;
 mod realtime_context;
 mod speculation;

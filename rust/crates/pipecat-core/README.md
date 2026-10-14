@@ -23,6 +23,14 @@ assert_eq!(frames.len(), 3); // Start, Text, End
 # }
 ```
 
+## Traversal diagnostics
+
+`Pipeline::with_heartbeats(HeartbeatConfig::default())` enables bounded root-sink
+traversal monitoring; ordinary pipelines remain disabled. Read the latest counters
+with `worker.heartbeat_monitor()`. Timeouts report stalled traversal without
+cancelling business work. See [HEARTBEATS.md](HEARTBEATS.md) for pressure behavior,
+composition limits, source differences and a credential-free runnable example.
+
 ## Processing and shutdown
 
 Implement `FrameProcessor` with `async_trait`. Its `process` method receives an

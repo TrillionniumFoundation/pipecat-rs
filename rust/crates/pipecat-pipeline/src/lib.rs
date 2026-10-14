@@ -470,7 +470,7 @@ impl Engine {
             }
             return Ok(());
         }
-        if self.order.is_none() || frame.is_system() {
+        if self.order.is_none() || frame.is_system() || ctx.is_heartbeat_probe(&frame) {
             return self.fanout(&frame, direction, ctx);
         }
         let sentinels: Vec<_> = self
@@ -588,6 +588,30 @@ impl Engine {
             {
                 return Ok(());
             }
+        }
+        // Diagnostics traverse a real branch, but never allocate synchronization
+        // sentinels or consume business/lifecycle batch capacity. Root receipt
+        // validation deduplicates fanout and remains the only acknowledgement.
+        if source.is_heartbeat_probe(&frame) {
+            let context = {
+                let state = self.state.lock().unwrap();
+                if state.closed {
+                    return Ok(());
+                }
+                check(&state)?;
+                state
+                    .context
+                    .as_ref()
+                    .ok_or_else(|| ProcessorError::fatal("parallel not set up"))?
+                    .forwarding_context(source)
+            };
+            return self
+                .emit(vec![Output {
+                    branch,
+                    item: DirectedFrame::new(frame, direction),
+                    context,
+                }])
+                .await;
         }
         let mut queue_interruption = None;
         let output = {

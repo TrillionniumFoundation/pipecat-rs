@@ -1,0 +1,135 @@
+{
+  "defaults": {
+    "enable_heartbeats": false,
+    "heartbeats_period_secs": 1.0,
+    "heartbeats_monitor_secs": 10.0
+  },
+  "activation": [
+    [
+      "flush_progress"
+    ],
+    [
+      "event",
+      "on_pipeline_started"
+    ],
+    [
+      "observer_start"
+    ],
+    [
+      "create_task",
+      "_heartbeat_push_handler"
+    ],
+    [
+      "create_task",
+      "_heartbeat_monitor_handler"
+    ]
+  ],
+  "push_after_end": [
+    [
+      "pipeline_queue",
+      "HeartbeatFrame",
+      0
+    ],
+    [
+      "sleep",
+      1.0
+    ],
+    [
+      "pipeline_queue",
+      "HeartbeatFrame",
+      1000000000
+    ],
+    [
+      "sleep",
+      1.0
+    ]
+  ],
+  "monitor": [
+    [
+      "wait",
+      10.0,
+      "receipt",
+      3
+    ],
+    [
+      "trace",
+      "worker: heartbeat frame processed in 2.0 seconds"
+    ],
+    [
+      "wait",
+      10.0,
+      "timeout",
+      10
+    ],
+    [
+      "warning",
+      "worker: heartbeat frame not received for more than 10.0 seconds"
+    ],
+    [
+      "event",
+      "on_heartbeat_timeout"
+    ],
+    [
+      "wait",
+      10.0,
+      "timeout",
+      10
+    ],
+    [
+      "warning",
+      "worker: heartbeat frame not received for more than 10.0 seconds"
+    ],
+    [
+      "event",
+      "on_heartbeat_timeout"
+    ],
+    [
+      "wait",
+      10.0,
+      "receipt",
+      2
+    ],
+    [
+      "trace",
+      "worker: heartbeat frame processed in 1.0 seconds"
+    ],
+    [
+      "wait",
+      10.0,
+      "timeout",
+      10
+    ],
+    [
+      "warning",
+      "worker: heartbeat frame not received for more than 10.0 seconds"
+    ],
+    [
+      "event",
+      "on_heartbeat_timeout"
+    ]
+  ],
+  "sink_heartbeat": {
+    "activity_increment": 0,
+    "flush_progress": false,
+    "queued_for_monitor": true
+  },
+  "idle_default_types": [
+    "BotSpeakingFrame",
+    "InterimTranscriptionFrame",
+    "TranscriptionFrame",
+    "UserSpeakingFrame",
+    "UserStartedSpeakingFrame"
+  ],
+  "idle_heartbeat_event_count": 0,
+  "cancel": [
+    [
+      "cancel_task",
+      "_heartbeat_push_handler"
+    ],
+    [
+      "cancel_task",
+      "_heartbeat_monitor_handler"
+    ]
+  ],
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf"
+}

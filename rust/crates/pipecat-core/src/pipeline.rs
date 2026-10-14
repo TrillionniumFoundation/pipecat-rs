@@ -116,6 +116,7 @@ pub struct WorkerReport {
 }
 
 pub struct Pipeline {
+    heartbeats: Option<crate::HeartbeatConfig>,
     processors: Vec<Arc<dyn FrameProcessor>>,
     observers: Vec<crate::observer::ObserverRegistration>,
     observer_clock: Arc<dyn ObserverClock>,
@@ -126,11 +127,19 @@ impl Pipeline {
     pub fn new(processors: Vec<Arc<dyn FrameProcessor>>) -> Self {
         Self {
             processors,
+            heartbeats: None,
             observers: vec![],
             observer_clock: Arc::new(MonotonicObserverClock::default()),
             inherited_observers: None,
             lifecycle_owner: None,
         }
+    }
+    /// Enable bounded traversal diagnostics for this root pipeline only.
+    /// Configuration validates at start; defaults remain disabled. This does not
+    /// automatically cancel, repair or mark processors unusable on a timeout.
+    pub fn with_heartbeats(mut self, config: crate::HeartbeatConfig) -> Self {
+        self.heartbeats = Some(config);
+        self
     }
     /// Register a bounded, independently dispatched observer before starting.
     /// Register a lifecycle-owning instance once per root, and let nested
@@ -181,6 +190,14 @@ impl Pipeline {
         self
     }
     pub async fn start(mut self, config: PipelineConfig) -> Result<PipelineWorker, PipelineError> {
+        if let Some(heartbeats) = self.heartbeats {
+            heartbeats.validate()?;
+            if self.lifecycle_owner.is_some() || self.inherited_observers.is_some() {
+                return Err(PipelineError::InvalidConfiguration(
+                    "heartbeats must be configured on the root pipeline".into(),
+                ));
+            }
+        }
         if config.queue_capacity == 0
             || config.system_queue_capacity == 0
             || config.output_capacity == 0
@@ -238,7 +255,7 @@ impl Pipeline {
             .map(|owner| owner.runtime.upgrade().ok_or(PipelineError::Closed))
             .transpose()?;
         let lifecycle = owner.as_ref().map_or_else(
-            || Arc::new(LifecycleGroup::new(runtime_id)),
+            || Arc::new(LifecycleGroup::new(runtime_id, self.heartbeats)),
             |parent| parent.lifecycle.clone(),
         );
         let admission = lifecycle.admission.clone();
@@ -515,7 +532,8 @@ impl PipelineSender {
     }
     /// Nonblocking child-pipeline admission with the source invocation's epoch.
     /// Stale interruptible emissions are discarded; full lanes return explicit
-    /// backpressure. Source and destination cutoffs are checked atomically.
+    /// backpressure. This lifecycle's owned heartbeat diagnostics alone may be
+    /// softly dropped under pressure. Source/destination cutoffs remain atomic.
     pub fn try_send_from(
         &self,
         frame: Frame,
@@ -560,17 +578,30 @@ impl PipelineSender {
             {
                 return Err(PipelineError::Closed);
             }
-            let _input =
-                if frame.is_system() {
-                    None
-                } else {
-                    Some(self.runtime.input_lock.try_lock().map_err(|_| {
-                        PipelineError::Backpressure("input admission is busy".into())
-                    })?)
-                };
-            self.runtime.queues[index]
+            let _input = if frame.is_system() {
+                None
+            } else {
+                match self.runtime.input_lock.try_lock() {
+                    Ok(guard) => Some(guard),
+                    Err(_) if self.runtime.heartbeat_pressure_drop(&frame) => return Ok(()),
+                    Err(_) => {
+                        return Err(PipelineError::Backpressure(
+                            "input admission is busy".into(),
+                        ))
+                    }
+                }
+            };
+            match self.runtime.queues[index]
                 .try_send_unlocked(DirectedFrame::new(frame, direction), generation)
-                .map_err(|(error, _)| PipelineError::from(error))?;
+            {
+                Ok(()) => {}
+                Err((QueueError::Full, dropped))
+                    if self.runtime.heartbeat_pressure_drop(&dropped.frame) =>
+                {
+                    return Ok(())
+                }
+                Err((error, _)) => return Err(PipelineError::from(error)),
+            }
             if terminal {
                 self.runtime.close_input();
             }
@@ -636,6 +667,17 @@ impl PipelineWorker {
             .iter()
             .cloned()
             .collect()
+    }
+    /// Latest-value diagnostics; only a configured root exposes this handle.
+    pub fn heartbeat_monitor(&self) -> Option<crate::HeartbeatMonitor> {
+        if self.runtime.lifecycle_owner.is_some() {
+            return None;
+        }
+        self.runtime
+            .lifecycle
+            .heartbeats
+            .as_ref()
+            .map(|state| state.lock().unwrap().monitor())
     }
     pub fn sender(&self) -> PipelineSender {
         PipelineSender {
@@ -735,6 +777,39 @@ pub(crate) struct Runtime {
     health_observations: Mutex<Vec<Arc<crate::health::HealthObservation>>>,
 }
 impl Runtime {
+    fn drive_heartbeats(&self) {
+        if self.lifecycle_owner.is_some() || self.lifecycle.heartbeats.is_none() {
+            return;
+        }
+        let _admission = self.admission.lock().unwrap();
+        if *self.state.borrow() != WorkerState::Running {
+            return;
+        }
+        if let Some(heartbeats) = &self.lifecycle.heartbeats {
+            heartbeats.lock().unwrap().tick(
+                Instant::now(),
+                self.accepting.load(Ordering::SeqCst)
+                    && !self.lifecycle.sealed.load(Ordering::SeqCst),
+                |frame| {
+                    self.queues[0]
+                        .try_send_unlocked(DirectedFrame::new(frame, Direction::Downstream), None)
+                        .is_ok()
+                },
+            );
+        }
+    }
+    pub(crate) fn is_heartbeat_probe(&self, frame: &Frame) -> bool {
+        self.lifecycle
+            .heartbeats
+            .as_ref()
+            .is_some_and(|state| state.lock().unwrap().owns(frame))
+    }
+    fn heartbeat_pressure_drop(&self, frame: &Frame) -> bool {
+        self.lifecycle
+            .heartbeats
+            .as_ref()
+            .is_some_and(|state| state.lock().unwrap().pressure_drop(frame))
+    }
     pub(crate) fn is_finished(&self) -> bool {
         self.state.borrow().is_finished() || self.lifecycle.sealed.load(Ordering::SeqCst)
     }
@@ -786,16 +861,24 @@ impl Runtime {
         let is_start =
             frame.data.is_start() && direction == Direction::Downstream && destination.is_none();
         let result = if let Some(index) = destination {
-            self.queues[index]
+            match self.queues[index]
                 .try_send_unlocked(DirectedFrame::new(frame, direction), generation)
-                .map_err(|(error, _)| {
+            {
+                Ok(()) => Ok(()),
+                Err((QueueError::Full, dropped))
+                    if self.heartbeat_pressure_drop(&dropped.frame) =>
+                {
+                    Ok(())
+                }
+                Err((error, _)) => {
                     if error == QueueError::Full {
                         self.fail(PipelineError::Backpressure(format!(
                             "processor {index} input lane is full"
                         )));
                     }
-                    ProcessorError::from(error)
-                })
+                    Err(ProcessorError::from(error))
+                }
+            }
         } else {
             self.deliver(frame, direction, generation)
         };
@@ -846,6 +929,22 @@ impl Runtime {
         direction: Direction,
         generation: Option<u64>,
     ) -> Result<(), ProcessorError> {
+        if direction == Direction::Downstream
+            && self.lifecycle_owner.is_none()
+            && self
+                .lifecycle
+                .heartbeats
+                .as_ref()
+                .is_some_and(|state| state.lock().unwrap().receive(&frame, Instant::now()))
+        {
+            return Ok(());
+        }
+        let diagnostic_probe = self
+            .lifecycle
+            .heartbeats
+            .as_ref()
+            .is_some_and(|state| state.lock().unwrap().owns(&frame));
+        let diagnostic_copy = diagnostic_probe.then(|| frame.clone());
         let requested = match &frame.data {
             FrameData::EndWorker(reason) => Some(FrameData::EndDetailed(reason.clone())),
             FrameData::StopWorker => Some(FrameData::Stop),
@@ -957,6 +1056,13 @@ impl Runtime {
                 permit.send(DirectedFrame::new(frame, direction));
             });
         if let Err(error) = send_result {
+            if matches!(error, mpsc::error::TrySendError::Full(_))
+                && diagnostic_copy
+                    .as_ref()
+                    .is_some_and(|frame| self.heartbeat_pressure_drop(frame))
+            {
+                return Ok(());
+            }
             let failure = match error {
                 mpsc::error::TrySendError::Full(_) => PipelineError::Backpressure(
                     "worker output queue is full; consume output concurrently".into(),
@@ -1521,6 +1627,11 @@ impl<T> Drop for AbortOnDrop<T> {
 struct OutputCloseGuard(Arc<Runtime>);
 impl Drop for OutputCloseGuard {
     fn drop(&mut self) {
+        if self.0.lifecycle_owner.is_none() {
+            if let Some(heartbeats) = &self.0.lifecycle.heartbeats {
+                heartbeats.lock().unwrap().close();
+            }
+        }
         self.0.health_observations.lock().unwrap().clear();
         if self.0.observer_owner {
             self.0.observers.abort();
@@ -1567,6 +1678,7 @@ async fn supervise(
                 runtime.finish_if_drained();
             },
         }
+        runtime.drive_heartbeats();
     }
     for node in &runtime.nodes {
         node.cancel_background();
