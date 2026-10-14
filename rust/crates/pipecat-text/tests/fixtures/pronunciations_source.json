@@ -1,0 +1,862 @@
+{
+  "schema": 1,
+  "source_blobs": {
+    "phonemes.py": "a71d06854e74a2069b4ba7e550aa4126b17fbf6d",
+    "pronunciations.py": "47591a62188c7f873bcca62f76267c2a27a60d0b",
+    "cartesia_tts.py": "70c492f5bb63402b6ba7d7c3a3f049fc8d84b86c",
+    "test_tts_pronunciations.py": "29e6f25449c236994a5c6e0cac870fb2c07b1fb6"
+  },
+  "python_version": "3.12.14",
+  "python_unicode_version": "15.0.0",
+  "source_tests_run": 9,
+  "scope": "Unmodified AST helper functions and pronunciation transform plus Cartesia formatter only; not full Python pipeline/provider/gating. ASCII dictionary keys and ASCII casefold; native Unicode 15 word-boundary profile is separate from Python Unicode version. Fixed cases cover shared characters only.",
+  "format_cases": [
+    {
+      "ipa": "",
+      "normalized": "",
+      "phones": [],
+      "stressed": [],
+      "formatted": null
+    },
+    {
+      "ipa": " ",
+      "normalized": "",
+      "phones": [],
+      "stressed": [],
+      "formatted": null
+    },
+    {
+      "ipa": "//",
+      "normalized": "",
+      "phones": [],
+      "stressed": [],
+      "formatted": null
+    },
+    {
+      "ipa": "[]",
+      "normalized": "",
+      "phones": [],
+      "stressed": [],
+      "formatted": null
+    },
+    {
+      "ipa": ".",
+      "normalized": "",
+      "phones": [],
+      "stressed": [],
+      "formatted": null
+    },
+    {
+      "ipa": "ˈ",
+      "normalized": "ˈ",
+      "phones": [
+        "ˈ"
+      ],
+      "stressed": [],
+      "formatted": "<<>>"
+    },
+    {
+      "ipa": "ˌ",
+      "normalized": "ˌ",
+      "phones": [
+        "ˌ"
+      ],
+      "stressed": [],
+      "formatted": "<<>>"
+    },
+    {
+      "ipa": "ˈˌ",
+      "normalized": "ˈˌ",
+      "phones": [
+        "ˈ",
+        "ˌ"
+      ],
+      "stressed": [],
+      "formatted": "<<>>"
+    },
+    {
+      "ipa": "ˈt",
+      "normalized": "ˈt",
+      "phones": [
+        "ˈ",
+        "t"
+      ],
+      "stressed": [
+        "t"
+      ],
+      "formatted": "<<t>>"
+    },
+    {
+      "ipa": " /ˈʧɪ.kən/ ",
+      "normalized": "ˈtʃɪkən",
+      "phones": [
+        "ˈ",
+        "tʃ",
+        "ɪ",
+        "k",
+        "ə",
+        "n"
+      ],
+      "stressed": [
+        "tʃ",
+        "ˈ",
+        "ɪ",
+        "k",
+        "ə",
+        "n"
+      ],
+      "formatted": "<<tʃ|ˈ|ɪ|k|ə|n>>"
+    },
+    {
+      "ipa": "[ˈtʃɪkən]",
+      "normalized": "ˈtʃɪkən",
+      "phones": [
+        "ˈ",
+        "tʃ",
+        "ɪ",
+        "k",
+        "ə",
+        "n"
+      ],
+      "stressed": [
+        "tʃ",
+        "ˈ",
+        "ɪ",
+        "k",
+        "ə",
+        "n"
+      ],
+      "formatted": "<<tʃ|ˈ|ɪ|k|ə|n>>"
+    },
+    {
+      "ipa": "'ælɛgrə",
+      "normalized": "ˈælɛɡrə",
+      "phones": [
+        "ˈ",
+        "æ",
+        "l",
+        "ɛ",
+        "ɡ",
+        "r",
+        "ə"
+      ],
+      "stressed": [
+        "ˈ",
+        "æ",
+        "l",
+        "ɛ",
+        "ɡ",
+        "r",
+        "ə"
+      ],
+      "formatted": "<<ˈ|æ|l|ɛ|ɡ|r|ə>>"
+    },
+    {
+      "ipa": "bi:",
+      "normalized": "biː",
+      "phones": [
+        "b",
+        "iː"
+      ],
+      "stressed": [
+        "b",
+        "iː"
+      ],
+      "formatted": "<<b|iː>>"
+    },
+    {
+      "ipa": "t͜s",
+      "normalized": "t͡s",
+      "phones": [
+        "ts"
+      ],
+      "stressed": [
+        "ts"
+      ],
+      "formatted": "<<ts>>"
+    },
+    {
+      "ipa": "t͡s",
+      "normalized": "t͡s",
+      "phones": [
+        "ts"
+      ],
+      "stressed": [
+        "ts"
+      ],
+      "formatted": "<<ts>>"
+    },
+    {
+      "ipa": "ʦ",
+      "normalized": "t͡s",
+      "phones": [
+        "ts"
+      ],
+      "stressed": [
+        "ts"
+      ],
+      "formatted": "<<ts>>"
+    },
+    {
+      "ipa": "ʣ",
+      "normalized": "d͡z",
+      "phones": [
+        "dz"
+      ],
+      "stressed": [
+        "dz"
+      ],
+      "formatted": "<<dz>>"
+    },
+    {
+      "ipa": "ʤ",
+      "normalized": "dʒ",
+      "phones": [
+        "dʒ"
+      ],
+      "stressed": [
+        "dʒ"
+      ],
+      "formatted": "<<dʒ>>"
+    },
+    {
+      "ipa": "d͜ʒ",
+      "normalized": "dʒ",
+      "phones": [
+        "dʒ"
+      ],
+      "stressed": [
+        "dʒ"
+      ],
+      "formatted": "<<dʒ>>"
+    },
+    {
+      "ipa": "kæts",
+      "normalized": "kæts",
+      "phones": [
+        "k",
+        "æ",
+        "t",
+        "s"
+      ],
+      "stressed": [
+        "k",
+        "æ",
+        "t",
+        "s"
+      ],
+      "formatted": "<<k|æ|t|s>>"
+    },
+    {
+      "ipa": "ˈpit͡sa",
+      "normalized": "ˈpit͡sa",
+      "phones": [
+        "ˈ",
+        "p",
+        "i",
+        "ts",
+        "a"
+      ],
+      "stressed": [
+        "p",
+        "ˈ",
+        "i",
+        "ts",
+        "a"
+      ],
+      "formatted": "<<p|ˈ|i|ts|a>>"
+    },
+    {
+      "ipa": "biːn̩",
+      "normalized": "biːn̩",
+      "phones": [
+        "b",
+        "iː",
+        "n̩"
+      ],
+      "stressed": [
+        "b",
+        "iː",
+        "n̩"
+      ],
+      "formatted": "<<b|iː|n̩>>"
+    },
+    {
+      "ipa": "mɛtˈfɔɹmɪn",
+      "normalized": "mɛtˈfɔɹmɪn",
+      "phones": [
+        "m",
+        "ɛ",
+        "t",
+        "ˈ",
+        "f",
+        "ɔ",
+        "ɹ",
+        "m",
+        "ɪ",
+        "n"
+      ],
+      "stressed": [
+        "m",
+        "ɛ",
+        "t",
+        "f",
+        "ˈ",
+        "ɔ",
+        "ɹ",
+        "m",
+        "ɪ",
+        "n"
+      ],
+      "formatted": "<<m|ɛ|t|f|ˈ|ɔ|ɹ|m|ɪ|n>>"
+    },
+    {
+      "ipa": "ˌsɪpɹoʊˈflɑksəsɪn",
+      "normalized": "ˌsɪpɹoʊˈflɑksəsɪn",
+      "phones": [
+        "ˌ",
+        "s",
+        "ɪ",
+        "p",
+        "ɹ",
+        "oʊ",
+        "ˈ",
+        "f",
+        "l",
+        "ɑ",
+        "k",
+        "s",
+        "ə",
+        "s",
+        "ɪ",
+        "n"
+      ],
+      "stressed": [
+        "s",
+        "ˌ",
+        "ɪ",
+        "p",
+        "ɹ",
+        "oʊ",
+        "f",
+        "l",
+        "ˈ",
+        "ɑ",
+        "k",
+        "s",
+        "ə",
+        "s",
+        "ɪ",
+        "n"
+      ],
+      "formatted": "<<s|ˌ|ɪ|p|ɹ|oʊ|f|l|ˈ|ɑ|k|s|ə|s|ɪ|n>>"
+    },
+    {
+      "ipa": "ˈɡlaɪ   mɛt",
+      "normalized": "ˈɡlaɪ mɛt",
+      "phones": [
+        "ˈ",
+        "ɡ",
+        "l",
+        "aɪ",
+        "m",
+        "ɛ",
+        "t"
+      ],
+      "stressed": [
+        "ɡ",
+        "l",
+        "ˈ",
+        "aɪ",
+        "m",
+        "ɛ",
+        "t"
+      ],
+      "formatted": "<<ɡ|l|ˈ|aɪ>> <<m|ɛ|t>>"
+    },
+    {
+      "ipa": "ˈtʃaɪnə",
+      "normalized": "ˈtʃaɪnə",
+      "phones": [
+        "ˈ",
+        "tʃ",
+        "aɪ",
+        "n",
+        "ə"
+      ],
+      "stressed": [
+        "tʃ",
+        "ˈ",
+        "aɪ",
+        "n",
+        "ə"
+      ],
+      "formatted": "<<tʃ|ˈ|aɪ|n|ə>>"
+    },
+    {
+      "ipa": "aɪ aʊ ɔɪ oʊ eɪ",
+      "normalized": "aɪ aʊ ɔɪ oʊ eɪ",
+      "phones": [
+        "aɪ",
+        "aʊ",
+        "ɔɪ",
+        "oʊ",
+        "eɪ"
+      ],
+      "stressed": [
+        "aɪ",
+        "aʊ",
+        "ɔɪ",
+        "oʊ",
+        "eɪ"
+      ],
+      "formatted": "<<aɪ>> <<aʊ>> <<ɔɪ>> <<oʊ>> <<eɪ>>"
+    },
+    {
+      "ipa": "ˈ́a",
+      "normalized": "ˈ́a",
+      "phones": [
+        "ˈ",
+        "́",
+        "a"
+      ],
+      "stressed": [
+        "́",
+        "ˈ",
+        "a"
+      ],
+      "formatted": "<<́|ˈ|a>>"
+    },
+    {
+      "ipa": "ˈˌka",
+      "normalized": "ˈˌka",
+      "phones": [
+        "ˈ",
+        "ˌ",
+        "k",
+        "a"
+      ],
+      "stressed": [
+        "k",
+        "ˌ",
+        "a"
+      ],
+      "formatted": "<<k|ˌ|a>>"
+    },
+    {
+      "ipa": "kaˈ",
+      "normalized": "kaˈ",
+      "phones": [
+        "k",
+        "a",
+        "ˈ"
+      ],
+      "stressed": [
+        "k",
+        "a"
+      ],
+      "formatted": "<<k|a>>"
+    },
+    {
+      "ipa": "á",
+      "normalized": "á",
+      "phones": [
+        "á"
+      ],
+      "stressed": [
+        "á"
+      ],
+      "formatted": "<<á>>"
+    },
+    {
+      "ipa": "ń̩",
+      "normalized": "ń̩",
+      "phones": [
+        "ń̩"
+      ],
+      "stressed": [
+        "ń̩"
+      ],
+      "formatted": "<<ń̩>>"
+    },
+    {
+      "ipa": "t͡",
+      "normalized": "t͡",
+      "phones": [
+        "t͡"
+      ],
+      "stressed": [
+        "t͡"
+      ],
+      "formatted": "<<t͡>>"
+    },
+    {
+      "ipa": "́ː",
+      "normalized": "́ː",
+      "phones": [
+        "́ː"
+      ],
+      "stressed": [
+        "́ː"
+      ],
+      "formatted": "<<́ː>>"
+    },
+    {
+      "ipa": "ːˑa",
+      "normalized": "ːˑa",
+      "phones": [
+        "ːˑ",
+        "a"
+      ],
+      "stressed": [
+        "ːˑ",
+        "a"
+      ],
+      "formatted": "<<ːˑ|a>>"
+    },
+    {
+      "ipa": "q?🙂",
+      "normalized": "q?🙂",
+      "phones": [
+        "q",
+        "?",
+        "🙂"
+      ],
+      "stressed": [
+        "q",
+        "?",
+        "🙂"
+      ],
+      "formatted": "<<q|?|🙂>>"
+    },
+    {
+      "ipa": "<cat>|x",
+      "normalized": "<cat>|x",
+      "phones": [
+        "<",
+        "c",
+        "a",
+        "t",
+        ">",
+        "|",
+        "x"
+      ],
+      "stressed": [
+        "<",
+        "c",
+        "a",
+        "t",
+        ">",
+        "|",
+        "x"
+      ],
+      "formatted": "<<<|c|a|t|>|||x>>"
+    },
+    {
+      "ipa": "/[a]/",
+      "normalized": "[a]",
+      "phones": [
+        "[",
+        "a",
+        "]"
+      ],
+      "stressed": [
+        "[",
+        "a",
+        "]"
+      ],
+      "formatted": "<<a>>"
+    },
+    {
+      "ipa": "[a\t b\n c]",
+      "normalized": "a b c",
+      "phones": [
+        "a",
+        "b",
+        "c"
+      ],
+      "stressed": [
+        "a",
+        "b",
+        "c"
+      ],
+      "formatted": "<<a>> <<b>> <<c>>"
+    },
+    {
+      "ipa": " a b",
+      "normalized": "a b",
+      "phones": [
+        "a",
+        "b"
+      ],
+      "stressed": [
+        "a",
+        "b"
+      ],
+      "formatted": "<<a>> <<b>>"
+    },
+    {
+      "ipa": "rɹɾt",
+      "normalized": "rɹɾt",
+      "phones": [
+        "r",
+        "ɹ",
+        "ɾ",
+        "t"
+      ],
+      "stressed": [
+        "r",
+        "ɹ",
+        "ɾ",
+        "t"
+      ],
+      "formatted": "<<r|ɹ|ɾ|t>>"
+    },
+    {
+      "ipa": "ˈɚ ˌɝ ˈɨ ˈɯ ˈø",
+      "normalized": "ˈɚ ˌɝ ˈɨ ˈɯ ˈø",
+      "phones": [
+        "ˈ",
+        "ɚ",
+        "ˌ",
+        "ɝ",
+        "ˈ",
+        "ɨ",
+        "ˈ",
+        "ɯ",
+        "ˈ",
+        "ø"
+      ],
+      "stressed": [
+        "ˈ",
+        "ɚ",
+        "ˌ",
+        "ɝ",
+        "ˈ",
+        "ɨ",
+        "ˈ",
+        "ɯ",
+        "ˈ",
+        "ø"
+      ],
+      "formatted": "<<ˈ|ɚ>> <<ˌ|ɝ>> <<ˈ|ɨ>> <<ˈ|ɯ>> <<ˈ|ø>>"
+    },
+    {
+      "ipa": "a͏",
+      "normalized": "a͏",
+      "phones": [
+        "a͏"
+      ],
+      "stressed": [
+        "a͏"
+      ],
+      "formatted": "<<a͏>>"
+    }
+  ],
+  "transform_cases": [
+    {
+      "name": "empty_dictionary",
+      "entries": [],
+      "text": "No replacement. <<cat>>",
+      "expected": "No replacement. <<cat>>"
+    },
+    {
+      "name": "case_punctuation",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "Cat, CAT! (cat) cat/cat cat.cat",
+      "expected": "<<k|æ|t>>, <<k|æ|t>>! (<<k|æ|t>>) <<k|æ|t>>/<<k|æ|t>> <<k|æ|t>>.<<k|æ|t>>"
+    },
+    {
+      "name": "longer_hyphen_underscore",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "cats bobcat cat-like -cat cat- _cat cat_ 2cat cat2",
+      "expected": "cats bobcat cat-like -cat cat- _cat cat_ 2cat cat2"
+    },
+    {
+      "name": "longest_phrase",
+      "entries": [
+        [
+          "new",
+          "nu"
+        ],
+        [
+          "new york",
+          "nu jɔɹk"
+        ],
+        [
+          "york",
+          "jɔɹk"
+        ]
+      ],
+      "text": "New York, NEW YORK; new yorker; new",
+      "expected": "<<n|u>> <<j|ɔ|ɹ|k>>, <<n|u>> <<j|ɔ|ɹ|k>>; <<n|u>> yorker; <<n|u>>"
+    },
+    {
+      "name": "duplicates_trim",
+      "entries": [
+        [
+          " cat ",
+          "a"
+        ],
+        [
+          "CAT",
+          "b"
+        ],
+        [
+          "cat",
+          ""
+        ]
+      ],
+      "text": "cat CAT Cat",
+      "expected": "<<b>> <<b>> <<b>>"
+    },
+    {
+      "name": "trim_and_empty",
+      "entries": [
+        [
+          "   ",
+          "a"
+        ],
+        [
+          " dog\t",
+          "dɔɡ"
+        ],
+        [
+          "empty",
+          "[]"
+        ]
+      ],
+      "text": "dog DOG empty",
+      "expected": "<<d|ɔ|ɡ>> <<d|ɔ|ɡ>> empty"
+    },
+    {
+      "name": "literal_keys",
+      "entries": [
+        [
+          "C++",
+          "si"
+        ],
+        [
+          "a.b",
+          "eɪ"
+        ],
+        [
+          "(cat)",
+          "kæt"
+        ]
+      ],
+      "text": "C++ C+++ a.b aXb (cat) x(cat)",
+      "expected": "<<s|i>> <<s|i>>+ <<eɪ>> aXb <<k|æ|t>> x(cat)"
+    },
+    {
+      "name": "all_occurrences",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "cat cat cat cat",
+      "expected": "<<k|æ|t>> <<k|æ|t>> <<k|æ|t>> <<k|æ|t>>"
+    },
+    {
+      "name": "nonrecursive",
+      "entries": [
+        [
+          "cat",
+          "dog"
+        ],
+        [
+          "dog",
+          "kæt"
+        ]
+      ],
+      "text": "cat dog",
+      "expected": "<<d|o|ɡ>> <<k|æ|t>>"
+    },
+    {
+      "name": "existing_markup",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "<<cat>> cat <<c|a|t>>",
+      "expected": "<<<<k|æ|t>>>> <<k|æ|t>> <<c|a|t>>"
+    },
+    {
+      "name": "stress_and_unknown",
+      "entries": [
+        [
+          "stress",
+          "ˈ"
+        ],
+        [
+          "unknown",
+          "q?🙂"
+        ]
+      ],
+      "text": "stress unknown",
+      "expected": "<<>> <<q|?|🙂>>"
+    },
+    {
+      "name": "unicode_boundary_stable",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "écat caté 中cat cat中 ²cat cat² cat́ ́cat cat‍ 😀cat cat😀",
+      "expected": "écat caté 中cat cat中 ²cat cat² <<k|æ|t>>́ ́<<k|æ|t>> <<k|æ|t>>‍ 😀<<k|æ|t>> <<k|æ|t>>😀"
+    },
+    {
+      "name": "apostrophe_boundary",
+      "entries": [
+        [
+          "cat",
+          "kæt"
+        ]
+      ],
+      "text": "cat's ‘cat’ cat—cat cat‐cat",
+      "expected": "<<k|æ|t>>'s ‘<<k|æ|t>>’ <<k|æ|t>>—<<k|æ|t>> <<k|æ|t>>‐<<k|æ|t>>"
+    },
+    {
+      "name": "phrase_whitespace_literal",
+      "entries": [
+        [
+          "new york",
+          "nu jɔɹk"
+        ]
+      ],
+      "text": "new york new  york new\tyork",
+      "expected": "<<n|u>> <<j|ɔ|ɹ|k>> new  york new\tyork"
+    },
+    {
+      "name": "rejected_duplicate_keeps_valid",
+      "entries": [
+        [
+          "cat",
+          "a"
+        ],
+        [
+          "CAT",
+          "[]"
+        ]
+      ],
+      "text": "Cat",
+      "expected": "<<a>>"
+    }
+  ]
+}

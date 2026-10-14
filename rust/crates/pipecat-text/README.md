@@ -6,6 +6,10 @@ weights are required at build time or runtime.
 
 ## API
 
+- `CartesiaPronunciationTransform`: bounded, explicit IPA preparation for
+  `TtsTextInputFrame`; only synthesis text changes. Display/original text and
+  options remain intact. ASCII dictionary keys, Unicode word boundaries and
+  source-specific inline phonemes are detailed in [PRONUNCIATIONS.md](PRONUNCIATIONS.md).
 - `SimpleTextAggregator`: streaming sentence boundaries with the same native
   SentenceX 0.1.32 engine used by the source's Python SentenceX 1.0.32 binding.
   Abbreviations, decimals, URLs, regional language selection, quotations,

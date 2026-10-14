@@ -9,6 +9,7 @@ pub mod markdown_text_filter;
 pub mod markup_utils;
 pub mod pattern_pair_aggregator;
 pub mod processors;
+pub mod pronunciations;
 pub mod simple_text_aggregator;
 pub mod skip_tags_aggregator;
 pub mod string;
@@ -21,6 +22,10 @@ pub use simple_text_aggregator::SimpleTextAggregator;
 pub use skip_tags_aggregator::SkipTagsAggregator;
 
 pub use processors::{LlmTextProcessor, SentenceAggregator};
+pub use pronunciations::{
+    format_cartesia_pronunciation, CartesiaPronunciationTransform, PronunciationError,
+    PronunciationLimits,
+};
 
 mod unicode_categories;
 
