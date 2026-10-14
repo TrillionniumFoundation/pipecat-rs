@@ -66,15 +66,11 @@ impl BrowserSession {
             },
         }
     }
-    pub async fn finish(self) {
+    pub async fn finish(self) -> Result<(), RunnerError> {
         match self {
-            Self::WebSocket(session) => {
-                let _ = session.finish().await;
-            }
+            Self::WebSocket(session) => session.finish().await.map_err(Into::into),
             #[cfg(feature = "webrtc")]
-            Self::WebRtc(peer) => {
-                let _ = peer.close().await;
-            }
+            Self::WebRtc(peer) => peer.close().await.map_err(Into::into),
         }
     }
 }
@@ -557,3 +553,7 @@ mod independent_source_boundary_review {
         right.unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "transport_cleanup_tests.rs"]
+mod cleanup_tests;

@@ -55,6 +55,15 @@ pub enum RunnerError {
     Io(#[from] std::io::Error),
     #[error("WebSocket failed")]
     Transport(#[from] pipecat_transports::TransportError),
+    #[cfg(feature = "webrtc")]
+    #[error("WebRTC cleanup failed: {0}")]
+    WebRtcCleanup(#[from] pipecat_webrtc::Error),
+    #[error("{primary}; transport cleanup also failed: {cleanup}")]
+    SessionCleanup {
+        #[source]
+        primary: Box<RunnerError>,
+        cleanup: Box<RunnerError>,
+    },
     #[error("protobuf failed")]
     Protobuf(#[from] pipecat_protocol::ProtocolError),
     #[error("pipeline failed")]

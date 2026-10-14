@@ -449,3 +449,36 @@ CLI receipt/image endpoint. All constructors reject `playback_protocol=ChunkV2`,
 This also applies to the Soniox, Whisper and WebRTC compositions. Default legacy
 options are unchanged. Use the explicitly opted-in voice-agent CLI/native APIs
 for those separate protocols; browser image/receipt integration remains open.
+
+
+## Browser transport completion failures
+
+The runner now awaits the browser transport finish result after pipeline cleanup.
+A transport protocol/I/O failure cannot turn an otherwise successful WebSocket
+session into `SessionSummary { successful: true, .. }` merely because its inbound
+queue ended. Normal WebSocket Close and existing text/audio/voice flows keep their
+normal success behavior; malformed frames and abrupt EOF are not newly tolerated.
+
+A lone pipeline error remains unchanged. A lone transport error becomes the
+session error. If both fail, `RunnerError::SessionCleanup` retains the original
+pipeline error as its `primary` source and first displayed diagnostic, with the
+typed `cleanup` error alongside it. `RunnerError::WebRtcCleanup` (with the webrtc
+feature) retains native shutdown details when the private BrowserSession wrapper
+finishes a native peer. These are additive public error-enum variants; the
+transport wrapper itself is private. The actual RTC server still uses its
+existing registry-owned close path and error precedence.
+
+The public summary schema is unchanged: any error becomes `successful: false`
+with the existing empty context and zero pipeline-error projection. Clients do
+not receive the internal typed error diagnostics through that summary; a zero
+pipeline-error count alone never proves the underlying pipeline succeeded.
+
+Native tests exercise actual authenticated/origin-checked HTTP/WebSocket setup,
+correlated RTVI readiness, graceful Close, malformed unmasked frames and abrupt
+TCP EOF. Direct private-wrapper tests verify exact typed WebSocket errors after
+the owned task joins; runner end-to-end tests separately verify the success flag
+and every fixture owner/listener release. Error-priority/source-chain assertions
+are focused combination tests, not a claim of real simultaneous pipeline and
+transport faults in one end-to-end session. Existing complete native text/audio,
+WS voice and Opus RTC voice programs are compatibility controls. No browser
+DOM/permission/playback execution or live-provider inference is added here.

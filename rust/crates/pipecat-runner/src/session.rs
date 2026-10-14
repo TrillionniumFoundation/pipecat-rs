@@ -96,8 +96,25 @@ pub async fn accept_session(
         resources,
     )
     .await;
-    session.finish().await;
-    result
+    let cleanup = session.finish().await;
+    with_transport_cleanup(result, cleanup)
+}
+
+// Cleanup has already been awaited. Preserve a lone original error unchanged;
+// only simultaneous errors need an aggregate, with the original as its source.
+fn with_transport_cleanup<T>(
+    primary: Result<T, RunnerError>,
+    cleanup: Result<(), RunnerError>,
+) -> Result<T, RunnerError> {
+    match (primary, cleanup) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(primary), Ok(())) => Err(primary),
+        (Ok(_), Err(cleanup)) => Err(cleanup),
+        (Err(primary), Err(cleanup)) => Err(RunnerError::SessionCleanup {
+            primary: Box::new(primary),
+            cleanup: Box::new(cleanup),
+        }),
+    }
 }
 
 #[cfg(feature = "webrtc")]
@@ -342,4 +359,61 @@ async fn run_cascade(
         return Err(RunnerError::Provider);
     }
     Ok((snapshot, report.total_errors))
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use std::error::Error as _;
+    #[test]
+    fn transport_cleanup_preserves_primary_priority_and_both_typed_diagnostics() {
+        assert_eq!(with_transport_cleanup(Ok(17), Ok(())).unwrap(), 17);
+        assert!(matches!(
+            with_transport_cleanup::<()>(Err(RunnerError::Protocol("primary")), Ok(())),
+            Err(RunnerError::Protocol("primary"))
+        ));
+        assert!(matches!(
+            with_transport_cleanup(
+                Ok(17),
+                Err(RunnerError::Transport(
+                    pipecat_transports::TransportError::Timeout("close")
+                ))
+            ),
+            Err(RunnerError::Transport(
+                pipecat_transports::TransportError::Timeout("close")
+            ))
+        ));
+        let both = with_transport_cleanup::<()>(
+            Err(RunnerError::Protocol("primary")),
+            Err(RunnerError::Transport(
+                pipecat_transports::TransportError::Timeout("close"),
+            )),
+        )
+        .unwrap_err();
+        assert_eq!(
+            both.source().unwrap().to_string(),
+            "browser protocol: primary"
+        );
+        assert_eq!(
+            both.to_string(),
+            "browser protocol: primary; transport cleanup also failed: WebSocket failed"
+        );
+        assert!(
+            matches!(&both, RunnerError::SessionCleanup {primary,cleanup}
+            if matches!(**primary,RunnerError::Protocol("primary"))
+            && matches!(**cleanup,RunnerError::Transport(pipecat_transports::TransportError::Timeout("close"))))
+        );
+    }
+    #[cfg(feature = "webrtc")]
+    #[test]
+    fn native_cleanup_conversion_retains_shutdown_details() {
+        // Type-conversion coverage, not an injected native worker experiment.
+        let detail = "owned transport worker failures: panicked=1, cancelled=0, timed_out=0";
+        let error: RunnerError = pipecat_webrtc::Error::Shutdown(detail.into()).into();
+        assert!(
+            matches!(&error, RunnerError::WebRtcCleanup(pipecat_webrtc::Error::Shutdown(text)) if text == detail)
+        );
+        assert!(error.to_string().contains(detail));
+        assert!(error.source().unwrap().to_string().contains(detail));
+    }
 }
