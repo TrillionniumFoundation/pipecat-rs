@@ -1,6 +1,6 @@
 # Native image generation
 
-`pipecat-images` implements the pinned OpenAI and Gemini image-generation services
+`pipecat-images` implements the pinned OpenAI, Gemini and Azure REST image-generation services
 using Rust HTTP, PNG/JPEG decoders, and the native pipeline. It does not use Python, Pillow,
 provider SDKs, a browser, subprocesses, or fabricated image pixels.
 
@@ -194,8 +194,11 @@ bounded errors, and real pipeline-to-output-backend delivery. They do not certif
 live model availability, image quality, camera/video encoding, a physical display,
 provider billing, or public production-network access.
 
-Azure's operation-location polling API and Fal are explicitly unimplemented
-sibling adapters. They are not generic OpenAI aliases.
+Azure's operation-location polling API is a distinct adapter: use
+`AzureImageConfig::new(key, endpoint)`, `AzureImageClient`, and
+`ImageGenProcessor::azure(client)`. See [AZURE.md](AZURE.md) for the bounded
+submit/poll/download contract and RGB-normalized differences. Fal remains an
+unimplemented sibling adapter; neither service is a generic OpenAI alias.
 
 Source-tree distribution retains the patched JPEG path dependency. Crates.io
 publishing of `pipecat-images` is disabled until a packaging route can preserve

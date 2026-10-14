@@ -1,7 +1,8 @@
 use crate::{
     decode::{CancelOnDrop, DecodeControl, DecoderWorker},
     security::{parse_url, valid_scheme},
-    CancellationToken, ImageError, ImageGenerationConfig, ImageGenerationSettings, Result,
+    CancellationToken, HostedImagePolicy, ImageError, ImageGenerationConfig,
+    ImageGenerationSettings, Result,
 };
 use base64::Engine;
 use futures_util::StreamExt;
@@ -222,35 +223,49 @@ impl OpenAiImageClient {
         Ok(GeneratedImage { image, url })
     }
     async fn download(&self, value: &str) -> Result<Vec<u8>> {
-        let url = parse_url(value)?;
-        let addresses = self.0.config.hosted_images.addresses(&url).await?;
-        // A fresh credential-free client pins the exact validated lookup result.
-        // Disabling proxies and redirects prevents a second authority/resolution path.
-        let client = Client::builder()
-            .retry(reqwest::retry::never())
-            .no_proxy()
-            .no_gzip()
-            .no_brotli()
-            .no_deflate()
-            .no_zstd()
-            .redirect(reqwest::redirect::Policy::none())
-            .resolve_to_addrs(url.host_str().ok_or(ImageError::AddressDenied)?, &addresses)
-            .build()
-            .map_err(|_| ImageError::Transport)?;
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|_| ImageError::Transport)?;
-        if !response
-            .remote_addr()
-            .is_some_and(|remote| addresses.contains(&remote))
-        {
-            return Err(ImageError::AddressDenied);
-        }
-        read_body(response, self.0.config.limits.max_encoded_image_bytes).await
+        download_hosted_image(
+            value,
+            &self.0.config.hosted_images,
+            self.0.config.limits.max_encoded_image_bytes,
+        )
+        .await
     }
 }
+/// Shared hosted-image path: never inherits provider credentials or cookies.
+pub(crate) async fn download_hosted_image(
+    value: &str,
+    policy: &HostedImagePolicy,
+    maximum: usize,
+) -> Result<Vec<u8>> {
+    let url = parse_url(value)?;
+    let addresses = policy.addresses(&url).await?;
+    // A fresh credential-free client pins the exact validated lookup result.
+    // Disabling proxies and redirects prevents a second authority/resolution path.
+    let client = Client::builder()
+        .retry(reqwest::retry::never())
+        .no_proxy()
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd()
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(url.host_str().ok_or(ImageError::AddressDenied)?, &addresses)
+        .build()
+        .map_err(|_| ImageError::Transport)?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|_| ImageError::Transport)?;
+    if !response
+        .remote_addr()
+        .is_some_and(|remote| addresses.contains(&remote))
+    {
+        return Err(ImageError::AddressDenied);
+    }
+    read_body(response, maximum).await
+}
+
 pub(crate) async fn read_body(response: Response, maximum: usize) -> Result<Vec<u8>> {
     if !response.status().is_success() {
         return Err(ImageError::Http(response.status().as_u16()));

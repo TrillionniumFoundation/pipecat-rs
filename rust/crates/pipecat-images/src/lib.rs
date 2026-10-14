@@ -1,6 +1,7 @@
 // Copyright (c) 2024-2026, Daily
 // SPDX-License-Identifier: BSD-2-Clause
-//! Bounded native OpenAI/Gemini image generation, RGB decoding, and pipeline delivery.
+//! Bounded native OpenAI/Gemini/Azure image generation, RGB decoding, and pipeline delivery.
+mod azure;
 mod budget;
 mod client;
 mod decode;
@@ -9,6 +10,7 @@ mod processor;
 mod security;
 mod settings;
 
+pub use azure::{AzureImageClient, AzureImageConfig};
 pub use client::{GeneratedImage, OpenAiImageClient};
 pub use gemini::{
     GeminiImageClient, GeminiImageConfig, GeminiImageGenProcessor, GeminiImageGeneration,

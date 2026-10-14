@@ -1,7 +1,7 @@
 use crate::budget::Budget;
 use crate::{
-    CancellationToken, ImageError, ImageGenerationSettings, ImageGenerationSettingsDelta,
-    OpenAiImageClient, Result,
+    AzureImageClient, CancellationToken, GeneratedImage, ImageError, ImageGenerationLimits,
+    ImageGenerationSettings, ImageGenerationSettingsDelta, OpenAiImageClient, Result,
 };
 use pipecat_core::{
     async_trait, Direction, ErrorFrame, Frame, FrameData, FrameProcessor, Metric,
@@ -15,6 +15,57 @@ use std::{
 };
 use tokio::sync::{oneshot, Semaphore};
 
+#[derive(Clone)]
+enum ImageBackend {
+    OpenAi(OpenAiImageClient),
+    Azure(AzureImageClient),
+}
+impl ImageBackend {
+    fn settings(&self) -> &ImageGenerationSettings {
+        match self {
+            Self::OpenAi(client) => &client.config().settings,
+            Self::Azure(client) => &client.config().settings,
+        }
+    }
+    fn limits(&self) -> &ImageGenerationLimits {
+        match self {
+            Self::OpenAi(client) => &client.config().limits,
+            Self::Azure(client) => &client.config().limits,
+        }
+    }
+    fn name(&self) -> &'static str {
+        match self {
+            Self::OpenAi(_) => "OpenAIImageGenService",
+            Self::Azure(_) => "AzureImageGenServiceREST",
+        }
+    }
+    fn task_name(&self) -> &'static str {
+        match self {
+            Self::OpenAi(_) => "openai-image-generation",
+            Self::Azure(_) => "azure-image-generation",
+        }
+    }
+    async fn generate(
+        &self,
+        prompt: &str,
+        settings: &ImageGenerationSettings,
+        cancellation: &CancellationToken,
+    ) -> Result<GeneratedImage> {
+        match self {
+            Self::OpenAi(client) => {
+                client
+                    .generate_with_settings(prompt, settings, cancellation)
+                    .await
+            }
+            Self::Azure(client) => {
+                client
+                    .generate_with_settings(prompt, settings, cancellation)
+                    .await
+            }
+        }
+    }
+}
+
 struct State {
     settings: ImageGenerationSettings,
     tail: Option<oneshot::Receiver<()>>,
@@ -26,21 +77,29 @@ struct State {
 /// controls remain responsive while accepted normal work runs in tracked tasks.
 /// End/Stop drain work, Cancel aborts it, and interruption cancels interruptible work.
 pub struct ImageGenProcessor {
-    client: OpenAiImageClient,
+    client: ImageBackend,
     state: Mutex<State>,
     permits: Arc<Semaphore>,
     health: ProcessorHealth,
 }
 impl ImageGenProcessor {
     pub fn new(client: OpenAiImageClient) -> Self {
+        Self::with_backend(ImageBackend::OpenAi(client))
+    }
+    /// Use the Azure submit/poll/download protocol with the same ordered native
+    /// frame and lifecycle handling as the OpenAI image service.
+    pub fn azure(client: AzureImageClient) -> Self {
+        Self::with_backend(ImageBackend::Azure(client))
+    }
+    fn with_backend(client: ImageBackend) -> Self {
         Self {
             state: Mutex::new(State {
-                settings: client.config().settings.clone(),
+                settings: client.settings().clone(),
                 tail: None,
                 started: false,
                 ending: false,
             }),
-            permits: Arc::new(Semaphore::new(client.config().limits.max_pending)),
+            permits: Arc::new(Semaphore::new(client.limits().max_pending)),
             client,
             health: Default::default(),
         }
@@ -80,7 +139,7 @@ impl ImageGenProcessor {
 #[async_trait]
 impl FrameProcessor for ImageGenProcessor {
     fn name(&self) -> &str {
-        "OpenAIImageGenService"
+        self.client.name()
     }
     fn health(&self) -> Option<ProcessorHealth> {
         Some(self.health.clone())
@@ -160,12 +219,12 @@ impl FrameProcessor for ImageGenProcessor {
             return ctx.push(frame, direction).await;
         }
         let incoming_prompt = prompt(&frame.data);
-        if incoming_prompt.is_some_and(|s| s.len() > self.client.config().limits.max_prompt_bytes) {
+        if incoming_prompt.is_some_and(|s| s.len() > self.client.limits().max_prompt_bytes) {
             return Err(ImageError::TooLarge.processor());
         }
         // Byte-count serialization writes to a bounded sink, never a JSON buffer.
         // Local executable payloads cannot be safely budgeted and are rejected.
-        let mut budget = Budget::new(self.client.config().limits.max_response_bytes);
+        let mut budget = Budget::new(self.client.limits().max_response_bytes);
         frame
             .data
             .serialize(&mut budget)
@@ -210,7 +269,7 @@ impl FrameProcessor for ImageGenProcessor {
         let generation = health.generation();
         let mut changed = health.watch();
         let interruptible = frame.interruptible;
-        ctx.spawn("openai-image-generation", interruptible, async move {
+        ctx.spawn(client.task_name(), interruptible, async move {
             let _permit = permit;
             // Sender drop releases the next job, including cancellation/panic paths.
             let _done = done;
@@ -233,7 +292,7 @@ impl FrameProcessor for ImageGenProcessor {
             let started = Instant::now();
             let result = tokio::select! { biased;
                 _ = changed.changed() => return Ok(()),
-                result = client.generate_with_settings(&prompt, &settings, &cancellation) => result,
+                result = client.generate(&prompt, &settings, &cancellation) => result,
             };
             if !output.is_current() || !health.is_usable() || health.generation() != generation {
                 return Ok(());
@@ -280,7 +339,7 @@ impl FrameProcessor for ImageGenProcessor {
                 output
                     .push(
                         Frame::new(FrameData::Metrics(vec![Metric::Processing {
-                            processor: "OpenAIImageGenService".into(),
+                            processor: client.name().into(),
                             seconds: started.elapsed().as_secs_f64(),
                         }])),
                         Direction::Downstream,

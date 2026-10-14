@@ -2,7 +2,7 @@
 
 Baseline: `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
 All source/test files below are byte-identical to this baseline. This map covers
-OpenAI Images, Gemini generate-content images, and their shared output path.
+OpenAI Images, Gemini generate-content images, Azure REST images, and their shared output path.
 
 | Pinned source | SHA-256 | Native implementation / tests |
 | --- | --- | --- |
@@ -107,3 +107,20 @@ qualification report for the exact candidate, not to this behavior map.
 Independent cases in `tests/gemini_review/mod.rs` additionally exercise exact
 aggregate-budget exhaustion before another billable HTTP request and admission
 release after a fused HTTP failure while the failed sequence remains alive.
+
+## Azure submit/poll/download
+
+Pinned `src/pipecat/services/azure/image.py` has Git blob
+`593089d7c97165f611dbee1570df5c7a2c7f052f` and SHA-256
+`e6e176eb101467ce31dc5b4a34648f0629c39876ebede8f8cab1b15c17b8f420`.
+`azure.rs` implements its request defaults, first-result selection and 119-poll
+state machine. `processor.rs` reuses the existing ordered image path under a
+separate backend/name. `tests/azure_http.rs` and `tests/azure_pipeline.rs` cover
+local wire, safety, actual RGB and native output delivery.
+
+See [AZURE.md](AZURE.md) for deliberate same-origin credential policy, strict
+HTTP/field handling, whole-operation cancellation/deadline and RGB normalization.
+The source returns original Pillow modes; this adapter does not claim mode
+preservation. Its historical API version is a fixed reference, not a current
+Azure availability guarantee. No Python runtime, provider SDK or live service
+is used by the native implementation or these deterministic tests.
