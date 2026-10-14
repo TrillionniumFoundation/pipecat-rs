@@ -4076,6 +4076,7 @@ dependencies = [
  "pipecat-classifiers",
  "pipecat-core",
  "pipecat-media-transport",
+ "pipecat-protocol",
  "serde_json",
  "tokio",
 ]

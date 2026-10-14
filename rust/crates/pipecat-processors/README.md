@@ -524,3 +524,131 @@ about helper APIs and an unsupported native realtime carrier plus direct-tool
 schema combination were corrected without relaxing core validation. Their first
 failure logs remain in the evidence alongside the final passing runs. These are
 selected source-bound checks, not a new full-workspace or live-provider claim.
+
+## Serialized asynchronous frame stream
+
+`AsyncGeneratorProcessor` bridges the existing synchronous
+`pipecat_protocol::adapters::FrameSerializer` into one application-owned async
+receiver. It is available through `pipecat::processors` without an optional
+feature. The bridge neither creates a transport connection nor sends data to an
+external service. Applications decide how to consume the returned
+`WireMessage::Text` and `WireMessage::Binary` values.
+
+The fixed Python contract is `ProfHepta/pipecat` commit
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`src/pipecat/processors/async_generator.py`, blob
+`643b5eacc84c8d7ddb9b42c92e79a7ed3be5b56b`. The referenced base serializer is
+`src/pipecat/serializers/base_serializer.py`, blob
+`0de9e403da940e48573f8e12c57fe1bc5838f088`.
+
+The original frame is first forwarded in its original direction, preserving ID,
+metadata and native semantic carriers. Only successful forward queue admission
+is followed by serialization. This is not a receipt that the next processor has
+finished handling the frame. A later serialization or stream-capacity failure
+cannot retract that original forwarding and must not be interpreted as "the
+frame was never forwarded".
+
+Both upstream and downstream frames are offered to the serializer, as in the
+source, even if a concrete transport would normally encode only downstream data.
+Place this processor at an intentional export boundary. It does not reinterpret
+upstream data as a command or grant authority to reinject received bytes. Before
+calling any custom serializer, the existing native continuation/eager/speculation/
+tool authority guard rejects a wire copy with unconsumed native semantics.
+The already-forwarded original keeps those semantics unchanged. Concrete codecs
+retain their own protocol-specific validation.
+
+Start and Interruption are ordinary serializer inputs. A None result or an empty
+text/binary result is ignored; nonempty results enter the receiver's FIFO.
+Interruption does not erase data that was already queued. A serialized result
+from an old invocation that races interruption is rejected at publication by its
+original causal fence; notification or consumer activity cannot renew that
+invocation. A discarded result does not roll back mutations already performed
+inside the stateful serializer; that same run continues with its current codec
+state. This publication safeguard is a native adaptation. End and Cancel,
+including detailed variants, are forwarded and close the stream without invoking
+the serializer. They do not flush codec tails or call serializer.setup: neither
+operation appears in the source processor.
+
+Configuration limits the queued message count, each retained message allocation,
+and total queued allocation bytes. Defaults are 1,024 messages, 1 MiB per message
+and 4 MiB queued; maximum configurable values are 65,536 messages, 16 MiB per
+message and 64 MiB queued. String/Vec spare capacity is charged, not only logical
+length. These bounds apply after serialization returns. They do not constrain
+codec temporary allocations, application closure captures, or messages the
+consumer has already removed and retained elsewhere. No message is truncated.
+
+A factory creates a fresh serializer and isolated session for each setup. After
+Pipeline::start, `take_receiver()` returns that session's receiver once. Its
+`recv()` yields queued values and then None after closure; status and a finite
+error reason are separately inspectable without payloads. Old receivers never
+follow the processor into a new session. Use distinct processor instances for
+concurrent pipelines and join the previous worker before sequential reuse.
+The setup-in-use diagnostic is not a concurrency isolation boundary because core
+cleanup has no invocation identity.
+
+The serializer's API is synchronous and stateful. Calls are serialized, and no
+queue or lifecycle lock is held while application serialization runs. There is
+no background dispatcher, callback task, automatic retry or promise of a
+preemptive timeout. Serializers must be fast and nonblocking; cleanup cannot
+undo their external effects or forcibly interrupt a blocking synchronous call.
+
+Closure does not consume queue capacity or enqueue a sentinel. End/Cancel and
+ordinary cleanup leave previously queued data available to drain before EOF.
+Native Stop is offered to the serializer, then closes on every exit path,
+including an error. A dropped receiver instead releases its queued data and
+retires the stream. Slow consumers encounter explicit count/byte failure rather
+than an unbounded backlog or indefinite producer wait. Codec, authority and
+capacity failures close the wire stream, record a content-free reason when they cause the first closure, and leave
+already queued data drainable. First closure wins: a later failure does not
+replace an earlier clean EOF outcome. The surrounding pipeline's core
+error policy remains authoritative; later frames can still be forwarded without
+restarting the closed stream.
+
+Queue closure is independent of a running serializer. An idle codec is released
+on closure; an in-flight synchronous codec can only be released when it returns.
+A result arriving after closure is not enqueued. Consumer Drop and the terminal close implementation do not wait on the serial
+codec permit before closing the queue. However, the core runs normal and system
+lanes within one actor task: a synchronous codec can delay processing a requested
+Cancel. Cancel admission alone neither closes this stream nor advances its causal
+generation. A codec result can therefore be queued before the actor processes
+Cancel; that result remains part of the FIFO drain. EOF and codec destruction may
+wait for the synchronous call to return. Interruption admission separately
+advances the epoch, so its original-fence rejection is a different guarantee.
+Caught factory/serializer panics use fixed diagnostics, but the global Rust
+panic hook may still log application panic text. Panicking destructors and panic
+payload destructors are unsupported and may reach the core panic path. These
+bounds, explicit errors, Stop/cleanup closure and fresh-session factory semantics
+are native adaptations to the source's unbounded shared queue.
+
+### Slice 58 verification, 2026-10-14 UTC
+
+Sixteen real-Pipeline tests cover original frame identity/direction and forward
+ordering, text/binary/UTF-8 and None/empty results, exact count and retained
+allocation budgets, spare capacity, queue failure after forwarding, full-queue
+terminal closure and FIFO drain, codec error/panic, native-authority rejection
+before custom serializer effects, receiver/worker drop, every terminal form,
+joined reuse and old-receiver isolation, failed factory startup followed by a
+fresh setup, and stale normal/system/uninterruptible invocations. A bounded
+multi-threaded codec fixture proves receiver Drop can close while synchronous
+serialization is running. A distinct real Cancel case proves the actual
+cooperative order: queued data, the already-running codec's result, then EOF.
+
+The facade's `async_generator_codec` test runs the production
+RtviClientFrameSerializer through two real Pipeline sessions, one ended and one
+cancelled. Both directions preserve original native frames and local identities.
+Wire values are compared with the actual codec and independently parsed as RTVI
+JSON and base64 PCM with exact sample rate/channel metadata. The fresh factory
+resets codec audio IDs, while the first run's still-unread receiver remains
+isolated from the second run. End/Cancel never call the codec. Owners are closed
+and joined before assertions, including observation failures. This is a local
+codec/pipeline witness, not a browser, network transport or playback receipt.
+
+The processor default suite passes 148 tests and its all-feature suite 191; the
+facade codec test passes separately. Strict all-target Clippy passes for the
+default processor/facade targets and all-feature processors; selected formatting
+passes. Initial tests incorrectly assumed graceful
+End/Stop use the ordinary bounded output slot and that a requested Cancel could
+preempt a synchronous codec. Those fixture assumptions were corrected to the
+existing core behavior, without changing core admission or cancellation. Initial
+failure logs are retained alongside final passing runs. No full-workspace or
+live-provider qualification is implied.

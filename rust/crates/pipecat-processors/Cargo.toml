@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
+pipecat-protocol = { path = "../pipecat-protocol" }
 pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 tokio.workspace = true
 serde_json.workspace = true

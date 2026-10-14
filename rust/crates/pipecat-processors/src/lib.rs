@@ -263,3 +263,9 @@ pub use gated_llm_context::{
     GatedLlmContextAggregator, GatedLlmContextAggregatorConfig, GatedLlmContextNotifier,
     GatedLlmContextSnapshot,
 };
+
+pub mod async_generator;
+pub use async_generator::{
+    AsyncGeneratorProcessor, AsyncGeneratorProcessorConfig, AsyncGeneratorReceiver,
+    AsyncGeneratorSerializerFactory, AsyncGeneratorSnapshot, AsyncGeneratorStreamError,
+};
