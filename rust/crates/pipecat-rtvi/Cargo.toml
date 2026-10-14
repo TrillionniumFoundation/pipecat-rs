@@ -17,6 +17,7 @@ thiserror.workspace = true
 base64 = "0.22"
 
 [dev-dependencies]
+pipecat-services = { path = "../pipecat-services" }
 pipecat-transports = { path = "../pipecat-transports" }
 
 [lints]

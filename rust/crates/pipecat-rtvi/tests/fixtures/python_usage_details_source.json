@@ -1,0 +1,702 @@
+{
+  "case_count": 30,
+  "cases": [
+    {
+      "id": "optional_absent",
+      "input": {
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "optional_explicit_none",
+      "input": {
+        "cache_creation_input_tokens": null,
+        "cache_read_input_audio_tokens": null,
+        "cache_read_input_tokens": null,
+        "completion_tokens": 7,
+        "input_audio_tokens": null,
+        "output_audio_tokens": null,
+        "prompt_tokens": 11,
+        "reasoning_tokens": null,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "all_optional_zero",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_audio_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 7,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0,
+        "prompt_tokens": 11,
+        "reasoning_tokens": 0,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_audio_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 7,
+              "input_audio_tokens": 0,
+              "output_audio_tokens": 0,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "all_optional_nonzero",
+      "input": {
+        "cache_creation_input_tokens": 9,
+        "cache_read_input_audio_tokens": 2,
+        "cache_read_input_tokens": 2,
+        "completion_tokens": 7,
+        "input_audio_tokens": 4,
+        "output_audio_tokens": 1,
+        "prompt_tokens": 11,
+        "reasoning_tokens": 3,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 9,
+              "cache_read_input_audio_tokens": 2,
+              "cache_read_input_tokens": 2,
+              "completion_tokens": 7,
+              "input_audio_tokens": 4,
+              "output_audio_tokens": 1,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 3,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_cache_read_input_tokens",
+      "input": {
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_cache_creation_input_tokens",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 0,
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_reasoning_tokens",
+      "input": {
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "reasoning_tokens": 0,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_input_audio_tokens",
+      "input": {
+        "completion_tokens": 7,
+        "input_audio_tokens": 0,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "input_audio_tokens": 0,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_output_audio_tokens",
+      "input": {
+        "completion_tokens": 7,
+        "output_audio_tokens": 0,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "output_audio_tokens": 0,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "single_zero_cache_read_input_audio_tokens",
+      "input": {
+        "cache_read_input_audio_tokens": 0,
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_read_input_audio_tokens": 0,
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "mixed_none_zero_nonzero",
+      "input": {
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 7,
+        "input_audio_tokens": null,
+        "output_audio_tokens": 0,
+        "prompt_tokens": 11,
+        "reasoning_tokens": 3,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 7,
+              "output_audio_tokens": 0,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 3,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "all_required_zero_still_one_record",
+      "input": {
+        "completion_tokens": 0,
+        "prompt_tokens": 0,
+        "total_tokens": 0
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 0,
+              "prompt_tokens": 0,
+              "total_tokens": 0
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "provider_total_is_not_recomputed",
+      "input": {
+        "cache_creation_input_tokens": 2,
+        "cache_read_input_tokens": 8,
+        "completion_tokens": 4,
+        "prompt_tokens": 10,
+        "reasoning_tokens": 1,
+        "total_tokens": 100
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 2,
+              "cache_read_input_tokens": 8,
+              "completion_tokens": 4,
+              "prompt_tokens": 10,
+              "reasoning_tokens": 1,
+              "total_tokens": 100
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "full_u64_values_preserved",
+      "input": {
+        "cache_read_input_tokens": 18446744073709551615,
+        "completion_tokens": 0,
+        "prompt_tokens": 18446744073709551615,
+        "total_tokens": 18446744073709551615
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_read_input_tokens": 18446744073709551615,
+              "completion_tokens": 0,
+              "prompt_tokens": 18446744073709551615,
+              "total_tokens": 18446744073709551615
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "python_signed_counter_not_native_scope",
+      "input": {
+        "completion_tokens": 2,
+        "prompt_tokens": -1,
+        "reasoning_tokens": -1,
+        "total_tokens": 1
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 2,
+              "prompt_tokens": -1,
+              "reasoning_tokens": -1,
+              "total_tokens": 1
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "two_usages_keep_order_and_multiplicity",
+      "input": null,
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            },
+            {
+              "completion_tokens": 3,
+              "prompt_tokens": 2,
+              "reasoning_tokens": 0,
+              "total_tokens": 5
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "empty_metrics_still_one_envelope",
+      "input": null,
+      "message": {
+        "data": {},
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "mixed_categories_no_wrapper_on_tokens",
+      "input": null,
+      "message": {
+        "data": {
+          "characters": [
+            {
+              "processor": "c",
+              "value": 3
+            }
+          ],
+          "stt_usage": [
+            {
+              "processor": "d",
+              "value": {
+                "audio_seconds": 1.25
+              }
+            }
+          ],
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ],
+          "ttfb": [
+            {
+              "processor": "a",
+              "value": 0.0
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "repeated_or_decreasing_records_pass_through_0",
+      "input": {
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "repeated_or_decreasing_records_pass_through_1",
+      "input": {
+        "completion_tokens": 7,
+        "prompt_tokens": 11,
+        "total_tokens": 29
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "repeated_or_decreasing_records_pass_through_2",
+      "input": {
+        "completion_tokens": 1,
+        "prompt_tokens": 5,
+        "total_tokens": 6
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 1,
+              "prompt_tokens": 5,
+              "reasoning_tokens": 0,
+              "total_tokens": 6
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "openai_original_token_usage_none",
+      "input": null,
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "openai_original_token_usage_zero",
+      "input": null,
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "openai_original_token_usage_rich",
+      "input": null,
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 2,
+              "cache_read_input_tokens": 5,
+              "completion_tokens": 7,
+              "prompt_tokens": 11,
+              "reasoning_tokens": 3,
+              "total_tokens": 29
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "anthropic_original_report_net_prompt",
+      "input": {
+        "cache_creation_input_tokens": 2,
+        "cache_read_input_tokens": 8,
+        "completion_tokens": 4,
+        "prompt_tokens": 10,
+        "reasoning_tokens": 1
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 2,
+              "cache_read_input_tokens": 8,
+              "completion_tokens": 4,
+              "prompt_tokens": 10,
+              "reasoning_tokens": 1,
+              "total_tokens": 24
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "anthropic_original_report_known_zero_cache",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 4,
+        "prompt_tokens": 10
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 4,
+              "prompt_tokens": 10,
+              "total_tokens": 14
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "anthropic_original_report_all_zero_suppressed_by_provider",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 0,
+        "prompt_tokens": 0
+      },
+      "messages": []
+    },
+    {
+      "id": "bedrock_original_report_net_prompt",
+      "input": {
+        "cache_creation_input_tokens": 2,
+        "cache_read_input_tokens": 8,
+        "completion_tokens": 4,
+        "prompt_tokens": 10
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 2,
+              "cache_read_input_tokens": 8,
+              "completion_tokens": 4,
+              "prompt_tokens": 10,
+              "total_tokens": 24
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "bedrock_original_report_known_zero_cache",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 4,
+        "prompt_tokens": 10
+      },
+      "message": {
+        "data": {
+          "tokens": [
+            {
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "completion_tokens": 4,
+              "prompt_tokens": 10,
+              "total_tokens": 14
+            }
+          ]
+        },
+        "label": "rtvi-ai",
+        "type": "metrics"
+      }
+    },
+    {
+      "id": "bedrock_original_report_all_zero_suppressed_by_provider",
+      "input": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 0,
+        "prompt_tokens": 0
+      },
+      "messages": []
+    }
+  ],
+  "execution": "byte-pinned original AST with real Pydantic; no SDK, network, provider, or pipeline runtime",
+  "optional_fields": [
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+    "reasoning_tokens",
+    "input_audio_tokens",
+    "output_audio_tokens",
+    "cache_read_input_audio_tokens"
+  ],
+  "repository": "ProfHepta/pipecat",
+  "revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf"
+}

@@ -141,3 +141,11 @@ interruption/flush/order, embedded and URL files, PCM/DTMF/tools, UI, unknown an
 oversized messages, bounded-queue pressure, concurrent requests, cancellation
 during a blocked flush, observer filters, metadata privacy, and playback evidence.
 The reference source commit and file hashes are stored with the fixtures.
+
+## Optional LLM usage breakdown
+
+`RtviObserver::with_llm_usage_details(true)` can project existing typed Usage
+metadata's cache-read, cache-write and reasoning token fields into the existing
+metrics token item. It is off by default, validates unique/matching base counts,
+and never recalculates totals. See [USAGE_DETAILS.md](USAGE_DETAILS.md) for exact
+schema, fallback, accounting differences and qualification scope.

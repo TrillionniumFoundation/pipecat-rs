@@ -4163,6 +4163,7 @@ dependencies = [
  "base64 0.22.1",
  "pipecat-core",
  "pipecat-protocol",
+ "pipecat-services",
  "pipecat-text",
  "pipecat-transports",
  "serde",

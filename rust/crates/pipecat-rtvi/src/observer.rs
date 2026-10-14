@@ -79,6 +79,7 @@ struct PendingSegment {
 }
 struct State {
     params: RtviObserverParams,
+    llm_usage_details: bool,
     speaking: bool,
     transcription: String,
     pending: VecDeque<PendingSegment>,
@@ -110,6 +111,7 @@ impl RtviObserver {
         Ok(Self {
             state: Mutex::new(State {
                 params,
+                llm_usage_details: false,
                 speaking: false,
                 transcription: String::new(),
                 pending: VecDeque::new(),
@@ -119,6 +121,13 @@ impl RtviObserver {
             }),
             session,
         })
+    }
+    /// Opt in to the three supported numeric usage breakdown fields carried in
+    /// `frame.metadata["llm_usage"]`. Default wire output remains unchanged.
+    /// Only an unambiguous metric with exactly matching base counts is enriched.
+    pub fn with_llm_usage_details(self, enabled: bool) -> Self {
+        self.state.lock().unwrap().llm_usage_details = enabled;
+        self
     }
     pub fn reset(&self) {
         let mut state = self.state.lock().unwrap();
@@ -399,7 +408,13 @@ impl RtviObserver {
                 }
             }
             FrameData::Metrics(metrics) if state.params.metrics_enabled => {
-                events.push(ServerEvent::Metrics(metrics_data(metrics)))
+                events.push(ServerEvent::Metrics(metrics_data(
+                    metrics,
+                    state
+                        .llm_usage_details
+                        .then(|| frame.metadata.get("llm_usage"))
+                        .flatten(),
+                )))
             }
             FrameData::FunctionCallsStarted(calls) => {
                 for call in calls {
@@ -701,7 +716,57 @@ fn report(
         }
     });
 }
-fn metrics_data(metrics: &[Metric]) -> Map<String, Value> {
+// Read a fixed numeric whitelist by reference. Never clone arbitrary metadata,
+// infer ownership across multiple LLM metrics, or normalize provider accounting.
+struct LlmUsageDetails {
+    prompt: u64,
+    completion: u64,
+    total: u64,
+    cache_read: Option<u64>,
+    cache_creation: Option<u64>,
+    reasoning: Option<u64>,
+}
+impl LlmUsageDetails {
+    fn parse(value: &Value) -> Option<Self> {
+        let object = value.as_object()?;
+        let optional = |key| match object.get(key) {
+            None | Some(Value::Null) => Some(None),
+            Some(value) => value.as_u64().map(Some),
+        };
+        Some(Self {
+            prompt: object.get("prompt_tokens")?.as_u64()?,
+            completion: object.get("completion_tokens")?.as_u64()?,
+            total: object.get("total_tokens")?.as_u64()?,
+            cache_read: optional("cache_read_input_tokens")?,
+            cache_creation: optional("cache_creation_input_tokens")?,
+            reasoning: optional("reasoning_tokens")?,
+        })
+    }
+    fn extend(&self, data: &mut Value, prompt: u64, completion: u64, total: u64) {
+        if (self.prompt, self.completion, self.total) != (prompt, completion, total) {
+            return;
+        }
+        for (name, value) in [
+            ("cache_read_input_tokens", self.cache_read),
+            ("cache_creation_input_tokens", self.cache_creation),
+            ("reasoning_tokens", self.reasoning),
+        ] {
+            if let Some(value) = value {
+                data[name] = json!(value);
+            }
+        }
+    }
+}
+fn metrics_data(metrics: &[Metric], usage: Option<&Value>) -> Map<String, Value> {
+    let details = usage.and_then(|usage| {
+        (metrics
+            .iter()
+            .filter(|m| matches!(m, Metric::LlmUsage { .. }))
+            .count()
+            == 1)
+            .then(|| LlmUsageDetails::parse(usage))
+            .flatten()
+    });
     let mut output = Map::new();
     for metric in metrics {
         let (key, data) = match metric {
@@ -716,10 +781,13 @@ fn metrics_data(metrics: &[Metric]) -> Map<String, Value> {
                 completion_tokens,
                 total_tokens,
                 ..
-            } => (
-                "tokens",
-                json!({"prompt_tokens":prompt_tokens,"completion_tokens":completion_tokens,"total_tokens":total_tokens}),
-            ),
+            } => {
+                let mut data = json!({"prompt_tokens":prompt_tokens,"completion_tokens":completion_tokens,"total_tokens":total_tokens});
+                if let Some(details) = &details {
+                    details.extend(&mut data, *prompt_tokens, *completion_tokens, *total_tokens);
+                }
+                ("tokens", data)
+            }
             Metric::TtsUsage {
                 processor,
                 characters,
