@@ -6,6 +6,7 @@ license.workspace = true
 [dependencies]
 pipecat-core = { path = "../pipecat-core" }
 pipecat-protocol = { path = "../pipecat-protocol" }
+pipecat-text = { path = "../pipecat-text", optional = true }
 pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 tokio.workspace = true
 serde_json.workspace = true
@@ -19,4 +20,5 @@ pipecat-media-transport = { path = "../pipecat-media-transport" }
 tokio = { workspace = true, features = ["test-util"] }
 
 [features]
+wake-check = ["dep:pipecat-text"]
 voicemail = ["dep:pipecat-classifiers"]

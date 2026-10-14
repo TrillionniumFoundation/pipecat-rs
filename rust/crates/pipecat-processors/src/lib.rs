@@ -1,4 +1,8 @@
 //! Native reusable frame filters and bounded gates.
+#[cfg(feature = "wake-check")]
+pub mod wake_check;
+#[cfg(feature = "wake-check")]
+pub use wake_check::{WakeCheckFilter, WakeCheckFilterConfig};
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
 use pipecat_core::{
     async_trait, Direction, Frame, FrameData, FramePriority, FrameProcessor, ProcessorContext,

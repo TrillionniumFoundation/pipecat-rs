@@ -1,7 +1,8 @@
 //! Streaming text aggregation, Markdown filtering, and Unicode text utilities.
 //!
-//! All public cursor offsets count Unicode scalar values, matching Python's
-//! character-indexed API. No Python interpreter is needed at build or runtime.
+//! Public text cursors count Unicode scalar values unless explicitly documented
+//! as UTF-8 byte ranges (the wake-check matcher). No Python interpreter is needed
+//! at build or runtime.
 pub mod aggregation;
 pub mod alnum_utils;
 pub mod base_text_filter;
@@ -13,7 +14,9 @@ pub mod pronunciations;
 pub mod simple_text_aggregator;
 pub mod skip_tags_aggregator;
 pub mod string;
+pub mod wake_check;
 pub mod word_timestamp_utils;
+pub use wake_check::{WakeCheckError, WakeCheckLimits, WakeCheckMatch, WakeCheckMatcher};
 
 pub use aggregation::{Aggregation, AggregationType, TextAggregator};
 pub use markdown_text_filter::{MarkdownSettings, MarkdownTextFilter};

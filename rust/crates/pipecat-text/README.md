@@ -52,8 +52,9 @@ assert_eq!(aggregator.aggregate(" Next")[0].text, "Dr. Smith is here.");
 assert_eq!(aggregator.flush().unwrap().text, "Next");
 ```
 
-Public cursor offsets count Unicode scalar values, matching Python character
-indices rather than UTF-8 byte offsets. Category tables use Unicode 15.0.0,
+Public text cursors count Unicode scalar values, matching Python character
+indices. The explicitly byte-indexed `WakeCheckMatch` ranges are an exception.
+Category tables use Unicode 15.0.0,
 matching the fixture interpreter; accent folding uses canonical decomposition.
 The basic text aggregators retain unfinished text without a size limit, as the
 source does. Applications accepting untrusted streams should impose their own
@@ -130,3 +131,15 @@ otherwise requires the whole Python distribution.
   sequencer is implemented as a utility; provider and playout adapters are still
   required. Language normalization,
   independent aggregators, and buffer-preserving language updates are tested.
+
+## Legacy wake-check matching
+
+`WakeCheckMatcher` is a bounded literal matcher for the deprecated Python
+WakeCheckFilter migration profile. It accepts ASCII phrase tokens separated by
+Python whitespace and matches Unicode 15 input with true Python word-boundary
+transitions, optional inter-token whitespace and ASCII IGNORECASE special cases.
+It preserves phrase declaration priority and returns explicit UTF-8 byte ranges
+into unchanged text. It does not normalize, filter frames, track participants or
+replace the recommended turn-start wake strategy. Construction, input and total
+matching work have separate limits; budget exhaustion is an error, not a false
+no-match. The work bound is synchronous, not a preemptive time guarantee.

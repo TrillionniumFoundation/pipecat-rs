@@ -670,3 +670,12 @@ dual-fenced `GatedLlmContextNotifier` constructor. Existing `FunctionFilter`
 closures could already express basic notifications. See
 [WAKE_NOTIFIER.md](WAKE_NOTIFIER.md) for source ordering, lifecycle behavior,
 cooperative cancellation and the limits of asynchronous side-effect rollback.
+
+## Legacy participant wake-check migration
+
+The default-off `wake-check` feature adds a bounded `WakeCheckFilter` migration
+adapter for the deprecated Python filter. It retains per-participant sliding
+windows, exact cross-frame concatenation and wake-prefix suffix forwarding.
+Existing WakePhrase turn strategies remain recommended for new pipelines. See
+[WAKE_CHECK.md](WAKE_CHECK.md) for the fixed source, Unicode profile, resource and
+lifecycle adaptations, and verification scope.

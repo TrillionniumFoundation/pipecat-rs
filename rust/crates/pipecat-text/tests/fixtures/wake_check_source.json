@@ -1,0 +1,4502 @@
+{
+  "schema_version": 1,
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_blob": "70a233000b5498c98b1747e15d94ab58bae7c844",
+  "source_blobs": {
+    "wake_check_filter.py": "70a233000b5498c98b1747e15d94ab58bae7c844",
+    "frames.py": "79dea3e32f5097a048d03b49f48031811fa1eca6",
+    "test_filters.py": "564ba4a08986ea42390758b820510cfbad8cf366"
+  },
+  "python_implementation": "cpython",
+  "unicode": "15.0.0",
+  "scope": "Research-only oracle: execute pinned class with lightweight transport stubs.\n\nThis is not execution of Pipecat's Pipeline, its original tests, or native Rust.\nOnly import dependencies, frame shells, clock, and push sinks are substituted.\nThe WakeCheckFilter class body is compiled from the verified source unchanged;\nthe deprecation decorator is omitted. No provider, subprocess, or network call.\n",
+  "cases": [
+    {
+      "name": "source_basic",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "Phrase 1",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "Phrase 1"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": " Hey, Pipecat",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "Hey, Pipecat",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 1,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "Phrase 2",
+            "at": 2,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "Phrase 2",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 2,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "raw_split_no_separator",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "noise: h",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "noise: h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "eypipe",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "noise: heypipe"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "cat! query",
+            "at": 2,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "heypipecat! query",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 2,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "separate_users",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "hey"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "pipecat",
+            "at": 0,
+            "user_id": "b",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "hey"
+            },
+            "b": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "pipecat"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "pipecat",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "heypipecat",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            },
+            "b": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "pipecat"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "sliding_strict_timeout",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "within",
+            "at": 2.9,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "within",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 2.9,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "within again",
+            "at": 5.8,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "within again",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 5.8,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "at deadline",
+            "at": 8.8,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 5.8,
+              "accumulator": "at deadline"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "clock_regression_source",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 10,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 10,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "wall clock went backwards",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "wall clock went backwards",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "upstream_transcription_redirect",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "other",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Text",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "other",
+              "user_id": "a",
+              "kind": "Text",
+              "direction": "upstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "not_subclasses_passthrough",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hidden",
+            "at": 0,
+            "user_id": "a",
+            "kind": "InterimTranscription",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hidden",
+              "user_id": "a",
+              "kind": "InterimTranscription",
+              "direction": "upstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {}
+        },
+        {
+          "input": {
+            "text": "hidden",
+            "at": 0,
+            "user_id": "a",
+            "kind": "EagerTranscription",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hidden",
+              "user_id": "a",
+              "kind": "EagerTranscription",
+              "direction": "upstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {}
+        },
+        {
+          "input": {
+            "text": "hidden",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Translation",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hidden",
+              "user_id": "a",
+              "kind": "Translation",
+              "direction": "upstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {}
+        },
+        {
+          "input": {
+            "text": "hidden",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Text",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hidden",
+              "user_id": "a",
+              "kind": "Text",
+              "direction": "upstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 4,
+                "timestamp": "timestamp-4",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 4
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {}
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "finalized_false_is_selected",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hidden ",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "hidden "
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "configuration_order_wins",
+      "phrases": [
+        "second",
+        "first"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "first xx second suffix",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "second suffix",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_interruption_retains_partial",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "h",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Interruption",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Interruption",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "ey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_stop_start_retains_awake",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Stop",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Stop",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Start",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Start",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "still awake",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "still awake",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 4,
+                "timestamp": "timestamp-4",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 4
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 1,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_end_does_not_flush",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "unmatched",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "unmatched"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "End",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "End",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "unmatched"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "punctuation_is_literal",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "Hey, Pipecat",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "Hey, Pipecat"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "configured_punctuation_matches",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "prefix:HEY,PIPEcat!",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "HEY,PIPEcat!",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "escaped_regex_literal",
+      "phrases": [
+        "hey.* bot"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "heyXYZbot",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "heyXYZbot"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": " hey.*bot",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey.*bot",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "empty_phrase_source",
+      "phrases": [
+        ""
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "nonempty",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "nonempty",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "strict_exact_deadline",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "within",
+            "at": 2,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "within",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 2,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "at deadline",
+            "at": 5,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 2,
+              "accumulator": "at deadline"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "nontranscription_does_not_refresh",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 2,
+            "user_id": "a",
+            "kind": "UserSpeaking",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "UserSpeaking",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "late",
+            "at": 3,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0,
+              "accumulator": "late"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "awake_empty_transcription_refreshes",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 2,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 2,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "still awake",
+            "at": 4,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "still awake",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 4,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "expired_then_reacquired",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "expired",
+            "at": 3,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0,
+              "accumulator": "expired"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": " hey again",
+            "at": 4,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey again",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 4,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_cancel_start_retains_partial",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "h",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Cancel",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Cancel",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Start",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Start",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "ey",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 4,
+                "timestamp": "timestamp-4",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 4
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 1,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_interruption_retains_awake",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "Interruption",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "Interruption",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "still awake",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "still awake",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 1,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "source_end_retains_partial_direct_only",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "h",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "",
+            "at": 0,
+            "user_id": "a",
+            "kind": "End",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "",
+              "user_id": "a",
+              "kind": "End",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "ey",
+            "at": 1,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 3,
+                "timestamp": "timestamp-3",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 3
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 1,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "cross_direction_same_participant",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "prefix:h",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "prefix:h"
+            }
+          }
+        },
+        {
+          "input": {
+            "text": "ey!",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "upstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey!",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 2,
+                "timestamp": "timestamp-2",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 2
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "raw_split_aggregate_match",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "noise: heypipecat! query",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "heypipecat! query",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "config_whitespace_split",
+      "phrases": [
+        "  hey\tbot \n"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "HEY\u001cBOT",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "HEY\u001cBOT",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "empty_phrase_list_source",
+      "phrases": [],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "hey"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_prefix_byte_offset",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "😀:héllo, hey 雪",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey 雪",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_han_word_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "中hey文",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "中hey文"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_han_punctuation_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "中,hey,文",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey,文",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_combining_mark_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "x́hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_connector_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "x‿hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_underscore_no_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "x_hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "x_hey"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_join_control_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "x‍hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "unicode_numeric_no_boundary",
+      "phrases": [
+        "hey"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "²hey",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "²hey"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_special_i_dotted",
+      "phrases": [
+        "i"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "İ",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "İ",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_special_i_dotless",
+      "phrases": [
+        "i"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "ı",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "ı",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_special_long_s",
+      "phrases": [
+        "s"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "ſ",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "ſ",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_special_kelvin",
+      "phrases": [
+        "k"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "K",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "K",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_no_multichar_fold",
+      "phrases": [
+        "ss"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "ß",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "ß"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_no_normalization",
+      "phrases": [
+        "café"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "café",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "café"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_whitespace_control",
+      "phrases": [
+        "hey bot"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey\u001cbot",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey\u001cbot",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "python_whitespace_nbsp",
+      "phrases": [
+        "hey bot"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "hey bot",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "hey bot",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "punctuation_phrase_boundary",
+      "phrases": [
+        "!hey!"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "a!hey!b",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "!hey!b",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "punctuation_phrase_no_standalone_boundary",
+      "phrases": [
+        "!hey!"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "!hey!",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "!hey!"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "single_punctuation_xor_boundaries",
+      "phrases": [
+        "!"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "a!b",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [
+            {
+              "text": "!b",
+              "user_id": "a",
+              "kind": "transcription",
+              "direction": "downstream",
+              "finalized": false,
+              "same_input_object": true,
+              "preserved_fields": {
+                "frame_id": 1,
+                "timestamp": "timestamp-1",
+                "language": "en",
+                "result": {
+                  "provider": "synthetic",
+                  "value": false
+                },
+                "metadata": {
+                  "fixture": "preserve",
+                  "step": 1
+                },
+                "transport_source": "source",
+                "transport_destination": "destination",
+                "pts": 12345,
+                "skip_tts": true,
+                "includes_inter_frame_spaces": true,
+                "append_to_context": false
+              }
+            }
+          ],
+          "state": {
+            "a": {
+              "state": "AWAKE",
+              "timer": 0,
+              "accumulator": ""
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "single_punctuation_missing_left_boundary",
+      "phrases": [
+        "!"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "!b",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "!b"
+            }
+          }
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "single_punctuation_missing_right_boundary",
+      "phrases": [
+        "!"
+      ],
+      "keepalive_timeout": 3,
+      "steps": [
+        {
+          "input": {
+            "text": "a!",
+            "at": 0,
+            "user_id": "a",
+            "kind": "transcription",
+            "direction": "downstream",
+            "finalized": false
+          },
+          "output": [],
+          "state": {
+            "a": {
+              "state": "IDLE",
+              "timer": 0.0,
+              "accumulator": "a!"
+            }
+          }
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "match_cases": [
+    {
+      "name": "source_basic_0",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "text": "Phrase 1",
+      "match": null
+    },
+    {
+      "name": "source_basic_1",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "text": " Hey, Pipecat",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 1,
+        "end_char": 13,
+        "start_byte": 1,
+        "end_byte": 13,
+        "suffix": "Hey, Pipecat"
+      }
+    },
+    {
+      "name": "source_basic_2",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "text": "Phrase 2",
+      "match": null
+    },
+    {
+      "name": "raw_split_no_separator_0",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "noise: h",
+      "match": null
+    },
+    {
+      "name": "raw_split_no_separator_1",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "eypipe",
+      "match": null
+    },
+    {
+      "name": "raw_split_no_separator_2",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "cat! query",
+      "match": null
+    },
+    {
+      "name": "separate_users_0",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "hey",
+      "match": null
+    },
+    {
+      "name": "separate_users_1",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "pipecat",
+      "match": null
+    },
+    {
+      "name": "separate_users_2",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "pipecat",
+      "match": null
+    },
+    {
+      "name": "sliding_strict_timeout_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "sliding_strict_timeout_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "within",
+      "match": null
+    },
+    {
+      "name": "sliding_strict_timeout_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "within again",
+      "match": null
+    },
+    {
+      "name": "sliding_strict_timeout_3",
+      "phrases": [
+        "hey"
+      ],
+      "text": "at deadline",
+      "match": null
+    },
+    {
+      "name": "clock_regression_source_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "clock_regression_source_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "wall clock went backwards",
+      "match": null
+    },
+    {
+      "name": "upstream_transcription_redirect_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "finalized_false_is_selected_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hidden ",
+      "match": null
+    },
+    {
+      "name": "finalized_false_is_selected_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "configuration_order_wins_0",
+      "phrases": [
+        "second",
+        "first"
+      ],
+      "text": "first xx second suffix",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 9,
+        "end_char": 15,
+        "start_byte": 9,
+        "end_byte": 15,
+        "suffix": "second suffix"
+      }
+    },
+    {
+      "name": "source_interruption_retains_partial_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "h",
+      "match": null
+    },
+    {
+      "name": "source_interruption_retains_partial_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "ey",
+      "match": null
+    },
+    {
+      "name": "source_stop_start_retains_awake_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "source_stop_start_retains_awake_3",
+      "phrases": [
+        "hey"
+      ],
+      "text": "still awake",
+      "match": null
+    },
+    {
+      "name": "source_end_does_not_flush_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "unmatched",
+      "match": null
+    },
+    {
+      "name": "punctuation_is_literal_0",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "Hey, Pipecat",
+      "match": null
+    },
+    {
+      "name": "configured_punctuation_matches_0",
+      "phrases": [
+        "Hey, Pipecat"
+      ],
+      "text": "prefix:HEY,PIPEcat!",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 7,
+        "end_char": 18,
+        "start_byte": 7,
+        "end_byte": 18,
+        "suffix": "HEY,PIPEcat!"
+      }
+    },
+    {
+      "name": "escaped_regex_literal_0",
+      "phrases": [
+        "hey.* bot"
+      ],
+      "text": "heyXYZbot",
+      "match": null
+    },
+    {
+      "name": "escaped_regex_literal_1",
+      "phrases": [
+        "hey.* bot"
+      ],
+      "text": " hey.*bot",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 1,
+        "end_char": 9,
+        "start_byte": 1,
+        "end_byte": 9,
+        "suffix": "hey.*bot"
+      }
+    },
+    {
+      "name": "empty_phrase_source_0",
+      "phrases": [
+        ""
+      ],
+      "text": "nonempty",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 0,
+        "start_byte": 0,
+        "end_byte": 0,
+        "suffix": "nonempty"
+      }
+    },
+    {
+      "name": "strict_exact_deadline_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "strict_exact_deadline_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "within",
+      "match": null
+    },
+    {
+      "name": "strict_exact_deadline_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "at deadline",
+      "match": null
+    },
+    {
+      "name": "nontranscription_does_not_refresh_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "nontranscription_does_not_refresh_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "late",
+      "match": null
+    },
+    {
+      "name": "awake_empty_transcription_refreshes_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "awake_empty_transcription_refreshes_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "",
+      "match": null
+    },
+    {
+      "name": "awake_empty_transcription_refreshes_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "still awake",
+      "match": null
+    },
+    {
+      "name": "expired_then_reacquired_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "expired_then_reacquired_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "expired",
+      "match": null
+    },
+    {
+      "name": "expired_then_reacquired_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": " hey again",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 1,
+        "end_char": 4,
+        "start_byte": 1,
+        "end_byte": 4,
+        "suffix": "hey again"
+      }
+    },
+    {
+      "name": "source_cancel_start_retains_partial_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "h",
+      "match": null
+    },
+    {
+      "name": "source_cancel_start_retains_partial_3",
+      "phrases": [
+        "hey"
+      ],
+      "text": "ey",
+      "match": null
+    },
+    {
+      "name": "source_interruption_retains_awake_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 3,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "source_interruption_retains_awake_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "still awake",
+      "match": null
+    },
+    {
+      "name": "source_end_retains_partial_direct_only_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "h",
+      "match": null
+    },
+    {
+      "name": "source_end_retains_partial_direct_only_2",
+      "phrases": [
+        "hey"
+      ],
+      "text": "ey",
+      "match": null
+    },
+    {
+      "name": "cross_direction_same_participant_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "prefix:h",
+      "match": null
+    },
+    {
+      "name": "cross_direction_same_participant_1",
+      "phrases": [
+        "hey"
+      ],
+      "text": "ey!",
+      "match": null
+    },
+    {
+      "name": "raw_split_aggregate_match_0",
+      "phrases": [
+        "hey pipecat"
+      ],
+      "text": "noise: heypipecat! query",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 7,
+        "end_char": 17,
+        "start_byte": 7,
+        "end_byte": 17,
+        "suffix": "heypipecat! query"
+      }
+    },
+    {
+      "name": "config_whitespace_split_0",
+      "phrases": [
+        "  hey\tbot \n"
+      ],
+      "text": "HEY\u001cBOT",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 7,
+        "start_byte": 0,
+        "end_byte": 7,
+        "suffix": "HEY\u001cBOT"
+      }
+    },
+    {
+      "name": "empty_phrase_list_source_0",
+      "phrases": [],
+      "text": "hey",
+      "match": null
+    },
+    {
+      "name": "unicode_prefix_byte_offset_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "😀:héllo, hey 雪",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 9,
+        "end_char": 12,
+        "start_byte": 13,
+        "end_byte": 16,
+        "suffix": "hey 雪"
+      }
+    },
+    {
+      "name": "unicode_han_word_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "中hey文",
+      "match": null
+    },
+    {
+      "name": "unicode_han_punctuation_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "中,hey,文",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 2,
+        "end_char": 5,
+        "start_byte": 4,
+        "end_byte": 7,
+        "suffix": "hey,文"
+      }
+    },
+    {
+      "name": "unicode_combining_mark_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "x́hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 2,
+        "end_char": 5,
+        "start_byte": 3,
+        "end_byte": 6,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "unicode_connector_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "x‿hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 2,
+        "end_char": 5,
+        "start_byte": 4,
+        "end_byte": 7,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "unicode_underscore_no_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "x_hey",
+      "match": null
+    },
+    {
+      "name": "unicode_join_control_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "x‍hey",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 2,
+        "end_char": 5,
+        "start_byte": 4,
+        "end_byte": 7,
+        "suffix": "hey"
+      }
+    },
+    {
+      "name": "unicode_numeric_no_boundary_0",
+      "phrases": [
+        "hey"
+      ],
+      "text": "²hey",
+      "match": null
+    },
+    {
+      "name": "python_special_i_dotted_0",
+      "phrases": [
+        "i"
+      ],
+      "text": "İ",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 1,
+        "start_byte": 0,
+        "end_byte": 2,
+        "suffix": "İ"
+      }
+    },
+    {
+      "name": "python_special_i_dotless_0",
+      "phrases": [
+        "i"
+      ],
+      "text": "ı",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 1,
+        "start_byte": 0,
+        "end_byte": 2,
+        "suffix": "ı"
+      }
+    },
+    {
+      "name": "python_special_long_s_0",
+      "phrases": [
+        "s"
+      ],
+      "text": "ſ",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 1,
+        "start_byte": 0,
+        "end_byte": 2,
+        "suffix": "ſ"
+      }
+    },
+    {
+      "name": "python_special_kelvin_0",
+      "phrases": [
+        "k"
+      ],
+      "text": "K",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 1,
+        "start_byte": 0,
+        "end_byte": 3,
+        "suffix": "K"
+      }
+    },
+    {
+      "name": "python_no_multichar_fold_0",
+      "phrases": [
+        "ss"
+      ],
+      "text": "ß",
+      "match": null
+    },
+    {
+      "name": "python_no_normalization_0",
+      "phrases": [
+        "café"
+      ],
+      "text": "café",
+      "match": null
+    },
+    {
+      "name": "python_whitespace_control_0",
+      "phrases": [
+        "hey bot"
+      ],
+      "text": "hey\u001cbot",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 7,
+        "start_byte": 0,
+        "end_byte": 7,
+        "suffix": "hey\u001cbot"
+      }
+    },
+    {
+      "name": "python_whitespace_nbsp_0",
+      "phrases": [
+        "hey bot"
+      ],
+      "text": "hey bot",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 0,
+        "end_char": 7,
+        "start_byte": 0,
+        "end_byte": 8,
+        "suffix": "hey bot"
+      }
+    },
+    {
+      "name": "punctuation_phrase_boundary_0",
+      "phrases": [
+        "!hey!"
+      ],
+      "text": "a!hey!b",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 1,
+        "end_char": 6,
+        "start_byte": 1,
+        "end_byte": 6,
+        "suffix": "!hey!b"
+      }
+    },
+    {
+      "name": "punctuation_phrase_no_standalone_boundary_0",
+      "phrases": [
+        "!hey!"
+      ],
+      "text": "!hey!",
+      "match": null
+    },
+    {
+      "name": "single_punctuation_xor_boundaries_0",
+      "phrases": [
+        "!"
+      ],
+      "text": "a!b",
+      "match": {
+        "phrase_index": 0,
+        "start_char": 1,
+        "end_char": 2,
+        "start_byte": 1,
+        "end_byte": 2,
+        "suffix": "!b"
+      }
+    },
+    {
+      "name": "single_punctuation_missing_left_boundary_0",
+      "phrases": [
+        "!"
+      ],
+      "text": "!b",
+      "match": null
+    },
+    {
+      "name": "single_punctuation_missing_right_boundary_0",
+      "phrases": [
+        "!"
+      ],
+      "text": "a!",
+      "match": null
+    }
+  ]
+}
