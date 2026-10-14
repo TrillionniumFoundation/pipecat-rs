@@ -342,3 +342,11 @@ later output failure is reported by the core runtime; it cannot retroactively
 change a response-end frame already emitted by the preceding context. Loopback
 ordering and cancellation tests are scoped to this native adapter, not complete
 Python service parity, live-provider behavior or physical playout.
+
+## Optional OpenAI transcription-only STT
+
+The default-off `openai-stt` feature adds a dedicated input-only Realtime
+recognition client and `OpenAiRealtimeSttProcessor`. It does not reuse the
+conversational client's model-response/tool surface. See
+[OPENAI_STT.md](OPENAI_STT.md) for the fixed source, local-VAD/24 kHz profile,
+readiness adaptation, user-input interruption semantics and ownership bounds.

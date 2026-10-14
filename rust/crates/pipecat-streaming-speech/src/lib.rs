@@ -16,6 +16,17 @@ pub mod cartesia_stt;
 mod cartesia_stt_processor;
 mod common;
 pub mod deepgram;
+#[cfg(feature = "openai-stt")]
+pub mod openai_stt;
+#[cfg(feature = "openai-stt")]
+mod openai_stt_processor;
+#[cfg(feature = "openai-stt")]
+pub use openai_stt::{
+    OpenAiSttClient, OpenAiSttConfig, OpenAiSttDelay, OpenAiSttEvent,
+    OpenAiSttNoiseReduction, OpenAiSttSender, OpenAiSttSession,
+};
+#[cfg(feature = "openai-stt")]
+pub use openai_stt_processor::{OpenAiRealtimeSttProcessor, OpenAiSttProcessor};
 pub mod processor;
 mod settings;
 mod stt_processor;

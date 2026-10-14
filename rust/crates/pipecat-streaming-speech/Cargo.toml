@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [features]
 default = []
+openai-stt = []
 cartesia-turns-eager = []
 
 [dependencies]

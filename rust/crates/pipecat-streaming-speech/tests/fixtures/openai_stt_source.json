@@ -1,0 +1,2169 @@
+{
+  "audio_caller_cases": [
+    {
+      "input_audio_hex": "",
+      "resampler_calls": [
+        {
+          "audio_hex": "",
+          "source_rate": 16000,
+          "target_rate": 24000
+        }
+      ],
+      "resampler_stub": "identity",
+      "trace": []
+    },
+    {
+      "input_audio_hex": "00000100ffff0080",
+      "resampler_calls": [
+        {
+          "audio_hex": "00000100ffff0080",
+          "source_rate": 16000,
+          "target_rate": 24000
+        }
+      ],
+      "resampler_stub": "identity",
+      "trace": [
+        {
+          "message": {
+            "audio": "AAABAP//AIA=",
+            "type": "input_audio_buffer.append"
+          },
+          "op": "ws_send"
+        }
+      ]
+    }
+  ],
+  "control_frame_cases": [
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        },
+        {
+          "message": {
+            "type": "input_audio_buffer.commit"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        },
+        {
+          "message": {
+            "type": "input_audio_buffer.commit"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": false
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": null
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "downstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "UserStoppedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "UserStoppedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "InterruptionFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "InterruptionFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    },
+    {
+      "input": {
+        "direction": "upstream",
+        "frame_type": "VADUserStartedSpeakingFrame",
+        "session_ready": false,
+        "turn_detection": {
+          "type": "server_vad"
+        }
+      },
+      "trace": [
+        {
+          "direction": "upstream",
+          "frame_type": "VADUserStartedSpeakingFrame",
+          "op": "base_process_frame"
+        }
+      ]
+    }
+  ],
+  "empty_text_cases": [
+    {
+      "input_event": {
+        "delta": "",
+        "item_id": "item-empty",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "delta": null,
+        "item_id": "item-empty",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "item_id": "item-empty",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "delta": " ",
+        "item_id": "item-empty",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      "trace": [
+        {
+          "direction": "downstream",
+          "frame": {
+            "append_to_context": true,
+            "includes_inter_frame_spaces": false,
+            "language": null,
+            "result": {
+              "delta": " ",
+              "item_id": "item-empty",
+              "type": "conversation.item.input_audio_transcription.delta"
+            },
+            "skip_tts": null,
+            "text": " ",
+            "timestamp": "2026-10-14T12:34:56.000+00:00",
+            "user_id": "speaker-7"
+          },
+          "frame_type": "InterimTranscriptionFrame",
+          "op": "push_frame"
+        }
+      ]
+    },
+    {
+      "input_event": {
+        "item_id": "item-empty",
+        "transcript": "",
+        "type": "conversation.item.input_audio_transcription.completed"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "item_id": "item-empty",
+        "transcript": null,
+        "type": "conversation.item.input_audio_transcription.completed"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "item_id": "item-empty",
+        "type": "conversation.item.input_audio_transcription.completed"
+      },
+      "trace": []
+    },
+    {
+      "input_event": {
+        "item_id": "item-empty",
+        "transcript": " ",
+        "type": "conversation.item.input_audio_transcription.completed"
+      },
+      "trace": [
+        {
+          "op": "emit_stt_usage_metrics"
+        },
+        {
+          "direction": "downstream",
+          "frame": {
+            "append_to_context": true,
+            "finalized": false,
+            "includes_inter_frame_spaces": false,
+            "language": null,
+            "result": {
+              "item_id": "item-empty",
+              "transcript": " ",
+              "type": "conversation.item.input_audio_transcription.completed"
+            },
+            "skip_tts": null,
+            "text": " ",
+            "timestamp": "2026-10-14T12:34:56.000+00:00",
+            "user_id": "speaker-7"
+          },
+          "frame_type": "TranscriptionFrame",
+          "op": "push_frame"
+        },
+        {
+          "is_final": true,
+          "language": null,
+          "op": "transcription_trace_entry",
+          "transcript": " "
+        }
+      ]
+    }
+  ],
+  "failure_cases": [
+    {
+      "input_event": {
+        "error": {
+          "code": "decode",
+          "message": "No speech decoded"
+        },
+        "item_id": "bad-1",
+        "type": "conversation.item.input_audio_transcription.failed"
+      },
+      "session_ready_after": true,
+      "trace": [
+        {
+          "error": "OpenAI Realtime STT error: No speech decoded",
+          "kwargs": {},
+          "op": "push_error"
+        }
+      ]
+    },
+    {
+      "input_event": {
+        "item_id": "bad-2",
+        "type": "conversation.item.input_audio_transcription.failed"
+      },
+      "session_ready_after": true,
+      "trace": [
+        {
+          "error": "OpenAI Realtime STT error: Transcription failed",
+          "kwargs": {},
+          "op": "push_error"
+        }
+      ]
+    }
+  ],
+  "fatal_error_case": {
+    "exception_message": "OpenAI Realtime STT error [invalid_request_error]: Malformed request",
+    "exception_type": "Exception",
+    "input_event": {
+      "error": {
+        "code": "invalid_request_error",
+        "message": "Malformed request"
+      },
+      "type": "error"
+    },
+    "trace": [
+      {
+        "error": "OpenAI Realtime STT error [invalid_request_error]: Malformed request",
+        "kwargs": {},
+        "op": "push_error"
+      }
+    ]
+  },
+  "language_cases": [
+    {
+      "input": "en",
+      "output": "en"
+    },
+    {
+      "input": "EN-US",
+      "output": "en"
+    },
+    {
+      "input": "pt-BR",
+      "output": "pt"
+    },
+    {
+      "input": "ZH-Hant-TW",
+      "output": "zh"
+    },
+    {
+      "input": "fr",
+      "output": "fr"
+    },
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "zh_CN",
+      "output": "zh_cn"
+    }
+  ],
+  "prompt_omission_cases": [
+    {
+      "changed": {
+        "prompt": "hint"
+      },
+      "input": {
+        "model": "gpt-realtime-whisper",
+        "prompt": "hint"
+      },
+      "prompt_after": null
+    },
+    {
+      "changed": {},
+      "input": {
+        "model": "gpt-realtime-whisper",
+        "prompt": ""
+      },
+      "prompt_after": ""
+    },
+    {
+      "changed": {},
+      "input": {
+        "model": "gpt-realtime-whisper",
+        "prompt": null
+      },
+      "prompt_after": null
+    },
+    {
+      "changed": {
+        "prompt": " "
+      },
+      "input": {
+        "model": "gpt-realtime-whisper",
+        "prompt": " "
+      },
+      "prompt_after": null
+    },
+    {
+      "changed": {},
+      "input": {
+        "model": "gpt-transcribe",
+        "prompt": "hint"
+      },
+      "prompt_after": "hint"
+    }
+  ],
+  "provenance": {
+    "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+    "executed_service_methods": [
+      {
+        "body_ast_sha256": "f63d613fd83261ca26c5ed3743189d7a1446c97e7debb51cb96269ffe3f78b12",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 403,
+        "line_start": 273,
+        "method": "__init__",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "a8d4e0a4dfcf93d91fd3499f262555bd738393c455d2118507469eeb804a85fd",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 416,
+        "line_start": 406,
+        "method": "_omit_unsupported_prompt",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": [
+          "staticmethod"
+        ]
+      },
+      {
+        "body_ast_sha256": "a6374dde1092ce8473c5846fcc15e2ccd6d89a40b424de3a2f68e0bf52b75015",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 429,
+        "line_start": 419,
+        "method": "_language_to_code",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": [
+          "staticmethod"
+        ]
+      },
+      {
+        "body_ast_sha256": "3b45e765fa2d2c16b54eddbbe0b8ba131fa216e39c9b39a6a851c00cbe1cfc54",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 473,
+        "line_start": 455,
+        "method": "_update_settings",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "05aa2ab23434af1be645efd718280e0686e4284ba3cff62cdf7b4e89789977e5",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 536,
+        "line_start": 519,
+        "method": "process_frame",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "9900c614578ace9f9a36b0859bedb4a3af87effdd2d12004536e256b11c58cdf",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 612,
+        "line_start": 597,
+        "method": "_ws_send",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "c33dfb64064039d6e6d5f1c2f54f402a5ca36d2c32ca92835f145e6ddf45f4d0",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 665,
+        "line_start": 618,
+        "method": "_send_session_update",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "1e7691ee5e537cab91980281900871e85dbfeb07bdcf0de558e0a77594809337",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 684,
+        "line_start": 667,
+        "method": "_send_audio",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "c4afa876a7653dc2905e4a3357f9225e0d2a0128f2ea712f06ed00afc43e1698",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 688,
+        "line_start": 686,
+        "method": "_commit_audio_buffer",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "4d946bed183a17a7d6fd78923d0a85b51a1e44c8f6d1a32d77d985f2a1e3bb3a",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 692,
+        "line_start": 690,
+        "method": "_clear_audio_buffer",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "2b45939f0de1196ed2978207afa95542eff817cc50a70724bf270188bb482ad5",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 736,
+        "line_start": 698,
+        "method": "_receive_messages",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "082c82b2360dbfb9f743f2af135f975b5e0242aaf60a3ae986db4a13e989c921",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 748,
+        "line_start": 738,
+        "method": "_handle_session_created",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "655b178ee28fc243676b4804f5c8af919e1593d866aead1ed9d8d0ab1fa6e6c7",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 759,
+        "line_start": 750,
+        "method": "_handle_session_updated",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "b8c6a232e6b4372499db50021cad65653739f0bfade0179f0d281064e0a93a2b",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 780,
+        "line_start": 761,
+        "method": "_handle_transcription_delta",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "5550829fef5e25ed0413c1b0dfeb571ed0b304309b17c6ae41598abf889fb089",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 804,
+        "line_start": 782,
+        "method": "_handle_transcription_completed",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "6daa5916a4b79267bf59c6c53c9c864ba9157d500e6c0f49efdbc1b1aef6e2d4",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 820,
+        "line_start": 807,
+        "method": "_handle_transcription_trace",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": [
+          "traced_stt"
+        ]
+      },
+      {
+        "body_ast_sha256": "9291219c45561bddb4c38ac5cee24c913970ab007340d6cb58d926230c0e7030",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 832,
+        "line_start": 822,
+        "method": "_handle_speech_started",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "5d229d39c16326d065bc5cf6d5da4984e1c0019d9224bc7ec234ecb909fb92a6",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 844,
+        "line_start": 834,
+        "method": "_handle_speech_stopped",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "d5c3f05560afb48e0f7046051570516b4d15eb56d6fcdd4c6ce358b8752f9959",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 857,
+        "line_start": 846,
+        "method": "_handle_transcription_failed",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      },
+      {
+        "body_ast_sha256": "029f13fdda609728c7d31a9ce7afcdc90c59db63676e863cac54e073b5e0c064",
+        "class": "OpenAIRealtimeSTTService",
+        "line_end": 873,
+        "line_start": 859,
+        "method": "_handle_error",
+        "path": "src/pipecat/services/openai/stt.py",
+        "removed_decorators": []
+      }
+    ],
+    "method": "Selected original AST method bodies executed unchanged; method decorators removed, static binding restored; source dataclass decorators retained.",
+    "repository": "ProfHepta/pipecat",
+    "source_manifest": "source-manifest.json",
+    "verified_files": [
+      {
+        "bytes": 34031,
+        "git_blob": "81cce1b3e03030409b040f61e88e53a8d2e56810",
+        "path": "src/pipecat/services/openai/stt.py",
+        "sha256": "506ef51c0da93ba4c98e05c110645eb3682087d96076ae2000ee348630f4bd31",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/openai/stt.py"
+      },
+      {
+        "bytes": 45870,
+        "git_blob": "1198fb92413fcde1db1a24a93271bb0d47b133ed",
+        "path": "src/pipecat/services/stt_service.py",
+        "sha256": "9496155ae6a33b5a59229b44fdfe26df9e4479e9993cbe222ffb9533a2ca8589",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/stt_service.py"
+      },
+      {
+        "bytes": 18599,
+        "git_blob": "4e0841422a20f480fc7f751f6acd19ec8ee378c6",
+        "path": "src/pipecat/services/websocket_service.py",
+        "sha256": "cd2c0523a15bea1da5be9d708ee970aecca615749b796165a3128c5687ae5f53",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/websocket_service.py"
+      },
+      {
+        "bytes": 229,
+        "git_blob": "110c95cdbf05157bdb392f7016d72f86221eabd4",
+        "path": "src/pipecat/services/openai/_constants.py",
+        "sha256": "0d1632fa9c3c3c632fa0a6c4ed3c2e7bd21cd98ffa29e4ede905cf6ec46f1a36",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/openai/_constants.py"
+      },
+      {
+        "bytes": 68596,
+        "git_blob": "5e859077a8ee44057adb6d1902709e44e04885cd",
+        "path": "src/pipecat/services/openai/realtime/llm.py",
+        "sha256": "0f8659fa2f33e81649e1698f2d3394e338970d21854162567ebb1f2220804b89",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/openai/realtime/llm.py"
+      },
+      {
+        "bytes": 36942,
+        "git_blob": "e0da4ad730c4c1d4d6a5a93342929c451ef4bde9",
+        "path": "src/pipecat/services/openai/realtime/events.py",
+        "sha256": "5d5c71e9d7b55db93b2d1eaa4c5bde9e36edac6e8a5444dcde74963bb005ff98",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/openai/realtime/events.py"
+      },
+      {
+        "bytes": 15498,
+        "git_blob": "1661be2ae22645cec63dbda591e78e7037597f18",
+        "path": "src/pipecat/audio/utils.py",
+        "sha256": "220e4500cd3ef43515d9f83468ce85b3e5b6ea49d9422a64935d46c82ca6aee2",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/audio/utils.py"
+      },
+      {
+        "bytes": 5218,
+        "git_blob": "5b2955d1d2694462bafec496a5104d27f18481bc",
+        "path": "src/pipecat/audio/resamplers/soxr_stream_resampler.py",
+        "sha256": "e6bd81f0111c329fa670ceec146c616794aa823999413a93b439771cb91766d1",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/audio/resamplers/soxr_stream_resampler.py"
+      },
+      {
+        "bytes": 15757,
+        "git_blob": "a81809e8cc4f8760e70d9ae0f874473ba2f38f48",
+        "path": "src/pipecat/services/settings.py",
+        "sha256": "da58cb8e61424abc818c9ccceb19da3475a6668184a3f358baa067312e2c9818",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/settings.py"
+      },
+      {
+        "bytes": 10724,
+        "git_blob": "e9e9011f040e053fec8a5dc3434d2a1d05f1d8ad",
+        "path": "src/pipecat/services/ai_service.py",
+        "sha256": "1bd1d8c8f1b31d7115ba50368c6d7cc6fcba367a561ecfd806c86883540da7c7",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/ai_service.py"
+      },
+      {
+        "bytes": 91263,
+        "git_blob": "79dea3e32f5097a048d03b49f48031811fa1eca6",
+        "path": "src/pipecat/frames/frames.py",
+        "sha256": "765266f414354ec753cda52b40f0517fffa056c868fbb767f3b41179d4f86449",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/frames/frames.py"
+      },
+      {
+        "bytes": 4671,
+        "git_blob": "a20b65d748d8ad56650f920b06e7bbc6e2008be7",
+        "path": "tests/test_openai_stt.py",
+        "sha256": "aee80bcadb1ecf6fd1db9d06d7475ec054099c5ffe1d21ea6b97c150ce4ee8ca",
+        "url": "https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/tests/test_openai_stt.py"
+      }
+    ]
+  },
+  "schema": "pipecat-openai-realtime-stt-source-oracle-v1",
+  "scope": {
+    "execution": "Offline narrow source oracle, not a full Pipecat service or live provider test.",
+    "fixed_clock": "2026-10-14T12:34:56.000+00:00",
+    "not_executed": [
+      "provider/network/websocket connection lifecycle",
+      "full base STT/audio/VAD/metrics timing",
+      "actual DSP resampling",
+      "tracing instrumentation",
+      "external user-turn strategies and interruption broadcast",
+      "SDK or full Pipecat package imports"
+    ],
+    "original_additional_ast": [
+      "_constants module",
+      "ServiceSettings and STTSettings class bodies",
+      "OpenAIRealtimeSTTSettings class body",
+      "TextFrame, TranscriptionFrame, InterimTranscriptionFrame and listed control frame class bodies"
+    ],
+    "static_only": [
+      {
+        "fact": "STTService.process_frame handles InterruptionFrame by resetting STT TTFB state and forwarding the frame. This base method is not executed by this harness.",
+        "lines": [
+          508,
+          510
+        ],
+        "path": "src/pipecat/services/stt_service.py"
+      },
+      {
+        "fact": "_reset_stt_ttfb_state cancels the TTFB timeout and TTFB metrics; it does not reset _user_speaking. No provider buffer clear is present in this method.",
+        "lines": [
+          581,
+          594
+        ],
+        "path": "src/pipecat/services/stt_service.py"
+      },
+      {
+        "fact": "Base push_frame may promote TranscriptionFrame.finalized to True when _finalize_pending is set. Oracle finalized=False records source frame construction before this unexecuted base logic.",
+        "lines": [
+          531,
+          545
+        ],
+        "path": "src/pipecat/services/stt_service.py"
+      },
+      {
+        "fact": "Realtime subclass process_frame has no interruption clear/cancel or direction filter; its only added branch commits local VAD stop.",
+        "lines": [
+          522,
+          536
+        ],
+        "path": "src/pipecat/services/openai/stt.py"
+      }
+    ],
+    "stubs": [
+      "Language.EN='en'; language inputs are raw strings",
+      "NOT_GIVEN identity sentinel and is_given/assert_given",
+      "logger recording",
+      "empty Frame/DataFrame/SystemFrame/ControlFrame ancestors",
+      "WebsocketSTTService constructor and process_frame record-only boundary",
+      "WebsocketSTTService push_frame/push_error/usage/broadcast record-only boundaries",
+      "WebsocketSTTService _update_settings delegates to original ServiceSettings.apply_update without STT language conversion",
+      "CaptureSocket sends/iteration use local JSON only",
+      "IdentityResampler records rate arguments; no resampling correctness claim",
+      "create_stream_resampler returns IdentityResampler",
+      "websocket_connect non-None placeholder; never called",
+      "OPENAI_REALTIME_TTFS_P99=None placeholder; latency values not claimed",
+      "traced_stt decorator removed; trace entry observer calls original no-op body"
+    ]
+  },
+  "session_cases": [
+    {
+      "id": "default_local_vad",
+      "input": {},
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_prompt_is_omitted",
+      "input": {
+        "prompt": "Spell Trillionnium correctly."
+      },
+      "logs": [
+        {
+          "level": "warning",
+          "message": "gpt-realtime-whisper does not support the prompt parameter; omitting prompt from OpenAI Realtime transcription session."
+        }
+      ],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_noise_delay",
+      "input": {
+        "settings": {
+          "delay": "low",
+          "noise_reduction": "near_field"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "low",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": "near_field",
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "noise_reduction": {
+                    "type": "near_field"
+                  },
+                  "transcription": {
+                    "delay": "low",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "transcribe_server_vad_all_fields",
+      "input": {
+        "settings": {
+          "delay": "xhigh",
+          "language": "PT-BR",
+          "model": "gpt-transcribe",
+          "noise_reduction": "far_field",
+          "prompt": "Names: Hepta."
+        },
+        "turn_detection": {
+          "threshold": 0.5,
+          "type": "server_vad"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": true,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "xhigh",
+        "extra": {},
+        "language": "PT-BR",
+        "model": "gpt-transcribe",
+        "noise_reduction": "far_field",
+        "prompt": "Names: Hepta."
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "noise_reduction": {
+                    "type": "far_field"
+                  },
+                  "transcription": {
+                    "delay": "xhigh",
+                    "language": "pt",
+                    "model": "gpt-transcribe",
+                    "prompt": "Names: Hepta."
+                  },
+                  "turn_detection": {
+                    "threshold": 0.5,
+                    "type": "server_vad"
+                  }
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "none_turn_detection_omits_field",
+      "input": {
+        "settings": {
+          "language": null
+        },
+        "turn_detection": null
+      },
+      "logs": [],
+      "server_vad_enabled": true,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": null,
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "model": "gpt-realtime-whisper"
+                  }
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "empty_prompt_and_noise_are_omitted",
+      "input": {
+        "settings": {
+          "delay": "",
+          "language": "",
+          "model": "gpt-transcribe",
+          "noise_reduction": "",
+          "prompt": ""
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "",
+        "extra": {},
+        "language": "",
+        "model": "gpt-transcribe",
+        "noise_reduction": "",
+        "prompt": ""
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "model": "gpt-transcribe"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "settings_override_direct_arguments",
+      "input": {
+        "language": "fr",
+        "model": "gpt-transcribe",
+        "noise_reduction": "far_field",
+        "prompt": "deprecated",
+        "settings": {
+          "language": "ZH-CN",
+          "model": "gpt-live-transcribe",
+          "noise_reduction": null,
+          "prompt": "canonical"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": "ZH-CN",
+        "model": "gpt-live-transcribe",
+        "noise_reduction": null,
+        "prompt": "canonical"
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "zh",
+                    "model": "gpt-live-transcribe",
+                    "prompt": "canonical"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_empty_prompt_remains_empty",
+      "input": {
+        "settings": {
+          "prompt": ""
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": ""
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "local_vad_language_none",
+      "input": {
+        "settings": {
+          "language": null
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": null,
+        "extra": {},
+        "language": null,
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "transcribe_local_vad_all_fields",
+      "input": {
+        "settings": {
+          "delay": "xhigh",
+          "language": "PT-BR",
+          "model": "gpt-transcribe",
+          "noise_reduction": "far_field",
+          "prompt": "Names: Hepta."
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "xhigh",
+        "extra": {},
+        "language": "PT-BR",
+        "model": "gpt-transcribe",
+        "noise_reduction": "far_field",
+        "prompt": "Names: Hepta."
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "noise_reduction": {
+                    "type": "far_field"
+                  },
+                  "transcription": {
+                    "delay": "xhigh",
+                    "language": "pt",
+                    "model": "gpt-transcribe",
+                    "prompt": "Names: Hepta."
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_local_vad_delay_minimal",
+      "input": {
+        "settings": {
+          "delay": "minimal"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "minimal",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "delay": "minimal",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_local_vad_delay_low",
+      "input": {
+        "settings": {
+          "delay": "low"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "low",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "delay": "low",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_local_vad_delay_medium",
+      "input": {
+        "settings": {
+          "delay": "medium"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "medium",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "delay": "medium",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_local_vad_delay_high",
+      "input": {
+        "settings": {
+          "delay": "high"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "high",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "delay": "high",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "id": "whisper_local_vad_delay_xhigh",
+      "input": {
+        "settings": {
+          "delay": "xhigh"
+        }
+      },
+      "logs": [],
+      "server_vad_enabled": false,
+      "session_ready": false,
+      "settings_after_init": {
+        "delay": "xhigh",
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "delay": "xhigh",
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    }
+  ],
+  "session_lifecycle_dispatch": {
+    "input_events": [
+      "not-json",
+      {
+        "type": "session.created"
+      },
+      {
+        "type": "session.updated"
+      },
+      {
+        "type": "input_audio_buffer.speech_started"
+      },
+      {
+        "type": "input_audio_buffer.speech_stopped"
+      },
+      {
+        "item_id": "item-commit",
+        "type": "input_audio_buffer.committed"
+      },
+      {
+        "type": "unknown.event"
+      }
+    ],
+    "logs": [
+      {
+        "level": "warning",
+        "message": "Failed to parse WebSocket message"
+      },
+      {
+        "level": "debug",
+        "message": "Transcription session created, sending configuration"
+      },
+      {
+        "level": "debug",
+        "message": "Transcription session configured and ready"
+      },
+      {
+        "level": "debug",
+        "message": "Server VAD: speech started"
+      },
+      {
+        "level": "debug",
+        "message": "Server VAD: speech stopped"
+      },
+      {
+        "level": "trace",
+        "message": "Audio buffer committed: item_id=item-commit"
+      },
+      {
+        "level": "trace",
+        "message": "Unhandled event: unknown.event"
+      }
+    ],
+    "session_ready_after": true,
+    "trace": [
+      {
+        "message": {
+          "session": {
+            "audio": {
+              "input": {
+                "format": {
+                  "rate": 24000,
+                  "type": "audio/pcm"
+                },
+                "transcription": {
+                  "language": "en",
+                  "model": "gpt-realtime-whisper"
+                },
+                "turn_detection": null
+              }
+            },
+            "type": "transcription"
+          },
+          "type": "session.update"
+        },
+        "op": "ws_send"
+      },
+      {
+        "frame_type": "ProposedUserStartedSpeakingFrame",
+        "op": "broadcast_frame"
+      },
+      {
+        "frame_type": "ProposedUserStoppedSpeakingFrame",
+        "op": "broadcast_frame"
+      }
+    ]
+  },
+  "settings_update_cases": [
+    {
+      "changed": {
+        "noise_reduction": null
+      },
+      "input": {
+        "constructor": {},
+        "delta": {
+          "noise_reduction": "near_field"
+        },
+        "session_ready": false
+      },
+      "settings_after": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": "near_field",
+        "prompt": null
+      },
+      "trace": []
+    },
+    {
+      "changed": {
+        "noise_reduction": null
+      },
+      "input": {
+        "constructor": {},
+        "delta": {
+          "noise_reduction": "near_field"
+        },
+        "session_ready": true
+      },
+      "settings_after": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": "near_field",
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "noise_reduction": {
+                    "type": "near_field"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "changed": {},
+      "input": {
+        "constructor": {},
+        "delta": {
+          "language": "en"
+        },
+        "session_ready": true
+      },
+      "settings_after": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": []
+    },
+    {
+      "changed": {
+        "prompt": null
+      },
+      "input": {
+        "constructor": {},
+        "delta": {
+          "prompt": "unsupported"
+        },
+        "session_ready": true
+      },
+      "settings_after": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    },
+    {
+      "changed": {
+        "model": "gpt-transcribe",
+        "prompt": "kept-until-switch"
+      },
+      "input": {
+        "constructor": {
+          "settings": {
+            "model": "gpt-transcribe",
+            "prompt": "kept-until-switch"
+          }
+        },
+        "delta": {
+          "model": "gpt-realtime-whisper"
+        },
+        "session_ready": true
+      },
+      "settings_after": {
+        "delay": null,
+        "extra": {},
+        "language": "en",
+        "model": "gpt-realtime-whisper",
+        "noise_reduction": null,
+        "prompt": null
+      },
+      "trace": [
+        {
+          "message": {
+            "session": {
+              "audio": {
+                "input": {
+                  "format": {
+                    "rate": 24000,
+                    "type": "audio/pcm"
+                  },
+                  "transcription": {
+                    "language": "en",
+                    "model": "gpt-realtime-whisper"
+                  },
+                  "turn_detection": null
+                }
+              },
+              "type": "transcription"
+            },
+            "type": "session.update"
+          },
+          "op": "ws_send"
+        }
+      ]
+    }
+  ],
+  "transcription_sequence": {
+    "input_events": [
+      {
+        "content_index": 0,
+        "delta": "Hel",
+        "item_id": "item-a",
+        "opaque": {
+          "keep": [
+            1,
+            "原文"
+          ]
+        },
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      {
+        "content_index": 0,
+        "delta": "lo",
+        "item_id": "item-a",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      {
+        "content_index": 0,
+        "delta": "世",
+        "item_id": "item-b",
+        "type": "conversation.item.input_audio_transcription.delta"
+      },
+      {
+        "content_index": 0,
+        "item_id": "item-b",
+        "opaque": [
+          "preserved",
+          {
+            "x": true
+          }
+        ],
+        "transcript": "世界",
+        "type": "conversation.item.input_audio_transcription.completed",
+        "usage": {
+          "input_tokens": 9
+        }
+      },
+      {
+        "content_index": 0,
+        "item_id": "item-a",
+        "transcript": "Hello",
+        "type": "conversation.item.input_audio_transcription.completed",
+        "usage": {
+          "input_tokens": 3
+        }
+      }
+    ],
+    "session_ready_after": false,
+    "trace": [
+      {
+        "direction": "downstream",
+        "frame": {
+          "append_to_context": true,
+          "includes_inter_frame_spaces": false,
+          "language": null,
+          "result": {
+            "content_index": 0,
+            "delta": "Hel",
+            "item_id": "item-a",
+            "opaque": {
+              "keep": [
+                1,
+                "原文"
+              ]
+            },
+            "type": "conversation.item.input_audio_transcription.delta"
+          },
+          "skip_tts": null,
+          "text": "Hel",
+          "timestamp": "2026-10-14T12:34:56.000+00:00",
+          "user_id": "speaker-7"
+        },
+        "frame_type": "InterimTranscriptionFrame",
+        "op": "push_frame"
+      },
+      {
+        "direction": "downstream",
+        "frame": {
+          "append_to_context": true,
+          "includes_inter_frame_spaces": false,
+          "language": null,
+          "result": {
+            "content_index": 0,
+            "delta": "lo",
+            "item_id": "item-a",
+            "type": "conversation.item.input_audio_transcription.delta"
+          },
+          "skip_tts": null,
+          "text": "lo",
+          "timestamp": "2026-10-14T12:34:56.000+00:00",
+          "user_id": "speaker-7"
+        },
+        "frame_type": "InterimTranscriptionFrame",
+        "op": "push_frame"
+      },
+      {
+        "direction": "downstream",
+        "frame": {
+          "append_to_context": true,
+          "includes_inter_frame_spaces": false,
+          "language": null,
+          "result": {
+            "content_index": 0,
+            "delta": "世",
+            "item_id": "item-b",
+            "type": "conversation.item.input_audio_transcription.delta"
+          },
+          "skip_tts": null,
+          "text": "世",
+          "timestamp": "2026-10-14T12:34:56.000+00:00",
+          "user_id": "speaker-7"
+        },
+        "frame_type": "InterimTranscriptionFrame",
+        "op": "push_frame"
+      },
+      {
+        "op": "emit_stt_usage_metrics"
+      },
+      {
+        "direction": "downstream",
+        "frame": {
+          "append_to_context": true,
+          "finalized": false,
+          "includes_inter_frame_spaces": false,
+          "language": null,
+          "result": {
+            "content_index": 0,
+            "item_id": "item-b",
+            "opaque": [
+              "preserved",
+              {
+                "x": true
+              }
+            ],
+            "transcript": "世界",
+            "type": "conversation.item.input_audio_transcription.completed",
+            "usage": {
+              "input_tokens": 9
+            }
+          },
+          "skip_tts": null,
+          "text": "世界",
+          "timestamp": "2026-10-14T12:34:56.000+00:00",
+          "user_id": "speaker-7"
+        },
+        "frame_type": "TranscriptionFrame",
+        "op": "push_frame"
+      },
+      {
+        "is_final": true,
+        "language": null,
+        "op": "transcription_trace_entry",
+        "transcript": "世界"
+      },
+      {
+        "op": "emit_stt_usage_metrics"
+      },
+      {
+        "direction": "downstream",
+        "frame": {
+          "append_to_context": true,
+          "finalized": false,
+          "includes_inter_frame_spaces": false,
+          "language": null,
+          "result": {
+            "content_index": 0,
+            "item_id": "item-a",
+            "transcript": "Hello",
+            "type": "conversation.item.input_audio_transcription.completed",
+            "usage": {
+              "input_tokens": 3
+            }
+          },
+          "skip_tts": null,
+          "text": "Hello",
+          "timestamp": "2026-10-14T12:34:56.000+00:00",
+          "user_id": "speaker-7"
+        },
+        "frame_type": "TranscriptionFrame",
+        "op": "push_frame"
+      },
+      {
+        "is_final": true,
+        "language": null,
+        "op": "transcription_trace_entry",
+        "transcript": "Hello"
+      }
+    ]
+  }
+}
