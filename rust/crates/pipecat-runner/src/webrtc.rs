@@ -108,7 +108,8 @@ pub(crate) async fn serve_session(
                     break peer;
                 }
                 Ok(Some(Ok(Err(_)))) => { let _ = command.reply.send(Err(ProxyError::InvalidRequest)); }
-                Ok(_) => return Err(RunnerError::Protocol("WebRTC negotiation task failed")),
+                Ok(Some(Err(error))) => return Err(negotiation_task_error(error)),
+                Ok(None) => return Err(RunnerError::Protocol("WebRTC negotiation task failed")),
                 Err(_) => {
                     let _ = command.reply.send(Err(ProxyError::Deadline));
                     return Err(RunnerError::Deadline);
@@ -166,12 +167,45 @@ pub(crate) async fn serve_session(
     }.await;
     // Registry cleanup runs even after failed negotiation, missed deadlines, or
     // a dropped HTTP response. Its close operation survives caller cancellation.
-    let closed = handler.close().await;
-    while negotiations.join_next().await.is_some() {}
-    if closed.is_err() {
-        return Err(RunnerError::Protocol("WebRTC cleanup failed"));
+    finish_signaling(result, handler.close(), &mut negotiations).await
+}
+
+fn negotiation_task_error(error: tokio::task::JoinError) -> RunnerError {
+    // Panic payloads can contain SDP or credentials; report only failure kind.
+    RunnerError::WebRtcNegotiationTasks {
+        panicked: usize::from(error.is_panic()),
+        cancelled: usize::from(error.is_cancelled()),
     }
-    result
+}
+
+async fn finish_signaling<T, N: Send + 'static>(
+    primary: Result<T, RunnerError>,
+    close: impl std::future::Future<Output = pipecat_webrtc::Result<()>>,
+    negotiations: &mut tokio::task::JoinSet<N>,
+) -> Result<T, RunnerError> {
+    // Closing the registry first cancels the owned peers. Even a close failure
+    // must not skip joining pending negotiation owners or replace the primary.
+    let closed = close.await.map_err(RunnerError::WebRtcCleanup);
+    let result = session::with_transport_cleanup(primary, closed);
+    let (mut panicked, mut cancelled) = (0usize, 0usize);
+    while let Some(outcome) = negotiations.join_next().await {
+        if let Err(error) = outcome {
+            panicked += usize::from(error.is_panic());
+            cancelled += usize::from(error.is_cancelled());
+        }
+        // An ordinary offer result such as Error::Closed after cancellation is
+        // not a task ownership failure. The signaling path has already supplied
+        // its invalid-request response or primary cancellation/deadline error.
+    }
+    let joined = if panicked == 0 && cancelled == 0 {
+        Ok(())
+    } else {
+        Err(RunnerError::WebRtcNegotiationTasks {
+            panicked,
+            cancelled,
+        })
+    };
+    session::with_transport_cleanup(result, joined)
 }
 
 struct AudioState {
@@ -329,3 +363,7 @@ mod tests {
         peer.close().await.unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "webrtc_cleanup_tests.rs"]
+mod cleanup_tests;

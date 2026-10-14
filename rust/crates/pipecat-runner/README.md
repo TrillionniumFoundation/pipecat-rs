@@ -448,7 +448,7 @@ CLI receipt/image endpoint. All constructors reject `playback_protocol=ChunkV2`,
 `image_channel`, or `initial_image` before creating a session or starting providers.
 This also applies to the Soniox, Whisper and WebRTC compositions. Default legacy
 options are unchanged. Use the explicitly opted-in voice-agent CLI/native APIs
-for those separate protocols; browser image/receipt integration remains open.
+for those separate protocols; those CLI channels remain unsupported on the browser route.
 
 
 ## Browser transport completion failures
@@ -465,8 +465,8 @@ pipeline error as its `primary` source and first displayed diagnostic, with the
 typed `cleanup` error alongside it. `RunnerError::WebRtcCleanup` (with the webrtc
 feature) retains native shutdown details when the private BrowserSession wrapper
 finishes a native peer. These are additive public error-enum variants; the
-transport wrapper itself is private. The actual RTC server still uses its
-existing registry-owned close path and error precedence.
+transport wrapper itself is private. The actual RTC server also preserves its
+primary error through registry close and negotiation-task cleanup, as described below.
 
 The public summary schema is unchanged: any error becomes `successful: false`
 with the existing empty context and zero pipeline-error projection. Clients do
@@ -482,3 +482,26 @@ are focused combination tests, not a claim of real simultaneous pipeline and
 transport faults in one end-to-end session. Existing complete native text/audio,
 WS voice and Opus RTC voice programs are compatibility controls. No browser
 DOM/permission/playback execution or live-provider inference is added here.
+
+
+## RTC signaling cleanup outcomes
+
+The actual `serve_session` path awaits the registry's cancellation-safe close
+before draining every pending negotiation task. A registry close error is now
+retained as `WebRtcCleanup`, instead of replacing the original outcome with a
+fixed protocol string. The same primary-first `SessionCleanup` combination rule
+applies when both the session and registry fail.
+
+`WebRtcNegotiationTasks { panicked, cancelled }` records Tokio task-join failures
+both during the initial offer wait and during the final drain. Its counts omit
+panic payloads (which could contain private data), and a task failure cannot
+short-circuit joining later owners. This additive error variant changes no
+public summary fields or signaling response schema. Ordinary offer errors,
+including `Closed` returned after normal registry cancellation, remain separate
+from a failed task join and retain their existing protocol handling.
+
+A real registry/peer/socket close control and actual spawned-task panic/abort
+cases validate ownership and classification. Simultaneous session/registry error
+combinations use explicitly injected typed registry outcomes, not a claim of a
+reproduced native peer-close fault. No new public fault-injection API is added.
+The inner request handler's separate invalid-offer cleanup behavior is unchanged.

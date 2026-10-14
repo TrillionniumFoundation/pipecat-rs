@@ -176,3 +176,44 @@ clients that never send client-ready, and dropping the last runner handle all jo
 their native owners. Invalid GGML content has a model-free rollback regression that
 reuses the session slot twice without contacting a provider. These checks neither
 assume native loading is abortable nor impose the network deadline on its join.
+
+## Slice 52: RTC registry and negotiation cleanup, 2026-10-14 UTC
+
+Scope is the existing `serve_session` cleanup boundary after slice 51
+`35f7f5d89f958ed590dc3c8f5f1215f102d8f993`. Registry close errors retain their
+native error value and preserve any primary session error. Both immediate and
+final negotiation joins now classify real Tokio panic/cancellation failures;
+the final drain joins all owned tasks before returning the combined outcome.
+The negotiation-join diagnostic includes failure counts instead of its panic
+payload. Native registry error details are retained unchanged. This does not suppress the runtime's ordinary panic hook or change public session-summary
+fields. Normal inner offer errors remain distinct from JoinError.
+
+The focused tests use actual spawned panicking/aborted tasks and verify every
+owner is dropped, all joins are consumed, primary/close/join errors coexist,
+and expected inner `Closed` outcomes are not counted as task failures. Typed
+registry-error combinations are explicitly injected outcomes through the same
+private production cleanup helper; they are not a reproduced native registry
+failure. A separate real SmallWebRTC registry/peer case checks gathered sockets
+are held before close, released afterward, the registry is empty, repeated close
+succeeds and final negotiation ownership is drained. Failure paths explicitly
+close native owners and drain remaining tasks before assertions; combination
+fixtures have a deadline with abort-and-join fallback.
+
+The production change neither adds public fault-injection APIs nor modifies the
+underlying handler's separate invalid-offer cleanup behavior. Browser execution,
+public-provider compatibility and physical media remain outside this slice.
+
+Fresh slice 52 checks passed:
+
+- `cargo test --locked -p pipecat-runner --features webrtc -- --test-threads=1`:
+  68 passed, none failed or ignored, including the six focused cleanup tests,
+  actual HTTP/WS/RTC session lifecycle and the text/image provider witnesses.
+- `cargo test --locked -p pipecat-runner --lib -- --test-threads=1` without
+  optional features: 21 passed, none failed or ignored.
+- Both default-feature and `--features webrtc` all-target Clippy with
+  `-D warnings` passed. Native workspace formatting and `git diff --check` passed.
+
+An initial focused test incorrectly assumed the existing boxed primary source
+would downcast directly to `RunnerError`. The assertion was corrected to check
+`Box<RunnerError>` and the preserved primary diagnostic; the production error
+source representation was not changed. The final full replay covers the corrected assertion. Initial failure logs are distinguished from final runs.

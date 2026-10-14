@@ -58,6 +58,9 @@ pub enum RunnerError {
     #[cfg(feature = "webrtc")]
     #[error("WebRTC cleanup failed: {0}")]
     WebRtcCleanup(#[from] pipecat_webrtc::Error),
+    #[cfg(feature = "webrtc")]
+    #[error("WebRTC negotiation tasks failed: panicked={panicked}, cancelled={cancelled}")]
+    WebRtcNegotiationTasks { panicked: usize, cancelled: usize },
     #[error("{primary}; transport cleanup also failed: {cleanup}")]
     SessionCleanup {
         #[source]

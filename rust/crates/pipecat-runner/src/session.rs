@@ -102,7 +102,7 @@ pub async fn accept_session(
 
 // Cleanup has already been awaited. Preserve a lone original error unchanged;
 // only simultaneous errors need an aggregate, with the original as its source.
-fn with_transport_cleanup<T>(
+pub(crate) fn with_transport_cleanup<T>(
     primary: Result<T, RunnerError>,
     cleanup: Result<(), RunnerError>,
 ) -> Result<T, RunnerError> {
