@@ -35,3 +35,13 @@ review did not rerun them or assert that their environmental blockers still hold
 Project-generator transport selection needs an entry-point-specific comparison
 against the already qualified generated RTC/WS browser paths before being called
 a missing feature; no new scaffold gap is asserted here.
+
+Follow-up status after the focused review: the optional cache/reasoning usage
+projection and rolling RTVI audio levels now have their own qualified native
+paths (see [usage details](../crates/pipecat-rtvi/USAGE_DETAILS.md) and
+[audio levels](../crates/pipecat-rtvi/AUDIO_LEVELS.md)). Recorded
+user audio now has a bounded library-only client path described in
+[recorded audio](../crates/pipecat-evals/RECORDED_AUDIO.md); this does not resolve YAML audio scenarios,
+the bundled text host, synthesized users, bot-audio transcription/judging, or
+live-provider qualification. These are separate contracts, not a whole-project
+completion claim.

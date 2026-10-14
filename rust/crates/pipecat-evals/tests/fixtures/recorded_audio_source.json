@@ -1,0 +1,141 @@
+{
+  "revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_git_blobs": {
+    "rtvi_client.py": "464c8cdcb7d216bda0a9bb06882e408683a204ae",
+    "client_transport.py": "1d9adf464991abe842d7bbf8ad28a86c2b85e387"
+  },
+  "ast_modules_parsed": 2,
+  "serializer_vectors": [
+    {
+      "input_pcm_hex": "0000ff7f0080ffff",
+      "envelope": {
+        "label": "rtvi-ai",
+        "type": "raw-audio",
+        "id": "1",
+        "data": {
+          "base64Audio": "AAD/fwCA//8=",
+          "sampleRate": 16000,
+          "numChannels": 1
+        }
+      },
+      "websocket_kind": "text"
+    },
+    {
+      "input_pcm_hex": "0100feff",
+      "envelope": {
+        "label": "rtvi-ai",
+        "type": "raw-audio",
+        "id": "2",
+        "data": {
+          "base64Audio": "AQD+/w==",
+          "sampleRate": 16000,
+          "numChannels": 1
+        }
+      },
+      "websocket_kind": "text"
+    }
+  ],
+  "pacing_loop_vectors": [
+    {
+      "case": "partial_tail",
+      "input_bytes": 1306,
+      "input_sha256": "8f6b587f911d1350772465f8bfab5574373651e3fb0480ad833e56947f4a221b",
+      "chunk_bytes": 1280,
+      "chunks": 4,
+      "source_pcm_preserved": true,
+      "tail_padding_and_idle_silence": true,
+      "tick_arguments": [
+        10.0,
+        10.04,
+        10.079999999999998,
+        10.119999999999997
+      ],
+      "chunk_sha256": [
+        "653846121a575c00641d7420423fc204f030b953bcbbedd54917d5a1f038c146",
+        "6266c2521ba4a12e0fcbe2d09bded31efd9062a56c285ed523ca09a76f356c47",
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462",
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462"
+      ]
+    },
+    {
+      "case": "exact_frame",
+      "input_bytes": 1280,
+      "input_sha256": "8cee9ff1f9c441de3ffdebc259ce8e083587027f12785d6b819489c73254de0d",
+      "chunk_bytes": 1280,
+      "chunks": 3,
+      "source_pcm_preserved": true,
+      "tail_padding_and_idle_silence": true,
+      "tick_arguments": [
+        10.0,
+        10.04,
+        10.079999999999998
+      ],
+      "chunk_sha256": [
+        "8cee9ff1f9c441de3ffdebc259ce8e083587027f12785d6b819489c73254de0d",
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462",
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462"
+      ]
+    },
+    {
+      "case": "idle_silence",
+      "input_bytes": 0,
+      "input_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "chunk_bytes": 1280,
+      "chunks": 2,
+      "source_pcm_preserved": true,
+      "tail_padding_and_idle_silence": true,
+      "tick_arguments": [
+        10.0,
+        10.04
+      ],
+      "chunk_sha256": [
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462",
+        "bfe492baf731a0dbf6e1e050f5bc3fe8c1b049383194dcdf82f023bfa409f462"
+      ]
+    }
+  ],
+  "sleep_helper_vectors": [
+    {
+      "case": "on_time",
+      "monotonic_inputs": [
+        10.0
+      ],
+      "target": 10.04,
+      "sleep_seconds": 0.03999999999999915,
+      "next_tick": 10.079999999999998
+    },
+    {
+      "case": "behind",
+      "monotonic_inputs": [
+        10.2,
+        10.205
+      ],
+      "target": 10.04,
+      "sleep_seconds": 0.0,
+      "next_tick": 10.245
+    },
+    {
+      "case": "exact_tick",
+      "monotonic_inputs": [
+        10.04,
+        10.043
+      ],
+      "target": 10.04,
+      "sleep_seconds": 0.0,
+      "next_tick": 10.082999999999998
+    }
+  ],
+  "negative_control": {
+    "rejected": true,
+    "before_ast_parse": true,
+    "extra_parse_calls": 0,
+    "reason": "client_transport.py: pinned Git blob mismatch before AST parse: 8bc54a4b6eb61efba49c70ba9a5c99468bffcc7c"
+  },
+  "scope": "Actual selected pinned source methods, deterministic clock and bounded loop collaborators; no real scheduler/network/STT/TTS execution.",
+  "counts": {
+    "wire_vectors": 2,
+    "pacing_loop_vectors": 3,
+    "sleep_helper_vectors": 3,
+    "negative_controls": 1
+  }
+}

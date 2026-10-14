@@ -304,8 +304,10 @@ Unsupported capabilities fail validation rather than being approximated:
 - Judge/provider Python factory configuration, explainers, simulated personas,
   goals/metrics, provider services, Python bot subprocesses, Python suite manifests,
   runner HTTP requests, recording and cache orchestration
-- Audio modalities, TTS/STT/VAD inference, file playback, transcript-audio alignment,
-  `tts_response`, recording, and scripted image-file input
+- YAML/CLI audio modalities, automatic file loading, TTS/STT/VAD inference,
+  transcript-audio alignment, `tts_response`, recording, and scripted image-file
+  input. The bounded recorded-input library API described below is available
+  separately for compatible audio-capable endpoints
 - No report dashboard, persistent runs/logs directory, progress callbacks,
   process respawn/retry, distributed scheduling, or descendant process containment
 - The native manifest retains source labels, scenario expansion, per-label
@@ -544,3 +546,12 @@ real Rust tool continuation, two EvalSession turns, negative assertions,
 configuration and cancellation. Hosted-release coverage starts and reaps the
 compiled real bot. Test code is synthetic provider evidence, not live-provider,
 audio, browser-device, simulated-persona or source-release-suite parity.
+
+## Recorded input library extension
+
+For a compatible audio-capable RTVI endpoint, `RecordedAudio` and
+`EvalSession::with_recorded_audio_inputs` replay bounded 16 kHz mono PCM16/WAV
+recordings through paced `raw-audio` messages and existing transcription/text
+assertions. See [RECORDED_AUDIO.md](RECORDED_AUDIO.md) for budgets, ownership,
+source differences and the real native pipeline fixture. This opt-in library
+path does not enable audio in the bundled text host or YAML/CLI parser.

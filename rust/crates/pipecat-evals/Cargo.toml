@@ -26,6 +26,7 @@ path = "examples/native_text_bot.rs"
 required-features = ["native-bot-example"]
 
 [dependencies]
+pipecat-audio = { path = "../pipecat-audio" }
 pipecat-processors = { path = "../pipecat-processors", optional = true }
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
 pipecat-core = { path = "../pipecat-core" }

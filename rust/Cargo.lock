@@ -3739,6 +3739,7 @@ name = "pipecat-evals"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "pipecat-audio",
  "pipecat-classifiers",
  "pipecat-core",
  "pipecat-processors",

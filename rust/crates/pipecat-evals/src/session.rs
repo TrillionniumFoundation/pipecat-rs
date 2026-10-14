@@ -1,4 +1,5 @@
 //! Owned native sessions with bounded transport, handshake, runtime, and cancellation.
+use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
 use crate::{
     events::{EventLimits, EventStream},
     judge::JudgeRequest,
@@ -13,7 +14,7 @@ use pipecat_classifiers::{CallOptions, ClassifierError};
 use pipecat_protocol::rtvi::{Envelope, PROTOCOL_VERSION};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
 use serde_json::{json, Value};
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 use tokio::{sync::watch, time::Instant};
 
 #[derive(Debug, Clone)]
@@ -124,6 +125,8 @@ pub struct EvalSession {
     wire_bytes: usize,
     judge: Option<EvalJudge>,
     active_expectation: i64,
+    recordings: BTreeMap<usize, RecordedAudio>,
+    playback: Option<Playback>,
 }
 impl EvalSession {
     pub fn new(
@@ -179,7 +182,42 @@ impl EvalSession {
             wire_bytes: 0,
             judge,
             active_expectation: -1,
+            recordings: BTreeMap::new(),
+            playback: None,
         })
+    }
+    /// Replace selected user turns with real recorded PCM input. The user text
+    /// remains a judge reference and is never sent as text for these turns.
+    /// Requires a compatible raw-audio endpoint; EvalBotHost remains text-only.
+    /// Validate all indices and aggregate storage before any connection.
+    pub fn with_recorded_audio_inputs(
+        mut self,
+        inputs: impl IntoIterator<Item = (usize, RecordedAudio)>,
+    ) -> Result<Self, EvalError> {
+        let mut recordings = BTreeMap::new();
+        let mut total = 0usize;
+        for (index, clip) in inputs {
+            let turn =
+                self.scenario.turns.get(index).ok_or_else(|| {
+                    EvalError::Scenario("recording turn index out of range".into())
+                })?;
+            if turn.user.as_ref().is_none_or(|text| text.trim().is_empty()) || turn.dtmf.is_some() {
+                return Err(EvalError::Scenario(
+                    "recording needs a nonempty user reference and no DTMF".into(),
+                ));
+            }
+            total = total
+                .checked_add(clip.pcm_bytes().len())
+                .ok_or(EvalError::Limit("recording bytes"))?;
+            if total > MAX_TOTAL_BYTES || recordings.len() >= 128 {
+                return Err(EvalError::Limit("recording inputs"));
+            }
+            if recordings.insert(index, clip).is_some() {
+                return Err(EvalError::Scenario("duplicate recording turn index".into()));
+            }
+        }
+        self.recordings = recordings;
+        Ok(self)
     }
     /// Dropping this future also drops its transport owner; no reader task is detached.
     pub async fn run(mut self, cancel: Cancellation) -> ScriptResult {
@@ -286,6 +324,15 @@ impl EvalSession {
             )
             .await?;
         }
+        if !self.recordings.is_empty() {
+            self.playback = Some(Playback::start(
+                self.socket
+                    .as_ref()
+                    .ok_or(EvalError::Disconnected)?
+                    .sender(),
+                &self.options,
+            ));
+        }
         self.phase = "turn";
         for index in 0..self.scenario.turns.len() {
             self.active_turn = index as i64;
@@ -364,17 +411,28 @@ impl EvalSession {
                 self.stream.turn_boundary();
             }
         }
+        let mut audio_completion = None;
         if let Some(user) = turn.user {
             self.record_pending_reply()?;
             self.stream.turn_boundary();
             if let Some(judge) = &mut self.judge {
                 judge.add_user_message(&user)?;
             }
-            self.send(
-                "send-text",
-                json!({"content":user,"options":{"run_immediately":true,"audio_response":false}}),
-            )
-            .await?;
+            if let Some(clip) = self.recordings.remove(&index) {
+                audio_completion = Some(
+                    self.playback
+                        .as_ref()
+                        .ok_or_else(|| {
+                            EvalError::Scenario("recording playback is not running".into())
+                        })?
+                        .queue(clip)?,
+                );
+            } else {
+                self.send(
+                    "send-text",
+                    json!({"content":user,"options":{"run_immediately":true,"audio_response":false}}),
+                ).await?;
+            }
         } else if let Some(dtmf) = turn.dtmf {
             self.record_pending_reply()?;
             self.stream.turn_boundary();
@@ -423,6 +481,17 @@ impl EvalSession {
                 });
             if timeout {
                 break;
+            }
+        }
+        if !(self.scenario.stop_on_failure && !self.result.turns[index].failures.is_empty()) {
+            if let Some(mut completed) = audio_completion {
+                loop {
+                    tokio::select! {
+                        biased;
+                        result = &mut completed => { result.map_err(|_| EvalError::Scenario("recording ended before playback completion".into()))?; break; }
+                        result = self.pump(Instant::now() + Duration::from_secs(61)) => { result?; }
+                    }
+                }
             }
         }
         Ok(())
@@ -614,13 +683,25 @@ impl EvalSession {
         if Instant::now() >= deadline {
             return Err(EvalError::Timeout("event"));
         }
-        let packet = tokio::time::timeout_at(
-            deadline,
-            self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv(),
-        )
-        .await
-        .map_err(|_| EvalError::Timeout("event"))?
-        .ok_or(EvalError::Disconnected)?;
+        let mut health = self.playback.as_ref().map(Playback::health);
+        let audio_error = async {
+            if let Some(rx) = &mut health {
+                loop {
+                    if let Some(error) = rx.borrow_and_update().clone() {
+                        return error;
+                    }
+                    if rx.changed().await.is_err() {
+                        return "recording task ended unexpectedly".into();
+                    }
+                }
+            }
+            std::future::pending::<String>().await
+        };
+        let packet = tokio::select! {
+            biased;
+            error = audio_error => return Err(EvalError::Scenario(error)),
+            packet = tokio::time::timeout_at(deadline, self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv()) => packet.map_err(|_| EvalError::Timeout("event"))?.ok_or(EvalError::Disconnected)?,
+        };
         self.ingest(packet)
     }
     fn ingest(&mut self, packet: Packet) -> Result<bool, EvalError> {
@@ -676,6 +757,18 @@ impl EvalSession {
         Ok(())
     }
     pub(crate) async fn shutdown(&mut self) {
+        if let Some(playback) = &mut self.playback {
+            if let Err(error) = playback.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "recording".into(),
+                    reason: error.to_string(),
+                    kind: "audio_error".into(),
+                });
+            }
+        }
+        self.playback.take();
         if self.socket.is_none() {
             return;
         }
