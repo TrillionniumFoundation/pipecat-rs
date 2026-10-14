@@ -17,8 +17,8 @@ pub mod video;
 use async_trait::async_trait;
 pub use input::{InputBackend, InputIngress, InputTransport, InputTransportConfig};
 pub use output::{
-    LiveVideoOutputConfig, OutputAdmissionPolicy, OutputBackend, OutputControl, OutputTransport,
-    OutputTransportConfig, PlaybackReceipt,
+    CyclicVideoOutputConfig, LiveVideoOutputConfig, OutputAdmissionPolicy, OutputBackend,
+    OutputControl, OutputTransport, OutputTransportConfig, PlaybackReceipt,
 };
 use pipecat_audio::PcmFormat;
 use pipecat_core::{FrameData, ProcessorError};

@@ -739,3 +739,12 @@ retracted. No backend call or await occurs under that lock. As with the existing
 core `try_push` contract, synchronous observer clocks and wakers must not reenter
 admission or wait for a lock held by their caller. Backend effects completed before
 cancellation remain irreversible even if their original frame is not forwarded.
+
+## Non-live image and sprite cycling
+
+An explicit `with_cyclic_video(CyclicVideoOutputConfig)` mode repeats a bounded
+raw-image set through the existing backend, with finite first-draw/flush and
+owned cancellation semantics. It is mutually exclusive with live video and
+does not change the default one-shot path. See [CYCLIC_VIDEO.md](CYCLIC_VIDEO.md)
+for the restricted payload profile, source interruption differences, causal
+scopes, resource budgets and synthetic validation limits.

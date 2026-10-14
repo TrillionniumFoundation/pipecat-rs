@@ -1,5 +1,5 @@
 use crate::fence::{FenceCancellation, FenceParticipant};
-use pipecat_core::{Frame, FrameData, ProcessorError};
+use pipecat_core::{Frame, FrameData, InvocationFence, ProcessorError};
 use std::collections::{BTreeMap, VecDeque};
 use std::future::{poll_fn, Future};
 use std::sync::{Arc, Mutex};
@@ -17,6 +17,7 @@ pub(crate) struct Signal {
 }
 pub(crate) struct Item {
     pub frame: Frame,
+    pub invocation: Option<InvocationFence>,
     pub epoch: u64,
     pub fence: Option<FenceParticipant>,
     deadline: Option<Instant>,
@@ -88,7 +89,27 @@ impl MediaQueue {
         deadline: Option<Instant>,
         timeout: Duration,
     ) -> Result<(), ProcessorError> {
-        let bytes = frame_bytes(&frame);
+        self.push_wait_inner(frame, deadline, timeout, None).await
+    }
+    /// Retain the original cyclic-image invocation across bounded admission.
+    pub async fn push_wait_with_invocation(
+        &self,
+        frame: Frame,
+        deadline: Option<Instant>,
+        timeout: Duration,
+        invocation: InvocationFence,
+    ) -> Result<(), ProcessorError> {
+        self.push_wait_inner(frame, deadline, timeout, Some(invocation))
+            .await
+    }
+    async fn push_wait_inner(
+        &self,
+        frame: Frame,
+        deadline: Option<Instant>,
+        timeout: Duration,
+        mut invocation: Option<InvocationFence>,
+    ) -> Result<(), ProcessorError> {
+        let bytes = scoped_frame_bytes(&frame, invocation.is_some());
         if self.count_limit == 0 || bytes > self.byte_limit {
             return Err(ProcessorError::new(
                 "bounded media queue is full: frame exceeds destination capacity",
@@ -103,7 +124,14 @@ impl MediaQueue {
             let capacity = self.capacity_available.notified();
             tokio::pin!(capacity);
             capacity.as_mut().enable();
-            match self.try_enqueue(&mut frame, false, deadline, Some(epoch), bytes) {
+            match self.try_enqueue(
+                &mut frame,
+                false,
+                deadline,
+                Some(epoch),
+                bytes,
+                &mut invocation,
+            ) {
                 Ok(()) | Err(AdmissionError::Interrupted) => return Ok(()),
                 Err(AdmissionError::Closed) => {
                     return Err(ProcessorError::new(AdmissionError::Closed.message()));
@@ -119,6 +147,23 @@ impl MediaQueue {
             }
         }
     }
+    pub fn push_with_invocation(
+        &self,
+        frame: Frame,
+        deadline: Option<Instant>,
+        invocation: InvocationFence,
+    ) -> Result<(), ProcessorError> {
+        let bytes = scoped_frame_bytes(&frame, true);
+        self.try_enqueue(
+            &mut Some(frame),
+            false,
+            deadline,
+            None,
+            bytes,
+            &mut Some(invocation),
+        )
+        .map_err(|error| ProcessorError::new(error.message()))
+    }
     fn enqueue(
         &self,
         frame: Frame,
@@ -126,7 +171,7 @@ impl MediaQueue {
         deadline: Option<Instant>,
     ) -> Result<(), ProcessorError> {
         let bytes = frame_bytes(&frame);
-        self.try_enqueue(&mut Some(frame), urgent, deadline, None, bytes)
+        self.try_enqueue(&mut Some(frame), urgent, deadline, None, bytes, &mut None)
             .map_err(|error| ProcessorError::new(error.message()))
     }
     fn try_enqueue(
@@ -136,6 +181,7 @@ impl MediaQueue {
         deadline: Option<Instant>,
         expected_epoch: Option<u64>,
         bytes: usize,
+        invocation: &mut Option<InvocationFence>,
     ) -> Result<(), AdmissionError> {
         let mut state = self.state.lock().unwrap();
         if state.signal.ending || state.signal.cancelled {
@@ -158,6 +204,7 @@ impl MediaQueue {
         state.bytes += bytes;
         let item = Item {
             frame: frame.take().expect("admission owns its frame"),
+            invocation: invocation.take(),
             epoch,
             fence: None,
             deadline,
@@ -283,6 +330,7 @@ impl MediaQueue {
             state.bytes += bytes;
             state.frames.push_back(Item {
                 frame: frame.clone(),
+                invocation: None,
                 epoch,
                 fence: Some(fence),
                 deadline: None,
@@ -619,7 +667,45 @@ mod admission_wait_tests {
         }
     }
 }
+// A captured invocation has at most 64 weak origins. Reserve conservatively
+// rather than treating its bounded heap allocation as free queue retention.
+fn scoped_frame_bytes(frame: &Frame, scoped: bool) -> usize {
+    frame_bytes(frame).saturating_add(if scoped { 64 * 128 } else { 0 })
+}
 pub(crate) fn frame_bytes(frame: &Frame) -> usize {
+    if let FrameData::Sprite(sprite) = &frame.data {
+        let entry = 12
+            * (std::mem::size_of::<(String, serde_json::Value)>() + std::mem::size_of::<usize>());
+        let bytes = sprite
+            .images
+            .iter()
+            .fold(
+                sprite
+                    .images
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<pipecat_core::OutputImageRawFrame>()),
+                |bytes, image| {
+                    bytes
+                        .saturating_add(image.image.image.capacity())
+                        .saturating_add(image.image.format.as_ref().map_or(0, String::capacity))
+                },
+            )
+            .saturating_add(frame.name.capacity())
+            .saturating_add(frame.transport_source.as_ref().map_or(0, String::capacity))
+            .saturating_add(
+                frame
+                    .transport_destination
+                    .as_ref()
+                    .map_or(0, String::capacity),
+            )
+            .saturating_add(frame.native_llm_continuation_retained_bytes())
+            .saturating_add(frame.metadata.len().saturating_mul(entry));
+        return frame.metadata.iter().fold(bytes, |bytes, (key, value)| {
+            bytes
+                .saturating_add(key.capacity())
+                .saturating_add(continuation_argument_bytes(value, 0))
+        });
+    }
     let input_audio = match &frame.data {
         FrameData::InputAudio(audio) => Some((audio, 0)),
         FrameData::UserAudio(audio) => Some((&audio.audio, audio.user_id.capacity())),
@@ -1475,5 +1561,82 @@ mod independent_image_cutoff_tests {
             !stale_forwarded,
             "Cancel permitted later uninterruptible image"
         );
+    }
+}
+
+#[cfg(test)]
+mod sprite_budget_tests {
+    use super::*;
+    use pipecat_core::{ImageRawFrame, OutputImageRawFrame, SpriteFrame};
+
+    fn sprite() -> Frame {
+        let mut frame = Frame::new(FrameData::Sprite(SpriteFrame {
+            images: vec![OutputImageRawFrame {
+                image: ImageRawFrame {
+                    image: vec![1, 2, 3],
+                    size: (1, 1),
+                    format: Some("RGB".into()),
+                },
+                sync_with_audio: false,
+            }],
+        }));
+        frame.name = "sprite".into();
+        frame
+    }
+
+    #[test]
+    fn sprite_container_pixels_format_and_outer_envelope_are_charged() {
+        let mut frame = sprite();
+        let original = frame_bytes(&frame);
+        assert!(original >= std::mem::size_of::<OutputImageRawFrame>() + 6);
+        if let FrameData::Sprite(sprite) = &mut frame.data {
+            let before = sprite.images.capacity();
+            sprite.images.reserve(20);
+            let delta =
+                (sprite.images.capacity() - before) * std::mem::size_of::<OutputImageRawFrame>();
+            assert_eq!(frame_bytes(&frame), original + delta);
+        }
+        let baseline = frame_bytes(&frame);
+        if let FrameData::Sprite(sprite) = &mut frame.data {
+            let image = &mut sprite.images[0].image;
+            let before = image.image.capacity();
+            image.image.reserve(4096);
+            let delta = image.image.capacity() - before;
+            assert_eq!(frame_bytes(&frame), baseline + delta);
+        }
+        let baseline = frame_bytes(&frame);
+        frame.transport_destination = Some(String::with_capacity(1024));
+        frame.metadata.insert(
+            "note".into(),
+            serde_json::Value::String(String::with_capacity(2048)),
+        );
+        assert!(frame_bytes(&frame) >= baseline + 3072);
+    }
+
+    #[tokio::test]
+    async fn sprite_budget_applies_to_immediate_wait_and_timed_admission() {
+        let frame = sprite();
+        let bytes = frame_bytes(&frame);
+        let queue = MediaQueue::new(4, bytes - 1);
+        assert!(queue.push(frame.clone()).is_err());
+        assert!(queue.push_timed(frame.clone(), Instant::now()).is_err());
+        assert!(queue
+            .push_wait(frame, None, Duration::from_millis(1))
+            .await
+            .is_err());
+        assert!(queue.is_empty());
+        let queue = MediaQueue::new(1, bytes);
+        queue.push(sprite()).unwrap();
+        assert!(queue.push(sprite()).is_err());
+        queue.pop().unwrap();
+        queue.push(sprite()).unwrap();
+    }
+
+    #[test]
+    fn empty_sprite_spare_container_capacity_is_not_free() {
+        let frame = Frame::new(FrameData::Sprite(SpriteFrame {
+            images: Vec::with_capacity(128),
+        }));
+        assert!(frame_bytes(&frame) >= 128 * std::mem::size_of::<OutputImageRawFrame>());
     }
 }

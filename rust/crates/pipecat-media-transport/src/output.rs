@@ -1,5 +1,8 @@
+#[path = "output_cycle.rs"]
+mod cycle;
 #[path = "output_video.rs"]
 mod video;
+pub use cycle::CyclicVideoOutputConfig;
 
 use crate::queue::{Item, MediaQueue};
 use crate::{error, AudioFilter, AudioMixer, SpokenHistory};
@@ -147,40 +150,64 @@ struct Destination {
     // This narrow lock also serializes publication with old control clones.
     // Never hold it over an await or while completing a fence.
     live: Mutex<Option<Arc<video::LiveVideo>>>,
+    cyclic: Mutex<Option<Arc<cycle::CyclicVideo>>>,
 }
 impl Destination {
     fn live(&self) -> Option<Arc<video::LiveVideo>> {
         self.live.lock().unwrap().clone()
     }
+    fn cyclic(&self) -> Option<Arc<cycle::CyclicVideo>> {
+        self.cyclic.lock().unwrap().clone()
+    }
+    fn independent_video(&self) -> bool {
+        self.live().is_some() || self.cyclic().is_some()
+    }
     fn pause(&self, paused: bool) {
         let live = self.live.lock().unwrap();
+        let cyclic = self.cyclic.lock().unwrap();
         // Once opted-in drain closes admission, late controls cannot close its
         // runnable gate again. Preserve the legacy constructor's old behavior.
-        let paused = paused && !(live.is_some() && self.queue.signal().ending);
+        let paused =
+            paused && !((live.is_some() || cyclic.is_some()) && self.queue.signal().ending);
         self.queue.pause(paused);
         if let Some(live) = live.as_ref() {
             live.queue.pause(paused);
         }
+        if let Some(cyclic) = cyclic.as_ref() {
+            cyclic.queue.pause(paused);
+        }
     }
     fn interrupt(&self) {
         let live = self.live.lock().unwrap();
+        let cyclic = self.cyclic.lock().unwrap();
         self.queue.interrupt();
         if let Some(live) = live.as_ref() {
             live.queue.interrupt();
         }
+        if let Some(cyclic) = cyclic.as_ref() {
+            cyclic.interrupt();
+        }
     }
     fn end(&self) {
         let live = self.live.lock().unwrap();
+        let cyclic = self.cyclic.lock().unwrap();
         self.queue.end();
         if let Some(live) = live.as_ref() {
             live.queue.end();
         }
+        if let Some(cyclic) = cyclic.as_ref() {
+            cyclic.end();
+        }
     }
     fn cancel(&self) {
         let live = self.live.lock().unwrap();
+        let cyclic = self.cyclic.lock().unwrap();
         self.queue.cancel();
         if let Some(live) = live.as_ref() {
             live.queue.cancel();
+        }
+        if let Some(cyclic) = cyclic.as_ref() {
+            cyclic.cancel();
         }
     }
 }
@@ -219,6 +246,11 @@ pub struct OutputTransport {
     filter: Option<Arc<dyn AudioFilter>>,
     control: OutputControl,
     format: Mutex<Option<PcmFormat>>,
+    // Setup's generation-free destination context is only the receiver of a
+    // cyclic acknowledgement; each queued activation still carries its exact
+    // original invocation fence. Cleanup releases this strong runtime owner.
+    cyclic_ack_context: Mutex<Option<ProcessorContext>>,
+    cyclic_setup_started: AtomicBool,
     started: AtomicBool,
     workers_started: AtomicBool,
     cleaned: AtomicBool,
@@ -261,6 +293,7 @@ impl OutputTransport {
                     started_at: Mutex::new(None),
                     mixer: mixers.get(&name).cloned(),
                     live: Mutex::new(None),
+                    cyclic: Mutex::new(None),
                 }),
             );
         }
@@ -279,6 +312,8 @@ impl OutputTransport {
                 ready: Arc::new(AtomicBool::new(false)),
             },
             format: Mutex::new(None),
+            cyclic_ack_context: Mutex::new(None),
+            cyclic_setup_started: AtomicBool::new(false),
             started: AtomicBool::new(false),
             workers_started: AtomicBool::new(false),
             cleaned: AtomicBool::new(false),
@@ -296,7 +331,7 @@ impl OutputTransport {
                 .control
                 .destinations
                 .values()
-                .any(|d| d.live().is_some())
+                .any(|d| d.independent_video())
         {
             return Err(ProcessorError::new(
                 "live video must be configured once before output starts",
@@ -343,6 +378,54 @@ impl OutputTransport {
         }
         Ok(self)
     }
+    /// Opt in to bounded non-live raw-image/sprite cycling. Mutually exclusive
+    /// with live video. Repeated backend writes do not repeat downstream frames.
+    /// See CYCLIC_VIDEO.md for the intentionally restricted payload/lifecycle profile.
+    pub fn with_cyclic_video(
+        self,
+        config: CyclicVideoOutputConfig,
+    ) -> Result<Self, ProcessorError> {
+        if self.started.load(Ordering::SeqCst)
+            || self.cleaned.load(Ordering::SeqCst)
+            || self
+                .control
+                .destinations
+                .values()
+                .any(|d| d.independent_video())
+        {
+            return Err(ProcessorError::new(
+                "cyclic video must be configured once before output starts",
+            ));
+        }
+        cycle::validate_config(config)?;
+        let destinations = self.control.destinations.len();
+        self.config
+            .queue_capacity
+            .checked_add(config.queue_capacity)
+            .and_then(|n| n.checked_add(config.retained_image_capacity))
+            .and_then(|n| n.checked_mul(destinations))
+            .and_then(|n| n.checked_add(2))
+            .ok_or_else(|| ProcessorError::new("aggregate cyclic image count overflow"))?;
+        self.config
+            .queue_byte_capacity
+            .checked_add(config.queue_byte_capacity)
+            .and_then(|n| n.checked_add(config.retained_byte_capacity))
+            .and_then(|n| n.checked_mul(destinations))
+            .ok_or_else(|| ProcessorError::new("aggregate cyclic image byte budget overflow"))?;
+        if !self.backend.supports_independent_video() {
+            return Err(ProcessorError::new(
+                "backend does not support independent video",
+            ));
+        }
+        for destination in self.control.destinations.values() {
+            let _live = destination.live.lock().unwrap();
+            let mut slot = destination.cyclic.lock().unwrap();
+            let cyclic = Arc::new(cycle::CyclicVideo::new(config));
+            cyclic.queue.pause(destination.queue.signal().paused);
+            *slot = Some(cyclic);
+        }
+        Ok(self)
+    }
     /// Opt in to whole-context spoken history through an atomic application sink.
     /// Only the default destination and the built-in resampler/chunker/gain are
     /// supported. Arbitrary filters/mixers cannot attest preservation of speech.
@@ -379,7 +462,24 @@ impl FrameProcessor for OutputTransport {
     fn name(&self) -> &str {
         &self.name
     }
-    async fn setup(&self, start: &StartFrame, _: &ProcessorContext) -> Result<(), ProcessorError> {
+    async fn setup(
+        &self,
+        start: &StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let cyclic = self
+            .control
+            .destinations
+            .values()
+            .any(|d| d.cyclic().is_some());
+        if cyclic
+            && (self.cleaned.load(Ordering::SeqCst)
+                || self.cyclic_setup_started.swap(true, Ordering::SeqCst))
+        {
+            return Err(ProcessorError::new(
+                "cyclic output is single-use and cannot be set up twice",
+            ));
+        }
         let format = PcmFormat::new(
             self.config
                 .sample_rate
@@ -418,6 +518,15 @@ impl FrameProcessor for OutputTransport {
             ),
         )
         .await?;
+        if cyclic {
+            // Do not retain the runtime during fallible/cancellable setup. The
+            // receiver is published only after the final successful backend await.
+            let mut receiver = self.cyclic_ack_context.lock().unwrap();
+            if self.cleaned.load(Ordering::SeqCst) {
+                return Err(ProcessorError::new("cyclic output closed during setup"));
+            }
+            *receiver = Some(ctx.clone());
+        }
         self.started.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -446,7 +555,7 @@ impl FrameProcessor for OutputTransport {
                     .control
                     .destinations
                     .values()
-                    .any(|d| d.live().is_some())
+                    .any(|d| d.independent_video())
                     && (self.cleaned.load(Ordering::SeqCst)
                         || self.workers_started.swap(true, Ordering::SeqCst))
                 {
@@ -457,7 +566,7 @@ impl FrameProcessor for OutputTransport {
                 ctx.push(frame, direction).await?;
                 let format = self.format.lock().unwrap().expect("setup precedes start");
                 for destination in self.control.destinations.values() {
-                    let worker = Sender::new(
+                    let mut worker = Sender::new(
                         destination.clone(),
                         self.backend.clone(),
                         if destination.name.is_none() {
@@ -483,6 +592,26 @@ impl FrameProcessor for OutputTransport {
                             self.spoken_history.clone(),
                         )
                     });
+                    let cycle_worker = if let Some(cyclic) = destination.cyclic() {
+                        let receiver =
+                            self.cyclic_ack_context
+                                .lock()
+                                .unwrap()
+                                .clone()
+                                .ok_or_else(|| {
+                                    ProcessorError::new("cyclic output setup receiver is missing")
+                                })?;
+                        worker.cyclic_ack_context = Some(receiver.clone());
+                        Some(cycle::CycleSender::new(
+                            destination.clone(),
+                            cyclic,
+                            self.backend.clone(),
+                            self.config.clone(),
+                            receiver,
+                        ))
+                    } else {
+                        None
+                    };
                     ctx.spawn(
                         format!("{}-media-{:?}", self.name, destination.name),
                         false,
@@ -491,6 +620,13 @@ impl FrameProcessor for OutputTransport {
                     if let Some(worker) = video_worker {
                         ctx.spawn(
                             format!("{}-video-{:?}", self.name, destination.name),
+                            false,
+                            worker.run(),
+                        )?;
+                    }
+                    if let Some(worker) = cycle_worker {
+                        ctx.spawn(
+                            format!("{}-cycle-{:?}", self.name, destination.name),
                             false,
                             worker.run(),
                         )?;
@@ -519,6 +655,7 @@ impl FrameProcessor for OutputTransport {
                     .flat_map(|destination| {
                         std::iter::once(destination.queue.clone())
                             .chain(destination.live().map(|live| live.queue.clone()))
+                            .chain(destination.cyclic().map(|cyclic| cyclic.queue.clone()))
                     })
                     .collect::<Vec<_>>();
                 match self.config.admission_policy {
@@ -669,6 +806,43 @@ impl FrameProcessor for OutputTransport {
                         }
                         None
                     };
+                    let cyclic = destination.cyclic();
+                    let invocation = if let Some(cyclic) = cyclic.as_ref().filter(|_| {
+                        matches!(
+                            frame.data,
+                            FrameData::OutputImage(_)
+                                | FrameData::OutputImageDetailed(_)
+                                | FrameData::Sprite(_)
+                                | FrameData::UrlImage(_)
+                                | FrameData::AssistantImage(_)
+                        )
+                    }) {
+                        cyclic.validate(&frame)?;
+                        Some(ctx.invocation_fence()?)
+                    } else {
+                        None
+                    };
+                    if let Some(invocation) = invocation {
+                        let queue = if cycle::is_independent(&frame) {
+                            cyclic
+                                .as_ref()
+                                .expect("validated cyclic mode")
+                                .queue
+                                .clone()
+                        } else {
+                            destination.queue.clone()
+                        };
+                        return match self.config.admission_policy {
+                            OutputAdmissionPolicy::Wait { timeout } => {
+                                queue
+                                    .push_wait_with_invocation(frame, deadline, timeout, invocation)
+                                    .await
+                            }
+                            OutputAdmissionPolicy::FailFast => {
+                                queue.push_with_invocation(frame, deadline, invocation)
+                            }
+                        };
+                    }
                     let queue = if video::is_live_image(&frame) {
                         destination.live().map(|live| live.queue.clone())
                     } else {
@@ -705,6 +879,8 @@ impl FrameProcessor for OutputTransport {
         if self.cleaned.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        let receiver = self.cyclic_ack_context.lock().unwrap().take();
+        drop(receiver);
         self.urgent_cancelled.send_replace(true);
         self.control.ready.store(false, Ordering::SeqCst);
         if let Some(history) = &self.spoken_history {
@@ -753,6 +929,7 @@ struct Sender {
     config: OutputTransportConfig,
     format: PcmFormat,
     ctx: ProcessorContext,
+    cyclic_ack_context: Option<ProcessorContext>,
     runs: VecDeque<AudioRun>,
     resampler: Option<SincResampler>,
     source: Option<(Frame, u64)>,
@@ -803,6 +980,7 @@ impl Sender {
             config,
             format,
             ctx,
+            cyclic_ack_context: None,
             runs: VecDeque::new(),
             resampler: None,
             source: None,
@@ -833,7 +1011,7 @@ impl Sender {
                 changed.changed().await.map_err(error)?;
                 continue;
             }
-            let item = if self.destination.live().is_some() {
+            let item = if self.destination.independent_video() {
                 self.destination.queue.pop_ready_independent(Instant::now())
             } else {
                 self.destination.queue.pop_ready(Instant::now())
@@ -846,7 +1024,7 @@ impl Sender {
                     continue;
                 }
                 if let Some(mut fence) = item.fence.take() {
-                    if self.destination.live().is_some() {
+                    if self.destination.independent_video() {
                         let result = async {
                             self.flush_resampler()?;
                             self.flush_chunks(true).await?;
@@ -1007,7 +1185,10 @@ impl Sender {
     }
     async fn handle(&mut self, item: Item) -> Result<(), ProcessorError> {
         let Item {
-            mut frame, epoch, ..
+            mut frame,
+            epoch,
+            invocation,
+            ..
         } = item;
         // Pipeline-marked items have already passed the shared-clock deadline
         // gate. Wire consumers use this destination's elapsed-time convention.
@@ -1206,6 +1387,25 @@ impl Sender {
                     | FrameData::OutputImageDetailed(_)
                     | FrameData::UrlImage(_)
                     | FrameData::AssistantImage(_) => {
+                        if let Some(cyclic) = self.destination.cyclic() {
+                            return cycle::activate(
+                                &cyclic,
+                                &self.destination.queue,
+                                &self.backend,
+                                self.cyclic_ack_context.as_ref().ok_or_else(|| {
+                                    ProcessorError::new("cyclic output receiver is missing")
+                                })?,
+                                (
+                                    frame,
+                                    epoch,
+                                    invocation.ok_or_else(|| {
+                                        ProcessorError::new("cyclic image lost invocation scope")
+                                    })?,
+                                ),
+                                self.config.write_timeout,
+                            )
+                            .await;
+                        }
                         if let Some(live) = self.destination.live() {
                             return video::write_image(
                                 &live,
