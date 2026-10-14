@@ -16,12 +16,14 @@ pub struct GeminiLiveProcessor {
     sender: Mutex<Option<GeminiSender>>,
     state: Mutex<InputState>,
     preroll_bytes: usize,
+    explicit_preroll: bool,
     user_id: String,
 }
 #[derive(Default)]
 struct InputState {
     activity: bool,
     preroll: VecDeque<u8>,
+    preroll_bytes: usize,
     initial_context: Option<LlmContextFrame>,
 }
 impl GeminiLiveProcessor {
@@ -33,8 +35,12 @@ impl GeminiLiveProcessor {
         Self {
             client,
             sender: Mutex::new(None),
-            state: Mutex::new(InputState::default()),
+            state: Mutex::new(InputState {
+                preroll_bytes,
+                ..Default::default()
+            }),
             preroll_bytes,
+            explicit_preroll: false,
             user_id: String::new(),
         }
     }
@@ -42,8 +48,9 @@ impl GeminiLiveProcessor {
         self.user_id = user_id.into();
         self
     }
-    /// Fixed local pre-roll. Unlike the Python service it does not auto-size
-    /// from SpeechControlParams; the chosen size is checked against wire limits.
+    /// Explicit fixed local pre-roll, including zero. This overrides subsequent
+    /// SpeechControlParams updates; without an override VAD start time + 100 ms
+    /// determines the local window. No provider setting is changed.
     pub fn with_preroll_ms(mut self, milliseconds: u32) -> Result<Self, GeminiError> {
         let bytes =
             u64::from(milliseconds) * u64::from(self.client.config().input_sample_rate) * 2 / 1000;
@@ -51,7 +58,63 @@ impl GeminiLiveProcessor {
             return Err(GeminiError::TooLarge);
         }
         self.preroll_bytes = bytes as usize / 2 * 2;
+        self.explicit_preroll = true;
+        self.state = Mutex::new(InputState {
+            preroll_bytes: self.preroll_bytes,
+            ..Default::default()
+        });
         Ok(self)
+    }
+    fn update_preroll(
+        &self,
+        control: &pipecat_core::SpeechControlParamsFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let proposal_error = |error| processor_error(error).with_permanence_override(false);
+        // Source explicit overrides ignore even malformed controls.
+        if self.explicit_preroll {
+            return Ok(());
+        }
+        let Some(vad) = &control.vad_params else {
+            return Ok(());
+        };
+        if !vad.start_secs.is_finite() || vad.start_secs < 0.0 {
+            return Err(proposal_error(GeminiError::Invalid(
+                "VAD start_secs must be finite and nonnegative",
+            )));
+        }
+        let config = self.client.config();
+        let raw_bytes =
+            ((vad.start_secs + 0.1) * f64::from(config.input_sample_rate) * 2.0).floor();
+        if !raw_bytes.is_finite() || raw_bytes > config.limits.max_audio_bytes as f64 {
+            return Err(proposal_error(GeminiError::TooLarge));
+        }
+        // Preserve whole PCM16 samples, unlike an odd Python byte slice.
+        let bytes = raw_bytes as usize / 2 * 2;
+        // Validate the exact base64 JSON size without allocating a PCM window.
+        let overhead = serde_json::to_vec(&json!({"realtimeInput":{"audio":{"mimeType":format!("audio/pcm;rate={}",config.input_sample_rate),"data":""}}}))
+            .map_err(|_| proposal_error(GeminiError::Invalid("JSON")))?.len();
+        let encoded = bytes
+            .checked_add(2)
+            .and_then(|n| (n / 3).checked_mul(4))
+            .and_then(|n| n.checked_add(overhead));
+        if encoded.is_none_or(|n| n > config.limits.max_message_bytes) {
+            return Err(proposal_error(GeminiError::TooLarge));
+        }
+        ctx.invocation_fence()?
+            .with_current(|| {
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                state.preroll_bytes = bytes;
+                // Shrink immediately rather than retaining excess until the next input.
+                while state.preroll.len() > bytes {
+                    state.preroll.pop_front();
+                }
+                Ok(())
+            })
+            .ok_or_else(|| ProcessorError::new("stale Gemini preroll control"))?
     }
     pub fn sender(&self) -> Result<GeminiSender, ProcessorError> {
         self.sender
@@ -88,7 +151,9 @@ impl GeminiLiveProcessor {
             return if existing == context {
                 Ok(())
             } else {
-                Err(processor_error(GeminiError::Unsupported("replacing or replaying evolving context; use explicit append-only ClientContent")))
+                Err(processor_error(GeminiError::Unsupported(
+                    "replacing or replaying evolving context; use explicit append-only ClientContent",
+                )))
             };
         }
         if context.messages.len() > 1024
@@ -154,7 +219,7 @@ fn text_turn(message: &ChatMessage) -> Result<TextTurn, ProcessorError> {
         _ => {
             return Err(processor_error(GeminiError::Unsupported(
                 "only user/model text can be appended",
-            )))
+            )));
         }
     };
     Ok(TextTurn {
@@ -209,8 +274,10 @@ impl FrameProcessor for GeminiLiveProcessor {
         *self
             .state
             .lock()
-            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))? =
-            InputState::default();
+            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))? = InputState {
+            preroll_bytes: self.preroll_bytes,
+            ..Default::default()
+        };
         let mut session = self.client.connect().await.map_err(processor_error)?;
         let sender = session.sender();
         *self
@@ -286,6 +353,7 @@ impl FrameProcessor for GeminiLiveProcessor {
             let origin = Self::origin(&frame);
             let manual = self.client.config().session.activity_detection.disabled;
             match &frame.data {
+                FrameData::SpeechControlParams(control) => self.update_preroll(control, ctx)?,
                 FrameData::InputAudio(audio)
                 | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
                     audio
@@ -309,8 +377,8 @@ impl FrameProcessor for GeminiLiveProcessor {
                         if manual && !state.activity {
                             // Evict before extending, so a large input never enlarges the ring.
                             let slice = &audio.audio
-                                [audio.audio.len().saturating_sub(self.preroll_bytes)..];
-                            while state.preroll.len() + slice.len() > self.preroll_bytes {
+                                [audio.audio.len().saturating_sub(state.preroll_bytes)..];
+                            while state.preroll.len() + slice.len() > state.preroll_bytes {
                                 state.preroll.pop_front();
                             }
                             state.preroll.extend(slice);

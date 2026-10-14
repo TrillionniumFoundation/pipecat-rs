@@ -114,8 +114,11 @@ bounded half-second idle pre-roll (capped by the audio-message limit), sends
 native behavior deliberately differs from the pinned Python zero-duration
 `buffer[-0:]` edge, which retains the buffer. Pre-roll combines input families as
 PCM bytes only; its flushed origin belongs to the activity-start frame, not a
-buffered speaker or audio context. Automatic sizing from upstream
-`SpeechControlParams` is not implemented. Server VAD receives continuous audio.
+buffered speaker or audio context. Downstream `SpeechControlParams.vad_params`
+automatically sizes the idle window to `start_secs + 0.1` seconds unless
+`with_preroll_ms` selected an explicit override. Server VAD receives continuous
+audio. See [VAD pre-roll controls](VAD_PREROLL.md) for validation, direction,
+reuse, and the pinned Python differences.
 Dedicated STT additionally flushes on VAD stop frames with `audioStreamEnd`.
 
 `LlmContext` supports one initial text-only seed; repeated identical snapshots

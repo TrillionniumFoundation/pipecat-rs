@@ -1,0 +1,1025 @@
+{
+  "boundary": "Original selected AST; immediate stubs; no provider imports, scheduler, network, or native execution.",
+  "constants": {
+    "AUTOSIZED_USER_AUDIO_PREROLL_MARGIN_SECS": 0.1,
+    "DEFAULT_USER_AUDIO_PREROLL_SECS": 0.5
+  },
+  "constructor_override_default": null,
+  "scenarios": {
+    "control_grow": [
+      {
+        "buffer": {
+          "bytes": 28800,
+          "first_16_hex": "3c3d3e3f404142434445464748494a4b",
+          "last_16_hex": "e6e7e8e9eaebecedeeeff0f1f2f3f4f5",
+          "sha256": "f7117ac61eeb82fd791822cd4dc8c87494e6f197c9ed81661d63acb91a693bc5"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.9,
+        "send_errors": [],
+        "step": "start_secs_0_8_plus_margin",
+        "user_is_speaking": false
+      }
+    ],
+    "control_shrink_next_idle_audio": [
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "default_buffer_full",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "control_does_not_trim_buffer",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 6400,
+          "first_16_hex": "babbbcbdbebfc0c1c2c3c4c5c6c7c8c9",
+          "last_16_hex": "d1d2d3d4d5d6d7d8d9dadbdcdddedfe0",
+          "sha256": "9f2934fad6d16e4cfe85120ded260cfd49a8f38718034f3b4580115f300512e8"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "next_idle_audio_trims_to_6400",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 6400,
+              "first_16_hex": "babbbcbdbebfc0c1c2c3c4c5c6c7c8c9",
+              "last_16_hex": "d1d2d3d4d5d6d7d8d9dadbdcdddedfe0",
+              "sha256": "9f2934fad6d16e4cfe85120ded260cfd49a8f38718034f3b4580115f300512e8"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "activity_start_flush",
+        "user_is_speaking": true
+      }
+    ],
+    "control_shrink_no_new_audio": [
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "default_buffer_full",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "control_does_not_trim_buffer",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 16000,
+              "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "activity_start_flush",
+        "user_is_speaking": true
+      }
+    ],
+    "default_idle_activity_order": [
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "constructed",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "one_second_idle",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 16000,
+              "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "activity_start_flush",
+        "user_is_speaking": true
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 16000,
+              "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+            }
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 320,
+              "first_16_hex": "4748494a4b4c4d4e4f50515253545556",
+              "last_16_hex": "7c7d7e7f808182838485868788898a8b",
+              "sha256": "9e1789f2776a4e7b8bb670784cdede1556b67494f4de1524d1334598b73bbea9"
+            }
+          },
+          {
+            "kind": "activity_end"
+          }
+        ],
+        "metrics_starts": 1,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "active_audio_then_stop",
+        "user_is_speaking": false
+      }
+    ],
+    "dynamic_duration_changes": [
+      {
+        "buffer": {
+          "bytes": 16320,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "48494a4b4c4d4e4f5051525354555657",
+          "sha256": "ac9c0d974056d50c623e340740197f189f593c7ea8f9384b167777c8b748d2ad"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.9,
+        "send_errors": [],
+        "step": "growth_cannot_restore_discarded_history",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 28800,
+          "first_16_hex": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+          "last_16_hex": "7f808182838485868788898a8b8c8d8e",
+          "sha256": "7acf022a4b3afa72326b7feed307e6b011fce6eb086765fb6df961a862211cf0"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.9,
+        "send_errors": [],
+        "step": "grown_window_filled",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 28800,
+              "first_16_hex": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+              "last_16_hex": "7f808182838485868788898a8b8c8d8e",
+              "sha256": "7acf022a4b3afa72326b7feed307e6b011fce6eb086765fb6df961a862211cf0"
+            }
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 32000,
+              "first_16_hex": "15161718191a1b1c1d1e1f2021222324",
+              "last_16_hex": "808182838485868788898a8b8c8d8e8f",
+              "sha256": "8374bac8c5bf34fb1dfc24cceb008c95f73fc0b67d1eb8802220da12fde19d44"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "control_during_activity_does_not_clip_live_audio",
+        "user_is_speaking": true
+      },
+      {
+        "buffer": {
+          "bytes": 6400,
+          "first_16_hex": "1415161718191a1b1c1d1e1f20212223",
+          "last_16_hex": "8182838485868788898a8b8c8d8e8f90",
+          "sha256": "4b11ae3a121bb9f6498db4247638d1908d52a73e3a491f1cd77a969c36f88a59"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 28800,
+              "first_16_hex": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+              "last_16_hex": "7f808182838485868788898a8b8c8d8e",
+              "sha256": "7acf022a4b3afa72326b7feed307e6b011fce6eb086765fb6df961a862211cf0"
+            }
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 32000,
+              "first_16_hex": "15161718191a1b1c1d1e1f2021222324",
+              "last_16_hex": "808182838485868788898a8b8c8d8e8f",
+              "sha256": "8374bac8c5bf34fb1dfc24cceb008c95f73fc0b67d1eb8802220da12fde19d44"
+            }
+          },
+          {
+            "kind": "activity_end"
+          }
+        ],
+        "metrics_starts": 1,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "next_turn_idle_uses_latest_duration",
+        "user_is_speaking": false
+      }
+    ],
+    "fractional_duration_can_split_pcm16_sample": [
+      {
+        "buffer": {
+          "bytes": 3201,
+          "first_16_hex": "b9babbbcbdbebfc0c1c2c3c4c5c6c7c8",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "09b4b665b167f5da770903b40040d1c9f029b695afa052d4d5be31cc2eb9c528"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.10004,
+        "send_errors": [],
+        "step": "odd_3201_byte_source_tail",
+        "user_is_speaking": false
+      }
+    ],
+    "invalid_direct_inputs_no_provider_model_validation": [
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 3200,
+            "first_16_hex": "babbbcbdbebfc0c1c2c3c4c5c6c7c8c9",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "4cf6c8cba4ceb42e88e1258b2735ff7547794bcc15a392260faa702a90b9112a"
+          },
+          "buffer_sample_rate": 16000,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": -0.9,
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": null,
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": -0.9,
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": -1.0,
+        "input_label": "negative",
+        "origin": "control"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": "nan",
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "ValueError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": "nan",
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": "nan",
+        "input_label": "nan",
+        "origin": "control"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": "infinity",
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "OverflowError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": "infinity",
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": "infinity",
+        "input_label": "infinity",
+        "origin": "control"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": 1e+308,
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "OverflowError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": null,
+          "preroll_secs": 1e+308,
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": 1e+308,
+        "input_label": "large_finite",
+        "origin": "control"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": 16000,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": -1.0,
+          "preroll_secs": -1.0,
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": null,
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": -1.0,
+          "preroll_secs": -1.0,
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": -1.0,
+        "input_label": "negative",
+        "origin": "constructor_override"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": "nan",
+          "preroll_secs": "nan",
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "ValueError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": "nan",
+          "preroll_secs": "nan",
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": "nan",
+        "input_label": "nan",
+        "origin": "constructor_override"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": "infinity",
+          "preroll_secs": "infinity",
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "OverflowError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": "infinity",
+          "preroll_secs": "infinity",
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": "infinity",
+        "input_label": "infinity",
+        "origin": "constructor_override"
+      },
+      {
+        "after_audio": {
+          "buffer": {
+            "bytes": 32000,
+            "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+            "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+            "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": 1e+308,
+          "preroll_secs": 1e+308,
+          "send_errors": [],
+          "step": "after_attempted_idle_audio",
+          "user_is_speaking": false
+        },
+        "audio_exception": "OverflowError",
+        "before_audio": {
+          "buffer": {
+            "bytes": 0,
+            "first_16_hex": "",
+            "last_16_hex": "",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "buffer_sample_rate": null,
+          "events": [],
+          "metrics_starts": 0,
+          "override_secs": 1e+308,
+          "preroll_secs": 1e+308,
+          "send_errors": [],
+          "step": "invalid_value_installed_without_validation",
+          "user_is_speaking": false
+        },
+        "input": 1e+308,
+        "input_label": "large_finite",
+        "origin": "constructor_override"
+      }
+    ],
+    "no_vad_control_is_noop": [
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "default_without_control",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "none_vad_preserves_default",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.2,
+        "send_errors": [],
+        "step": "none_vad_preserves_known_duration",
+        "user_is_speaking": false
+      }
+    ],
+    "override_positive": [
+      {
+        "buffer": {
+          "bytes": 3200,
+          "first_16_hex": "babbbcbdbebfc0c1c2c3c4c5c6c7c8c9",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "4cf6c8cba4ceb42e88e1258b2735ff7547794bcc15a392260faa702a90b9112a"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": 0.1,
+        "preroll_secs": 0.1,
+        "send_errors": [],
+        "step": "valid_and_invalid_controls_ignored",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 3200,
+              "first_16_hex": "babbbcbdbebfc0c1c2c3c4c5c6c7c8c9",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "4cf6c8cba4ceb42e88e1258b2735ff7547794bcc15a392260faa702a90b9112a"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": 0.1,
+        "preroll_secs": 0.1,
+        "send_errors": [],
+        "step": "activity_start_flush",
+        "user_is_speaking": true
+      }
+    ],
+    "override_zero": [
+      {
+        "buffer": {
+          "bytes": 32000,
+          "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": 0.0,
+        "preroll_secs": 0.0,
+        "send_errors": [],
+        "step": "valid_and_invalid_controls_ignored",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 64000,
+          "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+          "last_16_hex": "82838485868788898a8b8c8d8e8f9091",
+          "sha256": "9b98522feaf8700d8d9c5e89de14eb7f3cf490c5fb560f4be05411dcdfc02222"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": 0.0,
+        "preroll_secs": 0.0,
+        "send_errors": [],
+        "step": "python_negative_zero_slice_keeps_all_64000",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 64000,
+              "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+              "last_16_hex": "82838485868788898a8b8c8d8e8f9091",
+              "sha256": "9b98522feaf8700d8d9c5e89de14eb7f3cf490c5fb560f4be05411dcdfc02222"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": 0.0,
+        "preroll_secs": 0.0,
+        "send_errors": [],
+        "step": "activity_start_flush",
+        "user_is_speaking": true
+      }
+    ],
+    "sample_rate_change_source_behavior": [
+      {
+        "buffer": {
+          "bytes": 16000,
+          "first_16_hex": "bbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+          "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+          "sha256": "295ac7e655385c5c82cfbfb508faa85f921548121c101bbfb1ea916e2dfa36bc"
+        },
+        "buffer_sample_rate": 16000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "idle_at_16000_hz",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 8000,
+          "first_16_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+          "last_16_hex": "6c6d6e6f707172737475767778797a7b",
+          "sha256": "d95f864e74e9b3e549e02b9749f0fb97c413974849c2ca27be11626e515cdd38"
+        },
+        "buffer_sample_rate": 8000,
+        "events": [],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "new_frame_changes_budget_and_buffer_rate",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": 8000,
+        "events": [
+          {
+            "kind": "activity_start"
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=8000",
+            "payload": {
+              "bytes": 8000,
+              "first_16_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+              "last_16_hex": "6c6d6e6f707172737475767778797a7b",
+              "sha256": "d95f864e74e9b3e549e02b9749f0fb97c413974849c2ca27be11626e515cdd38"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.5,
+        "send_errors": [],
+        "step": "all_retained_bytes_labeled_with_latest_rate",
+        "user_is_speaking": true
+      }
+    ],
+    "server_vad_updates_duration_streams_continuously": [
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 32000,
+              "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+            }
+          }
+        ],
+        "metrics_starts": 0,
+        "override_secs": null,
+        "preroll_secs": 0.9,
+        "send_errors": [],
+        "step": "duration_updated_but_idle_audio_streamed",
+        "user_is_speaking": false
+      },
+      {
+        "buffer": {
+          "bytes": 0,
+          "first_16_hex": "",
+          "last_16_hex": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "buffer_sample_rate": null,
+        "events": [
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 32000,
+              "first_16_hex": "000102030405060708090a0b0c0d0e0f",
+              "last_16_hex": "6b6c6d6e6f707172737475767778797a",
+              "sha256": "b791531a2893f27525e88ceaabf7e3b65e0ef7fc6945be796a10239a3d0a959c"
+            }
+          },
+          {
+            "kind": "audio",
+            "mime_type": "audio/pcm;rate=16000",
+            "payload": {
+              "bytes": 320,
+              "first_16_hex": "2c2d2e2f303132333435363738393a3b",
+              "last_16_hex": "6162636465666768696a6b6c6d6e6f70",
+              "sha256": "506c7d3dd3f5ddcbc97cb8d04ca5edb6eb2a65c2825d46517437c913a507e9c7"
+            }
+          }
+        ],
+        "metrics_starts": 1,
+        "override_secs": null,
+        "preroll_secs": 0.9,
+        "send_errors": [],
+        "step": "speaking_markers_not_sent",
+        "user_is_speaking": false
+      }
+    ]
+  },
+  "schema_version": 1,
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "upstream_tests_with_stubbed_service_factory": [
+    "test_manual_vad_buffers_audio_until_turn_starts",
+    "test_manual_vad_flushes_preroll_after_activity_start",
+    "test_manual_vad_preroll_capped_to_default_window",
+    "test_manual_vad_preroll_override_pins_value_and_ignores_vad_params",
+    "test_manual_vad_preroll_sized_from_vad_start_secs",
+    "test_manual_vad_sends_activity_end_on_turn_stop",
+    "test_manual_vad_streams_audio_during_turn",
+    "test_server_vad_does_not_send_activity_markers",
+    "test_server_vad_streams_audio_when_idle"
+  ]
+}
