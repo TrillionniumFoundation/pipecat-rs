@@ -1,5 +1,10 @@
 //! Bounded, cancellation-aware WebSocket sessions for native Pipecat transports.
+//! `RtviClientProcessor` adds an explicit, single-run RTVI text/LLM pipeline
+//! boundary. See `RTVI_CLIENT.md` for its IPv4, framing and lifecycle profile.
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
+pub mod rtvi_client;
+pub use rtvi_client::{RtviClientConfig, RtviClientControl, RtviClientProcessor};
+
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use std::time::Duration;
@@ -338,15 +343,26 @@ impl WebSocketSession {
         self.incoming.recv().await
     }
     pub async fn cancel(mut self) -> Result<(), TransportError> {
-        let _ = self.cancel.send(2);
-        self.sender.take();
-        self.task.as_mut().expect("task owned").await?
+        self.shutdown_owned(false).await
     }
     /// Close outgoing admission and drain already admitted packets, including with live sender clones.
     pub async fn finish(mut self) -> Result<(), TransportError> {
-        let _ = self.cancel.send(1);
+        self.shutdown_owned(true).await
+    }
+    /// A borrowed shutdown keeps the join handle in its resource owner if the
+    /// caller's future is cancelled. The RTVI bridge can subsequently finish
+    /// joining from cleanup. Public consuming shutdown retains its old API.
+    async fn shutdown_owned(&mut self, graceful: bool) -> Result<(), TransportError> {
+        let mode = if graceful { 1 } else { 2 };
+        self.cancel
+            .send_modify(|current| *current = (*current).max(mode));
         self.sender.take();
-        self.task.as_mut().expect("task owned").await?
+        let Some(task) = self.task.as_mut() else {
+            return Ok(());
+        };
+        let result = task.await;
+        self.task.take();
+        result?
     }
 }
 impl Drop for WebSocketSession {
@@ -639,5 +655,70 @@ mod request_policy_tests {
             .unwrap()
             .unwrap();
         let _ = client.cancel().await;
+    }
+}
+
+#[cfg(test)]
+mod borrowed_shutdown_tests {
+    use super::*;
+
+    // This is a deterministic ownership-boundary fixture. The held task stands
+    // in for the session's owned socket task; real sockets remain covered by the
+    // public cancel/finish transport tests and the RTVI client integration.
+    #[tokio::test]
+    async fn cancelled_borrowed_shutdown_retains_handle_for_later_join() {
+        let (out_tx, _out_rx) = mpsc::channel(1);
+        let (_in_tx, in_rx) = mpsc::channel(1);
+        let (cancel, mut observed) = watch::channel(0u8);
+        let (release, held) = tokio::sync::oneshot::channel();
+        let (retired, retired_rx) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _ = held.await;
+            let _ = retired.send(());
+            Ok(())
+        });
+        let mut session = WebSocketSession {
+            sender: Some(SessionSender {
+                tx: out_tx,
+                max: 64,
+            }),
+            incoming: in_rx,
+            cancel,
+            task: Some(task),
+        };
+        {
+            let shutdown = session.shutdown_owned(false);
+            tokio::pin!(shutdown);
+            tokio::time::timeout(Duration::from_secs(1), async {
+                tokio::select! {
+                    biased;
+                    result = &mut shutdown => panic!("held owner joined early: {result:?}"),
+                    changed = observed.changed() => changed.unwrap(),
+                }
+            })
+            .await
+            .unwrap();
+            // Dropping this pending borrowed future must not drop the session.
+        }
+        assert!(session
+            .task
+            .as_ref()
+            .is_some_and(|task| !task.is_finished()));
+        assert_eq!(*observed.borrow(), 2);
+        assert!(session.sender.is_none());
+        let result = tokio::time::timeout(Duration::from_secs(1), async {
+            tokio::join!(session.shutdown_owned(true), async {
+                tokio::task::yield_now().await;
+                assert_eq!(*observed.borrow(), 2, "finish cannot downgrade cancel");
+                release.send(()).unwrap();
+            })
+        })
+        .await
+        .unwrap();
+        result.0.unwrap();
+        retired_rx.await.unwrap();
+        assert!(session.task.is_none());
+        session.shutdown_owned(false).await.unwrap();
+        session.shutdown_owned(true).await.unwrap();
     }
 }
