@@ -307,17 +307,18 @@ explicit native image mechanism and its limits are described below.
 `ReceiptRunConfig.initial_frames` is a trusted native startup API. Its frame
 count is bounded, but arbitrary caller-supplied metadata, native continuations
 or other startup payload allocations are outside the network ingress byte
-budget. The configured CLI supplies only a payload-free `LlmRun`; this API is
-not an alternative untrusted client input channel.
+budget. The default CLI supplies only a payload-free `LlmRun`. Explicit startup RGB
+configuration additionally supplies one separately bounded image (see below);
+this API is not an alternative untrusted client input channel.
 
 ## Explicit native image channel
 
 `ReceiptSession::negotiate_with_images` takes a loopback `TcpListener` and an
 `ImageChannelConfig`. `ReceiptOutput::new_with_images` connects that same
 `Arc<ReceiptBackend>` to the real shared output's bounded live-video lane.
-These are native application APIs: the current voice-agent binary, runner and
-generated browser do not opt in. `negotiate` and `ReceiptOutput::new` retain
-their existing defaults. A default backend advertises no independent video.
+The voice-agent binary and provider entry opt in only with the configuration
+below. The separate RTVI runner and generated browser do not implement this
+protocol. `negotiate` and `ReceiptOutput::new` retain their existing defaults. A default backend advertises no independent video.
 The enabled backend advertises the configured mechanism; peer readiness is
 separate and an image callback may wait within its operation deadline.
 
@@ -395,3 +396,73 @@ is not a retrospective HTTP allocation cap. Native frame metadata and caller
 queues remain outside that encoded-pixel bound. No browser rendering, real
 network deployment, physical display, multidestination video or runner wiring
 is qualified by this native loopback mechanism.
+
+
+## Opt-in voice-agent/provider image entry
+
+`pipecat-voice-agent --playback-protocol chunk-v2 --image-channel` enables the
+mechanism in the existing provider pipeline. Each main session owns a fresh
+image listener on the configured loopback IP and an ephemeral port; the main
+offer supplies that address. The same backend owns audio receipts and image
+writes. A client must explicitly accept and pair both protocols above. Missing
+or incompatible image acceptance rejects before providers or VAD start. This
+is still the native client protocol, not the RTVI browser runner.
+
+To send a local startup image without writing an application processor:
+
+```sh
+pipecat-voice-agent --playback-protocol chunk-v2 --image-channel \
+  --initial-image-rgb ./avatar.rgb --initial-image-size 512x512
+```
+
+The file is existing tightly packed row-major RGB8 pixels: exactly
+width × height × 3 bytes, no header, padding, PNG/JPEG decoder or URL download.
+Both file and size flags must be supplied together. Nonzero dimensions are at
+most 4096 each and pixels at most 8 MiB. A wrong length, trailing byte, non-regular
+file or symlink fails closed before credentials/listeners/provider construction.
+Use a stable trusted local file. Reads are byte-bounded, not time-bounded; the
+preflight/open checks are not an adversarial path-race defense or atomic snapshot
+against concurrent file changes. Error messages do not echo the path or pixels.
+Help does not load an asset. Smoke remains the existing legacy-only mode.
+
+Parsing loads the asset once. Options clones share its immutable Arc; each new
+accepted session gets one interruptible OutputImage before an optional intro.
+The file is not reloaded between clients. Interrupting that image does not replay
+it within the session, while a new session receives a fresh copy. End drains
+admitted media; Cancel/disconnect/failure closes the session-owned listener,
+pairing attempt and image stream, with the same joined/unverified boundaries
+as the native mechanism. Provider preparation failure awaits image/audio owner
+cleanup and preserves an explicit disposal-unverified failure if cleanup fails.
+
+Native applications can use `Options.image_channel = Some(ImageChannelConfig)`
+with no startup asset and emit supported images from their input processors.
+`StartupImage::from_rgb` and `StartupImage::load_rgb` supply the optional validated
+asset. Directly constructed Options are validated too: legacy+images, absent
+image configuration, smaller per-instance dimension/byte budgets and retained
+Vec capacity violations reject before that entry's handshake. No additional
+provider endpoint configuration was introduced for testing.
+
+Enabled output queue budgets are explicit and additive: normal count 8 and byte
+limit max(256 KiB, image pixel limit + 4096); live count 2 and byte limit image pixel
+limit + 4096. This includes synchronous image admission above the old 256 KiB
+limit. The shared write timeout is max(chunk receipt, cutoff, image operation)
+plus 20 ms. Media drain and image disposal retain their separate configured
+deadlines. The preloaded asset retains at most 8 MiB, and the one startup-frame
+clone retains at most 8 MiB separately from the remote input-pump byte budget.
+Core/shared queue retention, encoded message and codec buffers remain additive;
+this does not promise a single-copy/global 8 MiB process bound. Ordinary no-image
+sessions retain their original queue and write-timeout budgets.
+
+Qualification distinguishes actual executable option/offer/rejection checks
+from the successful parsed-Options provider-entry loopback tests. The latter
+use real STT WebSocket, LLM HTTP and TTS WebSocket handlers with synthetic
+responses, exact separate image bytes, PCM reports/history, End and joined
+shutdown. The binary rejection witness uses synthetic keys but deliberately
+fails acceptance before provider construction. No live-provider subprocess,
+browser execution/rendering, display device, deployment or RTVI image support
+is established. Physical partial-write disposal remains covered by the
+unchanged native image-channel graph and its retained raw-prefix witnesses.
+
+Rust API note: `Command::Serve` now contains `Box<Options>` to keep the command
+enum small as optional configuration grows. Matching callers can inspect fields
+through Deref, or pass `*options` to the unchanged `serve(Options, ...)` function.

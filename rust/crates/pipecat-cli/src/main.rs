@@ -17,7 +17,9 @@ async fn run() -> Result<(), AgentError> {
             println!("PASS: local synthetic STT → user turn → streamed LLM → TTS → protobuf WebSocket audio → playback-acknowledged assistant context ({} PCM bytes)",result.audio_bytes);
             println!("No paid provider calls, microphone capture, or physical speaker playback were used.");
         }
-        Command::Serve(options) => pipecat_cli::serve(options, ProviderConfig::from_env()?).await?,
+        Command::Serve(options) => {
+            pipecat_cli::serve(*options, ProviderConfig::from_env()?).await?
+        }
     }
     Ok(())
 }

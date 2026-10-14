@@ -1,11 +1,13 @@
 //! Explicit CLI and environment configuration. Secrets never appear in Debug.
 use crate::{
-    receipt_output::{PlaybackProtocol, ReceiptConfig},
+    receipt_output::{ImageChannelConfig, PlaybackProtocol, ReceiptConfig},
     AgentError,
 };
 use std::{fmt, net::SocketAddr, path::PathBuf, time::Duration};
 
-pub const HELP: &str = "pipecat-voice-agent [OPTIONS]\n\nNative WebSocket protobuf → Deepgram STT → OpenAI LLM → Cartesia TTS agent.\n\nOPTIONS\n  --help                     Show this help without reading credentials\n  --smoke                    Run local synthetic providers and a full socket roundtrip\n  --bind ADDRESS             Listen address (default 127.0.0.1:7860)\n  --once                     Exit after one client disconnects\n  --vad-model PATH           Enable native Silero using this ONNX model\n  --onnx-runtime PATH        Explicit ONNX Runtime library (required with --vad-model)\n  --playback-protocol MODE   legacy-v1 (default) or explicitly negotiated chunk-v2\n  --no-intro                 Wait for the user instead of generating an introduction\n  --turn-timeout-ms N         Transcript silence timeout (default 600)\n  --idle-timeout-secs N       Client inactivity limit (default 300)\n\nREQUIRED ENVIRONMENT (except --help / --smoke)\n  DEEPGRAM_API_KEY  OPENAI_API_KEY  CARTESIA_API_KEY\n\nOPTIONAL ENVIRONMENT\n  OPENAI_MODEL                default gpt-4.1-mini\n  CARTESIA_VOICE_ID           default 86e30c1d-714b-4074-a1f2-1cb6b552fb49\n  PIPECAT_SYSTEM_PROMPT       Spoken-response system instruction\n  PIPECAT_INPUT_SAMPLE_RATE   PCM16 input Hz (default 16000, mono)\n  PIPECAT_OUTPUT_SAMPLE_RATE  PCM16 output Hz (default 24000, mono)\n\nAudio clients must send playback-complete only after actual remote playback.\nNo microphone, local speaker, Daily, or LiveKit is embedded. Native Silero is optional and requires the two explicit file paths.\nBind to loopback by default; use an authenticated TLS proxy for remote access.\n";
+pub use crate::startup_image::StartupImage;
+
+pub const HELP: &str = "pipecat-voice-agent [OPTIONS]\n\nNative WebSocket protobuf → Deepgram STT → OpenAI LLM → Cartesia TTS agent.\n\nOPTIONS\n  --help                     Show this help without reading credentials\n  --smoke                    Run local synthetic providers and a full socket roundtrip\n  --bind ADDRESS             Listen address (default 127.0.0.1:7860)\n  --once                     Exit after one client disconnects\n  --vad-model PATH           Enable native Silero using this ONNX model\n  --onnx-runtime PATH        Explicit ONNX Runtime library (required with --vad-model)\n  --playback-protocol MODE   legacy-v1 (default) or explicitly negotiated chunk-v2\n  --image-channel            Enable separate bounded images (requires chunk-v2)\n  --initial-image-rgb PATH    One trusted raw RGB8 file per session (requires images)\n  --initial-image-size WxH    Exact dimensions for --initial-image-rgb\n  --no-intro                 Wait for the user instead of generating an introduction\n  --turn-timeout-ms N         Transcript silence timeout (default 600)\n  --idle-timeout-secs N       Client inactivity limit (default 300)\n\nREQUIRED ENVIRONMENT (except --help / --smoke)\n  DEEPGRAM_API_KEY  OPENAI_API_KEY  CARTESIA_API_KEY\n\nOPTIONAL ENVIRONMENT\n  OPENAI_MODEL                default gpt-4.1-mini\n  CARTESIA_VOICE_ID           default 86e30c1d-714b-4074-a1f2-1cb6b552fb49\n  PIPECAT_SYSTEM_PROMPT       Spoken-response system instruction\n  PIPECAT_INPUT_SAMPLE_RATE   PCM16 input Hz (default 16000, mono)\n  PIPECAT_OUTPUT_SAMPLE_RATE  PCM16 output Hz (default 24000, mono)\n\nAudio clients must send playback-complete only after actual remote playback.\nNo microphone, local speaker, Daily, or LiveKit is embedded. Native Silero is optional and requires the two explicit file paths.\nBind to loopback by default; use an authenticated TLS proxy for remote access.\n";
 
 pub const DEFAULT_SYSTEM: &str = "You are a helpful assistant in a voice conversation. Your responses will be spoken aloud, so avoid emojis, bullet points, or other formatting that cannot be spoken. Respond to what the user said in a creative, helpful, and brief way.";
 
@@ -13,7 +15,7 @@ pub const DEFAULT_SYSTEM: &str = "You are a helpful assistant in a voice convers
 pub enum Command {
     Help,
     Smoke,
-    Serve(Options),
+    Serve(Box<Options>),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VadPaths {
@@ -25,6 +27,8 @@ pub struct VadPaths {
 pub struct Options {
     pub playback_protocol: PlaybackProtocol,
     pub receipt: ReceiptConfig,
+    pub image_channel: Option<ImageChannelConfig>,
+    pub initial_image: Option<StartupImage>,
     pub vad: Option<VadPaths>,
     pub bind: SocketAddr,
     pub once: bool,
@@ -37,6 +41,8 @@ impl Default for Options {
         Self {
             playback_protocol: PlaybackProtocol::LegacyV1,
             receipt: ReceiptConfig::default(),
+            image_channel: None,
+            initial_image: None,
             vad: None,
             bind: SocketAddr::from(([127, 0, 0, 1], 7860)),
             once: false,
@@ -46,6 +52,33 @@ impl Default for Options {
         }
     }
 }
+impl Options {
+    /// Also enforced for native callers that do not use Command::parse.
+    pub fn validate(&self) -> Result<(), AgentError> {
+        if !self.bind.ip().is_loopback() {
+            return Err(AgentError::Config("listener must use a loopback address"));
+        }
+        if self.image_channel.is_some() && self.playback_protocol != PlaybackProtocol::ChunkV2 {
+            return Err(AgentError::Config(
+                "--image-channel requires --playback-protocol chunk-v2",
+            ));
+        }
+        if let Some(config) = &self.image_channel {
+            config.validate()?;
+            if let Some(image) = &self.initial_image {
+                image.validate(config)?;
+            }
+        } else if self.initial_image.is_some() {
+            return Err(AgentError::Config(
+                "initial RGB image requires --image-channel",
+            ));
+        }
+        if self.playback_protocol == PlaybackProtocol::ChunkV2 {
+            self.receipt.validate()?;
+        }
+        Ok(())
+    }
+}
 impl Command {
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, AgentError> {
         let mut args = args.into_iter();
@@ -53,6 +86,8 @@ impl Command {
         let mut smoke = false;
         let mut vad_model = None;
         let mut onnx_runtime = None;
+        let mut image_path = None;
+        let mut image_size = None;
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--help" | "-h" => return Ok(Self::Help),
@@ -68,6 +103,28 @@ impl Command {
                             ))
                         }
                     };
+                }
+                "--image-channel" => options.image_channel = Some(ImageChannelConfig::default()),
+                "--initial-image-rgb" => {
+                    image_path = Some(PathBuf::from(
+                        args.next()
+                            .ok_or(AgentError::Config("--initial-image-rgb needs a file path"))?,
+                    ));
+                }
+                "--initial-image-size" => {
+                    let value = args.next().ok_or(AgentError::Config(
+                        "--initial-image-size needs WIDTHxHEIGHT",
+                    ))?;
+                    image_size = Some(
+                        value
+                            .split_once('x')
+                            .and_then(|(w, h)| {
+                                Some((w.parse::<u32>().ok()?, h.parse::<u32>().ok()?))
+                            })
+                            .ok_or(AgentError::Config(
+                                "--initial-image-size needs WIDTHxHEIGHT",
+                            ))?,
+                    );
                 }
                 "--vad-model" => {
                     vad_model = Some(PathBuf::from(
@@ -119,6 +176,29 @@ impl Command {
                 ))
             }
         };
+        if smoke
+            && (options.image_channel.is_some() || image_path.is_some() || image_size.is_some())
+        {
+            return Err(AgentError::Config("--smoke does not accept image options"));
+        }
+        options.validate()?;
+        match (image_path, image_size) {
+            (None, None) => {}
+            (Some(path), Some(size)) if options.image_channel.is_some() => {
+                options.initial_image = Some(StartupImage::load_rgb(path, size)?);
+                options.validate()?;
+            }
+            (Some(_), Some(_)) => {
+                return Err(AgentError::Config(
+                    "initial RGB image requires --image-channel",
+                ))
+            }
+            _ => {
+                return Err(AgentError::Config(
+                    "--initial-image-rgb and --initial-image-size must be supplied together",
+                ))
+            }
+        }
         if smoke && options.playback_protocol != PlaybackProtocol::LegacyV1 {
             return Err(AgentError::Config(
                 "--smoke exercises legacy-v1; chunk-v2 requires its explicit client protocol",
@@ -127,7 +207,7 @@ impl Command {
         Ok(if smoke {
             Self::Smoke
         } else {
-            Self::Serve(options)
+            Self::Serve(Box::new(options))
         })
     }
 }

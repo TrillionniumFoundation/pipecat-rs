@@ -67,7 +67,7 @@ impl ReceiptSession {
         Self::negotiate_inner(session, config, output_rate, None).await
     }
     /// Explicitly pair a separate loopback image socket. Existing constructors
-    /// and the voice-agent binary do not enable this mechanism.
+    /// stay image-disabled; the voice-agent binary requires --image-channel.
     pub async fn negotiate_with_images(
         session: WebSocketSession,
         config: ReceiptConfig,

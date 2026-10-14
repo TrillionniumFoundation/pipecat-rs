@@ -35,8 +35,8 @@ const MAGIC: &[u8; 8] = b"PCIMG001";
 type Socket = WebSocketStream<ImageIo>;
 type PairFuture = Pin<Box<dyn Future<Output = Result<(Socket, Offer), ()>> + Send + Sync>>;
 
-/// Native loopback API only. This does not wire the CLI runner or a browser.
-#[derive(Clone, Debug)]
+/// Bounded native loopback image mechanism. The CLI enables it only by opt-in.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageChannelConfig {
     pub max_pixel_bytes: usize,
     pub max_dimension: u32,
@@ -56,7 +56,7 @@ impl Default for ImageChannelConfig {
     }
 }
 impl ImageChannelConfig {
-    fn validate(&self) -> Result<(), AgentError> {
+    pub fn validate(&self) -> Result<(), AgentError> {
         if self.max_pixel_bytes == 0
             || self.max_pixel_bytes > IMAGE_MAX_PIXELS_BYTES
             || self.max_dimension == 0

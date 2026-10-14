@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 use pipecat_cli::{
     config::{Options, ProviderConfig},
-    run_session, wire, SessionReport,
+    run_session, run_session_with_input_processors, wire, SessionReport,
 };
 use pipecat_protocol::protobuf::{self as pb, frame::Kind};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
@@ -111,6 +111,23 @@ impl Fixture {
         Self::start_gated(options, false).await
     }
     pub async fn start_gated(options: Options, hold_tts_done: bool) -> TestResult<Self> {
+        Self::start_inner(options, hold_tts_done, vec![], false).await
+    }
+    pub async fn start_with_processors(
+        options: Options,
+        processors: Vec<Arc<dyn pipecat_core::FrameProcessor>>,
+    ) -> TestResult<Self> {
+        Self::start_inner(options, false, processors, false).await
+    }
+    pub async fn start_invalid_provider(options: Options) -> TestResult<Self> {
+        Self::start_inner(options, false, vec![], true).await
+    }
+    async fn start_inner(
+        options: Options,
+        hold_tts_done: bool,
+        processors: Vec<Arc<dyn pipecat_core::FrameProcessor>>,
+        invalid_provider: bool,
+    ) -> TestResult<Self> {
         let dg = TcpListener::bind("127.0.0.1:0").await.map_err(error)?;
         let llm = TcpListener::bind("127.0.0.1:0").await.map_err(error)?;
         let tts = TcpListener::bind("127.0.0.1:0").await.map_err(error)?;
@@ -126,7 +143,7 @@ impl Fixture {
             model: "synthetic".into(),
             voice_id: "synthetic".into(),
             system_prompt: "Synthetic protocol test".into(),
-            input_rate: 16000,
+            input_rate: if invalid_provider { 0 } else { 16000 },
             output_rate: 24000,
         };
         let contacts = Arc::new(AtomicUsize::new(0));
@@ -151,9 +168,12 @@ impl Fixture {
         ];
         let server = tokio::spawn(async move {
             let (stream, _) = agent.accept().await.map_err(error)?;
-            run_session(stream, &options, &providers)
-                .await
-                .map_err(error)
+            let result = if processors.is_empty() {
+                run_session(stream, &options, &providers).await
+            } else {
+                run_session_with_input_processors(stream, &options, &providers, processors).await
+            };
+            result.map_err(error)
         });
         let mut fixture = Self {
             client: None,

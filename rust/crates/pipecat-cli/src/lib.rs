@@ -3,6 +3,7 @@ pub mod config;
 pub mod playback;
 pub mod receipt_output;
 pub mod smoke;
+mod startup_image;
 pub mod wire;
 use config::{Options, ProviderConfig};
 use pipecat_core::{
@@ -70,9 +71,7 @@ impl<T> Drop for AbortTask<T> {
 /// Serve one session at a time, with a fresh provider connection and isolated
 /// conversation context per client. The default loopback binding is deliberate.
 pub async fn serve(options: Options, providers: ProviderConfig) -> Result<(), AgentError> {
-    if !options.bind.ip().is_loopback() {
-        return Err(AgentError::Config("listener must use a loopback address"));
-    }
+    options.validate()?;
     let listener = TcpListener::bind(options.bind).await?;
     println!(
         "Native voice agent listening on ws://{}",
@@ -122,6 +121,7 @@ pub async fn run_session_with_input_processors(
     providers: &ProviderConfig,
     mut input_processors: Vec<Arc<dyn FrameProcessor>>,
 ) -> Result<SessionReport, AgentError> {
+    options.validate()?;
     let session_config = SessionConfig {
         queue_capacity: 8,
         max_message_bytes: if options.playback_protocol == receipt_output::PlaybackProtocol::ChunkV2
