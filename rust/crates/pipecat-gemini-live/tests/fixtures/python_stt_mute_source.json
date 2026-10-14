@@ -1,0 +1,185 @@
+{
+  "audio_passthrough_disabled": {
+    "frames": [],
+    "muted": true,
+    "provider": []
+  },
+  "dedicated_stt_no_preroll_auto_vad": {
+    "config_keys": [
+      "input_audio_transcription",
+      "response_modalities"
+    ],
+    "has_preroll_buffer": false,
+    "has_realtime_input_config": false,
+    "provider_before_any_vad": [
+      {
+        "audio_hex": "0500",
+        "mime_type": "audio/pcm;rate=16000"
+      }
+    ],
+    "response_modalities": [
+      "TEXT"
+    ]
+  },
+  "inflight_results_after_mute": {
+    "frames": [
+      {
+        "audio_hex": "0400",
+        "direction": "downstream",
+        "type": "UserAudioRawFrame",
+        "user_id": "speaker"
+      },
+      {
+        "direction": "downstream",
+        "text": "already sent interim",
+        "type": "InterimTranscriptionFrame",
+        "user_id": "speaker"
+      },
+      {
+        "direction": "downstream",
+        "finalized": true,
+        "text": "already sent final",
+        "type": "TranscriptionFrame",
+        "user_id": "speaker"
+      }
+    ],
+    "metrics": [
+      "stop_ttfb",
+      "stop_processing"
+    ],
+    "muted": true,
+    "provider": [
+      {
+        "audio_hex": "0400",
+        "mime_type": "audio/pcm;rate=16000"
+      }
+    ],
+    "provider_before_mute": [
+      {
+        "audio_hex": "0400",
+        "mime_type": "audio/pcm;rate=16000"
+      }
+    ]
+  },
+  "mute_resume_downstream": {
+    "after_mute": {
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        }
+      ],
+      "muted": true,
+      "provider": []
+    },
+    "after_resume": {
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        },
+        {
+          "audio_hex": "0200",
+          "direction": "downstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        }
+      ],
+      "muted": false,
+      "provider": [
+        {
+          "audio_hex": "0200",
+          "mime_type": "audio/pcm;rate=16000"
+        }
+      ]
+    },
+    "initial_muted": false
+  },
+  "mute_resume_upstream": {
+    "after_mute": {
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        }
+      ],
+      "muted": true,
+      "provider": []
+    },
+    "after_resume": {
+      "frames": [
+        {
+          "audio_hex": "0100",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        },
+        {
+          "audio_hex": "0200",
+          "direction": "upstream",
+          "type": "UserAudioRawFrame",
+          "user_id": "speaker"
+        }
+      ],
+      "muted": false,
+      "provider": [
+        {
+          "audio_hex": "0200",
+          "mime_type": "audio/pcm;rate=16000"
+        }
+      ]
+    },
+    "initial_muted": false
+  },
+  "reconnect_buffer_before_mute_guard": {
+    "buffered_while_muted": 1,
+    "frames": [
+      {
+        "audio_hex": "0600",
+        "direction": "downstream",
+        "type": "UserAudioRawFrame",
+        "user_id": "speaker"
+      }
+    ],
+    "muted": false,
+    "provider": [
+      {
+        "audio_hex": "0600",
+        "mime_type": "audio/pcm;rate=16000"
+      }
+    ]
+  },
+  "repeated_setup_source_preserves_mute": {
+    "muted": true,
+    "sample_rate": 24000
+  },
+  "vad_while_muted": {
+    "frames": [
+      {
+        "direction": "upstream",
+        "type": "VADUserStartedSpeakingFrame"
+      },
+      {
+        "direction": "upstream",
+        "type": "VADUserStoppedSpeakingFrame"
+      }
+    ],
+    "metrics": [
+      "cancel_ttfb",
+      "start_processing"
+    ],
+    "muted": true,
+    "provider": [
+      {
+        "audio_stream_end": true
+      }
+    ],
+    "user_speaking": false
+  }
+}

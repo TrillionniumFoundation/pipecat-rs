@@ -22,6 +22,7 @@ pub struct GeminiLiveProcessor {
 #[derive(Default)]
 struct InputState {
     activity: bool,
+    stt_muted: bool,
     preroll: VecDeque<u8>,
     preroll_bytes: usize,
     initial_context: Option<LlmContextFrame>,
@@ -341,6 +342,20 @@ impl FrameProcessor for GeminiLiveProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        if let (SessionMode::Transcription, FrameData::SttMute(muted)) =
+            (self.client.config().mode, &frame.data)
+        {
+            ctx.invocation_fence()?
+                .with_current(|| {
+                    self.state
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
+                        .stt_muted = *muted;
+                    Ok::<(), ProcessorError>(())
+                })
+                .ok_or_else(|| ProcessorError::new("stale Gemini STT mute control"))??;
+            return Ok(());
+        }
         if matches!(frame.data, FrameData::Interruption) {
             self.sender()?.interrupt().await;
         }
@@ -356,6 +371,19 @@ impl FrameProcessor for GeminiLiveProcessor {
                 FrameData::SpeechControlParams(control) => self.update_preroll(control, ctx)?,
                 FrameData::InputAudio(audio)
                 | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
+                    let muted = if self.client.config().mode == SessionMode::Transcription {
+                        self.state
+                            .lock()
+                            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
+                            .stt_muted
+                    } else {
+                        false
+                    };
+                    if muted {
+                        // Like STTService: suppress new recognition input, retaining
+                        // the native audio passthrough and already admitted results.
+                        return ctx.push(frame, direction).await;
+                    }
                     audio
                         .validate()
                         .map_err(|_| ProcessorError::new("invalid Gemini PCM"))?;

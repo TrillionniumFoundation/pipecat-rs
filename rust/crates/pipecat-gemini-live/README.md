@@ -121,6 +121,15 @@ audio. See [VAD pre-roll controls](VAD_PREROLL.md) for validation, direction,
 reuse, and the pinned Python differences.
 Dedicated STT additionally flushes on VAD stop frames with `audioStreamEnd`.
 
+Dedicated transcription mode consumes `SttMute` in either direction. While muted,
+new downstream `InputAudio` and `UserAudio` retain normal frame passthrough but
+are not validated or admitted to the provider. Unmuting resumes new input; no
+muted audio is retained for replay. Previously admitted audio, asynchronous
+transcripts, and VAD-stop finalization continue. This is recognition-input
+control, not a device microphone switch or withdrawal of sent data. Conversation
+mode keeps these controls as ordinary passthrough. Each native setup resets mute
+to false. See [STT mute boundaries](STT_MUTE.md).
+
 `LlmContext` supports one initial text-only seed; repeated identical snapshots
 are no-ops. System instructions/tools must already match connection setup.
 Evolving/replaced snapshots and detailed/non-text histories are rejected, since
