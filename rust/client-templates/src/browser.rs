@@ -2,7 +2,8 @@
 use crate::lifecycle::{capture_allowed, playback_allowed, Lifecycle, State};
 use crate::text_entry::{TextEntry, TextPayload};
 use crate::{
-    client_ready, offer_endpoint, protocol, transcript, websocket_endpoint, Config, Transport,
+    client_ready, offer_endpoint, protocol, transcript, websocket_endpoint, Config, InputMode,
+    Transport,
 };
 use js_sys::{Promise, Reflect, Uint8Array};
 use serde_json::{json, Value};
@@ -28,6 +29,7 @@ struct App {
     conversation: VecDeque<(Option<String>, Element)>,
 }
 struct Session {
+    input_mode: InputMode,
     text_entry: TextEntry,
     mic: bool,
     media: Option<MediaStream>,
@@ -198,9 +200,21 @@ fn update(app: &App) {
     let mic =
         app.session.as_ref().is_some_and(|s| s.mic) && app.lifecycle.state == State::Connected;
     let button: HtmlButtonElement = element("mic-btn").unchecked_into();
-    button.set_disabled(app.lifecycle.state != State::Connected);
+    button.set_disabled(
+        app.lifecycle.state != State::Connected
+            || !app
+                .session
+                .as_ref()
+                .is_some_and(|s| s.input_mode.captures_microphone()),
+    );
     let _ = button.class_list().toggle_with_force("on", mic);
-    element("mic-status").set_text_content(Some(if mic { "Mic on" } else { "Mic off" }));
+    element("mic-status").set_text_content(Some(if app.config.input_mode == InputMode::Text {
+        "Text mode (no microphone)"
+    } else if mic {
+        "Mic on"
+    } else {
+        "Mic off"
+    }));
     let text_ready = app.lifecycle.state == State::Connected
         && app
             .session
@@ -444,21 +458,28 @@ async fn fetch_json(
     result
 }
 fn begin_connect(app: &Shared) {
-    let transport = {
+    let (transport, input_mode) = {
         let app = app.borrow();
         let select = element("transport-select")
             .unchecked_into::<HtmlSelectElement>()
             .value();
-        app.config
-            .transports
-            .iter()
-            .find(|t| t.key() == select)
-            .copied()
+        (
+            app.config
+                .transports
+                .iter()
+                .find(|t| t.key() == select)
+                .copied(),
+            app.config.input_mode,
+        )
     };
     let Some(transport) = transport else {
         event("error", "Unsupported transport");
         return;
     };
+    if let Err(reason) = input_mode.validate_transport(transport) {
+        event("error", &reason);
+        return;
+    }
     let context = match AudioContext::new() {
         Ok(v) => v,
         Err(e) => {
@@ -485,8 +506,9 @@ fn begin_connect(app: &Shared) {
             *segment = None;
         }
         app.session = Some(Session {
+            input_mode,
             text_entry: TextEntry::new(epoch),
-            mic: true,
+            mic: input_mode.captures_microphone(),
             media: None,
             context,
             capture: None,
@@ -513,22 +535,30 @@ fn begin_connect(app: &Shared) {
     });
 }
 async fn connect(app: &Shared, epoch: u64, transport: Transport) -> Result<(), JsValue> {
-    let constraints = MediaStreamConstraints::new();
-    constraints.set_audio_bool(true);
-    constraints.set_video_bool(false);
-    let media: MediaStream = JsFuture::from(
-        window()
-            .navigator()
-            .media_devices()?
-            .get_user_media_with_constraints(&constraints)?,
-    )
-    .await?
-    .dyn_into()?;
-    if !current(app, epoch) {
-        stop_media(&media);
-        return Err(error("connection cancelled"));
+    checked(app, epoch)?;
+    let input_mode = app.borrow().session.as_ref().unwrap().input_mode;
+    input_mode
+        .validate_transport(transport)
+        .map_err(|reason| error(&reason))?;
+    if input_mode.captures_microphone() {
+        let constraints = MediaStreamConstraints::new();
+        constraints.set_audio_bool(true);
+        constraints.set_video_bool(false);
+        let media: MediaStream = JsFuture::from(
+            window()
+                .navigator()
+                .media_devices()?
+                .get_user_media_with_constraints(&constraints)?,
+        )
+        .await?
+        .dyn_into()?;
+        if !current(app, epoch) {
+            stop_media(&media);
+            return Err(error("connection cancelled"));
+        }
+        app.borrow_mut().session.as_mut().unwrap().media = Some(media);
     }
-    app.borrow_mut().session.as_mut().unwrap().media = Some(media);
+    checked(app, epoch)?;
     let (start, abort) = {
         let app = app.borrow();
         (
@@ -619,13 +649,32 @@ fn connect_websocket(
             .callbacks
             .extend([onopen, onclose, onerror, onmessage]);
     }
-    start_capture(app, epoch)
+    if app
+        .borrow()
+        .session
+        .as_ref()
+        .unwrap()
+        .input_mode
+        .captures_microphone()
+    {
+        start_capture(app, epoch)
+    } else {
+        Ok(())
+    }
 }
 fn start_capture(app: &Shared, epoch: u64) -> Result<(), JsValue> {
     let (context, media) = {
         let app = app.borrow();
         let s = app.session.as_ref().unwrap();
-        (s.context.clone(), s.media.clone().unwrap())
+        if !s.input_mode.captures_microphone() {
+            return Err(error("Microphone capture is disabled in text input mode"));
+        }
+        (
+            s.context.clone(),
+            s.media
+                .clone()
+                .ok_or_else(|| error("Voice input has no microphone stream"))?,
+        )
     };
     let source = context.create_media_stream_source(&media)?;
     #[allow(deprecated)]
@@ -922,6 +971,10 @@ async fn initialize() -> Result<(), JsValue> {
         if let Some(app) = weak.upgrade() {
             let mut app = app.borrow_mut();
             if let Some(session) = app.session.as_mut() {
+                // Also reject programmatic events against the disabled control.
+                if !session.input_mode.captures_microphone() {
+                    return;
+                }
                 session.mic = !session.mic;
                 if let Some(media) = &session.media {
                     for track in media.get_audio_tracks().iter() {

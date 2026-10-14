@@ -48,12 +48,38 @@ impl Transport {
     }
 }
 
+/// Browser input acquisition policy. Text mode retains bot audio output and uses
+/// WebSocket only; it does not change native provider/STT initialization.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum InputMode {
+    #[default]
+    Voice,
+    Text,
+}
+impl InputMode {
+    pub fn captures_microphone(self) -> bool {
+        self == Self::Voice
+    }
+    pub fn validate_transport(self, transport: Transport) -> Result<(), String> {
+        if self == Self::Text && transport != Transport::WebSocket {
+            return Err(
+                "text input mode supports only websocket; WebRTC receive-only is not implemented"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub project_name: String,
     pub start_endpoint: String,
     pub transports: Vec<Transport>,
+    #[serde(default)]
+    pub input_mode: InputMode,
 }
 impl Config {
     pub fn validate(&self, page_url: &str) -> Result<Url, String> {
@@ -65,6 +91,9 @@ impl Config {
             || self.transports.iter().any(|t| !t.implemented())
         {
             return Err("only smallwebrtc and websocket adapters are implemented".into());
+        }
+        for transport in &self.transports {
+            self.input_mode.validate_transport(*transport)?;
         }
         let url = Url::parse(page_url)
             .and_then(|p| p.join(&self.start_endpoint))
@@ -266,5 +295,56 @@ mod tests {
         assert!(transcript(&json!({"label":"rtvi-ai","type":"user-transcription","data":{"text":"hi","final":false}})).is_none());
         assert_eq!(transcript(&json!({"label":"rtvi-ai","type":"bot-output","data":{"text":"hi","segment_id":1,"spoken_status":"completed"}})).unwrap(), Transcript { role:"bot",text:"hi".into(),segment_id:Some("1".into()) });
         assert!(transcript(&json!({"type":"bot-output","data":{"text":"hi"}})).is_none());
+    }
+    #[test]
+    fn input_mode_defaults_to_voice_and_keeps_explicit_voice_compatible() {
+        for mode in [None, Some("voice")] {
+            let mut value = json!({"project_name":"voice","start_endpoint":"/api/start","transports":["websocket","smallwebrtc"]});
+            if let Some(mode) = mode {
+                value["input_mode"] = mode.into();
+            }
+            let config: Config = serde_json::from_value(value).unwrap();
+            assert_eq!(config.input_mode, InputMode::Voice);
+            assert!(config.input_mode.captures_microphone());
+            config.validate("http://127.0.0.1:8080/").unwrap();
+        }
+    }
+    #[test]
+    fn text_input_policy_preserves_websocket_but_has_no_microphone_capture() {
+        let config: Config = serde_json::from_value(json!({"project_name":"text","start_endpoint":"/api/start","transports":["websocket"],"input_mode":"text"})).unwrap();
+        assert_eq!(config.input_mode, InputMode::Text);
+        assert!(!config.input_mode.captures_microphone());
+        assert_eq!(
+            config.validate("http://127.0.0.1:8080/").unwrap().as_str(),
+            "http://127.0.0.1:8080/api/start"
+        );
+        assert_eq!(
+            config.transports[0].start_body(),
+            json!({"transport":"websocket"})
+        );
+    }
+    #[test]
+    fn invalid_text_transports_and_unknown_input_modes_fail_closed() {
+        for transports in [json!(["smallwebrtc"]), json!(["websocket", "smallwebrtc"])] {
+            let config: Config = serde_json::from_value(json!({"project_name":"text","start_endpoint":"/api/start","transports":transports,"input_mode":"text"})).unwrap();
+            assert_eq!(
+                config.validate("http://127.0.0.1:8080/").unwrap_err(),
+                "text input mode supports only websocket; WebRTC receive-only is not implemented"
+            );
+        }
+        for mode in [
+            json!("Text"),
+            json!("microphone-free"),
+            json!(null),
+            json!(false),
+        ] {
+            assert!(serde_json::from_value::<Config>(json!({"project_name":"bad","start_endpoint":"/api/start","transports":["websocket"],"input_mode":mode})).is_err());
+        }
+        assert!(InputMode::Text
+            .validate_transport(Transport::SmallWebRtc)
+            .is_err());
+        assert!(InputMode::Voice
+            .validate_transport(Transport::SmallWebRtc)
+            .is_ok());
     }
 }

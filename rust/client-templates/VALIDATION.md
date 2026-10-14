@@ -90,3 +90,20 @@ The updated acceptance fixture explicitly enables the Chromium sandbox and adds
 real-form text cases for both transports; it remains unexecuted on this host.
 Native shared-controller and real native transport/provider tests are separate
 from browser acceptance. The complete image/receipt browser bridge is not present.
+
+## Slice 46 microphone-free input boundary
+
+The explicit text input configuration is limited to WebSocket. Its actual WASM
+connection branch gates both getUserMedia and capture-node creation using the
+immutable session policy, while keeping bot audio output. Default voice mode and
+explicit unsupported WebRTC text-mode rejection are separate compatibility paths.
+
+The old-entry witness uses the actual native Config parser/validator: legacy
+voice JSON is accepted, while old45 rejects input_mode as an unknown field. This
+is a configuration-entry boundary, not an executed microphone permission failure.
+Selected native tests cover the shared input policy, real typed WebSocket replies,
+and independent WS/Opus WebRTC voice/provider controls. They do not run browser
+permission/capture APIs. The updated real Chromium fixture includes a throwing
+getUserMedia trap for text mode, capture/audio/resource checks and mode changes
+through disconnect/reload, but remains unexecuted on this host. The previously
+recorded launch blocker is reused; no new launch or sandbox workaround is attempted.

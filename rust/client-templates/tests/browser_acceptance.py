@@ -53,7 +53,15 @@ async def main():
     state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': [], 'texts': [], 'pending_ready': None}
     peer_page = None
     async def config(request):
-        return web.json_response({'project_name': 'Rust Pipecat acceptance', 'start_endpoint': '/api/start', 'transports': ['websocket', 'smallwebrtc'] if state['mode'] != 'unsupported' else ['daily']})
+        transports = ['websocket', 'smallwebrtc']
+        if state.get('input_mode') == 'text':
+            transports = ['smallwebrtc'] if state['mode'] == 'text_rtc' else ['websocket']
+        if state['mode'] == 'unsupported':
+            transports = ['daily']
+        value = {'project_name': 'Rust Pipecat acceptance', 'start_endpoint': '/api/start', 'transports': transports}
+        if 'input_mode' in state:
+            value['input_mode'] = state['input_mode']
+        return web.json_response(value)
     async def start(request):
         body = await request.json()
         state['starts'].append(body)
@@ -143,12 +151,13 @@ async def main():
             browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, chromium_sandbox=True, args=[ '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
             context = await browser.new_context(viewport={'width': 1200, 'height': 800})
             await context.add_init_script('''
-              window.capturedStreams=[]; window.audioContexts=[]; window.audioStarted=0; window.audioStopped=0; window.openSockets=[];
+              window.mediaRequests=0; window.captureNodes=0; window.rejectMedia=false; window.capturedStreams=[]; window.audioContexts=[]; window.audioStarted=0; window.audioStopped=0; window.openSockets=[];
               const NativeSocket=window.WebSocket; window.WebSocket=class extends NativeSocket {constructor(...args){super(...args);window.openSockets.push(this);}};
               const media = navigator.mediaDevices;
-              if (media) { const original=media.getUserMedia.bind(media); media.getUserMedia=async (...args)=>{ const stream=await original(...args); window.capturedStreams.push(stream); if(window.delayMedia) await new Promise(r=>setTimeout(r,500)); return stream; }; }
+              if (media) { const original=media.getUserMedia.bind(media); media.getUserMedia=async (...args)=>{ window.mediaRequests++; if(window.rejectMedia) throw new Error("text mode must not request microphone"); const stream=await original(...args); window.capturedStreams.push(stream); if(window.delayMedia) await new Promise(r=>setTimeout(r,500)); return stream; }; }
               const Native=window.AudioContext;
               window.AudioContext=class extends Native { constructor(...args) { super(...args); window.audioContexts.push(this); }
+                createMediaStreamSource(...args) { window.captureNodes++; return super.createMediaStreamSource(...args); }
                 createBufferSource() { const node=super.createBufferSource(); const start=node.start.bind(node); const stop=node.stop.bind(node); node.start=(...args)=>{window.audioStarted++;return start(...args);}; node.stop=(...args)=>{window.audioStopped++;return stop(...args);}; return node; }
               };
             ''')
@@ -332,6 +341,66 @@ async def main():
             await cleanup()
             await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
             checks.append('Real paired RTCPeerConnection: SDP offer/answer, data-channel RTVI, incoming synthetic audio track, keepalive, track-status mute and peer close')
+            # Explicit page configuration; this is not an in-session mode toggle.
+            state['input_mode'] = 'text'
+            state['mode'] = 'normal'
+            await initialized()
+            await page.evaluate('window.rejectMedia = true')
+            assert await page.locator('#mic-btn').is_disabled()
+            assert 'Text mode' in await page.locator('#mic-status').inner_text()
+            audio_before = state['audio']
+            text_before = len(state['texts'])
+            for index in range(2):
+                await connect()
+                await page.wait_for_function("!document.querySelector('#send-btn').disabled")
+                await page.wait_for_function('(count) => window.audioStarted >= count', arg=index + 1)
+                await page.evaluate("document.querySelector('#mic-btn').dispatchEvent(new Event('click'))")
+                assert await page.locator('#mic-btn').is_disabled()
+                assert await page.evaluate('window.mediaRequests === 0 && window.captureNodes === 0 && window.capturedStreams.length === 0')
+                assert state['audio'] == audio_before
+                await page.fill('#message-input', '免麦克风 你好 🦀')
+                await page.click('#send-btn')
+                for _ in range(100):
+                    if len(state['texts']) == text_before + index + 1: break
+                    await asyncio.sleep(.02)
+                assert len(state['texts']) == text_before + index + 1
+                assert state['texts'][-1]['data']['content'] == '免麦克风 你好 🦀'
+                await page.click('#connect-btn')
+                await cleanup()
+                await page.wait_for_function('window.openSockets.every(s=>s.readyState===WebSocket.CLOSED)')
+            assert state['texts'][-1]['id'] != state['texts'][-2]['id']
+            state['mode'] = 'failure'
+            await page.click('#connect-btn')
+            await cleanup()
+            assert await page.evaluate('window.mediaRequests === 0 && window.captureNodes === 0')
+            state['mode'] = 'slow'
+            await page.click('#connect-btn')
+            await page.wait_for_timeout(100)
+            await page.click('#connect-btn')
+            state['mode'] = 'normal'
+            await connect()
+            await page.wait_for_timeout(800)
+            assert await page.locator('#transport-state').inner_text() == 'Connected'
+            assert await page.evaluate('window.mediaRequests === 0 && window.captureNodes === 0')
+            await page.click('#connect-btn')
+            await cleanup()
+            checks.append('Explicit WS text mode never calls throwing getUserMedia or creates capture nodes; real text/audio, inert mic control, reconnect, failure/cancel cleanup and unique session IDs')
+            state['mode'] = 'text_rtc'
+            starts_before = len(state['starts'])
+            await page.reload()
+            await page.wait_for_function("document.querySelector('#transport-state').textContent==='Configuration error'")
+            assert await page.locator('#connect-btn').is_disabled()
+            assert len(state['starts']) == starts_before
+            assert await page.evaluate('window.mediaRequests === 0 && window.audioContexts.length === 0')
+            checks.append('Text + WebRTC configuration is explicitly rejected before permission or session allocation')
+            del state['input_mode']
+            state['mode'] = 'normal'
+            await initialized()
+            await connect()
+            await page.wait_for_function('window.mediaRequests > 0 && window.capturedStreams.length > 0 && window.captureNodes > 0')
+            await page.click('#connect-btn')
+            await cleanup()
+            checks.append('Disconnect/reload with omitted input_mode restores the original microphone capture path')
             state['mode'] = 'unsupported'
             await page.reload()
             await page.wait_for_function("document.querySelector('#transport-state').textContent==='Configuration error'")

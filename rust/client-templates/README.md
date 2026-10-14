@@ -40,8 +40,9 @@ configuration and local-only security boundary. Direct backend URLs ending in
 `/start` also work when the backend explicitly permits the browser origin via
 CORS. HTTPS is required for non-loopback microphone access. A static file server
 alone does not provide `/api/start`; the bot backend and proxy are separate
-services. The browser needs microphone permission after Connect, and platform
-permissions remain under the user's control.
+services. The default voice mode needs microphone permission after Connect. The explicit
+WebSocket text-input mode below does not request a microphone; platform permissions
+remain under the user's control.
 
 No private API key belongs in `config.json`, HTML, WASM, or a browser URL.
 Configure upstream authentication only in the native server. The browser accepts
@@ -74,8 +75,8 @@ After Connect and an exact current-session RTVI 2.2.0 `bot-ready`, type in the
 message box and click Send. Enter and Shift+Enter add newlines; IME composition
 is not intercepted. Both WebSocket protobuf and SmallWebRTC JSON use the existing
 `send-text` command with immediate generation and an audio response. Connect
-still requests microphone access, even when you intend to type; there is no
-microphone-free text-only connection mode in this template yet.
+uses the configured input mode: the default voice mode requests microphone
+access, while explicit WebSocket text mode does not.
 
 Text is preserved literally, including Chinese, emoji and surrounding whitespace.
 Blank messages and messages above 16 KiB UTF-8 are rejected rather than truncated.
@@ -96,6 +97,40 @@ transport queue acceptance: it is not a server acknowledgement, committed user
 history, or playback receipt. No confirmed conversation row is fabricated from
 Send success. This RTVI path does not implement the separate CLI chunk-v2 audio
 receipt or image-channel protocols, and has no image canvas/browser bridge.
+
+## Microphone-free WebSocket input
+
+To connect without requesting microphone permission, serve this configuration:
+
+```json
+{
+  "project_name": "Pipecat Bot",
+  "start_endpoint": "/api/start",
+  "transports": ["websocket"],
+  "input_mode": "text"
+}
+```
+
+Omitted `input_mode` defaults to `voice`; explicit `voice` keeps both existing
+transports. Unknown modes and text mode with SmallWebRTC or mixed transports fail
+configuration validation before Connect. WebRTC receive-only negotiation is not
+implemented, so no text-mode WebRTC option is displayed. No transport is silently
+changed. Rust callers constructing `Config` directly must now provide
+`input_mode: InputMode::Voice` or `InputMode::Text`.
+
+Text mode snapshots its policy for the owned session, never calls getUserMedia
+or builds a microphone capture graph, and keeps the mic button inert. It still
+creates/resumes an AudioContext from Connect for bot PCM replies and interruption
+handling. It is microphone-free input, not a text-only/silent response protocol.
+Normal browser audio/autoplay rules still apply. Change the mode by disconnecting,
+editing the served configuration and reloading; there is no live mode-switch API.
+
+Readiness, draft limits and no-replay behavior are unchanged. Disconnect closes
+the socket and AudioContext even when no microphone stream exists. Native provider
+setup, including configured STT, is unchanged: this option does not promise fewer
+server STT connections, different credentials or lower provider cost. Actual
+browser permission/capture execution remains unqualified on the current blocked
+Chromium host; see VALIDATION.md.
 
 ## Ownership and bounds
 
