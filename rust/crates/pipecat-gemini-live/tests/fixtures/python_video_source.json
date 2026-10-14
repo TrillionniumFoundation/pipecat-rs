@@ -1,0 +1,1535 @@
+{
+  "AssistantImageRawFrame_is_not_input_video": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "AssistantImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 10.0
+  },
+  "OutputImageRawFrame_is_not_input_video": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "OutputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 10.0
+  },
+  "disconnecting_direct": {
+    "escaped_exception": null,
+    "events": [],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "disconnecting_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "disconnecting_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "frombytes_failure_consumes_timestamp": [
+    {
+      "escaped_exception": "ValueError",
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 30.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 31.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 31.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 31.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 31.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 31.0,
+      "now": 31.0
+    }
+  ],
+  "global_throttle_across_frame_types_users_sources_and_directions": [
+    {
+      "direction": "downstream",
+      "input_type": "InputImageRawFrame",
+      "result": {
+        "escaped_exception": null,
+        "events": [
+          {
+            "direction": "downstream",
+            "event": "parent_process"
+          },
+          {
+            "event": "wall_clock",
+            "now": 100.0
+          },
+          {
+            "event": "image_frombytes",
+            "image_hex": "ff000000ff00",
+            "last_sent_time": 100.0,
+            "mode": "RGB",
+            "size": [
+              2,
+              1
+            ]
+          },
+          {
+            "event": "image_save",
+            "format": "JPEG",
+            "last_sent_time": 100.0
+          },
+          {
+            "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+            "event": "send_attempt",
+            "fails": false,
+            "last_sent_time": 100.0,
+            "mime_type": "image/jpeg"
+          },
+          {
+            "event": "send_success"
+          },
+          {
+            "direction": "downstream",
+            "event": "passthrough",
+            "frame_type": "InputImageRawFrame",
+            "image_hex": "ff000000ff00",
+            "same_object": true
+          }
+        ],
+        "last_sent_time": 100.0,
+        "now": 100.0
+      },
+      "source": "camera-a",
+      "user": ""
+    },
+    {
+      "direction": "upstream",
+      "input_type": "UserImageRawFrame",
+      "result": {
+        "escaped_exception": null,
+        "events": [
+          {
+            "direction": "upstream",
+            "event": "parent_process"
+          },
+          {
+            "event": "wall_clock",
+            "now": 100.5
+          },
+          {
+            "direction": "upstream",
+            "event": "passthrough",
+            "frame_type": "UserImageRawFrame",
+            "image_hex": "ff000000ff00",
+            "same_object": true
+          }
+        ],
+        "last_sent_time": 100.0,
+        "now": 100.5
+      },
+      "source": "camera-b",
+      "user": "user-b"
+    },
+    {
+      "direction": "upstream",
+      "input_type": "UserImageRawFrame",
+      "result": {
+        "escaped_exception": null,
+        "events": [
+          {
+            "direction": "upstream",
+            "event": "parent_process"
+          },
+          {
+            "event": "wall_clock",
+            "now": 101.0
+          },
+          {
+            "event": "image_frombytes",
+            "image_hex": "ff000000ff00",
+            "last_sent_time": 101.0,
+            "mode": "RGB",
+            "size": [
+              2,
+              1
+            ]
+          },
+          {
+            "event": "image_save",
+            "format": "JPEG",
+            "last_sent_time": 101.0
+          },
+          {
+            "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+            "event": "send_attempt",
+            "fails": false,
+            "last_sent_time": 101.0,
+            "mime_type": "image/jpeg"
+          },
+          {
+            "event": "send_success"
+          },
+          {
+            "direction": "upstream",
+            "event": "passthrough",
+            "frame_type": "UserImageRawFrame",
+            "image_hex": "ff000000ff00",
+            "same_object": true
+          }
+        ],
+        "last_sent_time": 101.0,
+        "now": 101.0
+      },
+      "source": "camera-c",
+      "user": "user-c"
+    },
+    {
+      "direction": "downstream",
+      "input_type": "InputImageRawFrame",
+      "result": {
+        "escaped_exception": null,
+        "events": [
+          {
+            "direction": "downstream",
+            "event": "parent_process"
+          },
+          {
+            "event": "wall_clock",
+            "now": 101.5
+          },
+          {
+            "direction": "downstream",
+            "event": "passthrough",
+            "frame_type": "InputImageRawFrame",
+            "image_hex": "ff000000ff00",
+            "same_object": true
+          }
+        ],
+        "last_sent_time": 101.0,
+        "now": 101.5
+      },
+      "source": "camera-a",
+      "user": ""
+    }
+  ],
+  "handler_failure_consumes_timestamp": [
+    {
+      "escaped_exception": "LookupError",
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 30.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 30.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": true,
+          "last_sent_time": 30.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_error_handler",
+          "exception": "RuntimeError",
+          "last_sent_time": 30.0
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 31.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 31.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 31.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 31.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 31.0,
+      "now": 31.0
+    }
+  ],
+  "independent_service_clocks": [
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 20.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 20.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 20.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 20.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 20.0,
+      "now": 20.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 20.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 20.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 20.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 20.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 20.0,
+      "now": 20.0
+    }
+  ],
+  "initial_zero_exact_boundary_duplicate_and_backward_wall_clock": [
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 0.0
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 0,
+      "now": 0.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 0.999
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 0,
+      "now": 0.999
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 1.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 1.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 1.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 1.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 1.0,
+      "now": 1.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 1.0
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 1.0,
+      "now": 1.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 1.999
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 1.0,
+      "now": 1.999
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 2.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 2.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 2.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 2.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 2.0,
+      "now": 2.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 1.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 2.0,
+      "now": 1.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 0.0
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 2.0,
+      "now": 0.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 2.999
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 2.0,
+      "now": 2.999
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 3.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 3.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 3.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 3.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 3.0,
+      "now": 3.0
+    }
+  ],
+  "missing_session_direct": {
+    "escaped_exception": null,
+    "events": [],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "missing_session_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "missing_session_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "not_ready_direct": {
+    "escaped_exception": null,
+    "events": [],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "not_ready_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "not_ready_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "paused_direct": {
+    "escaped_exception": null,
+    "events": [],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "paused_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "paused_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 0,
+    "now": 100.0
+  },
+  "save_failure_consumes_timestamp": [
+    {
+      "escaped_exception": "OSError",
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 30.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 30.0
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 31.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 31.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 31.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 31.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 31.0,
+      "now": 31.0
+    }
+  ],
+  "session_failure_consumes_timestamp": [
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 30.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 30.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": true,
+          "last_sent_time": 30.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_error_handler",
+          "exception": "RuntimeError",
+          "last_sent_time": 30.0
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 30.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 30.0,
+      "now": 30.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 31.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 31.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 31.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 31.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 31.0,
+      "now": 31.0
+    }
+  ],
+  "start_paused_and_setter_do_not_reset_throttle": [
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 0,
+      "now": 10.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 10.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 10.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 10.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 10.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 10.0,
+      "now": 10.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 10.0,
+      "now": 11.0
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 10.5
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 10.0,
+      "now": 10.5
+    },
+    {
+      "escaped_exception": null,
+      "events": [
+        {
+          "direction": "downstream",
+          "event": "parent_process"
+        },
+        {
+          "event": "wall_clock",
+          "now": 11.0
+        },
+        {
+          "event": "image_frombytes",
+          "image_hex": "ff000000ff00",
+          "last_sent_time": 11.0,
+          "mode": "RGB",
+          "size": [
+            2,
+            1
+          ]
+        },
+        {
+          "event": "image_save",
+          "format": "JPEG",
+          "last_sent_time": 11.0
+        },
+        {
+          "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+          "event": "send_attempt",
+          "fails": false,
+          "last_sent_time": 11.0,
+          "mime_type": "image/jpeg"
+        },
+        {
+          "event": "send_success"
+        },
+        {
+          "direction": "downstream",
+          "event": "passthrough",
+          "frame_type": "InputImageRawFrame",
+          "image_hex": "ff000000ff00",
+          "same_object": true
+        }
+      ],
+      "last_sent_time": 11.0,
+      "now": 11.0
+    }
+  ],
+  "success_InputImageRawFrame_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "event": "wall_clock",
+        "now": 10.0
+      },
+      {
+        "event": "image_frombytes",
+        "image_hex": "ff000000ff00",
+        "last_sent_time": 10.0,
+        "mode": "RGB",
+        "size": [
+          2,
+          1
+        ]
+      },
+      {
+        "event": "image_save",
+        "format": "JPEG",
+        "last_sent_time": 10.0
+      },
+      {
+        "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+        "event": "send_attempt",
+        "fails": false,
+        "last_sent_time": 10.0,
+        "mime_type": "image/jpeg"
+      },
+      {
+        "event": "send_success"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 10.0,
+    "now": 10.0
+  },
+  "success_InputImageRawFrame_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "event": "wall_clock",
+        "now": 10.0
+      },
+      {
+        "event": "image_frombytes",
+        "image_hex": "ff000000ff00",
+        "last_sent_time": 10.0,
+        "mode": "RGB",
+        "size": [
+          2,
+          1
+        ]
+      },
+      {
+        "event": "image_save",
+        "format": "JPEG",
+        "last_sent_time": 10.0
+      },
+      {
+        "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+        "event": "send_attempt",
+        "fails": false,
+        "last_sent_time": 10.0,
+        "mime_type": "image/jpeg"
+      },
+      {
+        "event": "send_success"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "InputImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 10.0,
+    "now": 10.0
+  },
+  "success_UserImageRawFrame_downstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "downstream",
+        "event": "parent_process"
+      },
+      {
+        "event": "wall_clock",
+        "now": 10.0
+      },
+      {
+        "event": "image_frombytes",
+        "image_hex": "ff000000ff00",
+        "last_sent_time": 10.0,
+        "mode": "RGB",
+        "size": [
+          2,
+          1
+        ]
+      },
+      {
+        "event": "image_save",
+        "format": "JPEG",
+        "last_sent_time": 10.0
+      },
+      {
+        "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+        "event": "send_attempt",
+        "fails": false,
+        "last_sent_time": 10.0,
+        "mime_type": "image/jpeg"
+      },
+      {
+        "event": "send_success"
+      },
+      {
+        "direction": "downstream",
+        "event": "passthrough",
+        "frame_type": "UserImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 10.0,
+    "now": 10.0
+  },
+  "success_UserImageRawFrame_upstream": {
+    "escaped_exception": null,
+    "events": [
+      {
+        "direction": "upstream",
+        "event": "parent_process"
+      },
+      {
+        "event": "wall_clock",
+        "now": 10.0
+      },
+      {
+        "event": "image_frombytes",
+        "image_hex": "ff000000ff00",
+        "last_sent_time": 10.0,
+        "mode": "RGB",
+        "size": [
+          2,
+          1
+        ]
+      },
+      {
+        "event": "image_save",
+        "format": "JPEG",
+        "last_sent_time": 10.0
+      },
+      {
+        "data_hex": "6f66666c696e652d636f6465632d73656e74696e656c2d6e6f742d612d7265616c2d6a706567",
+        "event": "send_attempt",
+        "fails": false,
+        "last_sent_time": 10.0,
+        "mime_type": "image/jpeg"
+      },
+      {
+        "event": "send_success"
+      },
+      {
+        "direction": "upstream",
+        "event": "passthrough",
+        "frame_type": "UserImageRawFrame",
+        "image_hex": "ff000000ff00",
+        "same_object": true
+      }
+    ],
+    "last_sent_time": 10.0,
+    "now": 10.0
+  }
+}

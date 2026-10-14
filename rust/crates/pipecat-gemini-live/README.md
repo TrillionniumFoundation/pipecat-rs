@@ -213,7 +213,7 @@ them: session resumption/reconnect/replay, Vertex authentication, ephemeral toke
 creation, initial-history configuration, context-window compression, thinking
 configuration/background reasoning, non-blocking/scheduled/streaming tools,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
-video/images/file input, Google File API upload/list/get/delete, live setting
+file input and image formats beyond the bounded RGB video path, Google File API upload/list/get/delete, live setting
 updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,
 tracing spans, transcription aggregation timeouts, or playback-status reporting.
 Related frame input, recognized unsupported server semantics, and unknown config
@@ -264,3 +264,10 @@ cargo test --manifest-path rust/Cargo.toml -p pipecat-gemini-live --offline -j 2
 cargo clippy --manifest-path rust/Cargo.toml -p pipecat-gemini-live --all-targets --offline -j 2 -- -D warnings
 cargo fmt --manifest-path rust/Cargo.toml -p pipecat-gemini-live -- --check
 ```
+
+## Sampled RGB video input
+
+Conversation-mode downstream InputImage/UserImage now connect to realtime video
+with bounded native JPEG encoding, service-wide one-second admission, pause and
+owned cancellation cleanup. See [VIDEO_INPUT.md](VIDEO_INPUT.md) for exact limits,
+source differences and evidence. This does not qualify live camera/browser use.

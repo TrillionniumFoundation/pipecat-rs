@@ -61,7 +61,7 @@ pub(crate) fn action_messages(
                 .try_fold(0usize, |n, t| n.checked_add(t.text.len()))
                 .is_none_or(|n| n > max) =>
         {
-            return Err(GeminiError::TooLarge)
+            return Err(GeminiError::TooLarge);
         }
         Action::ToolResponses(responses) => check_json_size(responses, max)?,
         _ => {}
@@ -81,6 +81,27 @@ pub(crate) fn action_messages(
     };
     let messages = match action {
         Action::Audio(bytes) => vec![audio(bytes)?],
+        Action::VideoJpeg(bytes) => {
+            let overhead = serde_json::to_vec(
+                &json!({"realtimeInput":{"video":{"mimeType":"image/jpeg","data":""}}}),
+            )
+            .map_err(|_| GeminiError::Invalid("JSON"))?
+            .len();
+            let size = bytes
+                .len()
+                .checked_add(2)
+                .and_then(|n| (n / 3).checked_mul(4))
+                .and_then(|n| n.checked_add(overhead));
+            if size.is_none_or(|n| n > max) {
+                return Err(GeminiError::TooLarge);
+            }
+            if !bytes.starts_with(&[0xff, 0xd8]) || !bytes.ends_with(&[0xff, 0xd9]) {
+                return Err(GeminiError::Invalid("video requires JPEG bytes"));
+            }
+            vec![
+                json!({"realtimeInput":{"video":{"mimeType":"image/jpeg","data":STANDARD.encode(bytes)}}}),
+            ]
+        }
         Action::RealtimeText(text) => {
             if text.is_empty() {
                 return Err(GeminiError::Invalid("empty text"));
@@ -441,4 +462,36 @@ pub(crate) fn check_json_size(
         }
     }
     serde_json::to_writer(Counter { remaining: max }, value).map_err(|_| GeminiError::TooLarge)
+}
+
+#[cfg(test)]
+mod video_tests {
+    use super::*;
+    #[test]
+    fn jpeg_action_checks_mode_signature_and_exact_full_json_budget() {
+        let mut config = GeminiConfig::new("fixture", "model");
+        let mut bytes = vec![0xff, 0xd8];
+        bytes.extend(vec![1; 180]);
+        bytes.extend([0xff, 0xd9]);
+        let action = Action::VideoJpeg(bytes);
+        let message = action_messages(&action, &config).unwrap().remove(0);
+        let exact = serde_json::to_vec(&message).unwrap().len();
+        config.limits.max_message_bytes = exact;
+        assert_eq!(action_messages(&action, &config).unwrap(), vec![message]);
+        config.limits.max_message_bytes = exact - 1;
+        assert!(matches!(
+            action_messages(&action, &config),
+            Err(GeminiError::TooLarge)
+        ));
+        config.limits.max_message_bytes = 1024;
+        assert!(matches!(
+            action_messages(&Action::VideoJpeg(vec![1, 2, 3]), &config),
+            Err(GeminiError::Invalid(_))
+        ));
+        config.mode = SessionMode::Transcription;
+        assert!(matches!(
+            action_messages(&action, &config),
+            Err(GeminiError::Unsupported(_))
+        ));
+    }
 }

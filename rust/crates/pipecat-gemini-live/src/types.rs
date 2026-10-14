@@ -125,7 +125,7 @@ pub struct FunctionDeclaration {
 }
 
 /// Connection-time configuration. No untyped pass-through for unsupported
-/// resumption, video, tools, or provider-managed background work is provided.
+/// resumption, advanced video settings, tools, or provider-managed background work is provided.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SessionConfig {
@@ -269,6 +269,8 @@ pub struct FunctionResponse {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Audio(Vec<u8>),
+    /// Bounded JPEG bytes, sent as realtimeInput.video in conversation mode.
+    VideoJpeg(Vec<u8>),
     RealtimeText(String),
     ClientContent {
         turns: Vec<TextTurn>,

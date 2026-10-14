@@ -7,6 +7,7 @@ mod client;
 mod processor;
 mod protocol;
 mod types;
+mod video;
 
 pub use client::*;
 pub use processor::*;

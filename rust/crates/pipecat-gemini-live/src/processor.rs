@@ -6,7 +6,14 @@ use pipecat_core::{
     StartFrame, TextFrame, TranscriptionFrame, TtsStartedFrame, TtsStoppedFrame,
 };
 use serde_json::json;
-use std::{collections::VecDeque, sync::Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+};
+use tokio::time::Instant;
 
 /// Persistent Gemini Live service. Original frames pass through unchanged.
 /// PCM is mono; resample explicitly elsewhere in the pipeline. Context seeding
@@ -18,6 +25,9 @@ pub struct GeminiLiveProcessor {
     preroll_bytes: usize,
     explicit_preroll: bool,
     user_id: String,
+    video: crate::video::VideoEncoder,
+    video_paused: AtomicBool,
+    start_video_paused: bool,
 }
 #[derive(Default)]
 struct InputState {
@@ -26,6 +36,7 @@ struct InputState {
     preroll: VecDeque<u8>,
     preroll_bytes: usize,
     initial_context: Option<LlmContextFrame>,
+    last_video: Option<Instant>,
 }
 impl GeminiLiveProcessor {
     pub fn new(client: GeminiClient) -> Self {
@@ -43,11 +54,82 @@ impl GeminiLiveProcessor {
             preroll_bytes,
             explicit_preroll: false,
             user_id: String::new(),
+            video: Default::default(),
+            video_paused: AtomicBool::new(false),
+            start_video_paused: false,
         }
     }
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = user_id.into();
         self
+    }
+    /// Initial pause state, restored on each setup. Paused frames still pass through.
+    pub fn with_video_input_paused(mut self, paused: bool) -> Self {
+        self.start_video_paused = paused;
+        self.video_paused = AtomicBool::new(paused);
+        self
+    }
+    /// Pause new image admissions without retracting already queued provider work.
+    pub fn set_video_input_paused(&self, paused: bool) {
+        self.video_paused.store(paused, Ordering::SeqCst);
+    }
+    async fn send_video(
+        &self,
+        image: &pipecat_core::ImageRawFrame,
+        origin: Origin,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.video_paused.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        let sender = match self.sender() {
+            Ok(sender) => sender,
+            Err(_) => return Ok(()),
+        };
+        if sender.is_finishing() {
+            return Ok(());
+        }
+        let generation = sender.generation();
+        let fence = ctx.invocation_fence()?;
+        let admitted = fence
+            .with_current(|| {
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                let now = Instant::now();
+                if state.last_video.is_some_and(|last| {
+                    now.duration_since(last) < std::time::Duration::from_secs(1)
+                }) {
+                    return Ok::<bool, ProcessorError>(false);
+                }
+                state.last_video = Some(now);
+                Ok(true)
+            })
+            .transpose()?
+            .unwrap_or(false);
+        if !admitted {
+            return Ok(());
+        }
+        let max = self.client.config().limits.max_message_bytes;
+        // Reserve exact JSON/base64 overhead before encoding, not after queue admission.
+        let overhead = serde_json::to_vec(
+            &json!({"realtimeInput":{"video":{"mimeType":"image/jpeg","data":""}}}),
+        )
+        .map_err(|_| ProcessorError::new("video JSON"))?
+        .len();
+        let max_jpeg = max.saturating_sub(overhead) / 4 * 3;
+        let jpeg = self
+            .video
+            .encode(image, max_jpeg)
+            .await
+            .map_err(|e| processor_error(e).with_permanence_override(false))?;
+        // The blocking result cannot authorize a retired invocation or provider generation.
+        fence
+            .with_current(|| sender.try_send_video_at_generation(jpeg, origin, generation))
+            .transpose()
+            .map_err(processor_error)?;
+        Ok(())
     }
     /// Explicit fixed local pre-roll, including zero. This overrides subsequent
     /// SpeechControlParams updates; without an override VAD start time + 100 ms
@@ -279,6 +361,9 @@ impl FrameProcessor for GeminiLiveProcessor {
             preroll_bytes: self.preroll_bytes,
             ..Default::default()
         };
+        self.video.reset().await.map_err(processor_error)?;
+        self.video_paused
+            .store(self.start_video_paused, Ordering::SeqCst);
         let mut session = self.client.connect().await.map_err(processor_error)?;
         let sender = session.sender();
         *self
@@ -360,6 +445,7 @@ impl FrameProcessor for GeminiLiveProcessor {
             self.sender()?.interrupt().await;
         }
         if frame.data.is_cancel() || matches!(frame.data, FrameData::Stop) {
+            self.video.cancel();
             if let Ok(sender) = self.sender() {
                 sender.cancel();
             }
@@ -517,6 +603,16 @@ impl FrameProcessor for GeminiLiveProcessor {
                     )?;
                     self.enqueue(action, origin)?;
                 }
+                FrameData::InputImage(image)
+                    if self.client.config().mode == SessionMode::Conversation =>
+                {
+                    self.send_video(image, origin, ctx).await?;
+                }
+                FrameData::UserImage(image)
+                    if self.client.config().mode == SessionMode::Conversation =>
+                {
+                    self.send_video(&image.image, origin, ctx).await?;
+                }
                 FrameData::InputImage(_)
                 | FrameData::InputFile(_)
                 | FrameData::UserFile(_)
@@ -561,6 +657,7 @@ impl FrameProcessor for GeminiLiveProcessor {
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        self.video.cancel();
         if let Some(sender) = self
             .sender
             .lock()
@@ -569,6 +666,7 @@ impl FrameProcessor for GeminiLiveProcessor {
         {
             sender.cancel();
         }
+        self.video.finish().await.map_err(processor_error)?;
         Ok(())
     }
 }
@@ -789,5 +887,159 @@ fn error_frame(error: GeminiError) -> ErrorFrame {
         fatal: false,
         processor: None,
         category,
+    }
+}
+
+#[cfg(test)]
+mod video_ownership_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use pipecat_core::{ImageRawFrame, Pipeline, PipelineConfig, WorkerState};
+    use std::{sync::Arc, time::Duration};
+    use tokio::time::timeout;
+    use tokio_tungstenite::tungstenite::Message;
+
+    async fn blocked_encoding_terminal(interrupt: bool) {
+        let wait = Duration::from_secs(5);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = GeminiConfig::new("fixture-key", "video-fixture");
+        config.endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        let mut peer = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            let mut ws = tokio_tungstenite::accept_async(tcp)
+                .await
+                .map_err(|e| e.to_string())?;
+            ws.next()
+                .await
+                .ok_or("no setup")?
+                .map_err(|e| e.to_string())?;
+            ws.send(Message::Text(
+                json!({"setupComplete":{}}).to_string().into(),
+            ))
+            .await
+            .map_err(|e| e.to_string())?;
+            let mut messages = Vec::new();
+            while let Some(message) = ws.next().await {
+                let message = match message {
+                    Err(tokio_tungstenite::tungstenite::Error::Protocol(
+                        tokio_tungstenite::tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+                    )) if !interrupt => return Ok(messages),
+                    result => result.map_err(|e| e.to_string())?,
+                };
+                match message {
+                    Message::Close(_) => {
+                        let _ = ws.flush().await;
+                        return Ok::<_, String>(messages);
+                    }
+                    Message::Text(t) => messages.push(t.to_string()),
+                    _ => {}
+                }
+            }
+            if interrupt {
+                Err("no close".into())
+            } else {
+                Ok(messages)
+            }
+        });
+        let p = Arc::new(GeminiLiveProcessor::new(GeminiClient::new(config).unwrap()));
+        let gate = p.video.test_gate();
+        let created = Pipeline::new(vec![p.clone()])
+            .start(PipelineConfig {
+                shutdown_timeout: Duration::from_secs(2),
+                start: StartFrame {
+                    audio_out_sample_rate: 24_000,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await;
+        let mut worker = match created {
+            Ok(w) => w,
+            Err(e) => {
+                gate.release();
+                peer.abort();
+                let _ = peer.await;
+                panic!("start {e}");
+            }
+        };
+        let observed = timeout(wait, async {
+            while !worker.recv().await.ok_or("no Start")?.frame.data.is_start() {}
+            worker
+                .sender()
+                .send(
+                    Frame::new(FrameData::InputImage(ImageRawFrame {
+                        image: vec![1; 12],
+                        size: (2, 2),
+                        format: Some("RGB".into()),
+                    })),
+                    Direction::Downstream,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            while !gate.entered() {
+                tokio::task::yield_now().await;
+            }
+            if interrupt {
+                p.sender().map_err(|e| e.to_string())?.interrupt().await;
+            } else {
+                worker
+                    .cancel("blocked video encode")
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok::<_, String>(())
+        })
+        .await;
+        // Always release the bounded test-only barrier, even on observation failure.
+        gate.release();
+        if interrupt && matches!(observed, Ok(Ok(()))) {
+            let ended = timeout(wait, worker.end()).await;
+            if !matches!(ended, Ok(Ok(()))) {
+                let _ = timeout(wait, worker.cancel("End deadline")).await;
+            }
+        }
+        if !matches!(observed, Ok(Ok(()))) {
+            let _ = timeout(wait, worker.cancel("observation failed")).await;
+        }
+        let mut join_timeout = None;
+        let joined = match timeout(wait, worker.join()).await {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = timeout(wait, worker.cancel("join timeout")).await;
+                join_timeout = Some(e.to_string());
+                worker.join().await
+            }
+        };
+        let remote = match timeout(wait, &mut peer).await {
+            Ok(r) => r,
+            Err(e) => {
+                peer.abort();
+                let _ = peer.await;
+                panic!("peer joined after {e}");
+            }
+        };
+        assert!(join_timeout.is_none(), "{join_timeout:?}");
+        assert!(matches!(observed, Ok(Ok(()))), "{observed:?}");
+        let report = joined.unwrap();
+        assert_eq!(
+            report.state,
+            if interrupt {
+                WorkerState::Ended
+            } else {
+                WorkerState::Cancelled
+            }
+        );
+        assert_eq!(report.total_errors, 0);
+        assert!(remote.unwrap().unwrap().is_empty());
+        assert!(gate.exited());
+        assert!(p.video.test_idle().await);
+    }
+    #[tokio::test]
+    async fn cancel_during_blocked_encoding_joins_cpu_and_peer_without_late_video() {
+        blocked_encoding_terminal(false).await;
+    }
+    #[tokio::test]
+    async fn external_sender_interrupt_cannot_relabel_old_encoded_image() {
+        blocked_encoding_terminal(true).await;
     }
 }

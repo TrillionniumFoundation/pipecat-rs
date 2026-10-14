@@ -240,8 +240,27 @@ pub struct GeminiSender {
     admission: Arc<std::sync::Mutex<()>>,
 }
 impl GeminiSender {
+    pub(crate) fn is_finishing(&self) -> bool {
+        self.finishing.load(Ordering::SeqCst) || self.control.borrow().cancel
+    }
     /// Admission never waits behind network I/O. A full queue is an explicit error.
     pub fn try_send(&self, action: Action, origin: Origin) -> Result<(), GeminiError> {
+        self.try_send_generation(action, origin, None)
+    }
+    pub(crate) fn try_send_video_at_generation(
+        &self,
+        jpeg: Vec<u8>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<(), GeminiError> {
+        self.try_send_generation(Action::VideoJpeg(jpeg), origin, Some(generation))
+    }
+    fn try_send_generation(
+        &self,
+        action: Action,
+        origin: Origin,
+        expected: Option<u64>,
+    ) -> Result<(), GeminiError> {
         let _admission = self.admission.lock().map_err(|_| GeminiError::Closed)?;
         if (self.finishing.load(Ordering::SeqCst) && !matches!(action, Action::ToolResponses(_)))
             || self.control.borrow().cancel
@@ -251,12 +270,18 @@ impl GeminiSender {
         if origin.context_id.as_ref().is_some_and(|s| s.len() > 1024) {
             return Err(GeminiError::TooLarge);
         }
+        if expected.is_some_and(|generation| generation != self.generation()) {
+            return Ok(());
+        }
         protocol::action_messages(&action, &self.config)?;
+        // Preserve ordinary callers' admission-time sampling; encoded video uses
+        // its explicitly captured generation even if interrupt raced validation.
+        let generation = expected.unwrap_or_else(|| self.generation());
         self.tx
             .try_send(Command {
                 action: Some(action),
                 origin,
-                generation: self.generation(),
+                generation,
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => GeminiError::Backpressure("input"),
@@ -367,6 +392,23 @@ async fn write(
         tokio::select! { biased;
             changed = control.changed() => { if changed.is_err() || control.borrow_and_update().cancel { return Err(GeminiError::Closed); } }
             result = &mut sending => return result.map_err(|_| GeminiError::Timeout("write"))?.map_err(transport),
+        }
+    }
+}
+
+async fn video_write_gate<'a>(
+    sender: &'a GeminiSender,
+    control: &mut watch::Receiver<Control>,
+) -> Result<tokio::sync::MutexGuard<'a, ()>, GeminiError> {
+    let locking = timeout(sender.config.limits.write_timeout, sender.gate.lock());
+    tokio::pin!(locking);
+    loop {
+        if control.borrow().cancel {
+            return Err(GeminiError::Closed);
+        }
+        tokio::select! { biased;
+            changed=control.changed()=>{if changed.is_err() {return Err(GeminiError::Closed);}},
+            result=&mut locking=>return result.map_err(|_|GeminiError::Timeout("video write gate")),
         }
     }
 }
@@ -622,6 +664,20 @@ async fn run(
                         finish_at = Instant::now() + sender.config.limits.finish_timeout;
                         continue;
                     };
+                    // A video result keeps its original generation even if an external
+                    // sender interrupts between encoding, enqueue and network write.
+                    // The gate linearizes its write against interrupt(); cancellation
+                    // still bypasses this gate and the write has a finite deadline.
+                    let _video_gate = if matches!(action, Action::VideoJpeg(_)) {
+                        Some(video_write_gate(&sender, &mut control).await?)
+                    } else {
+                        None
+                    };
+                    if matches!(action, Action::VideoJpeg(_))
+                        && command.generation != sender.generation()
+                    {
+                        continue;
+                    }
                     match &action {
                         Action::Audio(_)
                             if sender.config.session.activity_detection.disabled && !activity =>
@@ -807,5 +863,114 @@ mod ownership_tests {
         }
         peer.await.unwrap();
         assert!(release.send(()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod video_generation_tests {
+    use super::*;
+    #[tokio::test]
+    async fn captured_video_generation_is_never_resampled_after_interrupt() {
+        let (tx, mut rx) = mpsc::channel(2);
+        let (control, _) = watch::channel(Control::default());
+        let sender = GeminiSender {
+            config: Arc::new(GeminiConfig::new("fixture", "model")),
+            tx,
+            control,
+            generation: Arc::new(AtomicU64::new(0)),
+            finishing: Arc::new(AtomicBool::new(false)),
+            gate: Arc::new(Mutex::new(())),
+            admission: Arc::new(std::sync::Mutex::new(())),
+        };
+        let captured = sender.generation();
+        sender
+            .try_send_video_at_generation(vec![255, 216, 255, 217], Origin::default(), captured)
+            .unwrap();
+        sender.interrupt().await;
+        let queued = rx.try_recv().unwrap();
+        assert_eq!(queued.generation, captured);
+        assert_ne!(queued.generation, sender.generation());
+        sender
+            .try_send_video_at_generation(vec![255, 216, 255, 217], Origin::default(), captured)
+            .unwrap();
+        assert!(rx.try_recv().is_err());
+        sender
+            .try_send(
+                Action::VideoJpeg(vec![255, 216, 255, 217]),
+                Origin::default(),
+            )
+            .unwrap();
+        assert_eq!(rx.try_recv().unwrap().generation, sender.generation());
+    }
+    #[tokio::test]
+    async fn cancel_bypasses_held_video_write_gate_and_joins_socket() {
+        let wait = std::time::Duration::from_secs(2);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = GeminiConfig::new("fixture", "model");
+        config.endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        let client = GeminiClient::new(config).unwrap();
+        let mut peer = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            let mut socket = tokio_tungstenite::accept_async(tcp)
+                .await
+                .map_err(|e| e.to_string())?;
+            socket
+                .next()
+                .await
+                .ok_or("no setup")?
+                .map_err(|e| e.to_string())?;
+            socket
+                .send(Message::Text("{\"setupComplete\":{}}".into()))
+                .await
+                .map_err(|e| e.to_string())?;
+            match socket.next().await {
+                None | Some(Ok(Message::Close(_))) | Some(Err(tokio_tungstenite::tungstenite::Error::Protocol(tokio_tungstenite::tungstenite::error::ProtocolError::ResetWithoutClosingHandshake)))=>Ok::<_,String>(()),
+                other=>Err(format!("unexpected late video: {other:?}")),
+            }
+        });
+        let connected = client.connect().await;
+        let mut session = match connected {
+            Ok(s) => s,
+            Err(e) => {
+                peer.abort();
+                let _ = peer.await;
+                panic!("connect {e}");
+            }
+        };
+        let sender = session.sender();
+        let held = sender.gate.lock().await;
+        let sent = sender.try_send(
+            Action::VideoJpeg(vec![255, 216, 255, 217]),
+            Origin::default(),
+        );
+        let dequeued = timeout(wait, async {
+            while sender.tx.capacity() != sender.config.limits.queue_capacity {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        sender.cancel();
+        let result = timeout(wait, session.next_event()).await;
+        let bypassed = result.is_ok();
+        drop(held); // Always release, including the old-deadlock failure path.
+        let result = match result {
+            Ok(r) => r,
+            Err(_) => session.next_event().await,
+        };
+        let shutdown = session.shutdown().await;
+        let peer_result = match timeout(wait, &mut peer).await {
+            Ok(r) => r,
+            Err(e) => {
+                peer.abort();
+                let _ = peer.await;
+                panic!("peer aborted and joined {e}");
+            }
+        };
+        assert!(sent.is_ok());
+        assert!(dequeued.is_ok());
+        assert!(bypassed);
+        assert!(result.is_none());
+        assert!(shutdown.is_ok());
+        assert!(peer_result.unwrap().is_ok());
     }
 }
