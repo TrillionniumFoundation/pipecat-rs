@@ -88,6 +88,19 @@ Canceling a close future or reaching its deadline leaves its owned cleanup runni
 subsequent calls await that same cleanup. Completed close releases the native peer
 and its UDP sockets even when the public connection wrapper is retained. Registry
 shutdown likewise retains ownership of every admitted peer across cancellation.
+After all cleanup, unexpected owned-worker panics, external task cancellation,
+or a worker join deadline return a cached `Error::Shutdown`. The stable summary
+counts `panicked`, `cancelled`, and `timed_out`; it never includes panic payloads.
+Normal token-driven worker exits remain successful. A forced abort is counted as
+a timeout, without also calling its expected cancellation unexpected; a panic
+observed during that abort is still retained. Native peer-close and worker
+failures are both preserved. Cleanup continues through every owned task before
+returning errors, and repeated/concurrent callers observe the same final result.
+`Closed` describes resource release, not proof that all workers succeeded.
+Caller deadlines can still return `Error::Timeout("peer shutdown")` while the
+owned cleanup continues; a subsequent call retrieves its final cached outcome.
+This observes this crate's owned transport workers, not every internal task in
+WebRTC-rs. Drop still only schedules cleanup and detaches its handle.
 `send_frame` drains on End/Stop, cancels on Cancel, and clears audio on Interruption.
 
 Consume `recv_event` continuously. Reliable application JSON backpressures its
@@ -199,3 +212,17 @@ zero opposite-peer audio events/counters during requests and after track-status
 enable. Counters describe this transport, not a raw packet capture. Native voice
 and lifecycle programs remain compatibility controls. No browser permission,
 autoplay, physical device, WAN/TURN or live provider acceptance is implied.
+
+## Owned-worker failure witnesses
+
+Private native tests use real loopback ICE/DTLS/SCTP pairs and successful
+application traffic before aborting the actual message writer or deliberately
+panicking a real Tokio task added to the owned list. Held workers exercise actual
+join deadlines, fallback abort, panic during abort, dropped/concurrent close
+callers, and eventual cached failures. Pending guards, task lists, event queues,
+channel/native-peer ownership and actual UDP rebinding are checked after cleanup.
+A two-peer registry witness retains both public wrappers and proves the first
+worker error is propagated only after every admitted peer is closed. Injected
+worker failures are test faults, not a claim of a naturally observed media panic.
+The applicable runner voice/text/reply paths remain normal-close controls;
+real browser execution and live-provider/model/device validation are separate.

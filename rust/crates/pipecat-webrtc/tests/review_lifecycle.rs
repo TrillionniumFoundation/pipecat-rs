@@ -197,22 +197,47 @@ async fn cancelled_close_followed_by_drop_keeps_cleanup_owned() {
 #[tokio::test]
 async fn short_close_deadline_keeps_cleanup_owned_for_a_retry() {
     use pipecat_webrtc::{ConnectionState, Error};
-    let (a, b, addresses) = connected_pair(Duration::from_nanos(1)).await;
-    let mut state = a.subscribe_state();
-    assert!(matches!(
-        a.close().await,
-        Ok(()) | Err(Error::Timeout("peer shutdown"))
-    ));
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while *state.borrow_and_update() != ConnectionState::Closed {
-            state.changed().await.unwrap();
+    fn completed(result: &Result<(), Error>) -> bool {
+        match result {
+            Ok(()) => true,
+            Err(Error::Shutdown(message)) => message
+                .strip_prefix(
+                    "owned transport worker failures: panicked=0, cancelled=0, timed_out=",
+                )
+                .and_then(|count| count.parse::<usize>().ok())
+                .is_some_and(|count| (1..=3).contains(&count)),
+            _ => false,
         }
+    }
+    let (a, b, addresses) = connected_pair(Duration::from_nanos(1)).await;
+    let first = a.close().await;
+    let other_first = b.close().await;
+    let settled = tokio::time::timeout(Duration::from_secs(2), async {
+        for peer in [&a, &b] {
+            let mut state = peer.subscribe_state();
+            while *state.borrow_and_update() != ConnectionState::Closed {
+                state.changed().await.map_err(|error| error.to_string())?;
+            }
+        }
+        Ok::<(), String>(())
     })
-    .await
-    .unwrap();
-    a.close().await.unwrap();
+    .await;
+    let final_a = a.close().await;
+    let final_b = b.close().await;
+    let cached_a = a.close().await;
+    eprintln!("short-close first={first:?}; other_first={other_first:?}; settled={settled:?}; final_a={final_a:?}; final_b={final_b:?}; cached_a={cached_a:?}");
+    // A one-nanosecond worker deadline can force abort even a normal worker.
+    // Keep that explicit failure; Closed alone is never an all-worker success.
     assert_sockets_released(&addresses).await;
-    b.close().await.unwrap();
+    assert!(matches!(settled, Ok(Ok(()))));
+    assert!(
+        matches!(&first, Err(Error::Timeout("peer shutdown"))) || completed(&first),
+        "unexpected initial close: {first:?}"
+    );
+    assert!(other_first.is_ok(), "ordinary peer close: {other_first:?}");
+    assert!(completed(&final_a), "unexpected final close: {final_a:?}");
+    assert!(final_b.is_ok(), "unexpected other final close: {final_b:?}");
+    assert_eq!(format!("{final_a:?}"), format!("{cached_a:?}"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

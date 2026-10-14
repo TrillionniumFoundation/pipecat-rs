@@ -795,15 +795,7 @@ impl SmallWebRtcConnection {
                 && pc.dtls_transport().ice_transport().state() == RTCIceTransportState::Closed;
             let result = normalize_peer_close(result, transports_closed);
             let handles = std::mem::take(&mut *tasks.lock().unwrap());
-            for mut handle in handles {
-                if tokio::time::timeout(ctx.config.close_timeout, &mut handle)
-                    .await
-                    .is_err()
-                {
-                    handle.abort();
-                    let _ = handle.await;
-                }
-            }
+            let workers = join_transport_workers(handles, ctx.config.close_timeout).await;
             let mut events = events.lock().await;
             events.close();
             while events.try_recv().is_ok() {}
@@ -812,10 +804,55 @@ impl SmallWebRtcConnection {
             // released, even after WebRTC-rs reports successful shutdown.
             drop(pc);
             ctx.state.send_replace(ConnectionState::Closed);
-            result
+            // Closed records resource release. The cached result additionally
+            // records whether every owned transport worker ended successfully.
+            combine_close_results(result, workers)
         })
     }
 }
+// Do not return early: every handle remains owned through its final join.
+// Counts are bounded by the owned task list, and panic payloads are not exposed.
+async fn join_transport_workers(handles: Vec<JoinHandle<()>>, timeout: Duration) -> Option<String> {
+    let (mut panicked, mut cancelled, mut timed_out) = (0usize, 0usize, 0usize);
+    for mut handle in handles {
+        match tokio::time::timeout(timeout, &mut handle).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                if error.is_panic() {
+                    panicked += 1;
+                } else {
+                    cancelled += 1;
+                }
+            }
+            Err(_) => {
+                timed_out += 1;
+                handle.abort();
+                // A timeout remains a failure even if completion won the abort
+                // race. Our own abort cancellation is already counted above;
+                // a panic racing that abort remains an additional failure.
+                if let Err(error) = handle.await {
+                    if error.is_panic() {
+                        panicked += 1;
+                    }
+                }
+            }
+        }
+    }
+    (panicked != 0 || cancelled != 0 || timed_out != 0).then(|| format!(
+        "owned transport worker failures: panicked={panicked}, cancelled={cancelled}, timed_out={timed_out}"
+    ))
+}
+fn combine_close_results(
+    peer: std::result::Result<(), String>,
+    workers: Option<String>,
+) -> std::result::Result<(), String> {
+    match (peer, workers) {
+        (Ok(()), None) => Ok(()),
+        (Err(error), None) | (Ok(()), Some(error)) => Err(error),
+        (Err(peer), Some(workers)) => Err(format!("{peer}\n{workers}")),
+    }
+}
+
 impl Drop for SmallWebRtcConnection {
     fn drop(&mut self) {
         self.ctx.cancel.cancel();
@@ -1784,3 +1821,7 @@ mod tests {
         cancelled_receive_only_gather(true).await;
     }
 }
+
+#[cfg(test)]
+#[path = "worker_close_tests.rs"]
+mod worker_close_tests;
