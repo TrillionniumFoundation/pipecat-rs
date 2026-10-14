@@ -1,0 +1,1556 @@
+{
+  "case_count": 31,
+  "cases": [
+    {
+      "input": [],
+      "logged_errors": [],
+      "merged_wire": [],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_0_users_string",
+      "original_unchanged": true,
+      "output": []
+    },
+    {
+      "input": [],
+      "logged_errors": [],
+      "merged_wire": [],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_0_users_list",
+      "original_unchanged": true,
+      "output": []
+    },
+    {
+      "input": [
+        {
+          "content": "user-0",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": "user-0",
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_1_users_string",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "user-0",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_1_users_list",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": "user-0",
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": "user-1",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": "user-0",
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": "user-1",
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_2_users_string",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "user-0",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "user-1",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_2_users_list",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": "user-0",
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": "user-1",
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": "user-2",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": "user-0",
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": "user-1",
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": "user-2",
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_3_users_string",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": "user-0",
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "user-1",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "user-2",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-2",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-2",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "merged_wire_3_users_list",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "text": "user-0",
+              "type": "text"
+            },
+            {
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-1",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-1",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply-2",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "text": "user-2",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "last",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": "0",
+          "role": "user"
+        },
+        {
+          "content": "1",
+          "role": "user"
+        },
+        {
+          "content": "2",
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "role": "assistant"
+        },
+        {
+          "content": "final",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "0",
+              "type": "text"
+            },
+            {
+              "text": "1",
+              "type": "text"
+            },
+            {
+              "text": "2",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "role": "assistant"
+        },
+        {
+          "content": "final",
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "consecutive_users_merge_before_selection",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "text": "0",
+              "type": "text"
+            },
+            {
+              "text": "1",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "2",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "final",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "before",
+              "type": "text"
+            },
+            {
+              "content": "result",
+              "tool_use_id": "tool-1",
+              "type": "tool_result"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "before",
+              "type": "text"
+            },
+            {
+              "content": "result",
+              "tool_use_id": "tool-1",
+              "type": "tool_result"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "tool_result_final_block",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "text": "before",
+              "type": "text"
+            },
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "content": "result",
+              "tool_use_id": "tool-1",
+              "type": "tool_result"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": "question",
+          "role": "user"
+        },
+        {
+          "content": [
+            {
+              "signature": "opaque-signature",
+              "thinking": "signed text",
+              "type": "thinking"
+            },
+            {
+              "text": "answer",
+              "type": "text"
+            }
+          ],
+          "role": "assistant"
+        },
+        {
+          "content": "next",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": "question",
+          "role": "user"
+        },
+        {
+          "content": [
+            {
+              "signature": "opaque-signature",
+              "thinking": "signed text",
+              "type": "thinking"
+            },
+            {
+              "text": "answer",
+              "type": "text"
+            }
+          ],
+          "role": "assistant"
+        },
+        {
+          "content": "next",
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "signed_assistant_untouched",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "question",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        },
+        {
+          "content": [
+            {
+              "signature": "opaque-signature",
+              "thinking": "signed text",
+              "type": "thinking"
+            },
+            {
+              "text": "answer",
+              "type": "text"
+            }
+          ],
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "next",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [],
+      "merged_wire": [
+        {
+          "content": [
+            {
+              "text": "(empty)",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "mutable_identity_disjoint": true,
+      "name": "empty_content_source_placeholder",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "(empty)",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [
+        "Error adding cache control marker: list index out of range"
+      ],
+      "merged_wire": null,
+      "mutable_identity_disjoint": true,
+      "name": "malformed_empty_last_content",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [],
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "role": "assistant"
+        },
+        {
+          "content": "valid-latest",
+          "role": "user"
+        }
+      ],
+      "logged_errors": [
+        "Error adding cache control marker: list index out of range"
+      ],
+      "merged_wire": null,
+      "mutable_identity_disjoint": true,
+      "name": "malformed_partial_reverse_selection",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [],
+          "role": "user"
+        },
+        {
+          "content": "reply",
+          "role": "assistant"
+        },
+        {
+          "content": [
+            {
+              "cache_control": {
+                "type": "ephemeral"
+              },
+              "text": "valid-latest",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "input": [
+        {
+          "content": [
+            "bad-block"
+          ],
+          "role": "user"
+        }
+      ],
+      "logged_errors": [
+        "Error adding cache control marker: 'str' object does not support item assignment"
+      ],
+      "merged_wire": null,
+      "mutable_identity_disjoint": true,
+      "name": "malformed_non_mapping_last_block",
+      "original_unchanged": true,
+      "output": [
+        {
+          "content": [
+            "bad-block"
+          ],
+          "role": "user"
+        }
+      ]
+    },
+    {
+      "annotation_validation": false,
+      "input": {
+        "system": "policy",
+        "ttl": null
+      },
+      "name": "system_ttl_None",
+      "output": [
+        {
+          "cache_control": {
+            "type": "ephemeral"
+          },
+          "text": "policy",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "annotation_validation": false,
+      "input": {
+        "system": "policy",
+        "ttl": "5m"
+      },
+      "name": "system_ttl_5m",
+      "output": [
+        {
+          "cache_control": {
+            "ttl": "5m",
+            "type": "ephemeral"
+          },
+          "text": "policy",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "annotation_validation": false,
+      "input": {
+        "system": "policy",
+        "ttl": "1h"
+      },
+      "name": "system_ttl_1h",
+      "output": [
+        {
+          "cache_control": {
+            "ttl": "1h",
+            "type": "ephemeral"
+          },
+          "text": "policy",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "annotation_validation": false,
+      "input": {
+        "system": "policy",
+        "ttl": "invalid"
+      },
+      "name": "system_ttl_invalid",
+      "output": [
+        {
+          "cache_control": {
+            "ttl": "invalid",
+            "type": "ephemeral"
+          },
+          "text": "policy",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "input": {
+        "enabled": false,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": "1h"
+      },
+      "name": "invocation_False_'policy'_1h_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": null
+      },
+      "name": "invocation_True_'policy'_None_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": [
+          {
+            "cache_control": {
+              "type": "ephemeral"
+            },
+            "text": "policy",
+            "type": "text"
+          }
+        ],
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": "5m"
+      },
+      "name": "invocation_True_'policy'_5m_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": [
+          {
+            "cache_control": {
+              "ttl": "5m",
+              "type": "ephemeral"
+            },
+            "text": "policy",
+            "type": "text"
+          }
+        ],
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": "1h"
+      },
+      "name": "invocation_True_'policy'_1h_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": [
+          {
+            "cache_control": {
+              "ttl": "1h",
+              "type": "ephemeral"
+            },
+            "text": "policy",
+            "type": "text"
+          }
+        ],
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": null,
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": "1h"
+      },
+      "name": "invocation_True_None_1h_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": {
+          "oracle_sentinel": "ANTHROPIC_NOT_GIVEN"
+        },
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": false,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": "1h"
+      },
+      "name": "invocation_True_''_1h_False",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": [
+          {
+            "cache_control": {
+              "ttl": "1h",
+              "type": "ephemeral"
+            },
+            "text": "",
+            "type": "text"
+          }
+        ],
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "enabled": true,
+        "ensure_last_user": true,
+        "messages": [
+          {
+            "content": "question",
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          }
+        ],
+        "system": "policy",
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ],
+        "ttl": null
+      },
+      "name": "invocation_True_'policy'_None_True",
+      "original_unchanged": true,
+      "output": {
+        "messages": [
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": "question",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          },
+          {
+            "content": "answer",
+            "role": "assistant"
+          },
+          {
+            "content": [
+              {
+                "cache_control": {
+                  "type": "ephemeral"
+                },
+                "text": ".",
+                "type": "text"
+              }
+            ],
+            "role": "user"
+          }
+        ],
+        "system": [
+          {
+            "cache_control": {
+              "type": "ephemeral"
+            },
+            "text": "policy",
+            "type": "text"
+          }
+        ],
+        "tools": [
+          {
+            "input_schema": {
+              "type": "object"
+            },
+            "name": "unchanged-tool"
+          }
+        ]
+      }
+    },
+    {
+      "calls": [
+        [
+          "base",
+          "LLMEnablePromptCachingFrame",
+          "downstream"
+        ]
+      ],
+      "input": {
+        "enable": true
+      },
+      "name": "process_frame_enable",
+      "settings_after": {
+        "enable_prompt_caching": true,
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      },
+      "settings_before": {
+        "enable_prompt_caching": false,
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      }
+    },
+    {
+      "calls": [
+        [
+          "base",
+          "LLMEnablePromptCachingFrame",
+          "downstream"
+        ]
+      ],
+      "input": {
+        "enable": false
+      },
+      "name": "process_frame_disable",
+      "settings_after": {
+        "enable_prompt_caching": false,
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      },
+      "settings_before": {
+        "enable_prompt_caching": true,
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      }
+    },
+    {
+      "calls": [
+        [
+          "base",
+          "LLMEnablePromptCachingFrame",
+          "downstream"
+        ]
+      ],
+      "input": {
+        "enable": "invalid"
+      },
+      "name": "process_frame_malformed_enable_is_not_validated",
+      "settings_after": {
+        "enable_prompt_caching": "invalid",
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      },
+      "settings_before": {
+        "enable_prompt_caching": false,
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      }
+    },
+    {
+      "calls": [
+        [
+          "base",
+          "LLMContextFrame",
+          "downstream"
+        ],
+        [
+          "inference",
+          "context-token"
+        ]
+      ],
+      "input": {
+        "enable": null
+      },
+      "name": "process_frame_context_probe",
+      "settings_after": {
+        "enable_prompt_caching": "invalid",
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      },
+      "settings_before": {
+        "enable_prompt_caching": "invalid",
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      }
+    },
+    {
+      "calls": [
+        [
+          "base",
+          "Frame",
+          "downstream"
+        ],
+        [
+          "forward",
+          "Frame",
+          "downstream"
+        ]
+      ],
+      "input": {
+        "enable": null
+      },
+      "name": "process_frame_ordinary_forward_probe",
+      "settings_after": {
+        "enable_prompt_caching": "invalid",
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      },
+      "settings_before": {
+        "enable_prompt_caching": "invalid",
+        "model": "probe-model",
+        "system_prompt_cache_ttl": "1h"
+      }
+    }
+  ],
+  "methods": [
+    "_with_cache_control_markers",
+    "_system_with_cache_control",
+    "_from_universal_context_messages",
+    "_from_universal_context_message",
+    "_from_anthropic_specific_message",
+    "_ensure_last_message_is_user",
+    "get_llm_invocation_params",
+    "AnthropicLLMService.process_frame"
+  ],
+  "source_gate": "all three complete blobs: Git SHA-1 + SHA-256 + bytes before AST parsing/compilation",
+  "source_repository": "ProfHepta/pipecat",
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf"
+}

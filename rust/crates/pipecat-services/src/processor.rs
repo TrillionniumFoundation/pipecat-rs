@@ -136,6 +136,15 @@ impl LlmProcessor {
         }
     }
     fn consume(&self, frame: &Frame) -> Result<Consumption, ServiceError> {
+        if let FrameData::LlmEnablePromptCaching { enable } = &frame.data {
+            let mut delta = LlmSettings::default();
+            delta
+                .base
+                .extra
+                .insert("enable_prompt_caching".into(), serde_json::json!(enable));
+            self.update_settings(&delta)?;
+            return Ok(Consumption::Consumed);
+        }
         if let FrameData::LlmUpdateSettings(update) = &frame.data {
             if !self.targets_self(&update.service) {
                 return Ok(Consumption::Forward);
@@ -273,11 +282,6 @@ impl LlmProcessor {
             FrameData::LlmConfigureOutput { skip_tts } => {
                 state.skip_tts = Some(*skip_tts);
                 return Ok(Consumption::Consumed);
-            }
-            FrameData::LlmEnablePromptCaching { .. } => {
-                return Err(ServiceError::Unsupported(
-                    "runtime prompt caching policy".into(),
-                ))
             }
             _ => return Ok(Consumption::Forward),
         };
@@ -505,7 +509,9 @@ impl FrameProcessor for LlmProcessor {
                 }
                 let proposal = matches!(
                     frame.data,
-                    FrameData::LlmUpdateSettings(_) | FrameData::ServiceUpdateSettings(_)
+                    FrameData::LlmUpdateSettings(_)
+                        | FrameData::ServiceUpdateSettings(_)
+                        | FrameData::LlmEnablePromptCaching { .. }
                 );
                 ctx.push_error_with_permanence_override(
                     error_frame(error),

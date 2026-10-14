@@ -8,7 +8,8 @@ pub fn request_body(
     provider: Provider,
     request: &CompletionRequest,
 ) -> Result<Value, ServiceError> {
-    let resolved = crate::settings::resolve(request)?;
+    let mut resolved = crate::settings::resolve(request)?;
+    let cache_policy = crate::anthropic_cache::take_policy(provider, &mut resolved.extra)?;
     let request = &resolved;
     request.context.validate()?;
     if request.model.trim().is_empty() {
@@ -38,6 +39,7 @@ pub fn request_body(
         Provider::Gemini => gemini(request)?,
     };
     crate::settings::apply_wire(provider, &request.settings, &mut body)?;
+    crate::anthropic_cache::apply(&mut body, cache_policy)?;
     let object = body.as_object_mut().expect("adapter returns object");
     for (key, value) in &request.extra {
         if matches!(

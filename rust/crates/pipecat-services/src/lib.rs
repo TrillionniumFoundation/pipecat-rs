@@ -5,6 +5,8 @@
 //! tool calls or claim support for realtime APIs. Retries are explicit opt-in.
 
 pub mod adapters;
+mod anthropic_cache;
+pub use anthropic_cache::{AnthropicCacheTtl, AnthropicPromptCachePolicy};
 pub mod azure;
 pub use azure::{
     AzureApiSurface, AzureAuth, AzureConfig, AzureTokenProvider, AZURE_DATED_API_VERSION,

@@ -196,7 +196,7 @@ Unsupported features are not labeled as implemented integrations:
 
 - OpenAI Responses, Realtime, image/audio generation, STT, TTS, and legacy
   `function_call`; multiple completion candidates
-- Anthropic server tools, redacted thinking, prompt caching policies, batches,
+- Anthropic server tools, redacted thinking, automatic caching policies, batches,
   and Files API lifecycle
 - Gemini server code execution, multimodal output, live sessions, and Files API
   lifecycle; native signed text/tool continuation is described in [GEMINI.md](GEMINI.md)
@@ -206,8 +206,8 @@ Unsupported features are not labeled as implemented integrations:
   instead of silently converted to schemas. Speculative contexts require the native
   turn-owner capability and integrated bounded `LlmProcessor` gate described in
   [EAGER.md](../pipecat-turns/EAGER.md); missing capabilities return an explicit
-  error. Runtime prompt-caching controls and incomplete-user-turn filtering remain
-  unsupported
+  error. Incomplete-user-turn filtering remains unsupported. Explicit Anthropic
+  prompt-cache breakpoints and controls are described in [ANTHROPIC_CACHE.md](ANTHROPIC_CACHE.md)
 - Authentication beyond explicitly supplied API keys and the application-supplied
   Azure token-provider mode documented in [AZURE.md](AZURE.md)
 - Other Pipecat service families; compatible request presets do not imply those
@@ -291,3 +291,12 @@ Azure requires `ClientConfig::azure(AzureConfig::new(endpoint, auth)?)` rather
 than the generic preset constructor. Its private transport disables proxies,
 redirects and internal retries, rejects custom clients, and redacts provider
 diagnostics. See [AZURE.md](AZURE.md) for authentication and scope.
+
+## Explicit Anthropic cache breakpoints
+
+`AnthropicPromptCachePolicy` and `CompletionRequest::with_anthropic_prompt_cache`
+opt into the fixed source's system-prefix and last-two-user-message breakpoints.
+The existing `LlmEnablePromptCaching` control updates future request snapshots
+without starting inference. Defaults remain unchanged; internal policy settings
+never leak to provider fields. See [ANTHROPIC_CACHE.md](ANTHROPIC_CACHE.md) for TTL,
+validation, signed-history preservation, source boundaries and local-only tests.
