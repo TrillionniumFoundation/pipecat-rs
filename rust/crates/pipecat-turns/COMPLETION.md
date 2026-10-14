@@ -115,3 +115,41 @@ native custom markers do not leak into unrelated future transcript events.
 Overlapping markers are removed longest-first, then lexically, rather than
 depending on set iteration order. Spoken `LlmText` has its leading marker removed
 by the strategy; context retains that marker for the next model request.
+
+## Run the credential-free topology demonstration
+
+From `rust/`:
+
+```sh
+cargo run -p pipecat-turns --example turn_completion
+```
+
+The example creates an ephemeral loopback HTTP/SSE server and composes the real
+user aggregator, `LlmProcessor`, `LLMTurnCompletionProcessor`, and text-mode
+assistant aggregator. A bounded read-only tap observes text and response ends
+between the completion processor and assistant, since the assistant consumes
+these frames. Root output is drained separately; a FIFO flush synchronizes
+history checks. The server scripts responses; it does not run a model or
+classify speech. No API key, provider account, device, or external connection is
+needed. The fixed dummy authorization value is only for this local fixture.
+
+Four self-checking runs show:
+
+- `Complete`: the real HTTP request contains `completion_instructions()`, the
+  visible text omits `●`, and assistant history retains `●` with the reply.
+- `Short` and `Long`: `◐`/`○` suppress reply text, retain the marker in history,
+  and produce one developer-message retry through the real LLM. A second
+  incomplete reply cannot replenish the configured one-retry budget. Request
+  counts are checked over a further bounded observation window.
+- `Cancel`: a streamed incomplete prefix is followed by an intentionally open
+  provider response. Cancellation closes the client connection, observed by the
+  server as peer EOF, and both pipeline and server owners are joined.
+
+The example shortens timeout intervals to 100/150 ms so it finishes promptly;
+production defaults remain five/ten seconds. The second incomplete response is
+intentionally contrary to the developer prompt, exercising the native retry
+budget rather than claiming model compliance. It does not enable the rejected
+legacy `filter_incomplete_user_turns` service setting, speculative inference,
+signed-history rewriting, or tool effects. This is an executable composition of
+existing APIs, not new turn detection or live-provider qualification. Each run
+always closes and joins both owners before returning observation errors.

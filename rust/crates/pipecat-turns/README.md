@@ -1339,3 +1339,9 @@ End/Stop/Cancel admit their final record then close the stream; queued records
 remain caller-drainable. Cancel never spawns a new async callback. A replacement
 job requires a fresh assistant session. Full ordering, budgets and limits are in
 [assistant completion ownership](../../docs/assistant-stopped.md).
+
+For a credential-free, self-checking HTTP/SSE demonstration of complete and
+incomplete replies, one bounded automatic retry, and cancellation cleanup, run
+`cargo run -p pipecat-turns --example turn_completion`. The local server scripts
+responses while the native completion/LLM/aggregation topology is real. See
+[the completion demonstration](COMPLETION.md#run-the-credential-free-topology-demonstration).
