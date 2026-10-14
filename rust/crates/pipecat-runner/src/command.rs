@@ -3,7 +3,7 @@ use crate::{NativeRunner, Options, RunnerConfig, SttProvider, VoiceCascade};
 use pipecat_client_server::server::{serve_with_api, AssetBundle, ServerConfig};
 use std::{path::PathBuf, sync::Arc};
 
-const HELP:&str="pipecat-browser-agent [--bind 127.0.0.1:7860] [--assets DIRECTORY] [--no-intro] [--webrtc] [--text-input] [--vad-model PATH --onnx-runtime PATH]\n\nNative HTTP /api/start + isolated RTVI 2.2/protobuf WebSocket voice sessions.\nDefault environment: DEEPGRAM_API_KEY, OPENAI_API_KEY, CARTESIA_API_KEY.\nAlternative: --features soniox and PIPECAT_VOICE_CASCADE=soniox, SONIOX_API_KEY, OPENAI_API_KEY.\nSoniox supports WebSocket with provider endpoint detection; local STT/VAD and --webrtc are rejected.\nOptional SONIOX_STT_MODEL, SONIOX_TTS_MODEL, SONIOX_VOICE; history remains generated text.\nLocal STT: --features whisper; PIPECAT_STT_PROVIDER=whisper, PIPECAT_WHISPER_MODEL=/existing/ggml.bin.\nLocal STT needs Silero paths or explicit PIPECAT_WHISPER_SEGMENT_MS=1000..30000; no Deepgram key.\nOPENAI_API_KEY and CARTESIA_API_KEY remain required; no models auto-download.\nOptional PIPECAT_WHISPER_THREADS=1..256, PIPECAT_WHISPER_LANGUAGE=en|auto|language-tag, PIPECAT_WHISPER_PRE_ROLL_MS=0..5000 (VAD, default 3000).\nOptional provider/model/voice/rate environment matches pipecat-voice-agent.\n--text-input requires --assets and selects microphone-free WebSocket browser input; it cannot be combined with --webrtc.\nThe host replaces asset config.json in memory; omitted --text-input preserves voice. Provider/STT credentials and initialization are unchanged.\nWebSocket is the default; --webrtc also enables native SmallWebRTC (requires the webrtc Cargo feature).\nContext and bot-output represent generated text, never confirmed audio playback.\nBrowser automation and physical microphone/speaker validation are separate tests.\n";
+const HELP: &str = "pipecat-browser-agent [--bind 127.0.0.1:7860] [--assets DIRECTORY] [--no-intro] [--webrtc] [--text-input] [--vad-model PATH --onnx-runtime PATH]\n\nNative HTTP /api/start + isolated RTVI 2.2/protobuf WebSocket voice sessions.\nDefault environment: DEEPGRAM_API_KEY, OPENAI_API_KEY, CARTESIA_API_KEY.\nAlternative: --features soniox and PIPECAT_VOICE_CASCADE=soniox, SONIOX_API_KEY, OPENAI_API_KEY.\nSoniox supports WebSocket with provider endpoint detection; local STT/VAD and --webrtc are rejected.\nOptional SONIOX_STT_MODEL, SONIOX_TTS_MODEL, SONIOX_VOICE; history remains generated text.\nLocal STT: --features whisper; PIPECAT_STT_PROVIDER=whisper, PIPECAT_WHISPER_MODEL=/existing/ggml.bin.\nLocal STT needs Silero paths or explicit PIPECAT_WHISPER_SEGMENT_MS=1000..30000; no Deepgram key.\nOPENAI_API_KEY and CARTESIA_API_KEY remain required; no models auto-download.\nOptional PIPECAT_WHISPER_THREADS=1..256, PIPECAT_WHISPER_LANGUAGE=en|auto|language-tag, PIPECAT_WHISPER_PRE_ROLL_MS=0..5000 (VAD, default 3000).\nOptional provider/model/voice/rate environment matches pipecat-voice-agent.\n--text-input requires --assets and selects microphone-free input; --webrtc adds receive-only browser audio (requires the webrtc feature).\nThe host replaces asset config.json in memory; omitted --text-input preserves voice. Provider/STT credentials and initialization are unchanged.\nWebSocket is the default; --webrtc also enables native SmallWebRTC (requires the webrtc Cargo feature).\nContext and bot-output represent generated text, never confirmed audio playback.\nBrowser automation and physical microphone/speaker validation are separate tests.\n";
 /// Start the native browser runner from command-line flags and provider environment.
 /// `--help` does not read credentials. This owns the HTTP host and all sessions
 /// until SIGINT, then joins their cleanup.
@@ -43,9 +43,6 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err("unknown argument; use --help".into()),
         }
     }
-    if text_input && webrtc {
-        return Err("--text-input supports WebSocket only; --webrtc is incompatible".into());
-    }
     if text_input && assets.is_none() {
         return Err("--text-input requires --assets DIRECTORY".into());
     }
@@ -79,7 +76,7 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
         )),
         #[cfg(not(feature = "soniox"))]
         VoiceCascade::Soniox => {
-            return Err("Soniox cascade requires the soniox Cargo feature".into())
+            return Err("Soniox cascade requires the soniox Cargo feature".into());
         }
     };
     let listener = tokio::net::TcpListener::bind(options.bind).await?;

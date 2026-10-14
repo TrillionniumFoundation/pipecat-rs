@@ -778,7 +778,9 @@ async fn connect_webrtc(
         config.set_ice_servers(&js_sys::JSON::parse(&servers.to_string())?);
     }
     let rtc = RtcPeerConnection::new_with_configuration(&config)?;
+    app.borrow_mut().session.as_mut().unwrap().rtc = Some(rtc.clone());
     let data = rtc.create_data_channel("chat");
+    app.borrow_mut().session.as_mut().unwrap().data = Some(data.clone());
     let open = handler(Rc::downgrade(app), epoch, move |app, _| {
         connected(&app, epoch)
     });
@@ -852,20 +854,25 @@ async fn connect_webrtc(
         }
     });
     rtc.set_ontrack(Some(track.as_ref().unchecked_ref()));
-    let (media, abort) = {
-        let app = app.borrow();
-        let s = app.session.as_ref().unwrap();
-        (s.media.clone().unwrap(), s.abort.clone())
-    };
-    for track in media.get_audio_tracks().iter() {
-        rtc.add_track_0(&track.unchecked_into::<MediaStreamTrack>(), &media);
-    }
     {
         let mut app = app.borrow_mut();
         let s = app.session.as_mut().unwrap();
-        s.rtc = Some(rtc.clone());
-        s.data = Some(data);
         s.callbacks.extend([open, receive, close, state, track]);
+    }
+    let (input_mode, media, abort) = {
+        let app = app.borrow();
+        let s = app.session.as_ref().unwrap();
+        (s.input_mode, s.media.clone(), s.abort.clone())
+    };
+    if input_mode.captures_microphone() {
+        let media = media.ok_or_else(|| error("Voice WebRTC input has no microphone stream"))?;
+        for track in media.get_audio_tracks().iter() {
+            rtc.add_track_0(&track.unchecked_into::<MediaStreamTrack>(), &media);
+        }
+    } else {
+        let init = RtcRtpTransceiverInit::new();
+        init.set_direction(RtcRtpTransceiverDirection::Recvonly);
+        rtc.add_transceiver_with_str_and_init("audio", &init);
     }
     let offer = JsFuture::from(rtc.create_offer()).await?;
     checked(app, epoch)?;

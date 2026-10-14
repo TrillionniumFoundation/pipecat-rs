@@ -58,8 +58,9 @@ async fn help_remains_credential_free_and_describes_opt_in() {
         .contains("Provider/STT credentials and initialization are unchanged"));
 }
 
+#[cfg(not(feature = "webrtc"))]
 #[tokio::test]
-async fn incompatible_flags_fail_before_credentials_or_host_start() {
+async fn receive_only_without_feature_fails_before_credentials_or_host_start() {
     for args in [
         vec!["--text-input", "--webrtc", "--assets", "unused"],
         vec!["--webrtc", "--assets", "unused", "--text-input"],
@@ -72,7 +73,7 @@ async fn incompatible_flags_fail_before_credentials_or_host_start() {
         assert!(probe.stdout.raw.is_empty());
         assert_eq!(
             probe.stderr.text,
-            "--text-input supports WebSocket only; --webrtc is incompatible\n"
+            "--webrtc requires building pipecat-runner with --features webrtc\n"
         );
     }
 }
@@ -143,5 +144,19 @@ async fn repeated_text_hosts_have_fresh_owned_lifetimes() {
             .unwrap();
         assert_eq!(config.input_mode, InputMode::Text);
         assert_eq!(config.transports, vec![Transport::WebSocket]);
+    }
+}
+
+#[cfg(feature = "webrtc")]
+#[tokio::test]
+async fn explicit_receive_only_config_accepts_both_flag_orders() {
+    for args in [["--text-input", "--webrtc"], ["--webrtc", "--text-input"]] {
+        let config = host::hosted(&args).await.unwrap().into_config().unwrap();
+        assert_eq!(config.input_mode, InputMode::Text);
+        assert!(!config.input_mode.captures_microphone());
+        assert_eq!(
+            config.transports,
+            vec![Transport::WebSocket, Transport::SmallWebRtc]
+        );
     }
 }

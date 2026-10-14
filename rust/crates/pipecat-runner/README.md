@@ -33,10 +33,12 @@ cargo run -p pipecat-runner --bin pipecat-browser-agent -- \
   --assets client-templates/dist --text-input --no-intro
 ```
 
-`--text-input` requires `--assets` and rejects `--webrtc`, in either flag order,
-before credential lookup or listener creation. The host replaces the supplied
+`--text-input` requires `--assets`. Add `--webrtc` to a build with the `webrtc`
+feature for microphone-free receive-only audio; without that feature the flag is
+rejected before credential lookup or listener creation, in either flag order. The host replaces the supplied
 `config.json` completely in memory: CLI selection wins, and asset configuration
-is never merged. The new flag publishes `input_mode: "text"` with WebSocket only.
+is never merged. The flag publishes `input_mode: "text"` with WebSocket, or WebSocket plus
+SmallWebRTC when `--webrtc` is selected.
 Without it the existing voice configuration and transport choices remain unchanged,
 even if the supplied file asks for text mode. Build files are never rewritten.
 
@@ -45,8 +47,11 @@ native host. Custom static/proxy hosting may still configure `input_mode` direct
 Text mode retains bot audio replies and generated-text history. Provider/STT
 initialization and required credentials are unchanged; it neither disables
 server audio admission nor promises fewer provider connections or lower cost.
-WebRTC receive-only, browser image/receipt bridges and actual browser
-permission/capture/autoplay validation remain outside this entry change.
+Text-mode RTC uses a recvonly audio transceiver with no local microphone track.
+The RTVI data channel and bot audio replies remain active. Browser image/receipt
+bridges and actual browser permission/capture/autoplay validation remain open.
+Real native receive-only peer and injected-provider tests are separate from the
+actual CLI child HTTP configuration witness; neither is browser execution.
 
 `--help` reads no credentials. `--bind` selects a literal loopback address;
 `--no-intro` waits for user speech. Optional Silero requires both `--vad-model`

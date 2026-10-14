@@ -366,7 +366,7 @@ impl Fixture {
             #[cfg(feature = "webrtc")]
             Transport::SmallWebRtc => {
                 self.peer = Some(Peer::Rtc(get!(
-                    SmallWebRtcConnection::new(SmallWebRtcConfig {
+                    SmallWebRtcConnection::new_receive_only(SmallWebRtcConfig {
                         audio_codec: Some(AudioCodec::Pcmu),
                         localhost_only: true,
                         data_channel_label: "chat".into(),
@@ -474,6 +474,31 @@ impl Fixture {
                         .iter()
                         .any(|s| i16::from_le_bytes([s[0], s[1]]).abs() > 100),
                 "decoded native WebRTC audio missing"
+            );
+        }
+        #[cfg(feature = "webrtc")]
+        if let Peer::Rtc(rtc) = peer {
+            let silent = pipecat_core::AudioRawFrame::new(vec![0; 320], 8_000, 1)
+                .map_err(|e| format!("{e:?}"))?;
+            check!(
+                matches!(
+                    rtc.send_audio(silent.clone()).await,
+                    Err(pipecat_webrtc::Error::AudioDisabled)
+                ),
+                "runner client audio send accepted"
+            );
+            check!(
+                matches!(
+                    rtc.try_send_audio(silent),
+                    Err(pipecat_webrtc::Error::AudioDisabled)
+                ),
+                "runner client try audio send accepted"
+            );
+            let stats = rtc.stats();
+            eprintln!("runner receive-only client transport counters={stats:?}");
+            check!(
+                stats.audio_packets_sent == 0 && stats.audio_packets_received > 0,
+                "runner receive-only media counters"
             );
         }
         entry.close();
@@ -603,5 +628,17 @@ async fn actual_websocket_text_entry_exact_context_fresh_session_and_disconnect(
 #[cfg(feature = "webrtc")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn actual_native_webrtc_text_entry_and_generated_reply() {
-    run(Transport::SmallWebRtc, 1).await;
+    let config = host::hosted(&["--text-input", "--webrtc"])
+        .await
+        .expect("owned actual child HTTP probe")
+        .into_config()
+        .expect("actual hosted receive-only configuration and child shutdown");
+    assert_eq!(config.input_mode, InputMode::Text);
+    assert!(!config.input_mode.captures_microphone());
+    let mode = *config
+        .transports
+        .iter()
+        .find(|mode| **mode == Transport::SmallWebRtc)
+        .expect("actual host must advertise RTC");
+    run(mode, 2).await;
 }

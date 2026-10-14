@@ -9,7 +9,8 @@ a paid provider, a browser process, or PCM disguised as an encoded RTP codec.
 
 - Gathered offer/answer and trickle ICE, including end-of-candidates
 - Configured STUN/TURN URLs; no external ICE servers by default
-- One bidirectional audio track and one application data channel per peer
+- One bidirectional audio track by default, or explicitly receive-only audio,
+  plus one bidirectional application data channel per peer
 - Opus via the safe `opus` bindings and bundled native libopus (default feature)
 - PCMU and PCMA via `pipecat-audio`'s real G.711 codecs, including builds without Opus
 - Bounded pre-open JSON buffering, ordered delivery, message-size limits, and
@@ -172,3 +173,29 @@ The README example is compile-checked as a Rust doctest.
 - [Opus Rust bindings](https://docs.rs/opus/0.4.0/opus/)
 - [Opus RTP payload specification, RFC 7587](https://www.rfc-editor.org/rfc/rfc7587)
 - Source compatibility: `src/pipecat/transports/smallwebrtc/{connection,request_handler,transport}.py`
+
+## Explicit receive-only audio
+
+`SmallWebRtcConnection::new_receive_only(config).await` requires a configured
+codec and adds a standard recvonly audio transceiver. `new(config)` and the public
+configuration shape retain their prior defaults. Receive-only creates no local
+sample track, encoder, RTCP sender-reader or audio writer. Async and try audio
+sends, including audio `send_frame` variants, return `Error::AudioDisabled` before
+admission; once cancelled/closed they return `Error::Closed`. Remote `trackStatus`
+cannot promote the immutable policy. Text SCTP, ICE/DTLS and receiver RTCP still
+send traffic. No renegotiation or dynamic send-mode promotion is provided.
+
+Use explicit `close().await` for joined cleanup, including after cancelling an
+owned offer/answer operation. A wrapper owns the native peer before awaited
+track/transceiver setup; explicit setup failure awaits close and reports any
+unverified cleanup. Dropping a partially constructed future after that boundary
+schedules the existing close operation but detaches its handle. It is not proof
+of joined constructor cancellation, and cancellation before the underlying peer
+factory returns is not a new guarantee.
+
+The receive-only tests parse the negotiated audio m-line, reject local sending
+track descriptors, exercise PCMU/Opus downlink and exact SCTP traffic, and observe
+zero opposite-peer audio events/counters during requests and after track-status
+enable. Counters describe this transport, not a raw packet capture. Native voice
+and lifecycle programs remain compatibility controls. No browser permission,
+autoplay, physical device, WAN/TURN or live provider acceptance is implied.

@@ -41,7 +41,7 @@ configuration and local-only security boundary. Direct backend URLs ending in
 CORS. HTTPS is required for non-loopback microphone access. A static file server
 alone does not provide `/api/start`; the bot backend and proxy are separate
 services. The default voice mode needs microphone permission after Connect. The explicit
-WebSocket text-input mode below does not request a microphone; platform permissions
+Text-input mode below does not request a microphone; platform permissions
 remain under the user's control.
 
 No private API key belongs in `config.json`, HTML, WASM, or a browser URL.
@@ -98,7 +98,7 @@ history, or playback receipt. No confirmed conversation row is fabricated from
 Send success. This RTVI path does not implement the separate CLI chunk-v2 audio
 receipt or image-channel protocols, and has no image canvas/browser bridge.
 
-## Microphone-free WebSocket input
+## Microphone-free text input
 
 To connect without requesting microphone permission, serve this configuration:
 
@@ -115,15 +115,15 @@ The standard `pipecat-browser-agent --assets DIRECTORY` command replaces this
 file in memory. For that host, add `--text-input` instead of editing the bundle:
 `pipecat-browser-agent --assets client-templates/dist --text-input --no-intro`.
 Without the flag, the host preserves its voice default, even if the file requests
-text. The flag requires assets and rejects `--webrtc`; it does not change provider
-credentials or STT initialization. Direct configuration above applies to custom
+text. The flag requires assets. Add `--webrtc` with a webrtc-enabled runner build
+to offer both transports; it does not change provider credentials or STT initialization. Direct configuration above applies to custom
 static/proxy hosting.
 
 Omitted `input_mode` defaults to `voice`; explicit `voice` keeps both existing
-transports. Unknown modes and text mode with SmallWebRTC or mixed transports fail
-configuration validation before Connect. WebRTC receive-only negotiation is not
-implemented, so no text-mode WebRTC option is displayed. No transport is silently
-changed. Rust callers constructing `Config` directly must now provide
+transports. Text mode accepts WebSocket, SmallWebRTC, or both in the configured
+selection. Its WebRTC audio transceiver is recvonly with no local track; incoming
+audio and the bidirectional RTVI data channel remain active. Unknown modes and
+unsupported transports fail validation before Connect. No transport is silently changed. Rust callers constructing `Config` directly must now provide
 `input_mode: InputMode::Voice` or `InputMode::Text`.
 
 Text mode snapshots its policy for the owned session, never calls getUserMedia
@@ -134,7 +134,7 @@ Normal browser audio/autoplay rules still apply. Change the mode by disconnectin
 editing the served configuration and reloading; there is no live mode-switch API.
 
 Readiness, draft limits and no-replay behavior are unchanged. Disconnect closes
-the socket and AudioContext even when no microphone stream exists. Native provider
+the socket/peer and AudioContext even when no microphone stream exists. Native provider
 setup, including configured STT, is unchanged: this option does not promise fewer
 server STT connections, different credentials or lower provider cost. Actual
 browser permission/capture execution remains unqualified on the current blocked
@@ -197,3 +197,16 @@ See `VALIDATION.md` for the recorded passed checks and blocked browser stage.
 Browser acceptance must be reported separately from live-provider, physical
 microphone/speaker, WAN TURN traversal, multi-browser, autoplay-restriction and
 production-auth acceptance. Those environments are not exercised by the fixture.
+
+### Receive-only qualification boundary
+
+The native receive-only peer rejects audio send/try-send/frame admission before
+queueing, including after remote track-status enable. Real native paired tests
+observe no upstream audio events and zero audio transport counters alongside
+positive SCTP requests and PCMU/Opus downlink audio. These are transport-level
+observations, not packet captures or a claim of zero network traffic: ICE, DTLS,
+SCTP text and receiver RTCP still send. Default voice remains bidirectional.
+The actual child-hosted configuration is tested separately from its consumption
+by a native client with loopback provider services. The rebuilt WASM and updated
+Chromium fixture do not establish executed browser permission or autoplay behavior;
+that environment remains blocked as recorded in VALIDATION.md.

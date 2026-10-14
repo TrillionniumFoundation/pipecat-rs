@@ -152,6 +152,7 @@ async def main():
             context = await browser.new_context(viewport={'width': 1200, 'height': 800})
             await context.add_init_script('''
               window.mediaRequests=0; window.captureNodes=0; window.rejectMedia=false; window.capturedStreams=[]; window.audioContexts=[]; window.audioStarted=0; window.audioStopped=0; window.openSockets=[];
+              window.openPeers=[]; const NativePeer=window.RTCPeerConnection; window.RTCPeerConnection=class extends NativePeer {constructor(...args){super(...args);window.openPeers.push(this);}};
               const NativeSocket=window.WebSocket; window.WebSocket=class extends NativeSocket {constructor(...args){super(...args);window.openSockets.push(this);}};
               const media = navigator.mediaDevices;
               if (media) { const original=media.getUserMedia.bind(media); media.getUserMedia=async (...args)=>{ window.mediaRequests++; if(window.rejectMedia) throw new Error("text mode must not request microphone"); const stream=await original(...args); window.capturedStreams.push(stream); if(window.delayMedia) await new Promise(r=>setTimeout(r,500)); return stream; }; }
@@ -386,13 +387,45 @@ async def main():
             await cleanup()
             checks.append('Explicit WS text mode never calls throwing getUserMedia or creates capture nodes; real text/audio, inert mic control, reconnect, failure/cancel cleanup and unique session IDs')
             state['mode'] = 'text_rtc'
-            starts_before = len(state['starts'])
-            await page.reload()
-            await page.wait_for_function("document.querySelector('#transport-state').textContent==='Configuration error'")
-            assert await page.locator('#connect-btn').is_disabled()
-            assert len(state['starts']) == starts_before
-            assert await page.evaluate('window.mediaRequests === 0 && window.audioContexts.length === 0')
-            checks.append('Text + WebRTC configuration is explicitly rejected before permission or session allocation')
+            await initialized()
+            await page.evaluate('window.rejectMedia = true')
+            for index in range(2):
+                await connect()
+                await page.wait_for_function("!document.querySelector('#send-btn').disabled")
+                await page.wait_for_function("document.querySelector('audio')?.srcObject?.getAudioTracks().length === 1")
+                await page.wait_for_function("window.openPeers.some(p=>p.connectionState==='connected' && p.getTransceivers().some(t=>t.receiver.track.kind==='audio' && t.currentDirection==='recvonly'))")
+                assert await page.evaluate("window.openPeers.every(p=>p.getSenders().every(s=>s.track===null))")
+                assert await page.evaluate('window.mediaRequests === 0 && window.captureNodes === 0 && window.capturedStreams.length === 0')
+                await page.fill('#message-input', f'RTC 免麦克风 {index} 🦀')
+                await page.click('#send-btn')
+                await peer_page.wait_for_function("window.signals.some(v=>v.type==='send-text')")
+                values = await peer_page.evaluate("window.signals.filter(v=>v.type==='send-text')")
+                assert len(values) == 1 and values[0]['data']['content'] == f'RTC 免麦克风 {index} 🦀'
+                signals_before = await peer_page.evaluate('window.signals.length')
+                await page.evaluate("document.querySelector('#mic-btn').dispatchEvent(new Event('click'))")
+                await page.wait_for_timeout(100)
+                assert await page.locator('#mic-btn').is_disabled()
+                assert await peer_page.evaluate('window.signals.length') == signals_before
+                await page.wait_for_function("async()=>{const p=window.openPeers.find(p=>p.connectionState==='connected'); if(!p)return false;const stats=[...(await p.getStats()).values()];return stats.some(s=>s.type==='inbound-rtp' && s.kind==='audio' && s.packetsReceived>0);}")
+                assert await page.evaluate("async()=>{const p=window.openPeers.find(p=>p.connectionState==='connected');return [...(await p.getStats()).values()].filter(s=>s.type==='outbound-rtp' && s.kind==='audio').every(s=>(s.packetsSent||0)===0);}")
+                assert await peer_page.evaluate("async()=>[...(await window.peer.getStats()).values()].filter(s=>s.type==='inbound-rtp' && s.kind==='audio').every(s=>(s.packetsReceived||0)===0)")
+                await page.click('#connect-btn')
+                await cleanup()
+                await page.wait_for_function("window.openPeers.every(p=>p.signalingState==='closed')")
+                await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
+            state['mode'] = 'slow_offer'
+            offers_before = len(state['offers'])
+            await page.click('#connect-btn')
+            for _ in range(200):
+                if len(state['offers']) > offers_before: break
+                await asyncio.sleep(.025)
+            assert len(state['offers']) > offers_before
+            await page.click('#connect-btn')
+            await cleanup()
+            await page.wait_for_timeout(800)
+            assert await page.evaluate("window.openPeers.every(p=>p.signalingState==='closed') && window.mediaRequests===0")
+            await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
+            checks.append('Text WebRTC: throwing permission trap untouched, no capture/local tracks, negotiated recvonly, exact RTVI text/downlink RTP, zero audio RTP uplink counters, inert mic, reconnect and pending-offer cancellation cleanup')
             del state['input_mode']
             state['mode'] = 'normal'
             await initialized()

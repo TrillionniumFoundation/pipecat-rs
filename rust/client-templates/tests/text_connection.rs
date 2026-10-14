@@ -37,3 +37,18 @@ fn explicit_microphone_free_websocket_configuration_is_usable() {
     );
     assert_eq!(config.transports, vec![Transport::WebSocket]);
 }
+
+#[test]
+fn explicit_text_config_supports_receive_only_rtc_and_mixed_selection() {
+    use pipecat_browser_client::InputMode;
+    for transports in [json!(["smallwebrtc"]), json!(["websocket", "smallwebrtc"])] {
+        let config: Config = serde_json::from_value(json!({"project_name":"Receive only", "start_endpoint":"/api/start", "transports":transports, "input_mode":"text"})).unwrap();
+        config.validate("http://127.0.0.1:8080/").unwrap();
+        assert_eq!(config.input_mode, InputMode::Text);
+        assert!(!config.input_mode.captures_microphone());
+        assert!(config.transports.contains(&Transport::SmallWebRtc));
+        for transport in config.transports {
+            config.input_mode.validate_transport(transport).unwrap();
+        }
+    }
+}

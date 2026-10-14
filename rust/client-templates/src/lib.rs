@@ -62,13 +62,10 @@ impl InputMode {
         self == Self::Voice
     }
     pub fn validate_transport(self, transport: Transport) -> Result<(), String> {
-        if self == Self::Text && transport != Transport::WebSocket {
-            return Err(
-                "text input mode supports only websocket; WebRTC receive-only is not implemented"
-                    .into(),
-            );
+        match (self, transport) {
+            (_, Transport::WebSocket | Transport::SmallWebRtc) => Ok(()),
+            _ => Err("only smallwebrtc and websocket adapters are implemented".into()),
         }
-        Ok(())
     }
 }
 
@@ -325,12 +322,9 @@ mod tests {
     }
     #[test]
     fn invalid_text_transports_and_unknown_input_modes_fail_closed() {
-        for transports in [json!(["smallwebrtc"]), json!(["websocket", "smallwebrtc"])] {
+        for transports in [json!(["daily"]), json!(["websocket", "daily"])] {
             let config: Config = serde_json::from_value(json!({"project_name":"text","start_endpoint":"/api/start","transports":transports,"input_mode":"text"})).unwrap();
-            assert_eq!(
-                config.validate("http://127.0.0.1:8080/").unwrap_err(),
-                "text input mode supports only websocket; WebRTC receive-only is not implemented"
-            );
+            assert!(config.validate("http://127.0.0.1:8080/").is_err());
         }
         for mode in [
             json!("Text"),
@@ -342,7 +336,7 @@ mod tests {
         }
         assert!(InputMode::Text
             .validate_transport(Transport::SmallWebRtc)
-            .is_err());
+            .is_ok());
         assert!(InputMode::Voice
             .validate_transport(Transport::SmallWebRtc)
             .is_ok());

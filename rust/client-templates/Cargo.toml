@@ -30,6 +30,7 @@ web-sys = { version = "=0.3.106", features = [
   "RtcPeerConnection", "RtcConfiguration", "RtcSessionDescriptionInit", "RtcSessionDescription",
   "RtcSdpType", "RtcDataChannel", "RtcDataChannelState", "RtcTrackEvent", "RtcRtpSender",
   "RtcIceGatheringState", "RtcPeerConnectionState",
+  "RtcRtpTransceiver", "RtcRtpTransceiverInit", "RtcRtpTransceiverDirection",
   "AudioContext", "AudioContextState", "AudioNode", "AudioDestinationNode", "AudioBuffer",
   "AudioBufferSourceNode", "AudioScheduledSourceNode", "AudioProcessingEvent", "ScriptProcessorNode",
   "MediaStreamAudioSourceNode", "GainNode", "AudioParam", "console"

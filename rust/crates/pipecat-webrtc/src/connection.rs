@@ -27,7 +27,10 @@ use webrtc::{
         configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
         sdp::sdp_type::RTCSdpType, RTCPeerConnection,
     },
-    rtp_transceiver::rtp_codec::RTPCodecType,
+    rtp_transceiver::{
+        rtp_codec::RTPCodecType, rtp_transceiver_direction::RTCRtpTransceiverDirection,
+        RTCRtpTransceiverInit,
+    },
     sctp_transport::sctp_transport_state::RTCSctpTransportState,
     track::{
         track_local::{track_local_static_sample::TrackLocalStaticSample, TrackLocal},
@@ -210,6 +213,7 @@ struct Context {
     channel: watch::Sender<Option<Arc<RTCDataChannel>>>,
     channel_claimed: AtomicBool,
     audio_enabled: AtomicBool,
+    receive_only: bool,
     audio_track_claimed: AtomicBool,
     audio_generation: AtomicU64,
     trickle: AtomicBool,
@@ -284,6 +288,22 @@ pub struct SmallWebRtcConnection {
 }
 impl SmallWebRtcConnection {
     pub async fn new(config: SmallWebRtcConfig) -> Result<Self> {
+        Self::build(config, false).await
+    }
+
+    /// Negotiate receive-only audio without a local track, encoder or audio writer.
+    /// Application messages and normal ICE/DTLS/RTCP traffic remain bidirectional.
+    /// Audio send APIs return AudioDisabled while open. The mode cannot be promoted.
+    pub async fn new_receive_only(config: SmallWebRtcConfig) -> Result<Self> {
+        if config.audio_codec.is_none() {
+            return Err(Error::InvalidConfig(
+                "receive-only audio requires an audio codec",
+            ));
+        }
+        Self::build(config, true).await
+    }
+
+    async fn build(config: SmallWebRtcConfig, receive_only: bool) -> Result<Self> {
         config.validate()?;
         let mut media = MediaEngine::default();
         if let Some(codec) = config.audio_codec {
@@ -332,6 +352,7 @@ impl SmallWebRtcConnection {
             channel,
             channel_claimed: AtomicBool::new(false),
             audio_enabled: AtomicBool::new(true),
+            receive_only,
             audio_track_claimed: AtomicBool::new(false),
             audio_generation: AtomicU64::new(0),
             trickle: AtomicBool::new(false),
@@ -341,10 +362,39 @@ impl SmallWebRtcConnection {
             config: config.clone(),
         });
         let tasks: Tasks = Arc::new(StdMutex::new(Vec::new()));
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+        let id = format!(
+            "pc-{}-{}",
+            std::process::id(),
+            NEXT_ID.fetch_add(1, Ordering::Relaxed)
+        );
+        let connection = Self {
+            id,
+            pc: StdMutex::new(Some(pc.clone())),
+            ctx: ctx.clone(),
+            outgoing_messages: message_tx,
+            outgoing_audio: audio_tx,
+            events: Arc::new(Mutex::new(event_rx)),
+            tasks: tasks.clone(),
+            negotiation: Mutex::new(()),
+            close_state: Mutex::new(CloseState::Idle),
+        };
+        // Own the peer before awaited setup. A cancelled constructor schedules
+        // existing Drop cleanup; only explicit close provides an awaited result.
         install_callbacks(&pc, &ctx, &tasks);
         // Complete fallible codec/track setup before starting queue workers.
         let audio_setup = async {
-            if let Some(codec) = config.audio_codec {
+            if receive_only {
+                pc.add_transceiver_from_kind(
+                    RTPCodecType::Audio,
+                    Some(RTCRtpTransceiverInit {
+                        direction: RTCRtpTransceiverDirection::Recvonly,
+                        send_encodings: vec![],
+                    }),
+                )
+                .await?;
+                Ok::<_, Error>(None)
+            } else if let Some(codec) = config.audio_codec {
                 let encoder = Encoder::new(codec)?;
                 let track = Arc::new(TrackLocalStaticSample::new(
                     codec.parameters().capability,
@@ -372,8 +422,11 @@ impl SmallWebRtcConnection {
         let audio_setup = match audio_setup {
             Ok(setup) => setup,
             Err(error) => {
-                ctx.cancel.cancel();
-                let _ = pc.close().await;
+                if let Err(cleanup) = connection.close().await {
+                    return Err(Error::Shutdown(format!(
+                        "setup failed: {error}; setup cleanup unverified: {cleanup}"
+                    )));
+                }
                 return Err(error);
             }
         };
@@ -390,23 +443,7 @@ impl SmallWebRtcConnection {
             channel_rx,
             message_rx,
         )));
-        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-        let id = format!(
-            "pc-{}-{}",
-            std::process::id(),
-            NEXT_ID.fetch_add(1, Ordering::Relaxed)
-        );
-        Ok(Self {
-            id,
-            pc: StdMutex::new(Some(pc)),
-            ctx,
-            outgoing_messages: message_tx,
-            outgoing_audio: audio_tx,
-            events: Arc::new(Mutex::new(event_rx)),
-            tasks,
-            negotiation: Mutex::new(()),
-            close_state: Mutex::new(CloseState::Idle),
-        })
+        Ok(connection)
     }
 
     pub fn pc_id(&self) -> &str {
@@ -620,6 +657,9 @@ impl SmallWebRtcConnection {
     }
     pub async fn send_audio(&self, audio: AudioRawFrame) -> Result<()> {
         self.ensure_open()?;
+        if self.ctx.receive_only {
+            return Err(Error::AudioDisabled);
+        }
         self.ctx
             .config
             .audio_codec
@@ -637,6 +677,9 @@ impl SmallWebRtcConnection {
     }
     pub fn try_send_audio(&self, audio: AudioRawFrame) -> Result<()> {
         self.ensure_open()?;
+        if self.ctx.receive_only {
+            return Err(Error::AudioDisabled);
+        }
         self.ctx
             .config
             .audio_codec
@@ -1592,5 +1635,152 @@ mod tests {
         queued.await.unwrap();
         assert_eq!(cancelled.stats().app_messages_received, 0);
         cancelled.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn receive_only_has_no_local_track_or_audio_worker() {
+        let peer = SmallWebRtcConnection::new_receive_only(SmallWebRtcConfig {
+            localhost_only: true,
+            audio_codec: Some(AudioCodec::Pcmu),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let observation = tokio::time::timeout(Duration::from_secs(3), async {
+            let native = peer.peer().map_err(|e| format!("{e:?}"))?;
+            let mut tracks = 0;
+            for sender in native.get_senders().await {
+                tracks += usize::from(sender.track().await.is_some());
+            }
+            // Only the data writer is owned before negotiation; the receive-only
+            // branch drops audio_rx and never creates an encoder/track/RTCP reader.
+            Ok::<_, String>((
+                tracks,
+                peer.tasks.lock().unwrap().len(),
+                peer.outgoing_audio.is_closed(),
+                peer.ctx.pending.count.load(Ordering::Acquire),
+            ))
+        })
+        .await;
+        let cleanup = tokio::time::timeout(Duration::from_secs(8), peer.close()).await;
+        eprintln!("receive-only initial ownership={observation:?}; close={cleanup:?}");
+        assert!(matches!(cleanup, Ok(Ok(()))));
+        assert!(matches!(observation, Ok(Ok((0, 1, true, 0)))));
+    }
+
+    async fn cancelled_receive_only_gather(answering: bool) {
+        use std::{
+            future::{poll_fn, Future},
+            task::Poll,
+        };
+        use webrtc::ice_transport::ice_gatherer_state::RTCIceGathererState;
+        let config = SmallWebRtcConfig {
+            localhost_only: true,
+            audio_codec: Some(AudioCodec::Pcmu),
+            ..Default::default()
+        };
+        let target = SmallWebRtcConnection::new_receive_only(config.clone())
+            .await
+            .unwrap();
+        let other = match SmallWebRtcConnection::new(config).await {
+            Ok(peer) => peer,
+            Err(error) => {
+                let cleanup = target.close().await;
+                panic!("second constructor={error:?}; cleanup={cleanup:?}");
+            }
+        };
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let mut entered = Some(entered_tx);
+        let mut release = Some(release_rx);
+        target
+            .peer()
+            .unwrap()
+            .on_ice_gathering_state_change(Box::new(move |state| {
+                let held = if state == RTCIceGathererState::Complete {
+                    entered.take().zip(release.take())
+                } else {
+                    None
+                };
+                Box::pin(async move {
+                    if let Some((entered, release)) = held {
+                        let _ = entered.send(());
+                        let _ = release.await;
+                    }
+                })
+            }));
+        let observation=tokio::time::timeout(Duration::from_secs(6),async {
+            let offer=if answering {Some(other.create_offer().await.map_err(|e|format!("{e:?}"))?)} else {None};
+            let operation=async { match offer {Some(offer)=>target.answer_offer(offer.sdp).await,None=>target.create_offer().await} };
+            tokio::pin!(operation);
+            tokio::select! {
+                result=&mut operation=>return Err(format!("negotiation completed before held gathering callback: {result:?}")),
+                entered=entered_rx=>entered.map_err(|e|format!("gathering callback: {e:?}"))?,
+            }
+            let pending=poll_fn(|cx|Poll::Ready(operation.as_mut().poll(cx).is_pending())).await;
+            if !pending {return Err("gathering future was not physically Pending".into());}
+            target.cancel();
+            let result=tokio::time::timeout(Duration::from_secs(1),&mut operation).await;
+            eprintln!("receive-only answering={answering}; held actual gathering Pending; cancel outcome={result:?}");
+            if !matches!(result,Ok(Err(Error::Closed))) {return Err(format!("cancel did not terminate held gathering: {result:?}"));}
+            Ok::<_,String>(())
+        }).await;
+        // Always release the actual callback before close, even on any failed observation.
+        let _ = release_tx.send(());
+        let mut addresses = vec![];
+        for peer in [&target, &other] {
+            if let Ok(native) = peer.peer() {
+                if let Some(description) = native.local_description().await {
+                    for line in description
+                        .sdp
+                        .lines()
+                        .filter(|line| line.starts_with("a=candidate:"))
+                    {
+                        let fields = line.split_whitespace().collect::<Vec<_>>();
+                        if fields.len() >= 6 {
+                            if let Ok(address) = format!("{}:{}", fields[4], fields[5])
+                                .parse::<std::net::SocketAddr>()
+                            {
+                                addresses.push(address);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let (a, b) = tokio::join!(
+            tokio::time::timeout(Duration::from_secs(8), target.close()),
+            tokio::time::timeout(Duration::from_secs(8), other.close())
+        );
+        let sockets = tokio::time::timeout(Duration::from_secs(2), async {
+            while addresses
+                .iter()
+                .any(|address| std::net::UdpSocket::bind(address).is_err())
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        eprintln!(
+            "receive-only cancelled negotiation={observation:?}; joins={a:?}/{b:?}; candidate_count={}; release={sockets:?}",
+            addresses.len()
+        );
+        assert!(
+            matches!(a, Ok(Ok(()))) && matches!(b, Ok(Ok(()))),
+            "close joins failed"
+        );
+        assert!(
+            !addresses.is_empty() && sockets.is_ok(),
+            "real gathered sockets must be released"
+        );
+        assert!(matches!(observation, Ok(Ok(()))), "{observation:?}");
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn receive_only_cancel_during_pending_offer_gathering_joins() {
+        cancelled_receive_only_gather(false).await;
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn receive_only_cancel_during_pending_answer_gathering_joins() {
+        cancelled_receive_only_gather(true).await;
     }
 }

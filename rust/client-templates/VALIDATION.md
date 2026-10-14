@@ -93,7 +93,7 @@ from browser acceptance. The complete image/receipt browser bridge is not presen
 
 ## Slice 46 microphone-free input boundary
 
-The explicit text input configuration is limited to WebSocket. Its actual WASM
+At slice 46, the explicit text input configuration was limited to WebSocket. Its actual WASM
 connection branch gates both getUserMedia and capture-node creation using the
 immutable session policy, while keeping bot audio output. Default voice mode and
 explicit unsupported WebRTC text-mode rejection are separate compatibility paths.
@@ -107,3 +107,21 @@ permission/capture APIs. The updated real Chromium fixture includes a throwing
 getUserMedia trap for text mode, capture/audio/resource checks and mode changes
 through disconnect/reload, but remains unexecuted on this host. The previously
 recorded launch blocker is reused; no new launch or sandbox workaround is attempted.
+
+## Slice 48 receive-only WebRTC boundary
+
+Text-mode Config now accepts SmallWebRTC and mixed supported transport lists.
+The browser owns its peer/data channel before awaited negotiation and adds an
+explicit recvonly audio transceiver without a local microphone track. Existing
+voice-mode capture and audio reply paths remain separate controls. Native tests
+exercise actual peer direction, rejected audio send admission, zero audio uplink
+observations with positive text/downlink traffic, and owned cancellation/close.
+The standard runner child serves the exact opt-in config consumed by a separate
+native loopback-provider witness. These boundaries do not execute browser APIs.
+
+The Chromium fixture has corresponding throwing-permission, capture, local-track,
+negotiated direction, RTP statistics, text/reply, reconnect and pending-offer
+cleanup assertions. They remain unexecuted under the previously recorded ordinary
+launch blocker. There is no new launch retry or sandbox workaround. Fresh WASM
+and static packaging is a build/identity gate only; browser permissions/autoplay,
+physical devices, WAN/TURN and the image/receipt bridge remain unqualified.
