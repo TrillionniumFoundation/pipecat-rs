@@ -1,4 +1,4 @@
-//! Native bounded REST transcription and HTTP speech synthesis.
+//! Native bounded REST transcription and HTTP/opt-in WebSocket speech synthesis.
 //!
 //! Provider protocols have distinct typed requests; they are not interchangeable
 //! OpenAI presets. See the crate README for endpoint coverage and limitations.
@@ -6,6 +6,8 @@
 pub mod cartesia;
 mod common;
 pub mod deepgram;
+#[cfg(feature = "deepgram-ws")]
+pub mod deepgram_ws;
 pub mod elevenlabs;
 #[cfg(feature = "minimax")]
 pub mod minimax;

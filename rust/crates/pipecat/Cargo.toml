@@ -58,6 +58,7 @@ pipecat-realtime = { path = "../pipecat-realtime", optional = true }
 pipecat-responses = { path = "../pipecat-responses", optional = true }
 
 [features]
+deepgram-ws = ["pipecat-speech/deepgram-ws"]
 openai-stt = ["pipecat-streaming-speech/openai-stt"]
 http-smart-turn = ["pipecat-vad/http-smart-turn"]
 voicemail = ["pipecat-processors/voicemail"]

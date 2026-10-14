@@ -33,6 +33,14 @@ use crate::speechify::{SpeechifyEvent, SpeechifyHttpClient, SpeechifySynthesisRe
 #[cfg(feature = "minimax")]
 use crate::minimax::{MiniMaxHttpClient, MiniMaxSynthesisRequest};
 
+#[cfg(feature = "deepgram-ws")]
+use crate::{
+    deepgram::DeepgramEncoding,
+    deepgram_ws::{DeepgramWsClient, DeepgramWsStream},
+};
+#[cfg(feature = "deepgram-ws")]
+use pipecat_core::{InvocationFence, ObservedProcessor};
+
 static NEXT_TTS_CONTEXT: AtomicU64 = AtomicU64::new(1);
 
 /// Immutable provider settings copied for every accepted complete utterance.
@@ -66,6 +74,12 @@ pub enum HttpTtsBackend {
         client: DeepgramHttpClient,
         request: DeepgramSynthesisRequest,
     },
+    /// One fresh socket per complete utterance; PCM16 mono only.
+    #[cfg(feature = "deepgram-ws")]
+    DeepgramWebSocket {
+        client: DeepgramWsClient,
+        request: DeepgramSynthesisRequest,
+    },
     Cartesia {
         client: CartesiaHttpClient,
         request: CartesiaSynthesisRequest,
@@ -83,6 +97,8 @@ impl HttpTtsBackend {
             Self::OpenAi { .. } => 24000,
             Self::ElevenLabs { request, .. } => request.sample_rate,
             Self::Deepgram { request, .. } => request.sample_rate,
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWebSocket { request, .. } => request.sample_rate,
             Self::Cartesia { request, .. } => request.sample_rate,
         }
     }
@@ -124,6 +140,20 @@ impl HttpTtsBackend {
                 request.validate()
             }
             Self::Deepgram { request, .. } => {
+                let mut request = request.clone();
+                request.text = "validation".into();
+                request.validate()
+            }
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWebSocket { request, .. } => {
+                if request.encoding != DeepgramEncoding::Linear16 {
+                    return Err(SpeechError::Invalid(
+                        "Deepgram WS supports only mono linear16",
+                    ));
+                }
+                if request.voice.len() > 256 {
+                    return Err(SpeechError::TooLarge);
+                }
                 let mut request = request.clone();
                 request.text = "validation".into();
                 request.validate()
@@ -213,6 +243,20 @@ impl HttpTtsBackend {
                 changed |= required(&mut request.voice, &delta.base.model)?;
                 changed |= required(&mut request.voice, &delta.voice)?;
             }
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWebSocket { request, .. } => {
+                if !matches!(delta.language, Setting::NotGiven)
+                    || (!matches!(delta.base.model, Setting::NotGiven)
+                        && !matches!(delta.voice, Setting::NotGiven)
+                        && delta.base.model != delta.voice)
+                {
+                    return Err(SpeechError::Invalid(
+                        "Deepgram voice determines model and language",
+                    ));
+                }
+                changed |= required(&mut request.voice, &delta.base.model)?;
+                changed |= required(&mut request.voice, &delta.voice)?;
+            }
         }
         candidate.validate()?;
         Ok(changed.then_some(candidate))
@@ -252,6 +296,12 @@ impl HttpTtsBackend {
                 request.text = text;
                 client.synthesize(request).map(AudioStream::Raw)
             }
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWebSocket { client, request } => {
+                let mut request = request.clone();
+                request.text = text;
+                client.synthesize(request).map(AudioStream::DeepgramWs)
+            }
             Self::Cartesia { client, request } => {
                 let mut request = request.clone();
                 request.text = text;
@@ -261,6 +311,8 @@ impl HttpTtsBackend {
     }
 }
 enum AudioStream {
+    #[cfg(feature = "deepgram-ws")]
+    DeepgramWs(DeepgramWsStream),
     #[cfg(feature = "speechify")]
     Speechify(crate::ResponseStream<SpeechifyEvent>),
     Raw(SpeechStream),
@@ -281,6 +333,8 @@ enum AudioEvent {
 impl AudioStream {
     fn source_audio_observed(&self) -> bool {
         match self {
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWs(stream) => stream.source_audio_observed(),
             #[cfg(feature = "speechify")]
             Self::Speechify(stream) => stream.source_audio_observed(),
             Self::Raw(stream) => stream.source_audio_observed(),
@@ -289,6 +343,11 @@ impl AudioStream {
     }
     async fn next(&mut self) -> Option<Result<AudioEvent, SpeechError>> {
         match self {
+            #[cfg(feature = "deepgram-ws")]
+            Self::DeepgramWs(stream) => stream
+                .next()
+                .await
+                .map(|chunk| chunk.map(AudioEvent::Audio)),
             #[cfg(feature = "speechify")]
             Self::Speechify(stream) => stream.next().await.map(|event| {
                 event.map(|event| match event {
@@ -330,11 +389,20 @@ struct Pending {
 }
 struct State {
     backend: HttpTtsBackend,
+    #[cfg(feature = "deepgram-ws")]
+    websocket_owner: Option<WebSocketOwner>,
     pending: Vec<Pending>,
     failure: Arc<AtomicBool>,
     // Replace on Speechify interruption instead of resetting a shared atomic:
     // retiring tasks must never advance a new generation's baseline.
     timeline: Arc<AtomicU64>,
+}
+#[cfg(feature = "deepgram-ws")]
+struct WebSocketOwner {
+    identity: ObservedProcessor,
+    // Capture setup's raw, generation-free scope, never a Start-frame epoch.
+    // This weak fence does not keep the owning runtime alive.
+    lifetime: InvocationFence,
 }
 /// Synthesizes downstream complete utterances, including three-channel `TtsTextInput`.
 /// Normal downstream frames wait behind accepted utterances; explicit skipped
@@ -344,11 +412,18 @@ struct State {
 /// Emits lifecycle, PCM, source anchors and completion diagnostics. Speechify
 /// additionally emits provider-reported word timing; none of these are playback
 /// receipts. Character alignment remains available through the ElevenLabs client API.
+/// The opt-in Deepgram WebSocket backend has the name `DeepgramWebSocketTtsService`
+/// and permits one owning pipeline at a time, with a fresh client owner per setup.
 pub struct HttpTtsProcessor {
+    service_name: &'static str,
     health: ProcessorHealth,
     max_pending: usize,
     state: Mutex<State>,
     audio_watchdog: TtsAudioWatchdog,
+    #[cfg(feature = "deepgram-ws")]
+    websocket_active: AtomicBool,
+    #[cfg(feature = "deepgram-ws")]
+    websocket_cleanup: tokio::sync::Mutex<()>,
 }
 impl HttpTtsProcessor {
     pub fn new(backend: HttpTtsBackend, max_pending: usize) -> Result<Self, SpeechError> {
@@ -356,12 +431,26 @@ impl HttpTtsProcessor {
             return Err(SpeechError::Invalid("pending utterance limit"));
         }
         backend.validate()?;
+        let service_name = "HttpTtsService";
+        #[cfg(feature = "deepgram-ws")]
+        let service_name = if matches!(&backend, HttpTtsBackend::DeepgramWebSocket { .. }) {
+            "DeepgramWebSocketTtsService"
+        } else {
+            service_name
+        };
         Ok(Self {
+            service_name,
             health: ProcessorHealth::default(),
             max_pending,
             audio_watchdog: TtsAudioWatchdog::default(),
+            #[cfg(feature = "deepgram-ws")]
+            websocket_active: AtomicBool::new(false),
+            #[cfg(feature = "deepgram-ws")]
+            websocket_cleanup: tokio::sync::Mutex::new(()),
             state: Mutex::new(State {
                 backend,
+                #[cfg(feature = "deepgram-ws")]
+                websocket_owner: None,
                 pending: vec![],
                 failure: Arc::default(),
                 timeline: Arc::default(),
@@ -386,6 +475,51 @@ impl HttpTtsProcessor {
         state.backend = candidate;
         self.health.set_usable(true);
         Ok(true)
+    }
+    #[cfg(feature = "deepgram-ws")]
+    async fn cleanup_websocket(
+        &self,
+        terminal_owner: Option<&ObservedProcessor>,
+    ) -> Result<(), ProcessorError> {
+        // Serialize retries and Stop/cleanup overlap. No state lock crosses an
+        // await, and the durable backend retains the client if this is dropped.
+        let _cleanup = self.websocket_cleanup.lock().await;
+        let client = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
+            let HttpTtsBackend::DeepgramWebSocket { client, .. } = &state.backend else {
+                return Ok(());
+            };
+            let Some(owner) = &state.websocket_owner else {
+                // No successful setup: this is still the caller's template client.
+                return Ok(());
+            };
+            if let Some(identity) = terminal_owner {
+                if identity != &owner.identity {
+                    return Err(websocket_owner_error());
+                }
+            } else if owner.lifetime.is_current() {
+                // Core also calls contextless cleanup for failed setup. A
+                // rejected second runtime must not cancel the live first one.
+                // Core's legitimate cleanup follows runtime finish/sealing.
+                return Ok(());
+            }
+            client.clone()
+        };
+        self.cancel(false)?;
+        client.cancel_all();
+        client.cleanup().await.map_err(settings_error)?;
+        // Hold the state lock through release so setup cannot observe half a
+        // transition. Keep the weak identity until the old runtime has ended,
+        // including the gap between Stop's joined cleanup and forwarding.
+        let _state = self
+            .state
+            .lock()
+            .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
+        self.websocket_active.store(false, Ordering::Release);
+        Ok(())
     }
     fn cancel(&self, interruption_only: bool) -> Result<(), ProcessorError> {
         let mut state = self
@@ -579,18 +713,38 @@ impl FrameProcessor for HttpTtsProcessor {
         Some(self.health.clone())
     }
     fn name(&self) -> &str {
-        "HttpTtsService"
+        self.service_name
     }
     async fn setup(
         &self,
         config: &StartFrame,
         _ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        #[cfg(feature = "deepgram-ws")]
+        let _cleanup = if self.service_name == "DeepgramWebSocketTtsService" {
+            Some(
+                self.websocket_cleanup
+                    .try_lock()
+                    .map_err(|_| websocket_owner_error())?,
+            )
+        } else {
+            None
+        };
         #[allow(unused_mut)]
         let mut state = self
             .state
             .lock()
             .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
+        #[cfg(feature = "deepgram-ws")]
+        if matches!(state.backend, HttpTtsBackend::DeepgramWebSocket { .. })
+            && (self.websocket_active.load(Ordering::Acquire)
+                || state
+                    .websocket_owner
+                    .as_ref()
+                    .is_some_and(|owner| owner.lifetime.is_current()))
+        {
+            return Err(websocket_owner_error());
+        }
         let compatible = config.audio_out_sample_rate == state.backend.sample_rate();
         #[cfg(feature = "speechify")]
         let compatible = compatible
@@ -600,15 +754,45 @@ impl FrameProcessor for HttpTtsProcessor {
                     if config.audio_out_sample_rate == request.sample_rate
             );
         if !compatible {
-            return Err(ProcessorError::fatal(
+            let error = ProcessorError::fatal(
                 "pipeline output sample rate differs from HTTP TTS configuration",
             )
-            .with_category(ErrorCategory::InvalidRequest));
+            .with_category(ErrorCategory::InvalidRequest);
+            #[cfg(feature = "deepgram-ws")]
+            let error = if matches!(state.backend, HttpTtsBackend::DeepgramWebSocket { .. }) {
+                error.with_permanence_override(false)
+            } else {
+                error
+            };
+            return Err(error);
         }
+        #[cfg(feature = "deepgram-ws")]
+        let retired_client =
+            if let HttpTtsBackend::DeepgramWebSocket { client, .. } = &mut state.backend {
+                let owner = WebSocketOwner {
+                    identity: _ctx.processor_identity(),
+                    lifetime: _ctx.invocation_fence()?,
+                };
+                self.websocket_active
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .map_err(|_| websocket_owner_error())?;
+                // Fork only after validation and admission. Task/backend clones
+                // share this private owner; other processors and the caller do not.
+                let fresh = client.fork_owner();
+                let retired = std::mem::replace(client, fresh);
+                state.websocket_owner = Some(owner);
+                state.timeline = Arc::default();
+                Some(retired)
+            } else {
+                None
+            };
         #[cfg(feature = "speechify")]
         if matches!(state.backend, HttpTtsBackend::Speechify { .. }) {
             state.timeline = Arc::default();
         }
+        drop(state);
+        #[cfg(feature = "deepgram-ws")]
+        drop(retired_client);
         Ok(())
     }
     async fn process(
@@ -617,6 +801,20 @@ impl FrameProcessor for HttpTtsProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        #[cfg(feature = "deepgram-ws")]
+        if self.service_name == "DeepgramWebSocketTtsService" {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("TTS state lock poisoned"))?;
+            if !state
+                .websocket_owner
+                .as_ref()
+                .is_some_and(|owner| owner.identity == ctx.processor_identity())
+            {
+                return Err(websocket_owner_error());
+            }
+        }
         if matches!(
             frame.data,
             FrameData::Interruption | FrameData::Cancel(_) | FrameData::CancelDetailed(_)
@@ -647,6 +845,16 @@ impl FrameProcessor for HttpTtsProcessor {
         }
         if direction == Direction::Upstream {
             return ctx.push(frame, direction).await;
+        }
+        #[cfg(feature = "deepgram-ws")]
+        if self.service_name == "DeepgramWebSocketTtsService"
+            && matches!(frame.data, FrameData::Stop)
+        {
+            // Core drains this node's accepted work before invoking terminal
+            // processing, but deliberately skips cleanup for a stopped runtime.
+            // Join retired actors before Stop can cross the output boundary.
+            self.cleanup_websocket(Some(&ctx.processor_identity()))
+                .await?;
         }
         match &frame.data {
             FrameData::TtsSpeak(speak) if !speak.text.is_empty() => {
@@ -738,8 +946,18 @@ impl FrameProcessor for HttpTtsProcessor {
         ctx.push(frame, direction).await
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        #[cfg(feature = "deepgram-ws")]
+        if self.service_name == "DeepgramWebSocketTtsService" {
+            return self.cleanup_websocket(None).await;
+        }
         self.cancel(false)
     }
+}
+#[cfg(feature = "deepgram-ws")]
+fn websocket_owner_error() -> ProcessorError {
+    ProcessorError::fatal("Deepgram WebSocket TTS already belongs to another active pipeline")
+        .with_category(ErrorCategory::Application)
+        .with_permanence_override(false)
 }
 /// Each complete utterance owns an immutable provider/alignment context. Even
 /// adjacent utterances cannot inherit another destination, spacing or append policy.
@@ -1093,6 +1311,99 @@ fn settings_error(error: SpeechError) -> ProcessorError {
     ProcessorError::new(error.error)
         .with_category(error.category)
         .with_permanence_override(false)
+}
+
+#[cfg(all(test, feature = "deepgram-ws"))]
+mod deepgram_websocket_settings_tests {
+    use super::*;
+    use crate::{deepgram_ws::DeepgramWsConfig, SpeechConfig};
+
+    fn backend(request: DeepgramSynthesisRequest) -> HttpTtsBackend {
+        HttpTtsBackend::DeepgramWebSocket {
+            client: DeepgramWsClient::new(DeepgramWsConfig::new("synthetic-test-key")).unwrap(),
+            request,
+        }
+    }
+
+    #[test]
+    fn websocket_profile_has_distinct_name_and_completion_evidence() {
+        let websocket = backend(DeepgramSynthesisRequest::new(""));
+        assert_eq!(websocket.reporting(), TokenReporting::SynthesisCompletion);
+        let websocket = HttpTtsProcessor::new(websocket, 2).unwrap();
+        assert_eq!(websocket.name(), "DeepgramWebSocketTtsService");
+        let http = HttpTtsProcessor::new(
+            HttpTtsBackend::Deepgram {
+                client: DeepgramHttpClient::new(SpeechConfig::deepgram("synthetic-test-key"))
+                    .unwrap(),
+                request: DeepgramSynthesisRequest::new(""),
+            },
+            2,
+        )
+        .unwrap();
+        assert_eq!(http.name(), "HttpTtsService");
+    }
+
+    #[test]
+    fn websocket_templates_require_linear16_at_supported_rates() {
+        for rate in [8000, 16000, 24000, 32000, 48000] {
+            let mut request = DeepgramSynthesisRequest::new("");
+            request.sample_rate = rate;
+            let candidate = backend(request);
+            candidate.validate().unwrap();
+            assert_eq!(candidate.sample_rate(), rate);
+        }
+        for encoding in [DeepgramEncoding::Mulaw, DeepgramEncoding::Alaw] {
+            let mut request = DeepgramSynthesisRequest::new("");
+            request.encoding = encoding;
+            request.sample_rate = 8000;
+            assert!(HttpTtsProcessor::new(backend(request), 1).is_err());
+        }
+        let mut request = DeepgramSynthesisRequest::new("");
+        request.sample_rate = 44100;
+        assert!(HttpTtsProcessor::new(backend(request), 1).is_err());
+    }
+
+    #[test]
+    fn websocket_voice_and_model_alias_preserve_immutable_options() {
+        let mut request = DeepgramSynthesisRequest::new("");
+        request.speed = Some(1.1);
+        request.mip_opt_out = Some(false);
+        let original = backend(request);
+        assert!(original.updated(&TtsSettings::default()).unwrap().is_none());
+        let mut delta = TtsSettings {
+            voice: Setting::Value("new-voice".into()),
+            ..Default::default()
+        };
+        let candidate = original.updated(&delta).unwrap().unwrap();
+        let HttpTtsBackend::DeepgramWebSocket { request, .. } = &candidate else {
+            panic!("WebSocket profile changed");
+        };
+        assert_eq!(request.voice, "new-voice");
+        assert_eq!(request.speed, Some(1.1));
+        assert_eq!(request.mip_opt_out, Some(false));
+        delta.base.model = Setting::Value("new-voice".into());
+        assert!(candidate.updated(&delta).unwrap().is_none());
+        delta.base.model = Setting::Value("conflicting-voice".into());
+        assert!(candidate.updated(&delta).is_err());
+        delta.voice = Setting::NotGiven;
+        assert!(candidate.updated(&delta).unwrap().is_some());
+        for language in [Setting::Null, Setting::Value("en".into())] {
+            assert!(candidate
+                .updated(&TtsSettings {
+                    language,
+                    ..Default::default()
+                })
+                .is_err());
+        }
+        for (key, value) in [
+            ("speed", serde_json::json!(1.2)),
+            ("mip_opt_out", false.into()),
+        ] {
+            let mut delta = TtsSettings::default();
+            delta.base.extra.insert(key.into(), value);
+            assert!(candidate.updated(&delta).is_err());
+        }
+    }
 }
 
 #[cfg(test)]

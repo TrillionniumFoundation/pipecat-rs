@@ -1,0 +1,1695 @@
+{
+  "schema_version": 1,
+  "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "scope": "Verified original Python AST with finite offline socket/base/frame/settings/metric/tracing stubs. No full Python installation, provider, DSP, concurrency, lifecycle queue or Rust verification.",
+  "source_files": [
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "git_blob": "cb43af2e0f8ef86e8d0a6e20f6029915e7524f4a",
+      "sha256": "b18d7717bb71b3a29d6b182d4f1ff23b06523a741a8cf7e5611873c64639e3f2"
+    },
+    {
+      "path": "src/pipecat/services/tts_service.py",
+      "git_blob": "428b875796d0cf7ed07b89537be8a440ccc104f6",
+      "sha256": "bb0f1e7c2de961f9b147c2cb21852c0a0238895bec8d9a5a0e45be4b654a4d36"
+    },
+    {
+      "path": "src/pipecat/services/websocket_service.py",
+      "git_blob": "4e0841422a20f480fc7f751f6acd19ec8ee378c6",
+      "sha256": "cd2c0523a15bea1da5be9d708ee970aecca615749b796165a3128c5687ae5f53"
+    },
+    {
+      "path": "tests/test_deepgram_tts.py",
+      "git_blob": "122a36074a5d2db125cc9f5b782a945f98dddc37",
+      "sha256": "9017a53e15830cc34c6f5c0e6b33c656c3cb531acef6939c4977e4ce8bd0e2f0"
+    }
+  ],
+  "executed_original_methods": [
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "__init__",
+      "line_start": 98,
+      "line_end": 172,
+      "ast_sha256": "4489887fb01e0e85c4e2e125d1dd30b652635ef88082bc8b2ca2420a2909ded3",
+      "source_segment_sha256": "ec5a55a1bc47d007439efaf4f05ee0ce4778f75ffe673483e0978f6c03fd8920"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "can_generate_metrics",
+      "line_start": 189,
+      "line_end": 195,
+      "ast_sha256": "9713b9fb6b4c888653a8c65430d522d95b3fed466f580f55e4ae3a821ec00c14",
+      "source_segment_sha256": "c14a8b94a9c7d3511749d3eb92e06f7749b26a9381b167dbf7a135e3be31c9d1"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_connect",
+      "line_start": 206,
+      "line_end": 213,
+      "ast_sha256": "693eb4e95c0f0c21fb0468412c6d6dd0f1d5891ce7dbe69fbddb3fe56959b9bd",
+      "source_segment_sha256": "c297a8992f298f877964378def7426fc1f758d0a5cb883259f88a935cccd487d"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_disconnect",
+      "line_start": 215,
+      "line_end": 223,
+      "ast_sha256": "04b3f348be83e5939f12deac844264f8e8977b633f98085ad470e0afd13f11de",
+      "source_segment_sha256": "90ec7d44a8778da0c90d650788cedf449d90384e88048708cc7994881b2122aa"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_update_settings",
+      "line_start": 225,
+      "line_end": 245,
+      "ast_sha256": "b50d4cea4244e7477ec8703f76fb744782fe14d3aabf91b2d006edb95ff8cf95",
+      "source_segment_sha256": "299dc7a2fdb2c7a2b42b7c0d48ac0c8e5022a97e844301a5eb725dc73f66101f"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_connect_websocket",
+      "line_start": 247,
+      "line_end": 283,
+      "ast_sha256": "a663396ab4582e9b848fb42506acc3248499c33ca84ef968334d3082039b0abd",
+      "source_segment_sha256": "3d32493040d6edd9a286092a81ad71b78f886842534ff790cccc13496c7d24bc"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_disconnect_websocket",
+      "line_start": 285,
+      "line_end": 300,
+      "ast_sha256": "8e5570a03323226914338417df904f3886430c011604a6e9be04ebaca8413660",
+      "source_segment_sha256": "c77359f22e5f73647d889710066d9474311b6600bd931415a9a840443b799363"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_get_websocket",
+      "line_start": 302,
+      "line_end": 306,
+      "ast_sha256": "296481250905ca3802c6a64aa74ff110f67f7e7cae47acf449a85eaa8f6499d5",
+      "source_segment_sha256": "c296d68bdb694e800676d75b3249d6cb99eea486b18b0c24fb6b091cb92438a3"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "on_audio_context_interrupted",
+      "line_start": 308,
+      "line_end": 323,
+      "ast_sha256": "f8751f8cbf0d1c6a3f8aeac645afa799efafeb97f66391ea50a822f17dce9b3d",
+      "source_segment_sha256": "f63829f0bb1326721dff967cd52c278652827a6fd4d01008848c7f23c99e5ab9"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "_receive_messages",
+      "line_start": 325,
+      "line_end": 358,
+      "ast_sha256": "c258baf8d95c519c5cbefe06042a7febb46cbf7d0a6e9e3ba43412e9f67dc273",
+      "source_segment_sha256": "8eeec392cc15f9bb5626f9e6a566d1383b34c4df98720c0ff33c533cdca624d1"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "flush_audio",
+      "line_start": 360,
+      "line_end": 371,
+      "ast_sha256": "af0fd743dd1b44a397d43f3106660c59801a0684dfdfecb76700037baecc8168",
+      "source_segment_sha256": "6c07706cb787f51de318863c7b9e2d1227a9ff93fbafb862f2de68d538187199"
+    },
+    {
+      "path": "src/pipecat/services/deepgram/tts.py",
+      "class": "DeepgramTTSService",
+      "name": "run_tts",
+      "line_start": 374,
+      "line_end": 399,
+      "ast_sha256": "631556931afa22f3a669781a9359574f020ed0f9e48169a66d802ee7c2251afa",
+      "source_segment_sha256": "3dfb5bbc3294a5feb0e3002ee5e0aeb018da3a54a35a85063e70c4f7fb744245"
+    },
+    {
+      "path": "src/pipecat/services/tts_service.py",
+      "class": "TTSService",
+      "name": "get_active_audio_context_id",
+      "line_start": 1743,
+      "line_end": 1756,
+      "ast_sha256": "171d13c068e16f2172c024230ad37660d15c36dda83f44952eeb68ff6da8aa24",
+      "source_segment_sha256": "9fe471ffcd730f7340c2ee9b033330b93f3c470b47a7197788f031edde47b99b"
+    }
+  ],
+  "case_count": 42,
+  "cases": [
+    {
+      "name": "constructor_defaults",
+      "encoding": "linear16",
+      "base_options": {
+        "pause_frame_processing": true,
+        "push_stop_frames": false,
+        "push_start_frame": true,
+        "append_trailing_space": true
+      },
+      "can_generate_metrics": true,
+      "trace": [],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "constructor_settings_override_legacy_voice",
+      "trace": [],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": "legacy-voice",
+          "voice": "canonical-voice",
+          "language": null,
+          "speed": 1.2
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "constructor_case_insensitive_validation_preserves_encoding",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=LINEAR16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "constructor_rejects_mp3",
+      "exception": {
+        "exception_type": "ValueError",
+        "message": "Unsupported encoding 'mp3'. Must be one of linear16, mulaw, alaw for WebSocket TTS."
+      },
+      "logs": []
+    },
+    {
+      "name": "connect_default_query_token_header",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "connect_speed_and_mip_true",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://offline.invalid/v1/speak?model=custom-voice&encoding=mulaw&sample_rate=24000&speed=1.25&mip_opt_out=true",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "custom-voice",
+          "language": null,
+          "speed": 1.25
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "connect_mip_false_without_speed",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=alaw&sample_rate=24000&mip_opt_out=false",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "connect_open_socket_noop",
+      "trace": [],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "connect_closed_socket_replaced",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "connect_without_response_headers",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {}}"
+        }
+      ]
+    },
+    {
+      "name": "connect_failure_pushes_error_and_event",
+      "trace": [
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "push_error_frame",
+          "frame": {
+            "frame_type": "ErrorFrame",
+            "error": "DeepgramTTSService error: offline handshake failure",
+            "exception": {
+              "exception_type": "RuntimeError",
+              "message": "offline handshake failure"
+            }
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connection_error",
+          "args": [
+            "offline handshake failure"
+          ]
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "error",
+          "message": "DeepgramTTSService exception: offline handshake failure"
+        }
+      ]
+    },
+    {
+      "name": "run_speak_only_no_flush_or_context_id",
+      "yielded": [
+        null
+      ],
+      "trace": [
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Speak",
+            "text": "Hello, 世界. "
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "run_missing_socket",
+      "yielded": [
+        null
+      ],
+      "trace": [
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        },
+        {
+          "op": "create_receive_task",
+          "token": "receive-task-token"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Speak",
+            "text": "next"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": "receive-task-token",
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "run_closed_socket",
+      "yielded": [
+        null
+      ],
+      "trace": [
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        },
+        {
+          "op": "create_receive_task",
+          "token": "receive-task-token"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Speak",
+            "text": "next"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": "receive-task-token",
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "run_closing_socket",
+      "yielded": [
+        null
+      ],
+      "trace": [
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Speak",
+            "text": "next"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "CLOSING",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "run_send_failure_yields_error",
+      "yielded": [
+        {
+          "frame_type": "ErrorFrame",
+          "error": "Unknown error occurred: offline send failure",
+          "exception": null
+        }
+      ],
+      "trace": [
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Speak",
+            "text": "fails"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "run_connect_failure_pushes_then_yields_error",
+      "yielded": [
+        {
+          "frame_type": "ErrorFrame",
+          "error": "Unknown error occurred: Websocket not connected",
+          "exception": null
+        }
+      ],
+      "trace": [
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "push_error_frame",
+          "frame": {
+            "frame_type": "ErrorFrame",
+            "error": "DeepgramTTSService error: offline connect failure",
+            "exception": {
+              "exception_type": "RuntimeError",
+              "message": "offline connect failure"
+            }
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connection_error",
+          "args": [
+            "offline connect failure"
+          ]
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "error",
+          "message": "DeepgramTTSService exception: offline connect failure"
+        }
+      ]
+    },
+    {
+      "name": "flush_connected",
+      "trace": [
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Flush"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "flush_missing",
+      "trace": [],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "flush_send_failure",
+      "trace": [
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Flush"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "error",
+          "message": "DeepgramTTSService error sending Flush message: offline flush failure"
+        }
+      ]
+    },
+    {
+      "name": "interrupt_connected",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Clear"
+          }
+        },
+        {
+          "op": "base_context_interrupted",
+          "context_id": "ctx-interrupted"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "interrupt_missing",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "base_context_interrupted",
+          "context_id": "ctx-interrupted"
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "interrupt_send_failure",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Clear"
+          }
+        },
+        {
+          "op": "base_context_interrupted",
+          "context_id": "ctx-interrupted"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "error",
+          "message": "DeepgramTTSService error sending Clear message: offline clear failure"
+        }
+      ]
+    },
+    {
+      "name": "disconnect_connected",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "ws_close"
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        }
+      ]
+    },
+    {
+      "name": "disconnect_missing",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "disconnect_send_failure",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "push_error_frame",
+          "frame": {
+            "frame_type": "ErrorFrame",
+            "error": "DeepgramTTSService error: offline Close send failure",
+            "exception": null
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        },
+        {
+          "level": "error",
+          "message": "DeepgramTTSService exception: offline Close send failure"
+        }
+      ]
+    },
+    {
+      "name": "disconnect_close_failure",
+      "trace": [
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "ws_close"
+        },
+        {
+          "op": "push_error_frame",
+          "frame": {
+            "frame_type": "ErrorFrame",
+            "error": "DeepgramTTSService error: offline socket close failure",
+            "exception": null
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        }
+      ],
+      "state": {
+        "socket_present": false,
+        "socket_state": null,
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        },
+        {
+          "level": "error",
+          "message": "DeepgramTTSService exception: offline socket close failure"
+        }
+      ]
+    },
+    {
+      "name": "receive_binary_playing_precedence",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-playing",
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "01"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": "ctx-playing"
+          }
+        },
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-playing",
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "0203"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": "ctx-playing"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "receive_binary_turn_fallback",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-turn",
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "01"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": "ctx-turn"
+          }
+        },
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-turn",
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "0203"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": "ctx-turn"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "receive_binary_no_active_context",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": null,
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "01"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": null
+          }
+        },
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": null,
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "0203"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": null
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "receive_flushed_ignores_sequence_0",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-current",
+          "frame": {
+            "frame_type": "TTSStoppedFrame",
+            "context_id": "ctx-current"
+          }
+        },
+        {
+          "op": "remove_audio_context_boundary",
+          "context_id": "ctx-current"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "trace",
+          "message": "Received Flushed: {'type': 'Flushed', 'sequence_id': 0, 'context_id': 'ctx-old'}"
+        }
+      ]
+    },
+    {
+      "name": "receive_flushed_ignores_sequence_999",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-current",
+          "frame": {
+            "frame_type": "TTSStoppedFrame",
+            "context_id": "ctx-current"
+          }
+        },
+        {
+          "op": "remove_audio_context_boundary",
+          "context_id": "ctx-current"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "trace",
+          "message": "Received Flushed: {'type': 'Flushed', 'sequence_id': 999, 'context_id': 'ctx-old'}"
+        }
+      ]
+    },
+    {
+      "name": "receive_flushed_without_context",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": null,
+          "frame": {
+            "frame_type": "TTSStoppedFrame",
+            "context_id": null
+          }
+        },
+        {
+          "op": "remove_audio_context_boundary",
+          "context_id": null
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "trace",
+          "message": "Received Flushed: {'type': 'Flushed', 'sequence_id': 0}"
+        }
+      ]
+    },
+    {
+      "name": "receive_cleared_metadata_log_only",
+      "trace": [],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "trace",
+          "message": "Received Cleared: {'type': 'Cleared', 'sequence_id': 3}"
+        },
+        {
+          "level": "trace",
+          "message": "Received metadata: {'type': 'Metadata', 'request_id': 'metadata-id'}"
+        }
+      ]
+    },
+    {
+      "name": "receive_warning_variants_log_only",
+      "trace": [],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "warning",
+          "message": "DeepgramTTSService warning: preferred"
+        },
+        {
+          "level": "warning",
+          "message": "DeepgramTTSService warning: fallback"
+        },
+        {
+          "level": "warning",
+          "message": "DeepgramTTSService warning: Unknown warning"
+        }
+      ]
+    },
+    {
+      "name": "receive_unknown_error_and_bad_json_continue",
+      "trace": [
+        {
+          "op": "append_to_audio_context_boundary",
+          "context_id": "ctx-after-ignored",
+          "frame": {
+            "frame_type": "TTSAudioRawFrame",
+            "audio": {
+              "bytes_hex": "0001"
+            },
+            "sample_rate": 24000,
+            "num_channels": 1,
+            "context_id": "ctx-after-ignored"
+          }
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "Received unknown message type: {'type': 'Error', 'description': 'provider error'}"
+        },
+        {
+          "level": "debug",
+          "message": "Received unknown message type: {'type': 'FutureMessage'}"
+        },
+        {
+          "level": "error",
+          "message": "Invalid JSON message: {bad-json"
+        }
+      ]
+    },
+    {
+      "name": "receive_valid_nonobject_json_raises",
+      "exception": {
+        "exception_type": "AttributeError",
+        "message": "'list' object has no attribute 'get'"
+      },
+      "trace": [],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "receive_other_python_message_types_ignored",
+      "trace": [],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "update_no_change_no_reconnect",
+      "changed": {},
+      "trace": [
+        {
+          "op": "base_update_settings",
+          "changed": {}
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": null,
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": []
+    },
+    {
+      "name": "update_voice_sync_and_reconnect",
+      "changed": {
+        "voice": "aura-2-helena-en"
+      },
+      "trace": [
+        {
+          "op": "base_update_settings",
+          "changed": {
+            "voice": "aura-2-helena-en"
+          }
+        },
+        {
+          "op": "sync_model_name_to_metrics",
+          "model": "aura-2-new-en"
+        },
+        {
+          "op": "base_disconnect"
+        },
+        {
+          "op": "cancel_receive_task",
+          "token": "receive-task-token"
+        },
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "ws_close"
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        },
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-new-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        },
+        {
+          "op": "create_receive_task",
+          "token": "receive-task-token"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": "receive-task-token",
+        "settings": {
+          "model": "aura-2-new-en",
+          "voice": "aura-2-new-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "update_speed_reconnect",
+      "changed": {
+        "speed": null
+      },
+      "trace": [
+        {
+          "op": "base_update_settings",
+          "changed": {
+            "speed": null
+          }
+        },
+        {
+          "op": "base_disconnect"
+        },
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "ws_close"
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        },
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000&speed=1.1",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        },
+        {
+          "op": "create_receive_task",
+          "token": "receive-task-token"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": "receive-task-token",
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": 1.1
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    },
+    {
+      "name": "update_speed_none_reconnect_omits_query",
+      "changed": {
+        "speed": 1.1
+      },
+      "trace": [
+        {
+          "op": "base_update_settings",
+          "changed": {
+            "speed": 1.1
+          }
+        },
+        {
+          "op": "base_disconnect"
+        },
+        {
+          "op": "stop_all_metrics"
+        },
+        {
+          "op": "ws_send",
+          "message": {
+            "type": "Close"
+          }
+        },
+        {
+          "op": "ws_close"
+        },
+        {
+          "op": "event",
+          "event": "on_disconnected",
+          "args": []
+        },
+        {
+          "op": "base_connect"
+        },
+        {
+          "op": "websocket_connect",
+          "url": "wss://api.deepgram.com/v1/speak?model=aura-2-helena-en&encoding=linear16&sample_rate=24000",
+          "headers": {
+            "Authorization": "Token fake-offline-key"
+          }
+        },
+        {
+          "op": "event",
+          "event": "on_connected",
+          "args": []
+        },
+        {
+          "op": "create_receive_task",
+          "token": "receive-task-token"
+        }
+      ],
+      "state": {
+        "socket_present": true,
+        "socket_state": "OPEN",
+        "receive_task": "receive-task-token",
+        "settings": {
+          "model": null,
+          "voice": "aura-2-helena-en",
+          "language": null,
+          "speed": null
+        }
+      },
+      "logs": [
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Disconnecting from Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "Connecting to Deepgram WebSocket"
+        },
+        {
+          "level": "debug",
+          "message": "DeepgramTTSService: Websocket connection initialized: {\"headers\": {'dg-request-id': 'fixed-request'}}"
+        }
+      ]
+    }
+  ]
+}

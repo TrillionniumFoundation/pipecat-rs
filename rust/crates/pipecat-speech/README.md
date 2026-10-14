@@ -320,3 +320,12 @@ Enable `pipecat-speech/minimax` (or the facade's `minimax` feature) for
 hex PCM and reuses the existing TTS lifecycle without claiming word timestamps.
 See [MINIMAX.md](MINIMAX.md) for the fixed source, corrected EOF/error behavior,
 final aggregate handling and synthetic loopback qualification.
+
+## Optional Deepgram WebSocket utterances
+
+`deepgram-ws` adds the explicit `HttpTtsBackend::DeepgramWebSocket` variant and
+`deepgram_ws::DeepgramWsClient`. Despite the scheduler's historical HTTP type
+name, this variant performs a real WebSocket Speak/Flush/PCM/Flushed exchange.
+It uses one owned socket per complete utterance, with bounded Clear/Close and
+joined cleanup; it does not provide persistent token streaming or word timing.
+See [DEEPGRAM_WS.md](DEEPGRAM_WS.md) for the fixed-source contract and limits.
