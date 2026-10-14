@@ -257,3 +257,9 @@ pub use text_transformer::{
 
 pub mod idle_frame;
 pub use idle_frame::{IdleCallback, IdleFrameProcessor, IdleFrameProcessorConfig};
+
+pub mod gated_llm_context;
+pub use gated_llm_context::{
+    GatedLlmContextAggregator, GatedLlmContextAggregatorConfig, GatedLlmContextNotifier,
+    GatedLlmContextSnapshot,
+};

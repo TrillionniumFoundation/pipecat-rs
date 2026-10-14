@@ -237,8 +237,8 @@ string and per-handler task fan-out. Native urgent interruption may invalidate a
 racing old token/start invocation; such stale input cannot seed the next response.
 Callback admission closes once graceful shutdown starts. Source cleanup's
 unbounded wait is replaced by owned cancellation and cooperative deadlines. No
-assistant-stopped callback bridge, latest-context notifier gate, generic event
-system, provider integration, or audible playback parity is implied.
+assistant-stopped callback bridge, generic event system, provider integration,
+or audible playback parity is implied by the full-response callback utility.
 
 ## Stateless text transformation
 
@@ -416,3 +416,111 @@ repeated-start behavior uses a labelled wrapper/private-hook witness instead;
 startup rejection is checked as an error followed by successful clean reuse.
 Final focused and package checks pass; the initial logs remain in the evidence
 archive alongside the corrected runs.
+
+
+## Latest-context notification gate
+
+`GatedLlmContextAggregator` is a single-slot context gate, exported through
+`pipecat::processors` without optional features. It differs from the generic
+`GatedAggregator` FIFO: while closed, each accepted context replaces the previous
+one. An application obtains this run's `current_notifier()` after pipeline setup
+and calls `notify()` when its own prerequisite is ready. No provider, background
+application job or global notification bus is created by the gate.
+
+Fixed Python references from `ProfHepta/pipecat` commit
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`:
+- `src/pipecat/processors/aggregators/gated_llm_context.py`, blob
+  `3dfea5c6e6d54c5e17aebf909d7c5375b18c79a2`
+- `src/pipecat/utils/sync/event_notifier.py`, blob
+  `d55d3fe2955b1a87179ac0dc7388f19014ba83f7`
+- `src/pipecat/utils/sync/base_notifier.py`, blob
+  `1cbf5ee193a9c444b5b16398042ea62dc4bf2655`
+
+Default `start_open=false` holds the latest `LlmContext` or
+`LlmContextDetailed`. `start_open=true` lets the first accepted context pass in
+its original direction, then switches to notification mode. A consumed signal
+releases the current slot downstream, preserving the original frame identity,
+metadata and native semantic carriers. Non-context frames pass unchanged in their
+original direction. The signal does not permanently open the gate.
+
+Notifications coalesce into one pending bit, rather than counting permits.
+An empty signal grants no future permission **after the supervisor consumes it**.
+If a context arrives after `notify()` but before that consumption, the pending
+signal may release it, as with the source EventNotifier. Notification acceptance
+and payload-free snapshot counters are local diagnostics, not delivery or provider
+completion receipts. The slot is taken before output admission, so an independently
+arriving replacement cannot be erased by completion of the previous release.
+
+Native frames contain value snapshots. This API does not reproduce Python shared
+mutable context objects: changing an application's context after submission does
+not change an already buffered message snapshot. Opaque native tools and carriers
+keep their existing shared identities; this is not a deep clone of application
+closure state. It also does not copy the source's
+accidental duplicate Start forwarding. Native causal and lifecycle safeguards are
+explicit adaptations, not claims of identical Python scheduling.
+
+The default inspectable payload budget is 4 MiB, configurable from one byte to
+64 MiB. Counting writes do not create a second serialized payload buffer. The
+accounting includes public context data, metadata, envelope strings, shallow
+retained state and known native continuation bytes. Direct tool schemas are
+counted without serializing or replacing their native handlers. Opaque callback
+captures, shared carrier internals and runtime ownership are not a whole-heap
+memory guarantee. An invalid/over-budget context does not replace the previous
+slot or consume the first-context bypass. No payload is truncated.
+
+Each setup creates isolated state and one core-owned supervisor. Keep the
+processor in an Arc to obtain its current run's notifier after Pipeline::start.
+An old handle does not follow the processor into a new run; closed handles fail
+explicitly. Use different instances for concurrent pipelines, and join a prior
+worker before sequential reuse. An already-in-use setup diagnostic is not an
+isolation boundary because the core cleanup hook has no invocation identity.
+`start_open` is reset from configuration at each native setup, rather than
+retaining Python's mutated flag across runs.
+
+A delayed frame retains its original invocation context and causal fence.
+Notification cannot refresh an old generation. Interruption discards stale
+buffered work while leaving the supervisor available for fresh contexts.
+End/Stop prepare_end closes the supervisor before the core drains tasks;
+Cancel, cleanup and worker-owner drop also retire it. Unnotified buffered work
+is discarded, never automatically flushed at shutdown. A notification selects
+a frame by taking the slot under its lock. That already-selected synchronous
+release may finish during closure, but closure joins it before returning or
+forwarding a terminal. Cancellation cannot undo output already admitted to a
+downstream queue or external provider effects.
+
+Release uses native synchronous, fail-fast queue admission rather than Python's
+awaitable push. A full destination reports an owned-task error, retires the
+supervisor, drops its retained work and rejects further notifications. It does
+not silently retry a potentially meaningful request. Core error policy still
+decides whether the surrounding pipeline continues or terminates. Starting a
+new run requires complete teardown of the previous one.
+
+### Slice 57 verification, 2026-10-14 UTC
+
+Thirteen integration tests exercise real native Pipeline workers: latest-only
+replacement for both context variants, start-open direction and reset, consumed
+empty signals, original frame metadata and opaque carrier/handler identity,
+non-context passthrough, interruption cleanup, an independently retained original
+fence with local clearing deliberately bypassed, every terminal form, worker
+owner drop, joined reuse and stale handles, payload rejection, spawn admission
+rollback, and visible full-destination failure. Four private ownership tests
+cover unpolled cancellation, controlled take/replacement publication ordering,
+empty-notify-before-context timing, and failed first-output admission. These
+controlled private calls are not presented as a real awaitable capacity queue.
+
+The facade's `gated_llm_context_http` test uses actual loopback HTTP/SSE through
+LlmProcessor. Before notification the provider request count is zero; only the
+latest of contexts A/B appears in the one received request. It verifies returned
+LLM text, consumes an empty notification, retains a further C context, then proves
+End discards C without another request. The server keeps accepting until pipeline
+cleanup completes; both owners close and join before assertions, including the
+observation-timeout path. No paid provider or external credential is used.
+
+The processor package's default suite passes 132 tests and its all-feature suite
+175; the facade HTTP test passes separately. Strict all-target Clippy passes for
+the default processor/facade targets and all-feature processors; selected
+formatting passes. Initial test compile assumptions
+about helper APIs and an unsupported native realtime carrier plus direct-tool
+schema combination were corrected without relaxing core validation. Their first
+failure logs remain in the evidence alongside the final passing runs. These are
+selected source-bound checks, not a new full-workspace or live-provider claim.
