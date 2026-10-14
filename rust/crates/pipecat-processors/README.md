@@ -652,3 +652,12 @@ preempt a synchronous codec. Those fixture assumptions were corrected to the
 existing core behavior, without changing core admission or cancellation. Initial
 failure logs are retained alongside final passing runs. No full-workspace or
 live-provider qualification is implied.
+
+## Producer/Consumer subscriptions
+
+The default exports include a bounded native `ProducerProcessor` /
+`ConsumerProcessor` pair for independently owned pipelines, with asynchronous
+read-only filtering and owned Text/PCM transforms. See
+[FRAME_SUBSCRIPTION.md](FRAME_SUBSCRIPTION.md) for the fixed Python contract,
+dual-runtime causal admission, partial fanout, resource budgets, ownership and
+explicit native differences.

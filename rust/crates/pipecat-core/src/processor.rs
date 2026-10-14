@@ -115,6 +115,14 @@ pub(crate) struct ForwardingOrigin {
 pub struct InvocationFence {
     origins: Vec<(std::sync::Weak<Runtime>, usize, Option<u64>)>,
 }
+/// Result of a synchronous, raw-fenced enqueue at the receiving processor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FencedQueueOutcome {
+    /// The frame was admitted to this processor's own queue.
+    Queued,
+    /// A source or destination causal scope expired.
+    Stale,
+}
 /// Keep upgraded runtimes outside any source/capability lock so their final
 /// destruction cannot reenter a source owner's revoke path under that lock.
 pub(crate) struct InvocationObservation {
@@ -434,23 +442,116 @@ impl ProcessorContext {
     /// Admit provider output under its original non-owning causal fence and
     /// this receiver's own raw scope. Locks are ordered once, never reentered.
     /// This is only a local queue-admission guarantee, not remote cancellation.
+    /// System frames, uninterruptible frames and surviving background tasks
+    /// cannot bypass either raw scope. Stale or closed scopes silently drop.
     pub fn try_push_with_invocation_fence(
         &self,
         frame: Frame,
         direction: Direction,
         fence: &InvocationFence,
     ) -> Result<(), ProcessorError> {
-        let origins: Option<Vec<_>> = fence
-            .origins
-            .iter()
-            .map(|(runtime, index, epoch)| {
-                runtime.upgrade().map(|runtime| (runtime, *index, *epoch))
-            })
-            .collect();
-        let Some(mut origins) = origins else {
-            self.runtime.drop_frame();
-            return Ok(());
+        self.with_invocation_admission(fence, false, || {
+            self.runtime
+                .route_unlocked(self.index, self.current_generation(), frame, direction)
+        })
+        .map(|_| ())
+    }
+    /// Synchronously enqueue a restricted subscription snapshot at this
+    /// processor under both the source fence and this receiver's own raw
+    /// invocation, without translating epochs between independent runtimes
+    /// or forwarding to an adjacent processor.
+    /// System frames, uninterruptible frames and surviving background tasks
+    /// cannot bypass either raw scope. An expired source or inherited origin,
+    /// or a stale destination invocation returns `Stale`. A closed destination
+    /// takes precedence over stale scopes and returns an error; queue-capacity
+    /// and other admission errors also remain errors.
+    ///
+    /// `Queued` establishes only this local admission point. The queue does
+    /// not retain the source fence: later source cancellation cannot retract
+    /// an admitted frame. This method never waits for capacity. Like `try_push`,
+    /// synchronous wakers must not reenter runtime admission gates.
+    ///
+    /// This cross-runtime relay admits only ordinary text/transcription and
+    /// raw PCM payloads. Controls, executable/local native semantic carriers,
+    /// error origins and pipeline-clock PTS are rejected before taking locks.
+    /// These boundaries prevent ownership or clock authority from implicitly
+    /// crossing runtimes, and prevent custom payload destruction under locks.
+    /// Supported text kinds are Text, LlmText, InputText, VisionText,
+    /// AggregatedText, TtsText, and the plain/detailed Transcription,
+    /// InterimTranscription, EagerTranscription and Translation families.
+    /// Supported PCM kinds are InputAudio, OutputAudio, TtsAudio,
+    /// SpeechOutputAudio and UserAudio; their formats must validate.
+    pub fn try_queue_with_invocation_fence(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        fence: &InvocationFence,
+    ) -> Result<FencedQueueOutcome, ProcessorError> {
+        Self::validate_fenced_queue_frame(&frame)?;
+        self.with_invocation_admission(fence, true, || {
+            self.runtime.queue_from_unlocked(
+                self.index,
+                self.current_generation(),
+                frame,
+                direction,
+            )?;
+            Ok(FencedQueueOutcome::Queued)
+        })
+        .map(|outcome| outcome.unwrap_or(FencedQueueOutcome::Stale))
+    }
+    fn validate_fenced_queue_frame(frame: &Frame) -> Result<(), ProcessorError> {
+        frame
+            .require_no_native_llm_continuation()
+            .map_err(|error| ProcessorError::new(error.to_string()))?;
+        if frame.error_origin().is_some() || frame.has_pipeline_pts() {
+            return Err(ProcessorError::new(
+                "fenced self-queue cannot relay an error origin or pipeline-clock PTS",
+            ));
+        }
+        let audio = match &frame.data {
+            FrameData::Text(_)
+            | FrameData::LlmText(_)
+            | FrameData::InputText(_)
+            | FrameData::VisionText(_)
+            | FrameData::AggregatedText(_)
+            | FrameData::TtsText(_)
+            | FrameData::Transcription(_)
+            | FrameData::InterimTranscription(_)
+            | FrameData::EagerTranscription(_)
+            | FrameData::Translation(_)
+            | FrameData::TranscriptionDetailed(_)
+            | FrameData::InterimTranscriptionDetailed(_)
+            | FrameData::EagerTranscriptionDetailed(_)
+            | FrameData::TranslationDetailed(_) => return Ok(()),
+            FrameData::InputAudio(audio)
+            | FrameData::OutputAudio(audio)
+            | FrameData::TtsAudio(audio)
+            | FrameData::SpeechOutputAudio(audio) => audio,
+            FrameData::UserAudio(audio) => &audio.audio,
+            _ => {
+                return Err(ProcessorError::new(
+                    "fenced self-queue requires a text, transcription or raw PCM frame",
+                ))
+            }
         };
+        audio
+            .validate()
+            .map_err(|error| ProcessorError::new(error.to_string()))
+    }
+    /// Internal only: the operation must use unlocked routing and never
+    /// reenter admission. If admission rejects the operation, its captures are
+    /// dropped after all guards and weak upgrades. The self-queue caller
+    /// validates that payload destruction
+    /// cannot execute user code; existing push routing retains its behavior.
+    fn with_invocation_admission<T>(
+        &self,
+        fence: &InvocationFence,
+        reject_closed_destination: bool,
+        operation: impl FnOnce() -> Result<T, ProcessorError>,
+    ) -> Result<Option<T>, ProcessorError> {
+        let observation = fence.observe();
+        let source_expired = observation.is_none();
+        let mut origins = observation.map_or_else(Vec::new, |value| value.origins);
         origins.push((self.runtime.clone(), self.index, self.current_generation()));
         origins.extend(self.origins.iter().map(|origin| {
             (
@@ -466,15 +567,19 @@ impl ProcessorContext {
             .iter()
             .map(|runtime| runtime.admission.lock().unwrap())
             .collect();
-        if origins.iter().any(|(runtime, index, epoch)| {
-            runtime.is_finished()
-                || epoch.is_some_and(|epoch| runtime.queues[*index].generation() > epoch)
-        }) {
-            self.runtime.drop_frame();
-            return Ok(());
+        if reject_closed_destination && self.runtime.is_finished() {
+            return Err(ProcessorError::new("pipeline is closed"));
         }
-        self.runtime
-            .route_unlocked(self.index, self.current_generation(), frame, direction)
+        if source_expired
+            || origins.iter().any(|(runtime, index, epoch)| {
+                runtime.is_finished()
+                    || epoch.is_some_and(|epoch| runtime.queues[*index].generation() > epoch)
+            })
+        {
+            self.runtime.drop_frame();
+            return Ok(None);
+        }
+        operation().map(Some)
     }
     /// Synchronous, nonblocking equivalent of `push`, with identical causal
     /// admission and backpressure behavior. Useful when a producer's state
@@ -780,6 +885,8 @@ impl FrameProcessor for IdentityProcessor {
 
 #[cfg(test)]
 mod causal_scope_tests;
+#[cfg(test)]
+mod fenced_queue_tests;
 // Append only to processor.rs in an immutable independent review tree.
 // Source-only preparation for lock addendum18fa4874; no native execution yet.
 #[cfg(test)]

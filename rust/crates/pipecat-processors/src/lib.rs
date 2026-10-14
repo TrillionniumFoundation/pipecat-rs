@@ -269,3 +269,9 @@ pub use async_generator::{
     AsyncGeneratorProcessor, AsyncGeneratorProcessorConfig, AsyncGeneratorReceiver,
     AsyncGeneratorSerializerFactory, AsyncGeneratorSnapshot, AsyncGeneratorStreamError,
 };
+
+pub mod frame_subscription;
+pub use frame_subscription::{
+    AsyncFramePredicate, ConsumerProcessor, ConsumerSubscriptionSnapshot, FrameSubscriptionConfig,
+    FrameSubscriptionProducer, FrameTransformer, ProducerProcessor, ProducerSubscriptionSnapshot,
+};
