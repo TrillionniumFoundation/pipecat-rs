@@ -5,6 +5,8 @@ mod bot_audio;
 mod bot_transcription;
 #[cfg(feature = "bot-audio-transcription")]
 mod bot_transcription_settings;
+#[cfg(feature = "bot-audio-transcription")]
+mod native_loader;
 pub use bot_audio::{BotAudioChunk, BotAudioLimits, BotAudioRun};
 #[cfg(feature = "bot-audio-transcription")]
 pub use bot_transcription::BotTranscriptionConfig;

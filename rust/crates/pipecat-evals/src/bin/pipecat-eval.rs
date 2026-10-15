@@ -103,7 +103,8 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             "--bot-audio-response requires the bot-audio-transcription build feature".into(),
         ));
     }
-    // Parse every source and option before installing the signal task or launching a bot.
+    // Parse settings and ordinary scenarios up front. Audio-response preparation
+    // validates every scenario before loading models, under the signal owner.
     let manifest = if suite {
         #[cfg(feature = "bot-audio-transcription")]
         let audio_manifest = bot_audio_response
@@ -125,21 +126,20 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     } else {
         None
     };
+    #[cfg(feature = "bot-audio-transcription")]
+    let audio_settings = if single {
+        bot_audio_response
+            .map(pipecat_evals::BotTranscriptionSettings::load)
+            .transpose()?
+    } else {
+        None
+    };
     let mut sessions = Vec::new();
     if single {
         let options = SessionOptions {
             stop_bot,
             ..Default::default()
         };
-        #[cfg(feature = "bot-audio-transcription")]
-        if let Some(config) = bot_audio_response {
-            sessions = pipecat_evals::BotTranscriptionSettings::load(config)?.into_sessions(
-                &args[1],
-                &args[2],
-                options.clone(),
-                recorded,
-            )?;
-        }
         if bot_audio_response.is_none() && recorded {
             let file = RecordedScenarioFile::load(&args[1])?;
             if options.stop_bot && file.len() > 1 {
@@ -172,6 +172,21 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         }
     });
     let result = async {
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(settings) = audio_settings {
+            sessions = settings
+                .into_sessions_with_cancellation(
+                    &args[1],
+                    &args[2],
+                    SessionOptions {
+                        stop_bot,
+                        ..Default::default()
+                    },
+                    recorded,
+                    cancel.clone(),
+                )
+                .await?;
+        }
         if let Some(manifest) = manifest {
             let result = run_release(
                 manifest,

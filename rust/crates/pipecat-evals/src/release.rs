@@ -21,7 +21,13 @@ use std::{
 };
 use tokio::task::JoinSet;
 #[cfg(feature = "bot-audio-transcription")]
-use {crate::BotTranscriptionSettings, std::sync::Arc};
+use {
+    crate::{
+        native_loader::{LoaderRegistrar, LoaderRegistry},
+        BotTranscriptionSettings,
+    },
+    std::sync::Arc,
+};
 const MAX_RUNS: usize = 128;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 
@@ -529,19 +535,23 @@ impl ReleaseJob {
         session: SessionOptions,
         process: ProcessOptions,
         cancel: Cancellation,
+        #[cfg(feature = "bot-audio-transcription")] loaders: LoaderRegistrar,
     ) -> Result<ReleaseRun, EvalError> {
         if cancel.is_cancelled() {
             return Ok(self.failed("cancelled", "release run cancelled before launch"));
         }
         #[cfg(feature = "bot-audio-transcription")]
         let transcription = if let Some(settings) = &self.audio_response {
-            // Loading and inference stay in this task's owner. They cannot be
-            // bounded by an async timeout or delegated to a detached loader.
-            let config = settings.build_config();
-            if cancel.is_cancelled() {
+            // Cancellation remains observable while native loading finishes.
+            // Its owned thread is joined before the attempt can return.
+            let config = settings
+                .clone()
+                .build_config_owned(&cancel, &loaders)
+                .await?;
+            let Some(config) = config else {
                 return Ok(self.failed("cancelled", "release run cancelled before launch"));
-            }
-            Some(config?)
+            };
+            Some(config)
         } else {
             None
         };
@@ -612,6 +622,22 @@ pub async fn run_release(
 ) -> Result<ReleaseResult, EvalError> {
     run_release_with_budget(manifest, session, process, cancel, MAX_BYTES).await
 }
+
+async fn cancel_and_finish<T: 'static>(
+    tasks: &mut JoinSet<T>,
+    cancel: &Cancellation,
+    drain_loaders: bool,
+) {
+    cancel.cancel();
+    if drain_loaders {
+        // An audio task may own a native loader which must finish and be joined.
+        // Ordinary errors must preserve its cooperative cleanup path.
+        while tasks.join_next().await.is_some() {}
+    } else {
+        tasks.shutdown().await;
+    }
+}
+
 /// Configurable serialized retention budget, capped at 64 MiB. Summary space
 /// is reserved before launching any job. A too-small budget returns an error.
 pub async fn run_release_with_budget(
@@ -639,6 +665,10 @@ pub async fn run_release_with_budget(
     {
         return Err(invalid("invalid release plan size/concurrency"));
     }
+    #[cfg(feature = "bot-audio-transcription")]
+    let drain_loaders = manifest.jobs.iter().any(|job| job.audio_response.is_some());
+    #[cfg(not(feature = "bot-audio-transcription"))]
+    let drain_loaders = false;
     let mut audio_budget = AudioBudget::default();
     let mut ports = HashSet::new();
     let mut identities = HashSet::new();
@@ -713,6 +743,12 @@ pub async fn run_release_with_budget(
     if stored + reserved > max_bytes {
         return Err(EvalError::Limit("release summary budget"));
     }
+    // Declare the outer registry before the JoinSet: dropping the release first
+    // aborts its tasks, then closes loader admission and joins all native work.
+    #[cfg(feature = "bot-audio-transcription")]
+    let loaders = LoaderRegistry::new();
+    #[cfg(feature = "bot-audio-transcription")]
+    let loader_registrar = loaders.registrar();
     #[cfg(feature = "bot-audio-transcription")]
     {
         // A fully validated plan may contain jobs from different loaded
@@ -729,11 +765,14 @@ pub async fn run_release_with_budget(
             if !preflighted.insert(Arc::as_ptr(settings)) {
                 continue;
             }
-            let config = settings.build_config();
-            if cancel.is_cancelled() {
+            if settings
+                .clone()
+                .preflight_owned(&cancel, &loader_registrar)
+                .await?
+                .is_none()
+            {
                 break;
             }
-            drop(config?);
         }
     }
     let mut results = vec![None; manifest.jobs.len()];
@@ -741,48 +780,79 @@ pub async fn run_release_with_budget(
     let mut active = BTreeMap::<String, usize>::new();
     let mut tasks = JoinSet::new();
     while !pending.is_empty() || !tasks.is_empty() {
-        while tasks.len() < manifest.concurrency {
-            let Some(index) = pending
-                .iter()
-                .position(|(_, job)| active.get(&job.name).copied().unwrap_or(0) < job.concurrency)
-            else {
-                break;
-            };
-            let (index, job) = pending.remove(index);
-            *active.entry(job.name.clone()).or_default() += 1;
-            let cancel = cancel.clone();
-            let session = session.clone();
-            let process = process.clone();
-            tasks.spawn(async move {
-                let name = job.name.clone();
-                let result = if cancel.is_cancelled() {
-                    job.failed("cancelled", "release run cancelled before launch")
-                } else {
-                    match job.clone().run(session, process, cancel).await {
-                        Ok(result) => result,
-                        Err(_) => job.failed(
-                            "process_error",
-                            "native run failed during config or process cleanup",
-                        ),
-                    }
+        let (index, mut result) = if cancel.is_cancelled() && !pending.is_empty() {
+            // Pending jobs need ordered results, not new task/model owners.
+            let (index, job) = pending.remove(0);
+            (
+                index,
+                job.failed("cancelled", "release run cancelled before launch"),
+            )
+        } else {
+            while !cancel.is_cancelled() && tasks.len() < manifest.concurrency {
+                let Some(index) = pending.iter().position(|(_, job)| {
+                    active.get(&job.name).copied().unwrap_or(0) < job.concurrency
+                }) else {
+                    break;
                 };
-                (index, name, result)
-            });
-        }
-        let Some(joined) = tasks.join_next().await else {
-            return Err(invalid("release scheduler has no runnable job"));
+                let (index, job) = pending.remove(index);
+                *active.entry(job.name.clone()).or_default() += 1;
+                let cancel = cancel.clone();
+                let session = session.clone();
+                let process = process.clone();
+                #[cfg(feature = "bot-audio-transcription")]
+                let loader_registrar = loader_registrar.clone();
+                tasks.spawn(async move {
+                    let name = job.name.clone();
+                    let result = if cancel.is_cancelled() {
+                        job.failed("cancelled", "release run cancelled before launch")
+                    } else {
+                        match job
+                            .clone()
+                            .run(
+                                session,
+                                process,
+                                cancel,
+                                #[cfg(feature = "bot-audio-transcription")]
+                                loader_registrar,
+                            )
+                            .await
+                        {
+                            Ok(result) => result,
+                            Err(_) => job.failed(
+                                "process_error",
+                                "native run failed during config or process cleanup",
+                            ),
+                        }
+                    };
+                    (index, name, result)
+                });
+            }
+            // Cancellation can arrive between entering this branch and its
+            // admission loop. Let the next iteration summarize the queue.
+            if tasks.is_empty() && cancel.is_cancelled() && !pending.is_empty() {
+                continue;
+            }
+            let Some(joined) = tasks.join_next().await else {
+                return Err(invalid("release scheduler has no runnable job"));
+            };
+            let (index, name, result) = match joined {
+                Ok(value) => value,
+                Err(_) => {
+                    cancel_and_finish(&mut tasks, &cancel, drain_loaders).await;
+                    return Err(invalid("release run task failed"));
+                }
+            };
+            *active.get_mut(&name).unwrap() -= 1;
+            (index, result)
         };
-        let (index, name, mut result) = match joined {
-            Ok(value) => value,
-            Err(_) => {
-                cancel.cancel();
-                tasks.shutdown().await;
-                return Err(invalid("release run task failed"));
+        reserved -= sizes[index];
+        let mut size = match serialized_size(&result) {
+            Ok(size) => size,
+            Err(error) => {
+                cancel_and_finish(&mut tasks, &cancel, drain_loaders).await;
+                return Err(error);
             }
         };
-        *active.get_mut(&name).unwrap() -= 1;
-        reserved -= sizes[index];
-        let mut size = serialized_size(&result)?;
         if size > max_bytes - stored - reserved {
             result = summaries[index].take().unwrap();
             size = sizes[index];
@@ -803,4 +873,322 @@ pub async fn run_release_with_budget(
         return Err(EvalError::Limit("release result accounting"));
     }
     Ok(result)
+}
+
+#[cfg(all(test, unix, feature = "bot-audio-transcription"))]
+mod native_loader_tests {
+    use super::*;
+    use std::{
+        cell::RefCell,
+        sync::{
+            atomic::{AtomicBool, AtomicUsize},
+            Barrier, Condvar, Mutex,
+        },
+        time::Duration,
+    };
+
+    struct ThreadExit(Arc<AtomicUsize>);
+    impl Drop for ThreadExit {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    thread_local! {
+        static THREAD_EXIT: RefCell<Option<ThreadExit>> = const { RefCell::new(None) };
+    }
+
+    #[derive(Default)]
+    struct Gate {
+        entered: AtomicUsize,
+        exited: Arc<AtomicUsize>,
+        released: Mutex<bool>,
+        wake: Condvar,
+        timed_out: AtomicBool,
+    }
+    impl Gate {
+        fn block(&self) {
+            THREAD_EXIT.with(|probe| {
+                *probe.borrow_mut() = Some(ThreadExit(self.exited.clone()));
+            });
+            self.entered.fetch_add(1, Ordering::SeqCst);
+            // Bound a broken test too: unwinding an outer owner must not leave
+            // the suite hanging forever on this deliberately blocked thread.
+            let (released, timeout) = self
+                .wake
+                .wait_timeout_while(
+                    self.released.lock().unwrap(),
+                    Duration::from_secs(5),
+                    |released| !*released,
+                )
+                .unwrap();
+            if !*released && timeout.timed_out() {
+                self.timed_out.store(true, Ordering::SeqCst);
+            }
+        }
+        fn release(&self) {
+            *self.released.lock().unwrap() = true;
+            self.wake.notify_all();
+        }
+        async fn wait_entered(&self) {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                while self.entered.load(Ordering::SeqCst) == 0 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("native loader did not enter its fixture");
+        }
+        fn assert_joined(&self) {
+            assert!(!self.timed_out.load(Ordering::SeqCst));
+            assert_eq!(self.entered.load(Ordering::SeqCst), 1);
+            // The probe runs in a thread-local destructor, after its loader
+            // closure returns. Receiving a result alone cannot establish this.
+            assert_eq!(self.exited.load(Ordering::SeqCst), 1);
+        }
+    }
+
+    struct Temp(PathBuf);
+    impl Temp {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "pipecat-release-loader-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+        fn marker(&self) -> PathBuf {
+            self.0.join("child-was-spawned")
+        }
+        fn manifest(&self, settings: BotTranscriptionSettings) -> ReleaseManifest {
+            // Use a real native executable: NativeCommand correctly rejects
+            // script fixtures. Any unintended launch leaves a durable marker.
+            let executable = ["/usr/bin/touch", "/bin/touch"]
+                .into_iter()
+                .find_map(|path| Path::new(path).canonicalize().ok())
+                .expect("native touch fixture");
+            let command = NativeCommand {
+                executable: executable.clone(),
+                args: vec![self.marker().to_string_lossy().into_owned()],
+                cwd: self.0.clone(),
+                env: BTreeMap::new(),
+            };
+            command.validate().unwrap();
+            let scenario: ScriptScenario = serde_json::from_value(serde_json::json!({
+                "name": "owned loader", "turns": [{
+                    "user": "hello", "expect": [{
+                        "event": "response", "text_contains": "hello"
+                    }]
+                }]
+            }))
+            .unwrap();
+            let settings = Arc::new(settings);
+            ReleaseManifest {
+                concurrency: 1,
+                jobs: (1..=3)
+                    .map(|attempt| ReleaseJob {
+                        name: "loader fixture".into(),
+                        bot: executable.clone(),
+                        scenario: scenario.clone(),
+                        attempt,
+                        port: 7900 + attempt as u16,
+                        concurrency: 1,
+                        command: command.clone(),
+                        body: None,
+                        recordings: None,
+                        audio_response: Some(settings.clone()),
+                    })
+                    .collect(),
+            }
+        }
+    }
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn assert_cancelled(result: &ReleaseResult, temp: &Temp) {
+        assert!(!result.passed);
+        assert_eq!(result.runs.len(), 3);
+        for (index, run) in result.runs.iter().enumerate() {
+            assert_eq!(run.attempt, index + 1);
+            assert_eq!(run.hosted.process.pid, None);
+            assert_eq!(run.hosted.result.failures[0].kind, "cancelled");
+        }
+        assert!(!temp.marker().exists());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cancelling_release_preflight_joins_before_return_without_spawning() {
+        let temp = Temp::new();
+        let gate = Arc::new(Gate::default());
+        let preflight_gate = gate.clone();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let attempt_count = attempts.clone();
+        let settings = BotTranscriptionSettings::for_native_loader_test(
+            move || {
+                preflight_gate.block();
+                Ok(())
+            },
+            move || {
+                attempt_count.fetch_add(1, Ordering::SeqCst);
+                Err(invalid("unexpected fixture attempt"))
+            },
+        );
+        let cancel = Cancellation::new();
+        let mut run = Box::pin(run_release(
+            temp.manifest(settings),
+            SessionOptions::default(),
+            ProcessOptions::default(),
+            cancel.clone(),
+        ));
+        tokio::select! {
+            result = &mut run => panic!("release returned before preflight: {result:?}"),
+            _ = gate.wait_entered() => {}
+        }
+        cancel.cancel();
+        let returned_before_release =
+            tokio::time::timeout(Duration::from_millis(25), &mut run).await;
+        gate.release();
+        let waited_for_release = returned_before_release.is_err();
+        let result = match returned_before_release {
+            Ok(result) => result,
+            Err(_) => tokio::time::timeout(Duration::from_secs(2), run)
+                .await
+                .expect("cancelled release did not finish after loader release"),
+        };
+        gate.assert_joined();
+        assert!(waited_for_release);
+        let result = result.unwrap();
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
+        assert_cancelled(&result, &temp);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cancelling_release_attempt_joins_and_leaves_pending_jobs_unstarted() {
+        let temp = Temp::new();
+        let gate = Arc::new(Gate::default());
+        let attempt_gate = gate.clone();
+        let preflights = Arc::new(AtomicUsize::new(0));
+        let preflight_count = preflights.clone();
+        let settings = BotTranscriptionSettings::for_native_loader_test(
+            move || {
+                preflight_count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+            move || {
+                attempt_gate.block();
+                Err(invalid("cancelled fixture model"))
+            },
+        );
+        let cancel = Cancellation::new();
+        let mut run = Box::pin(run_release(
+            temp.manifest(settings),
+            SessionOptions::default(),
+            ProcessOptions::default(),
+            cancel.clone(),
+        ));
+        tokio::select! {
+            result = &mut run => panic!("release returned before attempt: {result:?}"),
+            _ = gate.wait_entered() => {}
+        }
+        cancel.cancel();
+        let returned_before_release =
+            tokio::time::timeout(Duration::from_millis(25), &mut run).await;
+        gate.release();
+        let waited_for_release = returned_before_release.is_err();
+        let result = match returned_before_release {
+            Ok(result) => result,
+            Err(_) => tokio::time::timeout(Duration::from_secs(2), run)
+                .await
+                .expect("cancelled release did not finish after loader release"),
+        };
+        gate.assert_joined();
+        assert!(waited_for_release);
+        let result = result.unwrap();
+        assert_eq!(preflights.load(Ordering::SeqCst), 1);
+        assert_cancelled(&result, &temp);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dropping_release_waits_for_its_active_attempt_native_thread() {
+        let temp = Temp::new();
+        let gate = Arc::new(Gate::default());
+        let attempt_gate = gate.clone();
+        let settings = BotTranscriptionSettings::for_native_loader_test(
+            || Ok(()),
+            move || {
+                attempt_gate.block();
+                Err(invalid("dropped fixture model"))
+            },
+        );
+        let mut run = Box::pin(run_release(
+            temp.manifest(settings),
+            SessionOptions::default(),
+            ProcessOptions::default(),
+            Cancellation::new(),
+        ));
+        tokio::select! {
+            result = &mut run => panic!("release returned before attempt: {result:?}"),
+            _ = gate.wait_entered() => {}
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let controller_dropped = dropped.clone();
+        let controller_gate = gate.clone();
+        // The controller is an OS thread because dropping the outer owner is
+        // deliberately synchronous and must not depend on this runtime polling.
+        let controller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            let returned_early = controller_dropped.load(Ordering::SeqCst);
+            controller_gate.release();
+            assert!(!returned_early, "outer Drop detached its native loader");
+        });
+        drop(run);
+        dropped.store(true, Ordering::SeqCst);
+        controller.join().unwrap();
+        gate.assert_joined();
+        assert!(!temp.marker().exists());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn release_drop_and_attempt_completion_share_native_join_ownership() {
+        for _ in 0..8 {
+            let temp = Temp::new();
+            let gate = Arc::new(Gate::default());
+            let attempt_gate = gate.clone();
+            let settings = BotTranscriptionSettings::for_native_loader_test(
+                || Ok(()),
+                move || {
+                    attempt_gate.block();
+                    Err(invalid("finished fixture model"))
+                },
+            );
+            let mut run = Box::pin(run_release(
+                temp.manifest(settings),
+                SessionOptions::default(),
+                ProcessOptions::default(),
+                Cancellation::new(),
+            ));
+            tokio::select! {
+                result = &mut run => panic!("release returned before attempt: {result:?}"),
+                _ = gate.wait_entered() => {}
+            }
+            let start = Arc::new(Barrier::new(2));
+            let controller_start = start.clone();
+            let controller_gate = gate.clone();
+            let controller = std::thread::spawn(move || {
+                controller_start.wait();
+                controller_gate.release();
+            });
+            start.wait();
+            drop(run);
+            let controller_result = controller.join();
+            gate.assert_joined();
+            controller_result.unwrap();
+            assert!(!temp.marker().exists());
+        }
+    }
 }

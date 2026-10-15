@@ -1,18 +1,22 @@
 //! Explicit trusted-local configuration for the spoken-response CLI/library loader.
 use crate::{
-    recorded_scenario::read_regular, BotTranscriptionConfig, EvalError, EvalSession,
-    RecordedScenarioFile, ScenarioFile, SessionOptions,
+    native_loader::{load_native, LoaderRegistrar, LoaderRegistry},
+    recorded_scenario::read_regular,
+    BotTranscriptionConfig, Cancellation, EvalError, EvalSession, RecordedAudio,
+    RecordedScenarioFile, ScenarioFile, ScriptScenario, SessionOptions,
 };
 use pipecat_speech::{SpeechClient, SpeechConfig, TranscriptionRequest};
 use pipecat_vad::{RuntimeOptions, SileroModel, SileroVadAnalyzer, VadParams};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
 const MAX_SCENARIOS: usize = 16;
+type ScenarioParts = Vec<(ScriptScenario, Vec<(usize, RecordedAudio)>)>;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,6 +42,14 @@ pub struct BotTranscriptionSettings {
     request: TranscriptionRequest,
     runtime: PathBuf,
     model: PathBuf,
+    #[cfg(test)]
+    test_loaders: Option<TestLoaders>,
+}
+
+#[cfg(test)]
+struct TestLoaders {
+    preflight: Box<dyn Fn() -> Result<(), EvalError> + Send + Sync>,
+    attempt: Box<dyn Fn() -> Result<BotTranscriptionConfig, EvalError> + Send + Sync>,
 }
 impl BotTranscriptionSettings {
     /// Read at most 32 KiB from a trusted-local regular JSON file (Unix).
@@ -102,6 +114,8 @@ impl BotTranscriptionSettings {
             },
             runtime,
             model,
+            #[cfg(test)]
+            test_loaders: None,
         })
     }
 
@@ -116,32 +130,7 @@ impl BotTranscriptionSettings {
         options: SessionOptions,
         recorded_audio: bool,
     ) -> Result<Vec<EvalSession>, EvalError> {
-        let parts = if recorded_audio {
-            RecordedScenarioFile::load_audio_response(scenario_path)?.into_parts()
-        } else {
-            ScenarioFile::load_audio_response(scenario_path)?
-                .scenarios
-                .into_iter()
-                .map(|scenario| (scenario, Vec::new()))
-                .collect()
-        };
-        if parts.is_empty() || parts.len() > MAX_SCENARIOS {
-            return Err(EvalError::Limit("bot transcription scenarios (1..16)"));
-        }
-        if options.stop_bot && parts.len() > 1 {
-            return Err(invalid("--stop-bot with several scenarios needs independent bot endpoints; use separate runs"));
-        }
-        // Validate the whole collection, including URL/options and recordings,
-        // before the first native model is instantiated. These temporary
-        // sessions have no socket, analyzer thread or HTTP request.
-        for (scenario, clips) in &parts {
-            EvalSession::new(
-                scenario.audio_response_validation_copy()?,
-                url,
-                options.clone(),
-            )?
-            .with_recorded_audio_inputs(clips.iter().cloned())?;
-        }
+        let parts = prepare_scenarios(scenario_path, url, &options, recorded_audio)?;
         let mut sessions = Vec::with_capacity(parts.len());
         for (scenario, clips) in parts {
             let config = self.build_config()?;
@@ -153,10 +142,113 @@ impl BotTranscriptionSettings {
         Ok(sessions)
     }
 
+    /// Prepare all scenarios and recordings, then load models sequentially on
+    /// owned native threads without blocking Tokio while waiting. At most
+    /// sixteen models (loading or retained in sessions) belong to this call.
+    ///
+    /// Cancellation prevents further admission and discards prepared sessions,
+    /// but an already-entered native call must finish and be joined first. This
+    /// is scheduling isolation, not a hard cancellation or startup deadline.
+    /// Externally dropping this future synchronously joins any admitted loader.
+    pub async fn into_sessions_with_cancellation(
+        self,
+        scenario_path: impl AsRef<Path>,
+        url: &str,
+        options: SessionOptions,
+        recorded_audio: bool,
+        cancel: Cancellation,
+    ) -> Result<Vec<EvalSession>, EvalError> {
+        if cancel.is_cancelled() {
+            return Err(EvalError::Cancelled);
+        }
+        // The complete collection is validated before entering native code.
+        let parts = prepare_scenarios(scenario_path, url, &options, recorded_audio)?;
+        let settings = Arc::new(self);
+        let loaders = LoaderRegistry::new();
+        let registrar = loaders.registrar();
+        let mut sessions = Vec::with_capacity(parts.len());
+        for (scenario, clips) in parts {
+            let Some(config) = settings
+                .clone()
+                .build_config_owned(&cancel, &registrar)
+                .await?
+            else {
+                // Returning drops previously prepared configurations only after
+                // the outstanding loader has actually been joined.
+                return Err(EvalError::Cancelled);
+            };
+            if cancel.is_cancelled() {
+                return Err(EvalError::Cancelled);
+            }
+            sessions.push(
+                EvalSession::with_bot_transcription(scenario, url, options.clone(), config)?
+                    .with_recorded_audio_inputs(clips)?,
+            );
+        }
+        if cancel.is_cancelled() {
+            return Err(EvalError::Cancelled);
+        }
+        Ok(sessions)
+    }
+
+    /// The invocation owns the registry through preflight and every attempt.
+    pub(crate) async fn build_config_owned(
+        self: Arc<Self>,
+        cancel: &Cancellation,
+        loaders: &LoaderRegistrar,
+    ) -> Result<Option<BotTranscriptionConfig>, EvalError> {
+        load_native(cancel, loaders, move || self.build_config()).await
+    }
+
+    /// Run model validation and destruction on the same owned native thread.
+    /// No unused preflight configuration is returned to a Tokio worker.
+    pub(crate) async fn preflight_owned(
+        self: Arc<Self>,
+        cancel: &Cancellation,
+        loaders: &LoaderRegistrar,
+    ) -> Result<Option<()>, EvalError> {
+        load_native(cancel, loaders, move || {
+            #[cfg(test)]
+            if let Some(test) = &self.test_loaders {
+                return (test.preflight)();
+            }
+            self.build_config().map(drop)
+        })
+        .await
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_native_loader_test(
+        preflight: impl Fn() -> Result<(), EvalError> + Send + Sync + 'static,
+        attempt: impl Fn() -> Result<BotTranscriptionConfig, EvalError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            speech: SpeechConfig {
+                base_url: "http://127.0.0.1:1/v1".into(),
+                api_key: "test-only".into(),
+                timeout: Duration::from_secs(1),
+                max_audio_bytes: 1024,
+                max_json_bytes: 1024,
+                queue_capacity: 1,
+            },
+            request: TranscriptionRequest::default(),
+            runtime: PathBuf::new(),
+            model: PathBuf::new(),
+            test_loaders: Some(TestLoaders {
+                preflight: Box::new(preflight),
+                attempt: Box::new(attempt),
+            }),
+        }
+    }
+
     /// Build a fresh model with checked inference and clean recurrent state.
     /// Native loading/inference is synchronous and has no hard deadline. The
     /// caller owns the result; no background loader or analyzer is started here.
     pub(crate) fn build_config(&self) -> Result<BotTranscriptionConfig, EvalError> {
+        #[cfg(test)]
+        if let Some(test) = &self.test_loaders {
+            return (test.attempt)();
+        }
         // Suite attempts may start long after settings were read. Reject
         // disappeared, nonregular or oversized assets again before native code
         // opens them. These trusted-local path checks are not a TOCTOU sandbox.
@@ -190,6 +282,42 @@ impl BotTranscriptionSettings {
         BotTranscriptionConfig::new(analyzer, self.speech.clone(), self.request.clone())
     }
 }
+
+fn prepare_scenarios(
+    scenario_path: impl AsRef<Path>,
+    url: &str,
+    options: &SessionOptions,
+    recorded_audio: bool,
+) -> Result<ScenarioParts, EvalError> {
+    let parts = if recorded_audio {
+        RecordedScenarioFile::load_audio_response(scenario_path)?.into_parts()
+    } else {
+        ScenarioFile::load_audio_response(scenario_path)?
+            .scenarios
+            .into_iter()
+            .map(|scenario| (scenario, Vec::new()))
+            .collect()
+    };
+    if parts.is_empty() || parts.len() > MAX_SCENARIOS {
+        return Err(EvalError::Limit("bot transcription scenarios (1..16)"));
+    }
+    if options.stop_bot && parts.len() > 1 {
+        return Err(invalid(
+            "--stop-bot with several scenarios needs independent bot endpoints; use separate runs",
+        ));
+    }
+    // These validation copies create no socket, analyzer thread or HTTP request.
+    for (scenario, clips) in &parts {
+        EvalSession::new(
+            scenario.audio_response_validation_copy()?,
+            url,
+            options.clone(),
+        )?
+        .with_recorded_audio_inputs(clips.iter().cloned())?;
+    }
+    Ok(parts)
+}
+
 fn invalid(message: &str) -> EvalError {
     EvalError::Scenario(message.into())
 }

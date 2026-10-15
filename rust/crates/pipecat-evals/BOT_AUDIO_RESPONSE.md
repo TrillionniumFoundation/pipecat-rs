@@ -206,13 +206,11 @@ preflight, the affected attempt fails through the existing process-error result
 with no child PID. Subsequent attempts and result retention follow the ordinary
 release scheduler policy.
 
-Cancellation is checked before and after per-attempt model construction. Native
-model loading and its preflight inference are synchronous and have no hard time
-bound; cancellation cannot preempt a native call. Unlike the Python suite's
-separate session subprocess, this model construction executes on a Tokio worker
-and can delay other attempts sharing that runtime. Concurrent local HTTP tests
-do not establish process-level pacing isolation or real-time scheduling.
-Once a session runs, its
+Cancellation is checked around per-attempt model construction. The CLI and
+hosted release path use the owned loading mechanism described below; native
+loading and preflight inference have no hard time bound and cannot be preempted.
+Concurrent local HTTP tests do not establish process-level pacing isolation or
+real-time scheduling. Once a session runs, its
 existing PCM/HTTP/analysis-thread ownership and the hosted child's teardown are
 shared with the library path. Forced child termination proves process reaping,
 not application-specific cleanup callbacks. Results remain in input/attempt
@@ -229,3 +227,51 @@ The input recording limits still apply across the complete manifest and repeats.
 They are separate from each session's bot PCM/transcription limits. No audio
 file export, playback, live-provider accuracy qualification or classifier judge
 is implied by a successful spoken-response suite.
+
+## Owned native model loading
+
+The explicit `run` CLI and hosted release path prepare native models on owned
+OS threads. Async callers wait for real thread completion and then join; a
+completion notification alone is not a join. This lets Tokio timers, other
+attempts and cooperative cancellation continue while a loader is blocked.
+The existing synchronous `BotTranscriptionSettings::into_sessions` API remains
+synchronous. Async library callers can use `into_sessions_with_cancellation`.
+
+Cancellation stops further model and child admission. An already started native
+call must still return before its owner can join and report cancellation. No
+`spawn_blocking` timeout detaches a loader, and no hard cancellation deadline is
+claimed. The CLI installs its signal owner before async native preparation; all
+scenario, URL, option and recording validation still finishes before any model
+is started, and every model is prepared before the first connection. The `run`
+path retains at most sixteen independently prepared sessions. If preparation
+is cancelled, the async library method returns `EvalError::Cancelled`; the CLI
+uses its existing preparation-error stderr/exit-2 path, with no fabricated
+scenario report. Cancellation of an already running session retains its
+ordinary failed-result/exit-1 behavior. The signal task is joined on either path.
+
+A release invocation owns a loader registry. Registration and closing are
+serialized so closing cannot miss a newly started thread. Each entry retains
+its handle through actual joining, including the race between task completion
+and registry destruction. In audio or mixed audio/text plans, cooperative
+cancellation and task errors drain active jobs; plain plans retain their
+existing error cleanup path. For an external forced future drop, the registry synchronously
+joins remaining loaders before its destruction returns. That fallback can
+block the dropping thread until native work finishes; it is deliberately not
+a responsive hard-abort mechanism.
+
+Suite task slots include loading and completed-but-unclaimed configurations as
+well as running sessions. The existing sixteen-attempt cap bounds models in
+one release invocation. Disposable preflight models are built and dropped
+serially before attempts start. At most 128 jobs and 128 distinct settings
+objects require at most 256 registry entries; joined entries retain no model.
+These are per-invocation bounds, not a process-global limit across independent
+library callers.
+
+This change isolates preparation only. The existing active-transcription
+analysis thread still has a synchronous final join, and native inference or
+thread teardown can delay it. Runtime initialization remains process-global
+with one canonical ONNX library path. Full process isolation would be needed
+to enforce hard deadlines on arbitrary native code; it is not provided here.
+
+Loader panic errors omit the panic payload from the returned error. The ordinary
+Rust panic hook can still print that payload to stderr.
