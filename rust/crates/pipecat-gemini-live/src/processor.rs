@@ -317,8 +317,9 @@ fn tool_result(
     final_result: bool,
     run_llm: Option<bool>,
     error: Option<&str>,
+    non_blocking: bool,
 ) -> Result<Action, ProcessorError> {
-    if !final_result || run_llm == Some(false) {
+    if !non_blocking && (!final_result || run_llm == Some(false)) {
         return Err(processor_error(GeminiError::Unsupported(
             "partial or scheduled tool responses",
         )));
@@ -330,6 +331,21 @@ fn tool_result(
     } else {
         json!({"result":result})
     };
+    if non_blocking {
+        return Ok(Action::NonBlockingToolResponses(vec![
+            NonBlockingFunctionResponse {
+                id: id.into(),
+                name: name.into(),
+                response,
+                will_continue: !final_result,
+                scheduling: if run_llm == Some(false) {
+                    ToolResponseScheduling::Silent
+                } else {
+                    ToolResponseScheduling::WhenIdle
+                },
+            },
+        ]));
+    }
     Ok(Action::ToolResponses(vec![FunctionResponse {
         id: id.into(),
         name: name.into(),
@@ -576,6 +592,7 @@ impl FrameProcessor for GeminiLiveProcessor {
                         result.is_final,
                         result.run_llm,
                         result.error.as_deref(),
+                        self.client.is_non_blocking_tool(&result.function_name),
                     )?;
                     self.enqueue(action, origin)?;
                 }
@@ -600,6 +617,7 @@ impl FrameProcessor for GeminiLiveProcessor {
                             .and_then(|p| p.run_llm)
                             .or(result.run_llm),
                         result.error.as_deref(),
+                        self.client.is_non_blocking_tool(&result.function_name),
                     )?;
                     self.enqueue(action, origin)?;
                 }
@@ -777,7 +795,7 @@ impl GeminiFrameMapper {
                 self.reset();
                 data.push(FrameData::Interruption);
             }
-            Event::ToolCalls(calls) => {
+            Event::ToolCalls(calls) | Event::NonBlockingToolCalls(calls) => {
                 data.push(FrameData::FunctionCallsStarted(
                     calls
                         .iter()
@@ -794,13 +812,16 @@ impl GeminiFrameMapper {
                             function_name: call.name.clone(),
                             tool_call_id: call.id.clone(),
                             arguments: call.args.clone(),
-                            cancel_on_interruption: true,
+                            cancel_on_interruption: !matches!(
+                                event.event,
+                                Event::NonBlockingToolCalls(_)
+                            ),
                             group_id: None,
                         },
                     ));
                 }
             }
-            Event::ToolCallsCancelled(calls) => {
+            Event::ToolCallsCancelled(calls) | Event::NonBlockingToolCallsCancelled(calls) => {
                 for call in calls {
                     data.push(FrameData::FunctionCallCancel(FunctionCallCancelFrame {
                         function_name: call.name.clone(),
@@ -833,10 +854,20 @@ impl GeminiFrameMapper {
         data.into_iter()
             .map(|data| {
                 let mut frame = Frame::new(data);
+                if matches!(
+                    event.event,
+                    Event::NonBlockingToolCalls(_) | Event::NonBlockingToolCallsCancelled(_)
+                ) {
+                    frame.interruptible = false;
+                }
                 frame
                     .metadata
                     .insert("gemini_generation".into(), json!(event.generation));
-                if let Event::ToolCalls(calls) | Event::ToolCallsCancelled(calls) = &event.event {
+                if let Event::ToolCalls(calls)
+                | Event::ToolCallsCancelled(calls)
+                | Event::NonBlockingToolCalls(calls)
+                | Event::NonBlockingToolCallsCancelled(calls) = &event.event
+                {
                     let selected_id = match &frame.data {
                         FrameData::FunctionCallInProgress(call) => Some(call.tool_call_id.as_str()),
                         FrameData::FunctionCallCancel(call) => Some(call.tool_call_id.as_str()),

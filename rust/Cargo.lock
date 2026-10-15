@@ -3812,6 +3812,7 @@ dependencies = [
  "futures-util",
  "jpeg-encoder",
  "pipecat-core",
+ "pipecat-processors",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

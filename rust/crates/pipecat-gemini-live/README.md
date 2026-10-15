@@ -60,7 +60,9 @@ worker.sender().send(
 Setup supports one AUDIO or TEXT response modality; text system instructions;
 voice and language code; temperature, max output tokens, top-p/top-k; basic
 input/output transcription; automatic VAD sensitivities/prefix/silence settings;
-and explicitly declared blocking function tools with JSON parameter schemas.
+and explicitly declared function tools with JSON parameter schemas. Blocking
+lifecycles remain the default; [asynchronous tools](ASYNC_TOOLS.md) require
+explicit per-name selection.
 Settings are fixed for a connection. Neither the client nor frame processor
 pretends that a settings frame updates an existing provider session.
 
@@ -152,8 +154,10 @@ avoid an unbounded completed-ID history. Repeated ID-less call messages are
 distinct calls, matching the source fallback; no provider replay key exists to
 deduplicate them. This does not add Vertex authentication or persistent sessions.
 Pending calls are bounded; duplicate IDs and unknown/canceled/mismatched results
-are errors. Omitted function arguments default to an empty JSON object. Local
+are errors. Omitted function arguments default to an empty JSON object. By default, local
 and provider interruptions invalidate pending calls and queued stale results.
+Explicit non-blocking tools use the separate lifecycle described in
+[Asynchronous tools](ASYNC_TOOLS.md).
 The most recent `max_pending_tools` abandoned calls are retained solely to
 recognize delayed provider cancellation, with original call correlation; they
 cannot block finish. Older or otherwise unknown cancellation IDs fail explicitly.
@@ -161,7 +165,8 @@ Cancellation events identify the original calls. The adapter emits
 `FunctionCallsStarted`, `FunctionCallInProgress` and `FunctionCallCancel`; it
 never executes, retries or undoes a function. Final scalar results are wrapped
 as `{"result": ...}` by the frame adapter; native `FunctionResponse` requires
-an object. Partial results, delayed scheduling and context callbacks are rejected.
+an object. Partial results and scheduled responses require explicit non-blocking selection.
+Context callbacks remain rejected.
 
 Gemini does not supply per-response IDs in this protocol. `Origin` and the
 `source_frame_id`, `context_id`, `gemini_generation` frame metadata are **local
@@ -210,7 +215,7 @@ acknowledged. The pipeline owns and joins its receive work on cleanup.
 
 The following are not implemented, and no pass-through setting/action advertises
 them: automatic replay, handle-less session rebuilding, Vertex authentication, ephemeral token
-creation, initial-history configuration, context-window compression, thinking tools/budgets, non-blocking/scheduled/streaming tools,
+creation, initial-history configuration, context-window compression, thinking tools/budgets,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
 file input and image formats beyond the bounded RGB video path, Google File API upload/list/get/delete, live setting
 updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,
@@ -279,3 +284,9 @@ source differences and evidence. This does not qualify live camera/browser use.
 for tool-free conversation sessions, deferred completion during background
 reasoning, bounded silence failure, and interruption/resumption ownership. The
 default client remains unchanged.
+
+## Explicit asynchronous tools
+
+[Asynchronous tools](ASYNC_TOOLS.md) describes per-name NON_BLOCKING selection,
+intermediate and final results, SILENT/WHEN_IDLE scheduling, interruption,
+provider cancellation, and the bounded call-identity ledger.

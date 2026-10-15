@@ -1,7 +1,7 @@
 use crate::{protocol, *};
 use futures_util::{SinkExt, StreamExt};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -72,6 +72,152 @@ struct PendingTool {
     call: FunctionCall,
     origin: Origin,
     generation: u64,
+    non_blocking: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CallAdmission {
+    Available,
+    Claimed,
+    Retired,
+}
+
+/// A session-local, non-evicting identity ledger. Keeping tombstones prevents
+/// an old queued control event/result from claiming a later call with the same
+/// provider ID. Exhaustion is terminal instead of silently recycling identity.
+#[derive(Default)]
+struct ToolAdmissions {
+    ids: HashMap<Box<str>, CallAdmission>,
+    id_bytes: usize,
+    closed: bool,
+}
+impl ToolAdmissions {
+    fn register(
+        &mut self,
+        calls: &[&PendingTool],
+        cancellations: &HashSet<String>,
+        limits: &Limits,
+    ) -> Result<(), GeminiError> {
+        if self.closed {
+            return Err(GeminiError::Closed);
+        }
+        let mut unique = HashSet::new();
+        let mut bytes = self.id_bytes;
+        for tool in calls {
+            if !tool.non_blocking || tool.call.id.is_empty() || tool.call.id.len() > 1024 {
+                return Err(GeminiError::Invalid("non-blocking tool ID"));
+            }
+            if self.ids.contains_key(tool.call.id.as_str()) || !unique.insert(&tool.call.id) {
+                return Err(GeminiError::Protocol("reused tool ID"));
+            }
+            bytes = bytes
+                .checked_add(tool.call.id.len())
+                .ok_or(GeminiError::TooLarge)?;
+        }
+        if self.ids.len().saturating_add(calls.len())
+            > limits.max_pending_tools.saturating_mul(32).min(4096)
+            || bytes > limits.max_message_bytes
+        {
+            return Err(GeminiError::TooLarge);
+        }
+        // All fallible validation precedes the first insertion.
+        for tool in calls {
+            let state = if cancellations.contains(&tool.call.id) {
+                CallAdmission::Retired
+            } else {
+                CallAdmission::Available
+            };
+            self.ids
+                .insert(tool.call.id.clone().into_boxed_str(), state);
+        }
+        self.id_bytes = bytes;
+        Ok(())
+    }
+    fn claim(&mut self, calls: &mut Vec<FunctionCall>) {
+        // No await separates receipt, this claim and returning the event.
+        // Cancellation takes this same lock: exactly one ordering wins.
+        calls.retain(|call| {
+            if self.closed {
+                return false;
+            }
+            match self.ids.get_mut(call.id.as_str()) {
+                Some(state) if *state == CallAdmission::Available => {
+                    *state = CallAdmission::Claimed;
+                    true
+                }
+                _ => false,
+            }
+        });
+    }
+    fn revoke(&mut self, id: &str) {
+        if let Some(state) = self.ids.get_mut(id) {
+            *state = CallAdmission::Retired;
+        }
+    }
+    fn close(&mut self) {
+        self.closed = true;
+        self.ids.clear();
+        self.id_bytes = 0;
+    }
+}
+
+fn tool_call_runs(
+    calls: &[PendingTool],
+    suppressed: bool,
+    cancellations: &HashSet<String>,
+) -> Vec<(bool, Vec<FunctionCall>)> {
+    let mut runs: Vec<(bool, Vec<FunctionCall>)> = Vec::new();
+    for tool in calls {
+        if runs
+            .last()
+            .is_none_or(|(selected, _)| *selected != tool.non_blocking)
+        {
+            runs.push((tool.non_blocking, Vec::new()));
+        }
+        if (tool.non_blocking && !cancellations.contains(&tool.call.id))
+            || (!tool.non_blocking && !suppressed)
+        {
+            runs.last_mut()
+                .expect("run was inserted")
+                .1
+                .push(tool.call.clone());
+        }
+    }
+    runs.retain(|(_, calls)| !calls.is_empty());
+    runs
+}
+
+fn validate_non_blocking_responses(
+    responses: &[NonBlockingFunctionResponse],
+    pending: &HashMap<String, PendingTool>,
+    admissions: &ToolAdmissions,
+) -> Result<(), GeminiError> {
+    if admissions.closed {
+        return Err(GeminiError::Closed);
+    }
+    for response in responses {
+        if !pending
+            .get(&response.id)
+            .is_some_and(|tool| tool.non_blocking && tool.call.name == response.name)
+            || admissions.ids.get(response.id.as_str()) != Some(&CallAdmission::Claimed)
+        {
+            return Err(GeminiError::Invalid(
+                "unknown, unclaimed, canceled, or mismatched non-blocking tool result",
+            ));
+        }
+    }
+    Ok(())
+}
+
+struct ToolAdmissionLifetime(Arc<std::sync::Mutex<ToolAdmissions>>);
+impl Drop for ToolAdmissionLifetime {
+    fn drop(&mut self) {
+        // Also runs on abort/panic, not only the normal run() return path.
+        self.0
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .close();
+    }
 }
 fn retire_tool(retired: &mut VecDeque<PendingTool>, tool: PendingTool, limit: usize) {
     if retired.len() == limit {
@@ -84,8 +230,15 @@ fn retire_pending(
     retired: &mut VecDeque<PendingTool>,
     limit: usize,
 ) {
-    for (_, tool) in pending.drain() {
-        retire_tool(retired, tool, limit);
+    let blocking: Vec<_> = pending
+        .iter()
+        .filter(|(_, tool)| !tool.non_blocking)
+        .map(|(id, _)| id.clone())
+        .collect();
+    for id in blocking {
+        if let Some(tool) = pending.remove(&id) {
+            retire_tool(retired, tool, limit);
+        }
     }
 }
 
@@ -94,6 +247,7 @@ pub struct GeminiClient {
     config: Arc<GeminiConfig>,
     resumption: Option<ResumptionPolicy>,
     thinking: Option<ThinkingPolicy>,
+    non_blocking_tools: Arc<HashSet<String>>,
 }
 impl GeminiClient {
     pub fn new(config: GeminiConfig) -> Result<Self, GeminiError> {
@@ -118,6 +272,7 @@ impl GeminiClient {
             config: Arc::new(config),
             resumption: None,
             thinking: None,
+            non_blocking_tools: Arc::new(HashSet::new()),
         })
     }
     /// Opt in to bounded receive-side recovery with an opaque server handle.
@@ -136,7 +291,10 @@ impl GeminiClient {
     /// Thinking tools and transcription-only mode are outside this subset.
     pub fn with_thinking(mut self, policy: ThinkingPolicy) -> Result<Self, GeminiError> {
         policy.validate()?;
-        if self.config.mode == SessionMode::Transcription || !self.config.session.tools.is_empty() {
+        if self.config.mode == SessionMode::Transcription
+            || !self.config.session.tools.is_empty()
+            || !self.non_blocking_tools.is_empty()
+        {
             return Err(GeminiError::Unsupported(
                 "thinking requires conversation mode without tools",
             ));
@@ -147,6 +305,53 @@ impl GeminiClient {
         protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
         self.thinking = Some(policy);
         Ok(self)
+    }
+    /// Select explicitly declared functions for bounded, call-authorized
+    /// background control delivery. Only the two exact ordinary Live model
+    /// profiles below are supported. Thinking and empty selections are rejected.
+    ///
+    /// Opted-in sessions never reuse selected tool IDs: their lifetime ledger retains
+    /// at most min(max_pending_tools * 32, 4096) IDs and max_message_bytes ID
+    /// bytes, then fails closed. Each selected ID is at most 1024 bytes. These
+    /// are payload/count limits, not a process RSS claim; keys use boxed strings
+    /// and map overhead is bounded by the entry limit. Each session has its own ledger.
+    pub fn with_non_blocking_tools(mut self, names: Vec<String>) -> Result<Self, GeminiError> {
+        let model = self
+            .config
+            .session
+            .model
+            .strip_prefix("models/")
+            .unwrap_or(&self.config.session.model);
+        if self.thinking.is_some()
+            || self.config.mode != SessionMode::Conversation
+            || !matches!(
+                model,
+                "gemini-3.8-live" | "gemini-2.5-flash-native-audio-preview-12-2025"
+            )
+        {
+            return Err(GeminiError::Unsupported(
+                "non-blocking tool model or session",
+            ));
+        }
+        if names.is_empty() || names.len() > self.config.limits.max_pending_tools {
+            return Err(GeminiError::Invalid("non-blocking tool selection"));
+        }
+        let mut selected = HashSet::new();
+        for name in names {
+            if name.trim().is_empty()
+                || !self.config.session.tools.iter().any(|t| t.name == name)
+                || !selected.insert(name)
+            {
+                return Err(GeminiError::Invalid("non-blocking tool selection"));
+            }
+        }
+        let setup = configured_setup(&self.config, self.thinking.as_ref(), &selected);
+        protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
+        self.non_blocking_tools = Arc::new(selected);
+        Ok(self)
+    }
+    pub(crate) fn is_non_blocking_tool(&self, name: &str) -> bool {
+        self.non_blocking_tools.contains(name)
     }
     pub fn config(&self) -> &GeminiConfig {
         &self.config
@@ -160,6 +365,7 @@ impl GeminiClient {
             self.resumption.as_ref(),
             None,
             self.thinking.as_ref(),
+            &self.non_blocking_tools,
         )
         .await?;
         let mut handle = None;
@@ -175,6 +381,8 @@ impl GeminiClient {
             finishing: Arc::new(AtomicBool::new(false)),
             gate: Arc::new(Mutex::new(())),
             admission: Arc::new(std::sync::Mutex::new(())),
+            tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
+            non_blocking_tools: self.non_blocking_tools.clone(),
         };
         let worker_sender = sender.clone();
         let policy = self.resumption.clone();
@@ -201,6 +409,39 @@ impl GeminiClient {
         })
     }
 }
+fn configured_setup(
+    config: &GeminiConfig,
+    thinking: Option<&ThinkingPolicy>,
+    non_blocking_tools: &HashSet<String>,
+) -> serde_json::Value {
+    let mut setup = protocol::setup(config);
+    if let Some(thinking) = thinking {
+        setup["setup"]["generationConfig"]["thinkingConfig"] =
+            serde_json::json!({"thinkingLevel": thinking.level});
+    }
+    if !non_blocking_tools.is_empty() {
+        let model = config
+            .session
+            .model
+            .strip_prefix("models/")
+            .unwrap_or(&config.session.model);
+        if let Some(declarations) =
+            setup["setup"]["tools"][0]["functionDeclarations"].as_array_mut()
+        {
+            for declaration in declarations {
+                if declaration["name"]
+                    .as_str()
+                    .is_some_and(|name| non_blocking_tools.contains(name))
+                {
+                    declaration["behavior"] = serde_json::json!("NON_BLOCKING");
+                } else if model == "gemini-3.8-live" {
+                    declaration["behavior"] = serde_json::json!("BLOCKING");
+                }
+            }
+        }
+    }
+    setup
+}
 fn apply_resumption(handle: &mut Option<String>, update: Option<protocol::ResumptionUpdate>) {
     if let Some(update) = update {
         // Unlike the pinned source, a non-resumable update revokes the old token.
@@ -217,12 +458,9 @@ async fn open_socket(
     policy: Option<&ResumptionPolicy>,
     handle: Option<&str>,
     thinking: Option<&ThinkingPolicy>,
+    non_blocking_tools: &HashSet<String>,
 ) -> Result<(Socket, Option<protocol::ResumptionUpdate>), GeminiError> {
-    let mut setup = protocol::setup(config);
-    if let Some(thinking) = thinking {
-        setup["setup"]["generationConfig"]["thinkingConfig"] =
-            serde_json::json!({"thinkingLevel": thinking.level});
-    }
+    let mut setup = configured_setup(config, thinking, non_blocking_tools);
     if policy.is_some() {
         setup["setup"]["sessionResumption"] = match handle {
             Some(handle) => serde_json::json!({"handle": handle}),
@@ -324,6 +562,8 @@ pub struct GeminiSender {
     finishing: Arc<AtomicBool>,
     gate: Arc<Mutex<()>>,
     admission: Arc<std::sync::Mutex<()>>,
+    tool_admissions: Arc<std::sync::Mutex<ToolAdmissions>>,
+    non_blocking_tools: Arc<HashSet<String>>,
 }
 impl GeminiSender {
     pub(crate) fn is_finishing(&self) -> bool {
@@ -348,7 +588,11 @@ impl GeminiSender {
         expected: Option<u64>,
     ) -> Result<(), GeminiError> {
         let _admission = self.admission.lock().map_err(|_| GeminiError::Closed)?;
-        if (self.finishing.load(Ordering::SeqCst) && !matches!(action, Action::ToolResponses(_)))
+        if (self.finishing.load(Ordering::SeqCst)
+            && !matches!(
+                action,
+                Action::ToolResponses(_) | Action::NonBlockingToolResponses(_)
+            ))
             || self.control.borrow().cancel
         {
             return Err(GeminiError::Closed);
@@ -360,6 +604,22 @@ impl GeminiSender {
             return Ok(());
         }
         protocol::action_messages(&action, &self.config)?;
+        if let Action::NonBlockingToolResponses(responses) = &action {
+            let admissions = self
+                .tool_admissions
+                .lock()
+                .map_err(|_| GeminiError::Closed)?;
+            if admissions.closed
+                || responses.iter().any(|response| {
+                    !self.non_blocking_tools.contains(&response.name)
+                        || admissions.ids.get(response.id.as_str()) != Some(&CallAdmission::Claimed)
+                })
+            {
+                return Err(GeminiError::Invalid(
+                    "unknown, unclaimed, or canceled non-blocking tool result",
+                ));
+            }
+        }
         // Preserve ordinary callers' admission-time sampling; encoded video uses
         // its explicitly captured generation even if interrupt raced validation.
         let generation = expected.unwrap_or_else(|| self.generation());
@@ -435,7 +695,27 @@ impl GeminiSession {
         self.sender.clone()
     }
     pub async fn next_event(&mut self) -> Option<Result<GeminiEvent, GeminiError>> {
-        while let Some(event) = self.events.recv().await {
+        while let Some(mut event) = self.events.recv().await {
+            if let Event::NonBlockingToolCalls(calls) = &mut event.event {
+                let claimed = match self.sender.tool_admissions.lock() {
+                    Ok(mut admissions) => {
+                        // Session cancel revokes delivery immediately, including
+                        // the interval before the worker observes it and drops
+                        // its admission lifetime. Local interrupt is independent.
+                        if self.sender.control.borrow().cancel {
+                            false
+                        } else {
+                            admissions.claim(calls);
+                            !calls.is_empty()
+                        }
+                    }
+                    Err(_) => return Some(Err(GeminiError::Closed)),
+                };
+                if claimed {
+                    return Some(Ok(event));
+                }
+                continue;
+            }
             if !event.event.is_output() || event.generation == self.sender.generation() {
                 return Some(Ok(event));
             }
@@ -534,6 +814,7 @@ async fn run(
     sender: GeminiSender,
     options: WorkerOptions,
 ) -> Result<(), GeminiError> {
+    let _admission_lifetime = ToolAdmissionLifetime(sender.tool_admissions.clone());
     let WorkerOptions {
         policy,
         mut handle,
@@ -636,7 +917,7 @@ async fn run(
                         // bounded queue until setupComplete; no sent action is replayed.
                         drop(socket);
                         let (replacement, update) = {
-                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref());
+                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref(), &sender.non_blocking_tools);
                             tokio::pin!(connecting);
                             loop {
                                 if held.as_ref().is_some_and(|h| h.generation != sender.generation()) {
@@ -706,6 +987,13 @@ async fn run(
                     if packet.setup_complete {
                         return Err(GeminiError::Protocol("duplicate setupComplete"));
                     }
+                    let cancellation_ids: HashSet<_> = packet.cancellations.iter().cloned().collect();
+                    if !cancellation_ids.is_empty() && !sender.non_blocking_tools.is_empty() {
+                        let mut admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                        for id in &cancellation_ids {
+                            admissions.revoke(id);
+                        }
+                    }
                     if let (Some(held), Some(thinking)) = (&mut held, &thinking) {
                         held.deadline = Instant::now() + thinking.silence_timeout;
                     }
@@ -732,44 +1020,88 @@ async fn run(
                             busy_generation = generation;
                         }
                         if let Event::ToolCalls(calls) = &mut event {
-                            for call in calls {
+                            let mut staged = Vec::with_capacity(calls.len());
+                            let mut batch_ids = HashSet::new();
+                            // Validate the entire provider batch before admitting
+                            // any call, including a mixed blocking/background batch.
+                            for call in calls.iter_mut() {
                                 tool_ids.assign(call)?;
-                                if pending.len() >= sender.config.limits.max_pending_tools {
+                                if sender.non_blocking_tools.contains(&call.name)
+                                    && (finishing || sender.finishing.load(Ordering::SeqCst))
+                                {
+                                    return Err(GeminiError::Protocol("new non-blocking tool call during finish"));
+                                }
+                                if pending.len().saturating_add(staged.len())
+                                    >= sender.config.limits.max_pending_tools {
                                     return Err(GeminiError::TooLarge);
                                 }
                                 if pending.contains_key(&call.id)
                                     || retired.iter().any(|tool| tool.call.id == call.id)
+                                    || !batch_ids.insert(call.id.clone())
                                 {
                                     return Err(GeminiError::Protocol("duplicate pending tool ID"));
                                 }
-                                if !sender
-                                    .config
-                                    .session
-                                    .tools
-                                    .iter()
-                                    .any(|tool| tool.name == call.name)
-                                {
+                                if !sender.config.session.tools.iter().any(|tool| tool.name == call.name) {
                                     return Err(GeminiError::Protocol("undeclared function call"));
                                 }
-                                let tool = PendingTool {
+                                staged.push(PendingTool {
                                     call: call.clone(),
-                                    origin: if output_active {
-                                        output_origin.clone()
-                                    } else {
-                                        input_origin.clone()
-                                    },
+                                    origin: if output_active { output_origin.clone() } else { input_origin.clone() },
                                     generation,
-                                };
-                                if suppressed {
-                                    retire_tool(
-                                        &mut retired,
-                                        tool,
-                                        sender.config.limits.max_pending_tools,
-                                    );
+                                    non_blocking: sender.non_blocking_tools.contains(&call.name),
+                                });
+                            }
+                            // Preserve provider ordering across alternating
+                            // authority classes. Reserve the whole emitted batch
+                            // before registering any selected call or pending tool.
+                            let runs = tool_call_runs(&staged, suppressed, &cancellation_ids);
+                            let permits = events.try_reserve_many(runs.len()).map_err(|error| match error {
+                                mpsc::error::TrySendError::Full(_) => GeminiError::Backpressure("output"),
+                                mpsc::error::TrySendError::Closed(_) => GeminiError::Closed,
+                            })?;
+                            if !sender.non_blocking_tools.is_empty() {
+                                // Share finish()'s synchronous admission barrier.
+                                // A selected batch either registers before finish
+                                // commits, or is rejected without partial state.
+                                let _input_admission = sender.admission.lock().map_err(|_| GeminiError::Closed)?;
+                                if staged.iter().any(|tool| tool.non_blocking)
+                                    && (finishing || sender.finishing.load(Ordering::SeqCst))
+                                {
+                                    return Err(GeminiError::Protocol("new non-blocking tool call during finish"));
+                                }
+                                let mut admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                                // A previously selected identity cannot reappear
+                                // with a blocking name either. Ordinary blocking
+                                // IDs never enter this selected-call ledger.
+                                if staged.iter().any(|tool| admissions.ids.contains_key(tool.call.id.as_str())) {
+                                    return Err(GeminiError::Protocol("reused tool ID"));
+                                }
+                                let selected: Vec<_> = staged.iter().filter(|tool| tool.non_blocking).collect();
+                                admissions.register(&selected, &cancellation_ids, &sender.config.limits)?;
+                            }
+                            let selected_origin = if output_active { output_origin.clone() } else { input_origin.clone() };
+                            for tool in staged {
+                                if suppressed && !tool.non_blocking {
+                                    retire_tool(&mut retired, tool, sender.config.limits.max_pending_tools);
                                 } else {
-                                    pending.insert(call.id.clone(), tool);
+                                    pending.insert(tool.call.id.clone(), tool);
                                 }
                             }
+                            for ((selected, calls), permit) in runs.into_iter().zip(permits) {
+                                let (event, origin) = if selected {
+                                    (Event::NonBlockingToolCalls(calls), selected_origin.clone())
+                                } else {
+                                    if !output_active {
+                                        output_origin = input_origin.clone();
+                                        output_active = true;
+                                        busy = true;
+                                        busy_generation = generation;
+                                    }
+                                    (Event::ToolCalls(calls), output_origin.clone())
+                                };
+                                permit.send(GeminiEvent { event, origin, generation });
+                            }
+                            continue;
                         }
                         if matches!(event, Event::TurnComplete) {
                             if let Some(thinking) = &thinking {
@@ -833,19 +1165,20 @@ async fn run(
                         }
                     }
                     if !packet.cancellations.is_empty() {
-                        let mut groups: Vec<(Origin, Vec<FunctionCall>)> = Vec::new();
+                        let mut groups: Vec<(Origin, u64, bool, Vec<FunctionCall>)> = Vec::new();
                         for id in packet.cancellations {
                             let tool = pending.remove(&id).or_else(|| {
                                 let index = retired.iter().position(|tool| tool.call.id == id)?;
                                 retired.remove(index)
                             });
                             if let Some(tool) = tool {
-                                if let Some((_, calls)) =
-                                    groups.iter_mut().find(|(origin, _)| *origin == tool.origin)
-                                {
+                                let call_generation = if tool.non_blocking { tool.generation } else { generation };
+                                if let Some((_, _, _, calls)) = groups.iter_mut().find(|(origin, g, selected, _)| {
+                                    *origin == tool.origin && *g == call_generation && *selected == tool.non_blocking
+                                }) {
                                     calls.push(tool.call);
                                 } else {
-                                    groups.push((tool.origin, vec![tool.call]));
+                                    groups.push((tool.origin, call_generation, tool.non_blocking, vec![tool.call]));
                                 }
                             } else {
                                 return Err(GeminiError::Protocol(
@@ -853,15 +1186,13 @@ async fn run(
                                 ));
                             }
                         }
-                        for (origin, calls) in groups {
-                            emit(
-                                &events,
-                                GeminiEvent {
-                                    event: Event::ToolCallsCancelled(calls),
-                                    origin,
-                                    generation,
-                                },
-                            )?;
+                        for (origin, call_generation, selected, calls) in groups {
+                            emit(&events, GeminiEvent {
+                                event: if selected { Event::NonBlockingToolCallsCancelled(calls) }
+                                    else { Event::ToolCallsCancelled(calls) },
+                                origin,
+                                generation: call_generation,
+                            })?;
                         }
                     }
                     if thinking.is_some() && interaction_status == Some(protocol::InteractionStatus::Idle) {
@@ -944,7 +1275,8 @@ async fn run(
                         Action::ToolResponses(responses) => {
                             for response in responses {
                                 if !pending.get(&response.id).is_some_and(|tool| {
-                                    tool.call.name == response.name
+                                    !tool.non_blocking
+                                        && tool.call.name == response.name
                                         && tool.generation == command.generation
                                         && command.generation == sender.generation()
                                 }) {
@@ -953,6 +1285,10 @@ async fn run(
                                     ));
                                 }
                             }
+                        }
+                        Action::NonBlockingToolResponses(responses) => {
+                            let admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                            validate_non_blocking_responses(responses, &pending, &admissions)?;
                         }
                         _ => {}
                     }
@@ -966,7 +1302,13 @@ async fn run(
                         )
                         .await?;
                     }
-                    input_origin = command.origin;
+                    // Background results retain their call's origin. SILENT
+                    // never changes turn ownership; WHEN_IDLE may establish an
+                    // idle turn, but cannot replace even an input-only active
+                    // turn, nor a generation interrupted during the wire write.
+                    if !matches!(action, Action::NonBlockingToolResponses(_)) {
+                        input_origin = command.origin;
+                    }
                     if matches!(action, Action::ActivityEnd | Action::Audio(_) | Action::AudioStreamEnd | Action::RealtimeText(_) | Action::ClientContent { turn_complete: true, .. } | Action::ToolResponses(_)) {
                         busy_generation = command.generation;
                     }
@@ -997,6 +1339,29 @@ async fn run(
                                 pending.remove(&response.id);
                             }
                             busy = true;
+                        }
+                        Action::NonBlockingToolResponses(responses) => {
+                            if !busy && !output_active && !suppressed && !activity && !has_audio
+                                && generation == sender.generation()
+                            {
+                                if let Some(tool) = responses.iter()
+                                    .find(|response| response.scheduling == ToolResponseScheduling::WhenIdle)
+                                    .and_then(|response| pending.get(&response.id))
+                                {
+                                    input_origin = tool.origin.clone();
+                                    busy = true;
+                                    busy_generation = generation;
+                                }
+                            }
+                            // No final call is removed until the complete,
+                            // validated response message was written successfully.
+                            let mut admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                            for response in responses {
+                                if !response.will_continue {
+                                    admissions.revoke(&response.id);
+                                    pending.remove(&response.id);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1054,6 +1419,8 @@ mod ownership_tests {
             finishing: Arc::new(AtomicBool::new(true)),
             gate: Arc::new(Mutex::new(())),
             admission: Arc::new(std::sync::Mutex::new(())),
+            tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
+            non_blocking_tools: Arc::new(HashSet::new()),
         };
         let worker = tokio::spawn(async move {
             let _ = release_rx.await;
@@ -1133,6 +1500,8 @@ mod video_generation_tests {
             finishing: Arc::new(AtomicBool::new(false)),
             gate: Arc::new(Mutex::new(())),
             admission: Arc::new(std::sync::Mutex::new(())),
+            tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
+            non_blocking_tools: Arc::new(HashSet::new()),
         };
         let captured = sender.generation();
         sender
@@ -1362,5 +1731,495 @@ mod thinking_configuration_tests {
                 })
                 .is_ok());
         }
+    }
+}
+
+#[cfg(test)]
+mod non_blocking_admission_tests {
+    use super::*;
+
+    fn config(model: &str) -> GeminiConfig {
+        let mut config = GeminiConfig::new("fixture", model);
+        config.session.tools = ["background", "ordinary"]
+            .into_iter()
+            .map(|name| FunctionDeclaration {
+                name: name.into(),
+                description: String::new(),
+                parameters: serde_json::json!({}),
+            })
+            .collect();
+        config
+    }
+    fn tool(id: &str, non_blocking: bool) -> PendingTool {
+        PendingTool {
+            call: FunctionCall {
+                id: id.into(),
+                id_source: ToolCallIdSource::Provider,
+                name: if non_blocking {
+                    "background"
+                } else {
+                    "ordinary"
+                }
+                .into(),
+                args: serde_json::json!({}),
+            },
+            origin: Origin {
+                frame_id: Some(42),
+                context_id: Some("original".into()),
+            },
+            generation: 7,
+            non_blocking,
+        }
+    }
+    fn sender() -> (GeminiSender, mpsc::Receiver<Command>) {
+        let (tx, rx) = mpsc::channel(8);
+        let (control, _) = watch::channel(Control::default());
+        (
+            GeminiSender {
+                config: Arc::new(config("gemini-3.8-live")),
+                tx,
+                control,
+                generation: Arc::new(AtomicU64::new(0)),
+                finishing: Arc::new(AtomicBool::new(false)),
+                gate: Arc::new(Mutex::new(())),
+                admission: Arc::new(std::sync::Mutex::new(())),
+                tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
+                non_blocking_tools: Arc::new(HashSet::from(["background".into()])),
+            },
+            rx,
+        )
+    }
+
+    #[test]
+    fn explicit_profiles_selection_and_unselected_setup_are_closed() {
+        for model in [
+            "gemini-3.8-live",
+            "models/gemini-3.8-live",
+            "gemini-2.5-flash-native-audio-preview-12-2025",
+        ] {
+            let config = config(model);
+            assert_eq!(
+                configured_setup(&config, None, &HashSet::new()),
+                protocol::setup(&config)
+            );
+            let client = GeminiClient::new(config.clone())
+                .unwrap()
+                .with_non_blocking_tools(vec!["background".into()])
+                .unwrap();
+            assert!(client.is_non_blocking_tool("background"));
+            assert!(!client.is_non_blocking_tool("ordinary"));
+            let setup = configured_setup(&config, None, &client.non_blocking_tools);
+            let declarations = &setup["setup"]["tools"][0]["functionDeclarations"];
+            assert_eq!(declarations[0]["behavior"], "NON_BLOCKING");
+            if model.ends_with("gemini-3.8-live") {
+                assert_eq!(declarations[1]["behavior"], "BLOCKING");
+            } else {
+                assert!(declarations[1].get("behavior").is_none());
+            }
+            assert!(client.with_thinking(ThinkingPolicy::default()).is_err());
+        }
+        for model in [
+            "gemini-3.8-live-preview",
+            "gemini-3.8-live-thinking",
+            "gemini-2.5-flash-native-audio-preview",
+            "models/models/gemini-3.8-live",
+        ] {
+            let result = GeminiClient::new(config(model))
+                .and_then(|client| client.with_non_blocking_tools(vec!["background".into()]));
+            assert!(result.is_err(), "unexpected model {model}");
+        }
+        for names in [
+            vec![],
+            vec!["".into()],
+            vec!["unknown".into()],
+            vec!["background".into(), "background".into()],
+        ] {
+            assert!(GeminiClient::new(config("gemini-3.8-live"))
+                .unwrap()
+                .with_non_blocking_tools(names)
+                .is_err());
+        }
+        let thinking = GeminiClient::new(GeminiConfig::new("fixture", "gemini-3.8-live"))
+            .unwrap()
+            .with_thinking(ThinkingPolicy::default())
+            .unwrap();
+        assert!(thinking
+            .with_non_blocking_tools(vec!["background".into()])
+            .is_err());
+    }
+
+    #[test]
+    fn complete_batch_rejection_never_partially_registers_or_charges() {
+        let mut ledger = ToolAdmissions::default();
+        let limits = Limits::default();
+        let first = tool("first", true);
+        let duplicate = tool("first", true);
+        assert!(ledger
+            .register(&[&first, &duplicate], &HashSet::new(), &limits)
+            .is_err());
+        assert!(ledger.ids.is_empty());
+        assert_eq!(ledger.id_bytes, 0);
+        let long = tool(&"x".repeat(1025), true);
+        assert!(ledger
+            .register(&[&first, &long], &HashSet::new(), &limits)
+            .is_err());
+        assert!(ledger.ids.is_empty());
+        let mut tiny = limits.clone();
+        tiny.max_message_bytes = 6;
+        let second = tool("second", true);
+        assert_eq!(
+            ledger.register(&[&first, &second], &HashSet::new(), &tiny),
+            Err(GeminiError::TooLarge)
+        );
+        assert!(ledger.ids.is_empty());
+        assert_eq!(ledger.id_bytes, 0);
+        ledger
+            .register(&[&first], &HashSet::new(), &limits)
+            .unwrap();
+        let charged = ledger.id_bytes;
+        assert!(ledger
+            .register(&[&second, &first], &HashSet::new(), &limits)
+            .is_err());
+        assert_eq!(ledger.ids.len(), 1);
+        assert_eq!(ledger.id_bytes, charged);
+        assert!(!ledger.ids.contains_key("second"));
+    }
+
+    #[test]
+    fn tombstones_never_recycle_and_count_exhaustion_rejects_whole_batch() {
+        let mut ledger = ToolAdmissions::default();
+        let mut limits = Limits::default();
+        limits.max_pending_tools = 1;
+        for n in 0..31 {
+            let tool = tool(&format!("id-{n}"), true);
+            ledger.register(&[&tool], &HashSet::new(), &limits).unwrap();
+            ledger.revoke(&tool.call.id);
+        }
+        let a = tool("last-a", true);
+        let b = tool("last-b", true);
+        assert_eq!(
+            ledger.register(&[&a, &b], &HashSet::new(), &limits),
+            Err(GeminiError::TooLarge)
+        );
+        assert_eq!(ledger.ids.len(), 31);
+        assert!(!ledger.ids.contains_key("last-a"));
+        let old = tool("id-0", true);
+        assert_eq!(
+            ledger.register(&[&old], &HashSet::new(), &limits),
+            Err(GeminiError::Protocol("reused tool ID"))
+        );
+        ledger.register(&[&a], &HashSet::new(), &limits).unwrap();
+        assert_eq!(ledger.ids.len(), 32);
+    }
+
+    #[test]
+    fn claim_and_revoke_have_one_linearized_order_and_same_packet_cancel_wins() {
+        for cancel_first in [false, true] {
+            let t = tool("selected", true);
+            let mut ledger = ToolAdmissions::default();
+            ledger
+                .register(&[&t], &HashSet::new(), &Limits::default())
+                .unwrap();
+            let mut calls = vec![t.call.clone()];
+            if cancel_first {
+                ledger.revoke("selected");
+            }
+            ledger.claim(&mut calls);
+            assert_eq!(calls.len(), usize::from(!cancel_first));
+            ledger.revoke("selected");
+            let mut duplicate = vec![t.call.clone()];
+            ledger.claim(&mut duplicate);
+            assert!(duplicate.is_empty());
+            assert_eq!(ledger.ids.get("selected"), Some(&CallAdmission::Retired));
+        }
+        let t = tool("same-packet", true);
+        let mut ledger = ToolAdmissions::default();
+        ledger
+            .register(
+                &[&t],
+                &HashSet::from(["same-packet".into()]),
+                &Limits::default(),
+            )
+            .unwrap();
+        let mut calls = vec![t.call];
+        ledger.claim(&mut calls);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn interrupt_preserves_selected_identity_and_origin_but_retires_blocking() {
+        let selected = tool("selected", true);
+        let expected = selected.call.clone();
+        let origin = selected.origin.clone();
+        let ordinary = tool("ordinary", false);
+        let mut pending =
+            HashMap::from([("selected".into(), selected), ("ordinary".into(), ordinary)]);
+        let mut retired = VecDeque::new();
+        retire_pending(&mut pending, &mut retired, 2);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending["selected"].call, expected);
+        assert_eq!(pending["selected"].origin, origin);
+        assert_eq!(pending["selected"].generation, 7);
+        assert_eq!(retired.len(), 1);
+        assert!(!retired[0].non_blocking);
+    }
+
+    #[tokio::test]
+    async fn next_event_claim_is_generation_independent_and_cancel_drops_unclaimed_call() {
+        for cancel_first in [false, true] {
+            let (sender, _commands) = sender();
+            let t = tool("selected", true);
+            sender
+                .tool_admissions
+                .lock()
+                .unwrap()
+                .register(&[&t], &HashSet::new(), &sender.config.limits)
+                .unwrap();
+            let (events, rx) = mpsc::channel(4);
+            events
+                .try_send(GeminiEvent {
+                    event: Event::NonBlockingToolCalls(vec![t.call.clone()]),
+                    origin: t.origin.clone(),
+                    generation: t.generation,
+                })
+                .unwrap();
+            sender.interrupt().await;
+            assert_ne!(sender.generation(), t.generation);
+            if cancel_first {
+                sender.tool_admissions.lock().unwrap().revoke("selected");
+                events
+                    .try_send(GeminiEvent {
+                        event: Event::NonBlockingToolCallsCancelled(vec![t.call]),
+                        origin: t.origin.clone(),
+                        generation: t.generation,
+                    })
+                    .unwrap();
+            }
+            drop(events);
+            let mut session = GeminiSession {
+                sender,
+                events: rx,
+                worker: None,
+            };
+            let event = session.next_event().await.unwrap().unwrap();
+            assert_eq!(event.origin, t.origin);
+            assert_eq!(event.generation, 7);
+            if cancel_first {
+                assert!(matches!(
+                    event.event,
+                    Event::NonBlockingToolCallsCancelled(_)
+                ));
+            } else {
+                assert!(matches!(event.event, Event::NonBlockingToolCalls(_)));
+            }
+            assert!(session.next_event().await.is_none());
+        }
+
+        // The worker is deliberately alive after cancel() returns. Its cleanup
+        // cannot supply the revocation that next_event must enforce itself.
+        let (sender, _commands) = sender();
+        let t = tool("queued-before-session-cancel", true);
+        sender
+            .tool_admissions
+            .lock()
+            .unwrap()
+            .register(&[&t], &HashSet::new(), &sender.config.limits)
+            .unwrap();
+        let (events, rx) = mpsc::channel(1);
+        events
+            .try_send(GeminiEvent {
+                event: Event::NonBlockingToolCalls(vec![t.call]),
+                origin: t.origin,
+                generation: t.generation,
+            })
+            .unwrap();
+        let (release, released) = tokio::sync::oneshot::channel();
+        let (entered, started) = tokio::sync::oneshot::channel();
+        let admissions = sender.tool_admissions.clone();
+        let worker = tokio::spawn(async move {
+            let _lifetime = ToolAdmissionLifetime(admissions);
+            let _ = entered.send(());
+            let _ = released.await;
+            drop(events);
+            Ok(())
+        });
+        started.await.unwrap();
+        sender.cancel();
+        assert!(!sender.tool_admissions.lock().unwrap().closed);
+        let mut session = GeminiSession {
+            sender,
+            events: rx,
+            worker: Some(worker),
+        };
+        {
+            let next = session.next_event();
+            tokio::pin!(next);
+            assert!(
+                matches!(futures_util::poll!(&mut next), std::task::Poll::Pending),
+                "session cancellation must prevent the queued call from being claimed"
+            );
+        }
+        release.send(()).unwrap();
+        assert!(
+            timeout(std::time::Duration::from_secs(2), session.next_event())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            session.worker.is_none(),
+            "terminal read must join the worker"
+        );
+        assert!(session.sender.tool_admissions.lock().unwrap().closed);
+    }
+
+    #[tokio::test]
+    async fn selected_response_admission_survives_interrupt_and_finishing_but_needs_claim() {
+        let (sender, mut commands) = sender();
+        let t = tool("selected", true);
+        sender
+            .tool_admissions
+            .lock()
+            .unwrap()
+            .register(&[&t], &HashSet::new(), &sender.config.limits)
+            .unwrap();
+        let response = Action::NonBlockingToolResponses(vec![NonBlockingFunctionResponse {
+            id: t.call.id.clone(),
+            name: t.call.name.clone(),
+            response: serde_json::json!({"ok": true}),
+            will_continue: false,
+            scheduling: ToolResponseScheduling::Silent,
+        }]);
+        assert!(sender
+            .try_send(response.clone(), Origin::default())
+            .is_err());
+        sender
+            .tool_admissions
+            .lock()
+            .unwrap()
+            .claim(&mut vec![t.call]);
+        sender.finishing.store(true, Ordering::SeqCst);
+        sender
+            .try_send(response.clone(), Origin::default())
+            .unwrap();
+        sender.interrupt().await;
+        let queued = commands.try_recv().unwrap();
+        assert_ne!(queued.generation, sender.generation());
+        sender
+            .try_send(response.clone(), Origin::default())
+            .unwrap();
+        sender.tool_admissions.lock().unwrap().revoke("selected");
+        assert!(sender.try_send(response, Origin::default()).is_err());
+    }
+
+    #[test]
+    fn worker_lifetime_drop_revokes_and_clears_all_queued_control_authority() {
+        let ledger = Arc::new(std::sync::Mutex::new(ToolAdmissions::default()));
+        let t = tool("selected", true);
+        ledger
+            .lock()
+            .unwrap()
+            .register(&[&t], &HashSet::new(), &Limits::default())
+            .unwrap();
+        drop(ToolAdmissionLifetime(ledger.clone()));
+        let mut ledger = ledger.lock().unwrap();
+        assert!(ledger.closed);
+        assert!(ledger.ids.is_empty());
+        assert_eq!(ledger.id_bytes, 0);
+        let mut queued = vec![t.call];
+        ledger.claim(&mut queued);
+        assert!(queued.is_empty());
+    }
+
+    #[test]
+    fn alternating_authority_runs_preserve_provider_call_order() {
+        let tools = vec![
+            tool("b1", false),
+            tool("s1", true),
+            tool("b2", false),
+            tool("s2", true),
+            tool("s3", true),
+        ];
+        let runs = tool_call_runs(&tools, false, &HashSet::new());
+        assert_eq!(
+            runs.iter()
+                .map(|(selected, _)| *selected)
+                .collect::<Vec<_>>(),
+            [false, true, false, true]
+        );
+        assert_eq!(
+            runs.iter()
+                .flat_map(|(_, calls)| calls.iter().map(|call| call.id.as_str()))
+                .collect::<Vec<_>>(),
+            ["b1", "s1", "b2", "s2", "s3"]
+        );
+        let suppressed = tool_call_runs(&tools, true, &HashSet::from(["s2".into()]));
+        assert!(suppressed.iter().all(|(selected, _)| *selected));
+        assert_eq!(
+            suppressed
+                .iter()
+                .flat_map(|(_, calls)| calls.iter().map(|call| call.id.as_str()))
+                .collect::<Vec<_>>(),
+            ["s1", "s3"]
+        );
+    }
+
+    #[test]
+    fn mixed_batch_reservation_fails_before_selected_registration() {
+        let tools = vec![tool("b", false), tool("s", true), tool("b2", false)];
+        let runs = tool_call_runs(&tools, false, &HashSet::new());
+        let (events, mut received) = mpsc::channel::<GeminiEvent>(2);
+        let ledger = ToolAdmissions::default();
+        assert!(matches!(
+            events.try_reserve_many(runs.len()),
+            Err(mpsc::error::TrySendError::Full(()))
+        ));
+        assert_eq!(events.capacity(), 2);
+        assert!(received.try_recv().is_err());
+        assert!(ledger.ids.is_empty());
+        assert_eq!(ledger.id_bytes, 0);
+    }
+
+    #[test]
+    fn worker_response_validation_rejects_unknown_unclaimed_canceled_and_mismatched_results() {
+        let t = tool("selected", true);
+        let mut ledger = ToolAdmissions::default();
+        ledger
+            .register(&[&t], &HashSet::new(), &Limits::default())
+            .unwrap();
+        let call = t.call.clone();
+        let pending = HashMap::from([("selected".into(), t)]);
+        let response = NonBlockingFunctionResponse {
+            id: "selected".into(),
+            name: "background".into(),
+            response: serde_json::json!({}),
+            will_continue: true,
+            scheduling: ToolResponseScheduling::Silent,
+        };
+        assert!(validate_non_blocking_responses(
+            std::slice::from_ref(&response),
+            &pending,
+            &ledger
+        )
+        .is_err());
+        ledger.claim(&mut vec![call]);
+        assert!(validate_non_blocking_responses(
+            std::slice::from_ref(&response),
+            &pending,
+            &ledger
+        )
+        .is_ok());
+        let mut unknown = response.clone();
+        unknown.id = "unknown".into();
+        assert!(validate_non_blocking_responses(&[unknown], &pending, &ledger).is_err());
+        let mut mismatched = response.clone();
+        mismatched.name = "ordinary".into();
+        assert!(validate_non_blocking_responses(&[mismatched], &pending, &ledger).is_err());
+        ledger.revoke("selected");
+        assert!(validate_non_blocking_responses(&[response], &pending, &ledger).is_err());
+        assert!(
+            pending.contains_key("selected"),
+            "validation must not finalize a call"
+        );
     }
 }

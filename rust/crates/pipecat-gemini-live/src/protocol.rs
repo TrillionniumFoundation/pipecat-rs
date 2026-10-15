@@ -64,6 +64,7 @@ pub(crate) fn action_messages(
             return Err(GeminiError::TooLarge);
         }
         Action::ToolResponses(responses) => check_json_size(responses, max)?,
+        Action::NonBlockingToolResponses(responses) => check_json_size(responses, max)?,
         _ => {}
     }
     let audio = |data: &[u8]| -> Result<Value, GeminiError> {
@@ -140,6 +141,22 @@ pub(crate) fn action_messages(
                 return Err(GeminiError::Invalid("audioStreamEnd requires server VAD"));
             }
             vec![json!({"realtimeInput":{"audioStreamEnd":true}})]
+        }
+        Action::NonBlockingToolResponses(responses) => {
+            if responses.is_empty() || responses.len() > config.limits.max_pending_tools {
+                return Err(GeminiError::Invalid("non-blocking tool response count"));
+            }
+            let mut ids = std::collections::HashSet::new();
+            for response in responses {
+                if response.id.is_empty()
+                    || response.name.is_empty()
+                    || !response.response.is_object()
+                    || !ids.insert(&response.id)
+                {
+                    return Err(GeminiError::Invalid("non-blocking tool response fields"));
+                }
+            }
+            vec![json!({"toolResponse":{"functionResponses":responses}})]
         }
         Action::ToolResponses(responses) => {
             if responses.is_empty() || responses.len() > config.limits.max_pending_tools {

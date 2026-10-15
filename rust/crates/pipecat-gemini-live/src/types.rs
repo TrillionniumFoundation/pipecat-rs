@@ -329,6 +329,26 @@ pub struct FunctionResponse {
     pub response: Value,
 }
 
+/// Explicit scheduling for an opted-in non-blocking function response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ToolResponseScheduling {
+    WhenIdle,
+    Silent,
+}
+
+/// An update to an existing non-blocking call. A final update closes that call
+/// only after its single wire message has been written successfully.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NonBlockingFunctionResponse {
+    pub id: String,
+    pub name: String,
+    pub response: Value,
+    pub will_continue: bool,
+    pub scheduling: ToolResponseScheduling,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Audio(Vec<u8>),
@@ -346,6 +366,7 @@ pub enum Action {
     ActivityEnd,
     AudioStreamEnd,
     ToolResponses(Vec<FunctionResponse>),
+    NonBlockingToolResponses(Vec<NonBlockingFunctionResponse>),
 }
 /// Local correlation, never claimed to be a provider-generated response ID.
 /// Audio/transcription is asynchronous; this identifies the input active when
@@ -413,7 +434,11 @@ pub enum Event {
     TurnComplete,
     Interrupted,
     ToolCalls(Vec<FunctionCall>),
+    /// Call-authorized control delivery, independent of audio generation.
+    NonBlockingToolCalls(Vec<FunctionCall>),
     ToolCallsCancelled(Vec<FunctionCall>),
+    /// Cancellation of a non-blocking call, independent of audio generation.
+    NonBlockingToolCallsCancelled(Vec<FunctionCall>),
     Usage(Usage),
     GoAway {
         time_left: String,
