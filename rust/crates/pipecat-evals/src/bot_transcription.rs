@@ -8,7 +8,10 @@ use pipecat_turns::{
     AggregationEvent, AggregationOutput, LLMUserAggregator, SharedContext, UserAggregatorConfig,
     UserTurnConfig,
 };
-use pipecat_vad::{SileroVadAnalyzer, VadState};
+use pipecat_vad::{
+    EndOfTurnState, SileroVadAnalyzer, SmartTurnAnalysis, SmartTurnAnalyzer, SmartTurnCancellation,
+    SmartTurnCompletionReason, SmartTurnParams, VadError, VadState,
+};
 use std::{
     collections::VecDeque,
     future::Future,
@@ -39,6 +42,7 @@ const MAX_JSON_BYTES: usize = 64 * 1024;
 /// including the response-body limit that precedes JSON parsing.
 pub struct BotTranscriptionConfig {
     analyzer: SileroVadAnalyzer,
+    smart_turn: Option<SmartTurnAnalyzer>,
     speech: SpeechClient,
     request: TranscriptionRequest,
     request_timeout: Duration,
@@ -71,6 +75,7 @@ impl BotTranscriptionConfig {
         })?;
         let config = Self {
             analyzer,
+            smart_turn: None,
             speech,
             request,
             request_timeout,
@@ -82,6 +87,24 @@ impl BotTranscriptionConfig {
         };
         config.validate()?;
         Ok(config)
+    }
+    /// Opt into locally paced Smart Turn endpointing using an already-loaded
+    /// analyzer. Only the bounded 16 kHz, 8 s model window, 500 ms preroll and
+    /// 3 s silence policy are supported. No model or runtime is downloaded.
+    /// Inference deadlines are disabled: only a model COMPLETE verdict or the
+    /// analyzer's sample-counted silence fallback may release a local stop.
+    pub fn with_smart_turn(mut self, mut analyzer: SmartTurnAnalyzer) -> Result<Self, EvalError> {
+        validate_smart_turn(&analyzer)?;
+        analyzer.set_inference_timeout(None).map_err(|_| {
+            EvalError::Scenario("invalid bot transcription Smart Turn timeout".into())
+        })?;
+        analyzer
+            .update_vad_start_secs(self.analyzer.params().start_secs)
+            .map_err(|_| EvalError::Scenario("invalid bot transcription VAD start delay".into()))?;
+        analyzer.clear();
+        self.smart_turn = Some(analyzer);
+        self.validate()?;
+        Ok(self)
     }
     /// The lifetime admission budget is not replenished by interruptions.
     pub fn with_max_total_pcm_bytes(mut self, bytes: usize) -> Self {
@@ -112,6 +135,9 @@ impl BotTranscriptionConfig {
         self
     }
     pub(crate) fn validate(&self) -> Result<(), EvalError> {
+        if let Some(analyzer) = &self.smart_turn {
+            validate_smart_turn(analyzer)?;
+        }
         if self.analyzer.sample_rate() != SAMPLE_RATE {
             return Err(EvalError::Unsupported(
                 "bot transcription requires 16000 Hz mono PCM".into(),
@@ -157,6 +183,17 @@ impl BotTranscriptionConfig {
         }
         Ok(())
     }
+}
+
+fn validate_smart_turn(analyzer: &SmartTurnAnalyzer) -> Result<(), EvalError> {
+    if analyzer.buffer().sample_rate() != SAMPLE_RATE
+        || analyzer.buffer().params() != &SmartTurnParams::default()
+    {
+        return Err(EvalError::Scenario(
+            "bot transcription Smart Turn requires 16000 Hz, an 8 s window, 500 ms preroll and 3 s silence fallback".into(),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -223,8 +260,18 @@ struct AudioCommand {
     pcm: Box<[u8]>,
 }
 enum ThreadEvent {
-    Started { epoch: u64 },
-    Segment { epoch: u64, pcm: Vec<u8> },
+    Started {
+        epoch: u64,
+    },
+    Pcm {
+        epoch: u64,
+        pcm: Box<[u8; TICK_BYTES]>,
+        is_speech: bool,
+    },
+    Segment {
+        epoch: u64,
+        pcm: Vec<u8>,
+    },
 }
 struct Segment {
     epoch: u64,
@@ -242,8 +289,51 @@ impl Drop for InFlight {
     }
 }
 
-/// Owns exactly one joined native-analysis thread and at most one HTTP future.
-/// Cancelling `next` does not detach or discard the in-progress HTTP request.
+type EndpointFuture = Pin<Box<dyn Future<Output = pipecat_vad::Result<SmartTurnAnalysis>> + Send>>;
+struct EndpointInFlight {
+    epoch: u64,
+    revision: u64,
+    cancel: SmartTurnCancellation,
+    future: EndpointFuture,
+}
+impl Drop for EndpointInFlight {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+struct Endpoint {
+    analyzer: SmartTurnAnalyzer,
+    pending: Option<EndpointInFlight>,
+    requested: bool,
+    complete: bool,
+    revision: u64,
+}
+impl Endpoint {
+    fn new(analyzer: SmartTurnAnalyzer) -> Self {
+        Self {
+            analyzer,
+            pending: None,
+            requested: false,
+            complete: false,
+            revision: 0,
+        }
+    }
+    fn invalidate(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+        self.requested = false;
+        self.complete = false;
+        if let Some(pending) = &self.pending {
+            pending.cancel.cancel();
+        }
+    }
+    fn clear(&mut self) {
+        self.invalidate();
+        self.analyzer.clear();
+    }
+}
+
+/// Owns one joined VAD thread, at most one HTTP future and an optional joined
+/// Smart Turn worker. Cancelling `next` preserves both owned in-progress futures.
 pub(crate) struct BotTranscription {
     commands: Option<SyncSender<AudioCommand>>,
     events: async_mpsc::Receiver<ThreadEvent>,
@@ -264,6 +354,7 @@ pub(crate) struct BotTranscription {
     transcript_bytes: usize,
     pending: VecDeque<Segment>,
     inflight: Option<InFlight>,
+    endpoint: Option<Endpoint>,
     ready: VecDeque<(u64, String)>,
     local_speaking: bool,
     held_stop: bool,
@@ -284,6 +375,7 @@ impl BotTranscription {
         let (output, events) = async_mpsc::channel(OUTPUT_CAPACITY);
         let thread_shared = shared.clone();
         let max_segment_bytes = config.max_segment_bytes;
+        let smart_turn_enabled = config.smart_turn.is_some();
         let mut analyzer = config.analyzer;
         // A caller may have probed the supplied analyzer before moving it here.
         analyzer.reset();
@@ -291,13 +383,26 @@ impl BotTranscription {
             .name("eval-bot-vad".into())
             .spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_worker(analyzer, input, output, &thread_shared, max_segment_bytes);
+                    run_worker(
+                        analyzer,
+                        input,
+                        output,
+                        &thread_shared,
+                        max_segment_bytes,
+                        smart_turn_enabled,
+                    );
                 }));
                 if result.is_err() {
                     thread_shared.fail(Failure::State("bot audio VAD thread panicked"));
                 }
             })?;
-        let turn_config = aggregator_config(config.request_timeout, config.max_pending_segments);
+        let mut turn_config =
+            aggregator_config(config.request_timeout, config.max_pending_segments);
+        if smart_turn_enabled {
+            // The endpoint gate holds the local stop, so no second fixed delay
+            // should be added after both the model and HTTP receipts are ready.
+            turn_config.turn.speech_timeout = Duration::ZERO;
+        }
         Ok(Self {
             commands: Some(commands),
             events,
@@ -318,6 +423,7 @@ impl BotTranscription {
             transcript_bytes: 0,
             pending: VecDeque::new(),
             inflight: None,
+            endpoint: config.smart_turn.map(Endpoint::new),
             ready: VecDeque::new(),
             local_speaking: false,
             held_stop: false,
@@ -417,6 +523,12 @@ impl BotTranscription {
         self.epoch = epoch;
         self.idle_notified = false;
         self.inflight = None;
+        if let Some(endpoint) = &mut self.endpoint {
+            endpoint.clear();
+            // Retain the canceled old-epoch receipt until the native predictor
+            // exits. A fresh stop can request the next snapshot meanwhile,
+            // without filling the analyzer's single waiting-request slot.
+        }
         self.pending.clear();
         self.ready.clear();
         self.local_speaking = false;
@@ -453,6 +565,9 @@ impl BotTranscription {
             && activity.output_events == 0
             && self.pending.is_empty()
             && self.inflight.is_none()
+            && self.endpoint.as_ref().is_none_or(|endpoint| {
+                endpoint.pending.is_none() && !endpoint.requested && !endpoint.complete
+            })
             && self.ready.is_empty()
             && !self.local_speaking
             && !self.held_stop
@@ -463,6 +578,7 @@ impl BotTranscription {
         ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             self.check()?;
+            self.release_held_stop()?;
             if let Some((epoch, text)) = self.ready.pop_front() {
                 if epoch == self.epoch && epoch == self.shared.epoch.load(Ordering::Acquire) {
                     return Ok((epoch, text));
@@ -476,6 +592,7 @@ impl BotTranscription {
                 return Ok((self.epoch, String::new()));
             }
             self.start_request();
+            self.start_analysis()?;
             tokio::select! {
                 biased;
                 event = self.events.recv() => {
@@ -500,6 +617,18 @@ impl BotTranscription {
                         self.commit_transcript(flight.epoch, transcript.text)?;
                     }
                 }
+                result = async {
+                    self.endpoint.as_mut().expect("guarded endpoint")
+                        .pending.as_mut().expect("guarded analysis").future.as_mut().await
+                }, if self.endpoint.as_ref().is_some_and(|endpoint| endpoint.pending.is_some()) => {
+                    let pending = self.endpoint.as_mut().expect("completed endpoint")
+                        .pending.take().expect("completed analysis");
+                    // Events admitted between select's event poll and the ready
+                    // prediction still have priority. Started invalidates even
+                    // before its matching PCM can update analyzer generation.
+                    self.drain_events()?;
+                    self.apply_analysis(pending.epoch, pending.revision, result)?;
+                }
                 _ = ticks.tick() => {
                     let output = self.aggregator.advance(self.origin.elapsed())
                         .map_err(|_| EvalError::Scenario("bot transcript turn aggregation failed".into()))?;
@@ -514,10 +643,37 @@ impl BotTranscription {
                 self.idle_notified = false;
                 self.local_speaking = true;
                 self.held_stop = false;
+                if let Some(endpoint) = &mut self.endpoint {
+                    // Retain the utterance buffer on resumed speech and retain
+                    // its canceled future until the old native job resolves.
+                    endpoint.invalidate();
+                }
                 self.process_frame(FrameData::VadUserStartedSpeaking(VadSpeakingFrame {
                     duration_secs: 0.0,
                     timestamp: 0.0,
                 }))?;
+            }
+            ThreadEvent::Pcm {
+                epoch,
+                pcm,
+                is_speech,
+            } if self.current(epoch) => {
+                if let Some(endpoint) = &mut self.endpoint {
+                    let state = match endpoint.analyzer.append_audio(pcm.as_ref(), is_speech) {
+                        Ok(state) => state,
+                        Err(_) => {
+                            return self
+                                .fail(Failure::State("bot audio Smart Turn buffering failed"));
+                        }
+                    };
+                    if state == EndOfTurnState::Complete {
+                        // append_audio has already cleared the buffer and
+                        // canceled its old generation. Keep this verdict while
+                        // HTTP is pending; never analyze the now-empty buffer.
+                        endpoint.complete = true;
+                        endpoint.requested = false;
+                    }
+                }
             }
             ThreadEvent::Segment { epoch, pcm } if self.current(epoch) => {
                 self.local_speaking = false;
@@ -526,10 +682,83 @@ impl BotTranscription {
                     return self.fail(Failure::Limit("bot transcription pending segments"));
                 }
                 self.pending.push_back(Segment { epoch, pcm });
+                if let Some(endpoint) = &mut self.endpoint {
+                    endpoint.requested = !endpoint.complete;
+                }
             }
             _ => {}
         }
         Ok(())
+    }
+    fn drain_events(&mut self) -> Result<(), EvalError> {
+        // A bounded pass cannot be starved by a continuously publishing worker.
+        // The release fence below refuses to commit while any event remains.
+        for _ in 0..OUTPUT_CAPACITY {
+            match self.events.try_recv() {
+                Ok(event) => {
+                    self.shared.received_event();
+                    self.process_event(event)?;
+                }
+                Err(async_mpsc::error::TryRecvError::Empty) => break,
+                Err(async_mpsc::error::TryRecvError::Disconnected) => {
+                    self.check()?;
+                    return self.fail(Failure::State("bot audio VAD thread disconnected"));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn start_analysis(&mut self) -> Result<(), EvalError> {
+        let Some(endpoint) = &mut self.endpoint else {
+            return Ok(());
+        };
+        if endpoint.pending.is_some() || !endpoint.requested {
+            return Ok(());
+        }
+        endpoint.requested = false;
+        let analysis = match endpoint.analyzer.begin_analysis() {
+            Ok(analysis) => analysis,
+            Err(_) => return self.fail(Failure::State("bot audio Smart Turn request failed")),
+        };
+        endpoint.pending = Some(EndpointInFlight {
+            epoch: self.epoch,
+            revision: endpoint.revision,
+            cancel: analysis.cancellation(),
+            future: Box::pin(analysis.wait()),
+        });
+        Ok(())
+    }
+    fn apply_analysis(
+        &mut self,
+        epoch: u64,
+        revision: u64,
+        result: pipecat_vad::Result<SmartTurnAnalysis>,
+    ) -> Result<(), EvalError> {
+        if !self.current(epoch) || self.local_speaking {
+            return Ok(());
+        }
+        let Some(endpoint) = &mut self.endpoint else {
+            return Ok(());
+        };
+        if revision != endpoint.revision || endpoint.complete {
+            return Ok(());
+        }
+        let analysis = match result {
+            Ok(analysis) => analysis,
+            Err(VadError::Cancelled) => return Ok(()),
+            Err(_) => return self.fail(Failure::State("bot audio Smart Turn inference failed")),
+        };
+        if analysis.reason == SmartTurnCompletionReason::Timeout {
+            return self.fail(Failure::State("bot audio Smart Turn inference timed out"));
+        }
+        if endpoint.analyzer.apply_analysis(&analysis)
+            && analysis.state == EndOfTurnState::Complete
+            && analysis.reason == SmartTurnCompletionReason::Model
+        {
+            endpoint.complete = true;
+            endpoint.requested = false;
+        }
+        self.release_held_stop()
     }
     fn start_request(&mut self) {
         if self.inflight.is_some() {
@@ -587,19 +816,50 @@ impl BotTranscription {
             finalized: true,
             ..TranscriptionFrame::default()
         }))?;
-        if self.current(epoch)
-            && !self.local_speaking
-            && self.held_stop
-            && self.pending.is_empty()
-            && self.inflight.is_none()
+        self.release_held_stop()
+    }
+    fn release_held_stop(&mut self) -> Result<(), EvalError> {
+        if !self.current(self.epoch)
+            || self.local_speaking
+            || !self.held_stop
+            || !self.pending.is_empty()
+            || self.inflight.is_some()
         {
-            self.held_stop = false;
-            self.process_frame(FrameData::VadUserStoppedSpeaking(VadSpeakingFrame {
-                duration_secs: 0.4,
-                timestamp: 0.0,
-            }))?;
+            return Ok(());
         }
-        Ok(())
+        // Only opt-in endpointing uses the worker fence. Holding this lock
+        // through the synchronous stop commit linearizes it before subsequent
+        // input admission and VAD processing/publication. A concurrent native
+        // batch or already-admitted event must be observed before completion.
+        // Audio admitted after this commit belongs to the next local turn.
+        let shared = self.shared.clone();
+        let activity = if let Some(endpoint) = &self.endpoint {
+            if !endpoint.complete {
+                return Ok(());
+            }
+            let activity = shared
+                .activity
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            if activity.queued_bytes != 0
+                || activity.processing
+                || activity.vad_busy
+                || activity.tail_unsettled
+                || activity.output_events != 0
+            {
+                return Ok(());
+            }
+            Some(activity)
+        } else {
+            None
+        };
+        self.held_stop = false;
+        let result = self.process_frame(FrameData::VadUserStoppedSpeaking(VadSpeakingFrame {
+            duration_secs: 0.4,
+            timestamp: 0.0,
+        }));
+        drop(activity);
+        result
     }
     fn process_frame(&mut self, data: FrameData) -> Result<(), EvalError> {
         if !self.current(self.epoch) {
@@ -624,6 +884,9 @@ impl BotTranscription {
                 AggregationEvent::UserTurnStarted => self.turn_active = true,
                 AggregationEvent::UserTurnStopped { text, .. } => {
                     self.turn_active = false;
+                    if let Some(endpoint) = &mut self.endpoint {
+                        endpoint.clear();
+                    }
                     if !text.trim().is_empty() {
                         if self.ready.len() >= OUTPUT_CAPACITY
                             || text.len() > self.max_transcript_bytes
@@ -656,6 +919,10 @@ impl BotTranscription {
         self.shared.fail(failure);
         self.inflight = None;
         self.pending.clear();
+        if let Some(endpoint) = &mut self.endpoint {
+            endpoint.clear();
+            endpoint.pending = None;
+        }
         self.wake();
         Err(failure.error())
     }
@@ -664,12 +931,18 @@ impl BotTranscription {
             worker.thread().unpark();
         }
     }
-    /// Cancels HTTP and actually joins the native thread. There is no detached
+    /// Cancels HTTP and actually joins both native owners. There is no detached
     /// blocking task and no join handle is moved across a cancellable await.
-    /// A 40 ms audio batch bounds inference work, not inference wall time.
+    /// Shutdown is synchronous, including an active Smart Turn prediction:
+    /// cancellation is cooperative and neither native join has a wall-time
+    /// bound. A 40 ms audio batch bounds VAD input, not inference wall time.
     pub(crate) fn finish(&mut self) -> Result<(), EvalError> {
         self.shared.stop.store(true, Ordering::Release);
         self.inflight = None;
+        if let Some(endpoint) = &mut self.endpoint {
+            endpoint.clear();
+            endpoint.pending = None;
+        }
         self.pending.clear();
         self.ready.clear();
         self.commands = None;
@@ -681,6 +954,10 @@ impl BotTranscription {
                     .fail(Failure::State("bot audio VAD thread panicked"));
             }
         }
+        // Drop joins the analyzer's actual inference worker after audio feeding
+        // has stopped. Async cleanup can move its join to a cancellable task;
+        // this owner deliberately retains the synchronous completion boundary.
+        self.endpoint = None;
         self.finished = true;
         if let Some(error) = self.shared.failure() {
             Err(error.error())
@@ -810,6 +1087,7 @@ fn run_worker(
     output: async_mpsc::Sender<ThreadEvent>,
     shared: &Shared,
     max_segment_bytes: usize,
+    smart_turn_enabled: bool,
 ) {
     let origin = Instant::now();
     let mut next_tick = origin;
@@ -922,6 +1200,23 @@ fn run_worker(
         {
             break;
         }
+        if smart_turn_enabled
+            && !publish(
+                &output,
+                shared,
+                epoch,
+                ThreadEvent::Pcm {
+                    epoch,
+                    pcm: Box::new(block),
+                    // Latched local speech includes Stopping. Starting noise
+                    // before the first real start does not count as speech.
+                    is_speech: segmenter.segment.is_some(),
+                },
+            )
+            && shared.stop.load(Ordering::Acquire)
+        {
+            break;
+        }
         if let Some(pcm) = completed {
             if !publish(&output, shared, epoch, ThreadEvent::Segment { epoch, pcm })
                 && shared.stop.load(Ordering::Acquire)
@@ -948,6 +1243,683 @@ fn run_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pipecat_vad::{MonotonicSmartTurnClock, SmartTurnPrediction, SmartTurnPredictor};
+
+    struct PredictionCall {
+        cancellation: SmartTurnCancellation,
+        samples: Vec<i16>,
+    }
+    struct ControlledPredictor {
+        calls: mpsc::Sender<PredictionCall>,
+        replies: Receiver<pipecat_vad::Result<SmartTurnPrediction>>,
+    }
+    impl SmartTurnPredictor for ControlledPredictor {
+        fn predict(
+            &mut self,
+            samples: &[i16],
+            sample_rate: u32,
+            cancellation: &SmartTurnCancellation,
+        ) -> pipecat_vad::Result<SmartTurnPrediction> {
+            assert_eq!(sample_rate, SAMPLE_RATE);
+            self.calls
+                .send(PredictionCall {
+                    cancellation: cancellation.clone(),
+                    samples: samples.to_vec(),
+                })
+                .unwrap();
+            loop {
+                if cancellation.is_cancelled() {
+                    return Err(VadError::Cancelled);
+                }
+                match self.replies.recv_timeout(Duration::from_millis(5)) {
+                    Ok(reply) => return reply,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return Err(VadError::Cancelled),
+                }
+            }
+        }
+    }
+    struct SmartHarness {
+        engine: BotTranscription,
+        output: async_mpsc::Sender<ThreadEvent>,
+        _input: Receiver<AudioCommand>,
+        calls: Receiver<PredictionCall>,
+        replies: mpsc::Sender<pipecat_vad::Result<SmartTurnPrediction>>,
+    }
+    impl SmartHarness {
+        fn new() -> Self {
+            let (mut engine, output, input) = test_engine();
+            let (calls_tx, calls) = mpsc::channel();
+            let (replies, replies_rx) = mpsc::channel();
+            let analyzer = SmartTurnAnalyzer::with_predictor(
+                ControlledPredictor {
+                    calls: calls_tx,
+                    replies: replies_rx,
+                },
+                SAMPLE_RATE,
+                SmartTurnParams::default(),
+                Arc::new(MonotonicSmartTurnClock::default()),
+                None,
+            )
+            .unwrap();
+            engine.endpoint = Some(Endpoint::new(analyzer));
+            engine.turn_config.turn.speech_timeout = Duration::ZERO;
+            engine.aggregator =
+                LLMUserAggregator::new(SharedContext::default(), engine.turn_config.clone());
+            Self {
+                engine,
+                output,
+                _input: input,
+                calls,
+                replies,
+            }
+        }
+        fn call(&self) -> PredictionCall {
+            self.calls.recv_timeout(Duration::from_secs(2)).unwrap()
+        }
+        fn reply(&self, complete: bool) {
+            self.replies
+                .send(Ok(SmartTurnPrediction {
+                    probability: if complete { 0.9 } else { 0.1 },
+                    complete,
+                }))
+                .unwrap();
+        }
+        async fn resolve(&mut self) -> Result<(), EvalError> {
+            let (epoch, revision, result) = {
+                let pending = self
+                    .engine
+                    .endpoint
+                    .as_mut()
+                    .unwrap()
+                    .pending
+                    .as_mut()
+                    .unwrap();
+                (
+                    pending.epoch,
+                    pending.revision,
+                    tokio::time::timeout(Duration::from_secs(2), pending.future.as_mut())
+                        .await
+                        .unwrap(),
+                )
+            };
+            self.engine.endpoint.as_mut().unwrap().pending = None;
+            self.engine.drain_events()?;
+            self.engine.apply_analysis(epoch, revision, result)
+        }
+        fn receipt(&mut self, text: &str) {
+            let segment = self.engine.pending.pop_front().unwrap();
+            self.engine
+                .commit_transcript(segment.epoch, text.into())
+                .unwrap();
+        }
+    }
+    fn pcm_tick(engine: &mut BotTranscription, is_speech: bool) {
+        engine
+            .process_event(ThreadEvent::Pcm {
+                epoch: engine.epoch,
+                pcm: Box::new([if is_speech { 7 } else { 0 }; TICK_BYTES]),
+                is_speech,
+            })
+            .unwrap();
+    }
+    fn local_segment(engine: &mut BotTranscription) {
+        engine
+            .process_event(ThreadEvent::Started {
+                epoch: engine.epoch,
+            })
+            .unwrap();
+        pcm_tick(engine, true);
+        pcm_tick(engine, false);
+        engine
+            .process_event(ThreadEvent::Segment {
+                epoch: engine.epoch,
+                pcm: vec![7, 0],
+            })
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn smart_turn_incomplete_retains_utterance_until_later_model_complete() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("first segment");
+        harness.engine.start_analysis().unwrap();
+        let first = harness.call();
+        harness.reply(false);
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.held_stop);
+        assert!(harness.engine.turn_active);
+        assert!(harness.engine.ready.is_empty());
+        assert!(!harness.engine.is_idle());
+        let output = harness
+            .engine
+            .aggregator
+            .advance(Duration::from_secs(200))
+            .unwrap();
+        harness.engine.collect(output).unwrap();
+        assert!(harness.engine.ready.is_empty());
+
+        local_segment(&mut harness.engine);
+        harness.receipt("second segment");
+        harness.engine.start_analysis().unwrap();
+        let second = harness.call();
+        assert!(second.samples.len() > first.samples.len());
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert!(!harness.engine.held_stop);
+        assert!(!harness.engine.turn_active);
+        assert_eq!(
+            harness.engine.next().await.unwrap(),
+            (0, "first segment second segment".into())
+        );
+        assert!(harness.engine.is_idle());
+    }
+
+    #[tokio::test]
+    async fn smart_turn_complete_waits_for_http_and_new_start_revokes_old_completion() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.endpoint.as_ref().unwrap().complete);
+        assert!(harness.engine.ready.is_empty());
+        assert!(harness.engine.held_stop);
+
+        local_segment(&mut harness.engine);
+        assert!(!harness.engine.endpoint.as_ref().unwrap().complete);
+        harness.receipt("first");
+        assert!(harness.engine.ready.is_empty());
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.ready.is_empty());
+        assert!(harness.engine.held_stop);
+        harness.receipt("second");
+        assert_eq!(
+            harness.engine.ready.pop_front(),
+            Some((0, "first second".into()))
+        );
+        assert!(!harness.engine.turn_active);
+    }
+
+    #[tokio::test]
+    async fn smart_turn_resume_cancels_prediction_and_retains_latest_stop_request() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("first");
+        harness.engine.start_analysis().unwrap();
+        let first = harness.call();
+        let old_revision = harness.engine.endpoint.as_ref().unwrap().revision;
+        let old_generation = harness
+            .engine
+            .endpoint
+            .as_ref()
+            .unwrap()
+            .analyzer
+            .buffer()
+            .generation();
+        local_segment(&mut harness.engine);
+        harness.receipt("second");
+        assert!(first.cancellation.is_cancelled());
+        assert!(harness.engine.endpoint.as_ref().unwrap().requested);
+        harness.engine.start_analysis().unwrap();
+        assert!(harness.calls.try_recv().is_err());
+        harness
+            .engine
+            .apply_analysis(
+                0,
+                old_revision,
+                Ok(SmartTurnAnalysis {
+                    state: EndOfTurnState::Complete,
+                    metrics: None,
+                    reason: SmartTurnCompletionReason::Model,
+                    generation: old_generation,
+                }),
+            )
+            .unwrap();
+        assert!(harness.engine.ready.is_empty());
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.endpoint.as_ref().unwrap().requested);
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert_eq!(
+            harness.engine.ready.pop_front(),
+            Some((0, "first second".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn smart_turn_epoch_cancels_native_work_and_rejects_old_pcm_and_verdict() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("discarded");
+        harness.engine.start_analysis().unwrap();
+        let first = harness.call();
+        let old_revision = harness.engine.endpoint.as_ref().unwrap().revision;
+        let old_generation = harness
+            .engine
+            .endpoint
+            .as_ref()
+            .unwrap()
+            .analyzer
+            .buffer()
+            .generation();
+        harness.engine.set_epoch(1).unwrap();
+        assert!(first.cancellation.is_cancelled());
+        assert!(harness.engine.endpoint.as_ref().unwrap().pending.is_some());
+        assert_eq!(
+            harness
+                .engine
+                .endpoint
+                .as_ref()
+                .unwrap()
+                .analyzer
+                .buffer()
+                .buffered_samples(),
+            0
+        );
+        harness
+            .engine
+            .process_event(ThreadEvent::Pcm {
+                epoch: 0,
+                pcm: Box::new([9; TICK_BYTES]),
+                is_speech: true,
+            })
+            .unwrap();
+        harness
+            .engine
+            .apply_analysis(
+                0,
+                old_revision,
+                Ok(SmartTurnAnalysis {
+                    state: EndOfTurnState::Complete,
+                    metrics: None,
+                    reason: SmartTurnCompletionReason::Model,
+                    generation: old_generation,
+                }),
+            )
+            .unwrap();
+        assert_eq!(
+            harness
+                .engine
+                .endpoint
+                .as_ref()
+                .unwrap()
+                .analyzer
+                .buffer()
+                .buffered_samples(),
+            0
+        );
+        local_segment(&mut harness.engine);
+        harness.receipt("fresh");
+        harness.engine.start_analysis().unwrap();
+        assert!(harness.calls.try_recv().is_err());
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.endpoint.as_ref().unwrap().requested);
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert_eq!(harness.engine.ready.pop_front(), Some((1, "fresh".into())));
+    }
+
+    #[tokio::test]
+    async fn smart_turn_analyzer_generation_rejection_never_opens_held_stop() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("kept");
+        let endpoint = harness.engine.endpoint.as_ref().unwrap();
+        let revision = endpoint.revision;
+        let stale = endpoint.analyzer.buffer().generation().wrapping_sub(1);
+        harness
+            .engine
+            .apply_analysis(
+                0,
+                revision,
+                Ok(SmartTurnAnalysis {
+                    state: EndOfTurnState::Complete,
+                    metrics: None,
+                    reason: SmartTurnCompletionReason::Model,
+                    generation: stale,
+                }),
+            )
+            .unwrap();
+        assert!(harness.engine.held_stop);
+        assert!(harness.engine.ready.is_empty());
+        assert!(!harness.engine.endpoint.as_ref().unwrap().complete);
+    }
+
+    #[tokio::test]
+    async fn smart_turn_three_second_pcm_silence_fallback_is_not_a_fixed_turn_timer() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("fallback");
+        harness.engine.start_analysis().unwrap();
+        let call = harness.call();
+        // The local stop's quiet block contributed the first 40 ms. Another
+        // 2,920 ms is still INCOMPLETE even if the wall clock advances far ahead.
+        for _ in 0..73 {
+            pcm_tick(&mut harness.engine, false);
+        }
+        let output = harness
+            .engine
+            .aggregator
+            .advance(Duration::from_secs(200))
+            .unwrap();
+        harness.engine.collect(output).unwrap();
+        assert!(harness.engine.ready.is_empty());
+        assert!(!harness.engine.endpoint.as_ref().unwrap().complete);
+        pcm_tick(&mut harness.engine, false);
+        assert!(harness.engine.endpoint.as_ref().unwrap().complete);
+        assert!(call.cancellation.is_cancelled());
+        assert!(!harness.engine.endpoint.as_ref().unwrap().requested);
+        assert_eq!(
+            harness
+                .engine
+                .endpoint
+                .as_ref()
+                .unwrap()
+                .analyzer
+                .buffer()
+                .buffered_samples(),
+            0
+        );
+        harness.engine.release_held_stop().unwrap();
+        assert_eq!(
+            harness.engine.ready.pop_front(),
+            Some((0, "fallback".into()))
+        );
+        assert!(!harness.engine.is_idle());
+        harness.resolve().await.unwrap();
+        // Idle silence is bounded preroll, not a new analysis or unfinished turn.
+        for _ in 0..250 {
+            pcm_tick(&mut harness.engine, false);
+        }
+        assert!(harness.engine.is_idle());
+        assert!(!harness.engine.endpoint.as_ref().unwrap().requested);
+        assert!(harness.calls.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn smart_turn_empty_final_waits_for_endpoint_without_fabricating_transcript() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("");
+        assert!(!harness.engine.is_idle());
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.ready.is_empty());
+        assert!(harness.engine.is_idle());
+        assert_eq!(harness.engine.next().await.unwrap(), (0, String::new()));
+    }
+
+    #[tokio::test]
+    async fn smart_turn_errors_and_predictor_timeout_fail_closed() {
+        for error in [
+            VadError::Runtime("controlled failure".into()),
+            VadError::SmartTurnTimeout,
+        ] {
+            let mut harness = SmartHarness::new();
+            local_segment(&mut harness.engine);
+            harness.receipt("must not escape");
+            harness.engine.start_analysis().unwrap();
+            harness.call();
+            harness.replies.send(Err(error)).unwrap();
+            assert!(harness.resolve().await.is_err());
+            assert!(harness.engine.shared.failure().is_some());
+            assert!(harness.engine.ready.is_empty());
+            assert!(harness.engine.next().await.is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn smart_turn_release_waits_for_every_admitted_worker_activity() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        let segment = harness.engine.pending.pop_front().unwrap();
+        harness.engine.shared.activity.lock().unwrap().queued_bytes = 2;
+        harness
+            .engine
+            .commit_transcript(segment.epoch, "held".into())
+            .unwrap();
+        for blocker in 0..5 {
+            {
+                let mut activity = harness.engine.shared.activity.lock().unwrap();
+                *activity = Activity::default();
+                match blocker {
+                    0 => activity.queued_bytes = 2,
+                    1 => activity.processing = true,
+                    2 => activity.vad_busy = true,
+                    3 => activity.tail_unsettled = true,
+                    _ => activity.output_events = 1,
+                }
+            }
+            harness.engine.release_held_stop().unwrap();
+            assert!(harness.engine.held_stop);
+            assert!(harness.engine.ready.is_empty());
+        }
+        *harness.engine.shared.activity.lock().unwrap() = Activity::default();
+        harness.engine.release_held_stop().unwrap();
+        assert_eq!(harness.engine.ready.pop_front(), Some((0, "held".into())));
+    }
+
+    #[tokio::test]
+    async fn smart_turn_already_admitted_start_beats_a_ready_prediction() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("held");
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        assert!(publish(
+            &harness.output,
+            &harness.engine.shared,
+            0,
+            ThreadEvent::Started { epoch: 0 }
+        ));
+        harness.resolve().await.unwrap();
+        assert!(harness.engine.local_speaking);
+        assert!(harness.engine.ready.is_empty());
+        assert!(!harness.engine.endpoint.as_ref().unwrap().complete);
+        assert_eq!(
+            harness.engine.shared.activity.lock().unwrap().output_events,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn smart_turn_complete_cannot_release_past_an_unconsumed_start() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.engine.start_analysis().unwrap();
+        harness.call();
+        harness.reply(true);
+        harness.resolve().await.unwrap();
+        assert!(publish(
+            &harness.output,
+            &harness.engine.shared,
+            0,
+            ThreadEvent::Started { epoch: 0 }
+        ));
+        harness.receipt("held");
+        assert!(harness.engine.held_stop);
+        assert!(harness.engine.ready.is_empty());
+        harness.engine.drain_events().unwrap();
+        assert!(!harness.engine.endpoint.as_ref().unwrap().complete);
+        assert!(harness.engine.local_speaking);
+        assert!(harness.engine.ready.is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancellation_of_next_preserves_the_owned_smart_turn_future() {
+        let mut harness = SmartHarness::new();
+        local_segment(&mut harness.engine);
+        harness.receipt("kept");
+        harness.engine.start_analysis().unwrap();
+        let call = harness.call();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), harness.engine.next())
+                .await
+                .is_err()
+        );
+        assert!(!call.cancellation.is_cancelled());
+        assert!(harness.engine.endpoint.as_ref().unwrap().pending.is_some());
+        harness.reply(true);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), harness.engine.next())
+                .await
+                .unwrap()
+                .unwrap(),
+            (0, "kept".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn finish_cancels_and_synchronously_joins_a_noncooperative_predictor() {
+        struct BlockingPredictor {
+            entered: mpsc::Sender<SmartTurnCancellation>,
+            release: Receiver<()>,
+            exited: Arc<AtomicBool>,
+        }
+        impl SmartTurnPredictor for BlockingPredictor {
+            fn predict(
+                &mut self,
+                _samples: &[i16],
+                _sample_rate: u32,
+                cancellation: &SmartTurnCancellation,
+            ) -> pipecat_vad::Result<SmartTurnPrediction> {
+                self.entered.send(cancellation.clone()).unwrap();
+                // Deliberately ignore cancellation until the test releases the
+                // real native owner. Dropping only its future is insufficient.
+                self.release.recv().unwrap();
+                self.exited.store(true, Ordering::Release);
+                Ok(SmartTurnPrediction {
+                    probability: 0.9,
+                    complete: true,
+                })
+            }
+        }
+        let (mut engine, _output, _input) = test_engine();
+        let (entered_tx, entered) = mpsc::channel();
+        let (release, release_rx) = mpsc::channel();
+        let exited = Arc::new(AtomicBool::new(false));
+        engine.endpoint = Some(Endpoint::new(
+            SmartTurnAnalyzer::with_predictor(
+                BlockingPredictor {
+                    entered: entered_tx,
+                    release: release_rx,
+                    exited: exited.clone(),
+                },
+                SAMPLE_RATE,
+                SmartTurnParams::default(),
+                Arc::new(MonotonicSmartTurnClock::default()),
+                None,
+            )
+            .unwrap(),
+        ));
+        local_segment(&mut engine);
+        engine.start_analysis().unwrap();
+        let cancel = entered.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (returned_tx, returned) = mpsc::channel();
+        let finisher = thread::spawn(move || {
+            engine.finish().unwrap();
+            assert!(engine.endpoint.is_none());
+            returned_tx.send(()).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !cancel.is_cancelled() && Instant::now() < deadline {
+            thread::yield_now();
+        }
+        let cancelled = cancel.is_cancelled();
+        let returned_early = returned.recv_timeout(Duration::from_millis(20)).is_ok();
+        let exited_early = exited.load(Ordering::Acquire);
+        release.send(()).unwrap();
+        finisher.join().unwrap();
+        assert!(cancelled);
+        assert!(!returned_early, "finish detached a live native predictor");
+        assert!(!exited_early);
+        assert!(exited.load(Ordering::Acquire));
+        returned.recv_timeout(Duration::from_secs(2)).unwrap();
+    }
+
+    #[test]
+    fn smart_turn_supported_rate_and_buffer_policy_are_bounded() {
+        fn analyzer(rate: u32, params: SmartTurnParams) -> SmartTurnAnalyzer {
+            let (calls, _calls_rx) = mpsc::channel();
+            let (_replies_tx, replies) = mpsc::channel();
+            SmartTurnAnalyzer::with_predictor(
+                ControlledPredictor { calls, replies },
+                rate,
+                params,
+                Arc::new(MonotonicSmartTurnClock::default()),
+                None,
+            )
+            .unwrap()
+        }
+        assert!(validate_smart_turn(&analyzer(SAMPLE_RATE, SmartTurnParams::default())).is_ok());
+        assert!(validate_smart_turn(&analyzer(8_000, SmartTurnParams::default())).is_err());
+        for params in [
+            SmartTurnParams {
+                stop_secs: 2.0,
+                ..SmartTurnParams::default()
+            },
+            SmartTurnParams {
+                pre_speech_ms: 501.0,
+                ..SmartTurnParams::default()
+            },
+            SmartTurnParams {
+                max_duration_secs: 9.0,
+                ..SmartTurnParams::default()
+            },
+        ] {
+            assert!(validate_smart_turn(&analyzer(SAMPLE_RATE, params)).is_err());
+        }
+    }
+
+    #[test]
+    fn smart_turn_pcm_publication_uses_the_existing_fail_closed_output_bound() {
+        let mut harness = SmartHarness::new();
+        for _ in 0..OUTPUT_CAPACITY {
+            assert!(publish(
+                &harness.output,
+                &harness.engine.shared,
+                0,
+                ThreadEvent::Pcm {
+                    epoch: 0,
+                    pcm: Box::new([0; TICK_BYTES]),
+                    is_speech: false,
+                }
+            ));
+        }
+        assert!(!publish(
+            &harness.output,
+            &harness.engine.shared,
+            0,
+            ThreadEvent::Pcm {
+                epoch: 0,
+                pcm: Box::new([0; TICK_BYTES]),
+                is_speech: false,
+            }
+        ));
+        assert!(matches!(harness.engine.check(), Err(EvalError::Limit(_))));
+        assert_eq!(
+            harness.engine.shared.activity.lock().unwrap().output_events,
+            OUTPUT_CAPACITY
+        );
+        assert!(harness.engine.finish().is_err());
+    }
 
     #[test]
     fn segmentation_retains_bounded_preroll_and_waits_for_quiet() {
@@ -963,17 +1935,21 @@ mod tests {
                 .unwrap()
                 .0
         );
+        assert!(segmenter.segment.is_none());
         let (started, completed) = segmenter
             .push(&[3; TICK_BYTES], VadState::Speaking)
             .unwrap();
         assert!(started && completed.is_none());
+        assert!(segmenter.segment.is_some());
         assert!(segmenter
             .push(&[4; TICK_BYTES], VadState::Stopping)
             .unwrap()
             .1
             .is_none());
+        assert!(segmenter.segment.is_some());
         let (started, completed) = segmenter.push(&[0; TICK_BYTES], VadState::Quiet).unwrap();
         assert!(!started);
+        assert!(segmenter.segment.is_none());
         let pcm = completed.unwrap();
         assert_eq!(pcm.len(), PREROLL_BYTES + 3 * TICK_BYTES);
         assert_eq!(
@@ -1063,6 +2039,7 @@ mod tests {
             transcript_bytes: 0,
             pending: VecDeque::new(),
             inflight: None,
+            endpoint: None,
             ready: VecDeque::new(),
             local_speaking: false,
             held_stop: false,

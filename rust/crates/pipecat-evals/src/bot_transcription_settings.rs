@@ -6,7 +6,10 @@ use crate::{
     RecordedScenarioFile, ScenarioFile, ScriptScenario, SessionOptions,
 };
 use pipecat_speech::{SpeechClient, SpeechConfig, TranscriptionRequest};
-use pipecat_vad::{RuntimeOptions, SileroModel, SileroVadAnalyzer, VadParams};
+use pipecat_vad::{
+    RuntimeOptions, SileroModel, SileroVadAnalyzer, SmartTurnAnalyzer, SmartTurnModel,
+    SmartTurnParams, VadParams,
+};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -16,6 +19,7 @@ use std::{
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
 const MAX_SCENARIOS: usize = 16;
+const MAX_SMART_TURN_MODEL_BYTES: u64 = 128 * 1024 * 1024;
 type ScenarioParts = Vec<(ScriptScenario, Vec<(usize, RecordedAudio)>)>;
 
 #[derive(Deserialize)]
@@ -26,6 +30,7 @@ struct FileSettings {
     api_key_env: String,
     onnx_runtime: PathBuf,
     silero_model: PathBuf,
+    smart_turn_model: Option<PathBuf>,
     language: Option<String>,
     #[serde(default = "timeout_ms")]
     timeout_ms: u64,
@@ -42,6 +47,7 @@ pub struct BotTranscriptionSettings {
     request: TranscriptionRequest,
     runtime: PathBuf,
     model: PathBuf,
+    smart_turn_model: Option<PathBuf>,
     #[cfg(test)]
     test_loaders: Option<TestLoaders>,
 }
@@ -105,6 +111,10 @@ impl BotTranscriptionSettings {
             .map_err(|_| invalid("bot transcription endpoint or credential is invalid"))?;
         let runtime = checked_asset(&root.join(raw.onnx_runtime), 128 * 1024 * 1024)?;
         let model = checked_asset(&root.join(raw.silero_model), 16 * 1024 * 1024)?;
+        let smart_turn_model = raw
+            .smart_turn_model
+            .map(|path| checked_asset(&root.join(path), MAX_SMART_TURN_MODEL_BYTES))
+            .transpose()?;
         Ok(Self {
             speech,
             request: TranscriptionRequest {
@@ -114,6 +124,7 @@ impl BotTranscriptionSettings {
             },
             runtime,
             model,
+            smart_turn_model,
             #[cfg(test)]
             test_loaders: None,
         })
@@ -121,8 +132,9 @@ impl BotTranscriptionSettings {
 
     /// Prepare every scenario, recording and model before any connection.
     /// Explicit `response` events remain spoken transcripts; `llm_response`
-    /// remains reported text. At most sixteen independent model instances are
-    /// retained. Recorded input uses the existing outer-scenario-directory rules.
+    /// remains reported text. At most sixteen independent model sets are
+    /// retained, each with Silero and an optional Smart Turn model. Recorded
+    /// input uses the existing outer-scenario-directory rules.
     pub fn into_sessions(
         self,
         scenario_path: impl AsRef<Path>,
@@ -144,7 +156,7 @@ impl BotTranscriptionSettings {
 
     /// Prepare all scenarios and recordings, then load models sequentially on
     /// owned native threads without blocking Tokio while waiting. At most
-    /// sixteen models (loading or retained in sessions) belong to this call.
+    /// sixteen model sets (loading or retained in sessions) belong to this call.
     ///
     /// Cancellation prevents further admission and discards prepared sessions,
     /// but an already-entered native call must finish and be joined first. This
@@ -234,6 +246,7 @@ impl BotTranscriptionSettings {
             request: TranscriptionRequest::default(),
             runtime: PathBuf::new(),
             model: PathBuf::new(),
+            smart_turn_model: None,
             test_loaders: Some(TestLoaders {
                 preflight: Box::new(preflight),
                 attempt: Box::new(attempt),
@@ -241,7 +254,7 @@ impl BotTranscriptionSettings {
         }
     }
 
-    /// Build a fresh model with checked inference and clean recurrent state.
+    /// Build fresh models with checked inference and clean recurrent state.
     /// Native loading/inference is synchronous and has no hard deadline. The
     /// caller owns the result; no background loader or analyzer is started here.
     pub(crate) fn build_config(&self) -> Result<BotTranscriptionConfig, EvalError> {
@@ -256,6 +269,11 @@ impl BotTranscriptionSettings {
             library_path: checked_asset(&self.runtime, 128 * 1024 * 1024)?,
         };
         let model_path = checked_asset(&self.model, 16 * 1024 * 1024)?;
+        let smart_turn_path = self
+            .smart_turn_model
+            .as_ref()
+            .map(|path| checked_asset(path, MAX_SMART_TURN_MODEL_BYTES))
+            .transpose()?;
         let mut model = SileroModel::load(&runtime, &model_path).map_err(|_| {
             invalid("bot transcription native runtime or model could not be loaded")
         })?;
@@ -279,7 +297,28 @@ impl BotTranscriptionSettings {
             },
         )
         .map_err(|_| invalid("bot transcription analyzer configuration is invalid"))?;
-        BotTranscriptionConfig::new(analyzer, self.speech.clone(), self.request.clone())
+        let config =
+            BotTranscriptionConfig::new(analyzer, self.speech.clone(), self.request.clone())?;
+        let Some(path) = smart_turn_path else {
+            return Ok(config);
+        };
+        // Use the same explicit runtime and owned loading thread as Silero.
+        // The real graph is probed before any session can connect; constructing
+        // the analyzer does not start its inference worker.
+        let model = SmartTurnModel::load(&runtime, path)
+            .map_err(|_| invalid("bot transcription Smart Turn model could not be loaded"))?;
+        let prediction = model.predict_pcm16(&[0; 512], 16_000).map_err(|_| {
+            invalid("bot transcription Smart Turn model preflight inference failed")
+        })?;
+        if !prediction.probability.is_finite() || !(0.0..=1.0).contains(&prediction.probability) {
+            return Err(invalid(
+                "bot transcription Smart Turn model preflight probability is invalid",
+            ));
+        }
+        let analyzer = SmartTurnAnalyzer::new(model, SmartTurnParams::default()).map_err(|_| {
+            invalid("bot transcription Smart Turn analyzer configuration is invalid")
+        })?;
+        config.with_smart_turn(analyzer)
     }
 }
 

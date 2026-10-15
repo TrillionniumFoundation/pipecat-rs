@@ -79,8 +79,9 @@ refund the lifetime input admission budget. Queue or budget exhaustion fails
 explicitly rather than silently clipping speech.
 
 There is no detached transcription task. The session owns the HTTP future and
-one native-analysis thread. Normal completion, failure and cancellation stop
-feed, revoke HTTP work, and actually join that thread. Dropping the run future
+one Silero analysis thread, plus the optional Smart Turn worker described below.
+Normal completion, failure and cancellation stop feed, revoke HTTP work, and
+actually join these threads. Dropping the run future
 also drops these owners. A 40 ms audio window limits inference work per call;
 it is not a hard execution-time deadline for the native runtime. Model/runtime
 stalls can therefore delay the synchronous final join.
@@ -100,9 +101,10 @@ produce `response`; neither reported LLM text nor TTS text is a substitute.
 Explicit native adaptations in this slice:
 
 - Only 16 kHz mono input is accepted; the source serializer resamples wider input.
-- Native uses a 600 ms speech-timeout aggregation policy. The pinned source's
-  initial default is LocalSmartTurnAnalyzerV3 (subject to service strategy
-  recommendations). This is not SmartTurn completion parity.
+- Native defaults to a 600 ms speech-timeout aggregation policy. The pinned
+  source defaults to LocalSmartTurnAnalyzerV3 (subject to service strategy
+  recommendations). The optional model-backed policy below closes that model
+  decision path without changing the existing native default.
 - Native retains a bounded 300 ms preroll and the real silence confirming the
   VAD stop. It does not append the source segmented-STT service's extra 0.5 s
   upload padding.
@@ -275,3 +277,54 @@ to enforce hard deadlines on arbitrary native code; it is not provided here.
 
 Loader panic errors omit the panic payload from the returned error. The ordinary
 Rust panic hook can still print that payload to stderr.
+
+
+## Optional Smart Turn completion
+
+The same feature supports an explicit local Smart Turn v3 model. Add
+`"smart_turn_model": "models/smart-turn-v3.2-cpu.onnx"` to the existing response
+configuration. Omission or JSON null retains the 600 ms policy. The optional
+asset resolves relative to the canonical configuration target's directory,
+like Silero; it must be a nonempty regular file of at most 128 MiB. Configuration
+validation, each disposable suite preflight and every attempt recheck it.
+The existing owned loader loads and probes both models with the same explicit
+runtime before network or child admission. No model is downloaded. A session
+now retains one Silero model and, when enabled, one Smart Turn model; the
+sixteen-session/attempt bound applies to these pairs, not sixteen total graphs.
+
+Library callers can supply `BotTranscriptionConfig::with_smart_turn(analyzer)`.
+This adapter accepts the bounded 16 kHz mono default Smart Turn policy: an
+eight-second retained window, 500 ms pre-speech selection and three seconds of
+sample-counted silence fallback. VAD start compensation uses the actual Silero
+start setting. Maximum history is a model input window, not a completion rule.
+
+The paced local VAD owner sends PCM and its latched speaking state through one
+bounded, epoch-tagged event queue. Starting noise before a VAD start is not
+speech; the stopping delay remains speech until local VAD stop. Smart Turn sees
+all paced chunks, including generated silence. At local stop it analyzes the
+retained utterance while HTTP transcription continues. INCOMPLETE retains that
+history for subsequent speech; COMPLETE clears the analyzer buffer and latches
+a completion decision. Three seconds of nonspeech samples after local VAD stop
+also complete the turn. This is not a wall-clock timer from the acoustic end.
+
+A response still requires all admitted segment HTTP receipts. The existing
+held-stop adapter releases its aggregator stop only when the current endpoint
+decision and those receipts are ready, with no additional 600 ms delay. New
+local speech revokes a prior completion latch; epoch changes clear history and
+invalidate old predictions and transcripts. Remote speaking messages do not
+establish an audio boundary. The adapter deliberately retains the native
+all-final HTTP gate rather than Python's physical-stop/P99 transcript fallback;
+it does not claim identical source timing or identify remotely late untagged PCM.
+
+Smart Turn retains at most 128,000 PCM16 samples (256,000 bytes) in its
+eight-second history, plus a bounded prediction snapshot. The shared event
+queue has sixteen entries; each additional PCM event contains one 1,280-byte
+block. These are additional to the existing capture and STT buffers, and do not
+include native model/runtime memory.
+
+Smart Turn uses the existing bounded native inference owner in addition to the
+Silero owner. Cancellation invalidates predictions, stops input and actually
+joins both owners. Active inference teardown can block until native code
+returns; this policy adds no hard cancellation deadline. Queue overflow or
+model failure is an evaluation failure, not silent audio truncation. The
+existing total PCM, per-segment, transcript and HTTP limits remain in force.
