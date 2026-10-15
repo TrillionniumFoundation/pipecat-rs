@@ -205,6 +205,11 @@ fn encode_part(part: &MessagePart) -> Result<Value, CodecError> {
             }
             json!({"type":"file","file":file})
         }
+        MessagePart::RedactedThinking { .. } => {
+            return Err(invalid(
+                "native Anthropic redacted history cannot cross this wire protocol",
+            ))
+        }
         MessagePart::Thinking { text, signature } => {
             let mut out = json!({"type":"thinking","thinking":text});
             if let Some(signature) = signature {

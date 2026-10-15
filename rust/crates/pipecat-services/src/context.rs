@@ -69,6 +69,10 @@ pub enum ContentPart {
         mime_type: String,
         filename: Option<String>,
     },
+    /// Opaque Anthropic encrypted thinking; retained verbatim, never spoken.
+    RedactedThinking {
+        data: String,
+    },
     Thinking {
         text: String,
         signature: Option<String>,
@@ -111,6 +115,10 @@ impl std::fmt::Debug for ContentPart {
                 .debug_struct("GeminiToolMetadata")
                 .field("signature", &signature.as_ref().map(|_| "[redacted]"))
                 .finish_non_exhaustive(),
+            Self::RedactedThinking { data } => f
+                .debug_struct("RedactedThinking")
+                .field("bytes", &data.len())
+                .finish(),
             Self::Thinking { text, signature } => f
                 .debug_struct("Thinking")
                 .field("text", text)
@@ -319,6 +327,19 @@ impl Context {
                             ));
                         }
                         thinking_bytes += bytes;
+                    }
+                    if let ContentPart::RedactedThinking { data } = part {
+                        if message.role != Role::Assistant || data.is_empty() {
+                            return Err(ServiceError::InvalidRequest(
+                                "invalid Anthropic redacted thinking".into(),
+                            ));
+                        }
+                        thinking_bytes = thinking_bytes.saturating_add(data.len());
+                        if thinking_bytes > crate::protocol::MAX_HISTORY_BYTES {
+                            return Err(ServiceError::InvalidRequest(
+                                "Anthropic history exceeds size limit".into(),
+                            ));
+                        }
                     }
                     if let ContentPart::Thinking { text, signature } = part {
                         if signature.as_ref().is_some_and(|s| {

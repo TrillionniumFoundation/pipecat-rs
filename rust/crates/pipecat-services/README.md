@@ -196,7 +196,7 @@ Unsupported features are not labeled as implemented integrations:
 
 - OpenAI Responses, Realtime, image/audio generation, STT, TTS, and legacy
   `function_call`; multiple completion candidates
-- Anthropic server tools, redacted thinking, automatic caching policies, batches,
+- Anthropic server tools, automatic caching policies, batches,
   and Files API lifecycle
 - Gemini server code execution, multimodal output, live sessions, and Files API
   lifecycle; native signed text/tool continuation is described in [GEMINI.md](GEMINI.md)
@@ -300,3 +300,11 @@ The existing `LlmEnablePromptCaching` control updates future request snapshots
 without starting inference. Defaults remain unchanged; internal policy settings
 never leak to provider fields. See [ANTHROPIC_CACHE.md](ANTHROPIC_CACHE.md) for TTL,
 validation, signed-history preservation, source boundaries and local-only tests.
+
+### Anthropic redacted thinking
+
+`redacted_thinking` blocks now retain their opaque `data` string through indexed
+SSE history, native continuation carriers and the assistant context, then replay
+it unchanged in the next Anthropic request. They produce no thought or speech
+text. See [the redacted-history contract](ANTHROPIC_REDACTED.md) for bounds,
+checkpoint ownership, unsupported destinations and source differences.

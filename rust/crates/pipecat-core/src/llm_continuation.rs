@@ -23,6 +23,8 @@ pub enum LlmContinuationBlock {
     },
     BedrockRedacted(Vec<u8>),
     Text(String),
+    /// Opaque Anthropic encrypted thinking, with no public text.
+    RedactedThinking(String),
     Thinking {
         text: String,
         signature: String,
@@ -51,6 +53,10 @@ impl fmt::Debug for LlmContinuationBlock {
                 .field("bytes", &data.len())
                 .finish(),
             Self::Text(text) => f.debug_struct("Text").field("bytes", &text.len()).finish(),
+            Self::RedactedThinking(data) => f
+                .debug_struct("RedactedThinking")
+                .field("bytes", &data.len())
+                .finish(),
             Self::Thinking { text, signature } => f
                 .debug_struct("Thinking")
                 .field("text_bytes", &text.len())
@@ -206,6 +212,12 @@ impl NativeLlmContinuation {
                     }
                     charge(&mut bytes, text.capacity())?;
                 }
+                LlmContinuationBlock::RedactedThinking(data) => {
+                    if provider != LlmContinuationProvider::Anthropic || data.is_empty() {
+                        return Err(NativeLlmContinuationError::InvalidProviderBlock);
+                    }
+                    charge(&mut bytes, data.capacity())?;
+                }
                 LlmContinuationBlock::Thinking { text, signature } => {
                     if provider != LlmContinuationProvider::Anthropic {
                         return Err(NativeLlmContinuationError::InvalidProviderBlock);
@@ -279,6 +291,7 @@ impl NativeLlmContinuation {
                     signature: Some(_),
                     ..
                 } | LlmContinuationBlock::BedrockRedacted(_)
+                    | LlmContinuationBlock::RedactedThinking(_)
                     | LlmContinuationBlock::Thinking { .. }
                     | LlmContinuationBlock::GeminiText {
                         signature: Some(_),

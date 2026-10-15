@@ -1019,6 +1019,9 @@ fn native_history(
                 if parts.len() == 1 && message.tool_calls.is_empty() =>
             {
                 match parts.into_iter().next().expect("one thinking block") {
+                    crate::ContentPart::RedactedThinking { data } => {
+                        blocks.push(LlmContinuationBlock::RedactedThinking(data))
+                    }
                     crate::ContentPart::Thinking {
                         text,
                         signature: Some(signature),

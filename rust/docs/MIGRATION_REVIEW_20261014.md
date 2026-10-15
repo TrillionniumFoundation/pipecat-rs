@@ -107,3 +107,11 @@ Thinking with tools is rejected before connection: NON_BLOCKING declarations,
 intermediate/silent tool responses and their cross-interruption ownership remain
 a distinct provider-semantic gap. This subset does not imply live-model
 availability or reproduce Python's synthetic completion on watchdog expiry.
+
+Slice97 addresses an Anthropic provider-compatibility failure: a legal
+`redacted_thinking` content block previously aborted the native stream as
+unsupported. Its opaque data now follows the ordered native history carrier and
+Anthropic request replay path; see [the contract](../crates/pipecat-services/ANTHROPIC_REDACTED.md).
+This is not a claim that the fixed Python stream implemented the same chain:
+that source omitted these blocks, although its adapter could preserve explicitly
+supplied native Anthropic messages.

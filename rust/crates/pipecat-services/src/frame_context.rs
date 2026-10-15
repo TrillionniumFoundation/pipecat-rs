@@ -167,6 +167,9 @@ pub fn message(message: &ContextMessage) -> Result<Message, ServiceError> {
                             mime_type: mime_type.clone(),
                             filename: filename.clone(),
                         },
+                        MessagePart::RedactedThinking { data } => {
+                            ContentPart::RedactedThinking { data: data.clone() }
+                        }
                         MessagePart::Thinking { text, signature } => ContentPart::Thinking {
                             text: text.clone(),
                             signature: signature.clone(),
@@ -262,6 +265,9 @@ pub fn to_core_message(message: &Message) -> ContextMessage {
                             mime_type: mime_type.clone(),
                             filename: filename.clone(),
                         },
+                        ContentPart::RedactedThinking { data } => {
+                            MessagePart::RedactedThinking { data: data.clone() }
+                        }
                         ContentPart::Thinking { text, signature } => MessagePart::Thinking {
                             text: text.clone(),
                             signature: signature.clone(),

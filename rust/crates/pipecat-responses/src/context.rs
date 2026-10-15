@@ -349,7 +349,7 @@ fn convert_message(message: &Message, items: &mut Vec<InputItem>) -> Result<(), 
                                     "Bedrock history in Responses".into(),
                                 ))
                             }
-                            ContentPart::Thinking { .. } => {
+                            ContentPart::Thinking { .. } | ContentPart::RedactedThinking { .. } => {
                                 return Err(ServiceError::Unsupported(
                                     "use Responses ReasoningItem for encrypted reasoning history"
                                         .into(),

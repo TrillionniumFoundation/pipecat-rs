@@ -211,6 +211,7 @@ pub fn estimate_context_tokens(messages: &[ContextMessage]) -> usize {
                     | MessagePart::Thinking { text, .. }
                     | MessagePart::Refusal { text } => text_tokens(text),
                     MessagePart::BedrockRedacted { data } => data.len(),
+                    MessagePart::RedactedThinking { data } => data.len(),
                     MessagePart::Image { .. } => 500,
                     MessagePart::GeminiToolMetadata { .. } => 0,
                     MessagePart::Audio { data, .. } | MessagePart::File { data, .. } => {

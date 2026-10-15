@@ -456,6 +456,10 @@ pub enum MessagePart {
         mime_type: String,
         filename: Option<String>,
     },
+    /// Opaque Anthropic encrypted thinking; retained verbatim, never spoken.
+    RedactedThinking {
+        data: String,
+    },
     Thinking {
         text: String,
         signature: Option<String>,
@@ -512,6 +516,10 @@ impl std::fmt::Debug for MessagePart {
                 .field("data", data)
                 .field("mime_type", mime_type)
                 .field("filename", filename)
+                .finish(),
+            Self::RedactedThinking { data } => f
+                .debug_struct("RedactedThinking")
+                .field("bytes", &data.len())
                 .finish(),
             Self::Thinking { text, signature } => f
                 .debug_struct("Thinking")

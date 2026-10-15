@@ -316,6 +316,13 @@ impl SignedHistory {
                     }]));
                     messages.push(message);
                 }
+                LlmContinuationBlock::RedactedThinking(data) => {
+                    let mut message = Message::text(Role::Assistant, "");
+                    message.content = Some(Content::Parts(vec![ContentPart::RedactedThinking {
+                        data: data.clone(),
+                    }]));
+                    messages.push(message);
+                }
                 LlmContinuationBlock::Thinking { text, signature } => {
                     let mut message = Message::text(Role::Assistant, "");
                     message.content = Some(Content::Parts(vec![ContentPart::Thinking {

@@ -190,7 +190,7 @@ fn openai_content(content: &Content) -> Result<Value, ServiceError> {
             }
             ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => Err(ServiceError::Unsupported("Bedrock history in Chat Completions".into())),
             ContentPart::Refusal { text } => Ok(json!({"type":"refusal","refusal":text})),
-            ContentPart::Thinking { .. } => Err(ServiceError::Unsupported("signed thinking replay in Chat Completions".into())),
+            ContentPart::Thinking { .. } | ContentPart::RedactedThinking { .. } => Err(ServiceError::Unsupported("signed thinking replay in Chat Completions".into())),
         }).collect::<Result<Vec<_>,_>>().map(Value::Array),
     }
 }
@@ -332,6 +332,9 @@ fn anthropic_content(content: Option<&Content>) -> Result<Vec<Value>, ServiceErr
                     }
                     Ok(part)
                 }
+                ContentPart::RedactedThinking { data } => {
+                    Ok(json!({"type":"redacted_thinking","data":data}))
+                }
                 ContentPart::Thinking {
                     text,
                     signature: Some(signature),
@@ -467,7 +470,7 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                         ContentPart::InputAudio{..}=>return Err(ServiceError::Unsupported("Gemini input audio format".into())),
                         ContentPart::ImageUrlDetailed{..}=>return Err(ServiceError::Unsupported("Gemini image detail or remote image URL".into())),
                         ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => return Err(ServiceError::Unsupported("Bedrock history in Gemini".into())),
-                        ContentPart::Thinking{..}=>return Err(ServiceError::Unsupported("Gemini thought-signature context replay".into())),
+                        ContentPart::Thinking{..} | ContentPart::RedactedThinking { .. } =>return Err(ServiceError::Unsupported("Gemini thought-signature context replay".into())),
                         ContentPart::Refusal{..}=>return Err(ServiceError::Unsupported("Gemini refusal content parts".into())),
                     };
                         parts.push(converted);

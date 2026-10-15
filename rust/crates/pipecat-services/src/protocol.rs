@@ -457,6 +457,19 @@ impl ProtocolDecoder {
                             events.push(StreamEvent::TextDelta(text.into()));
                         }
                     }
+                    "redacted_thinking" => {
+                        let data = required_string(block, "data")?;
+                        if data.is_empty() {
+                            return Err(ServiceError::Protocol(
+                                "empty Anthropic redacted thinking".into(),
+                            ));
+                        }
+                        self.retain_bytes(data.len())?;
+                        message.content =
+                            Some(Content::Parts(vec![ContentPart::RedactedThinking {
+                                data: data.into(),
+                            }]));
+                    }
                     "thinking" => {
                         let text = optional_block_string(block, "thinking")?;
                         let signature = match block.get("signature") {
@@ -966,5 +979,5 @@ fn optional_block_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, Ser
     }
 }
 fn has_thinking(message: &Message) -> bool {
-    matches!(&message.content, Some(Content::Parts(parts)) if parts.iter().any(|part| matches!(part, ContentPart::Thinking { .. })))
+    matches!(&message.content, Some(Content::Parts(parts)) if parts.iter().any(|part| matches!(part, ContentPart::Thinking { .. } | ContentPart::RedactedThinking { .. })))
 }
