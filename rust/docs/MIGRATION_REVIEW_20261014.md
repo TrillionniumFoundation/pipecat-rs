@@ -54,3 +54,8 @@ revalidation; see [recorded suites](../crates/pipecat-evals/RECORDED_SUITE.md).
 Synthesized users and audio output judging remain separate. See also
 [recorded scenarios](../crates/pipecat-evals/RECORDED_SCENARIOS.md). These are separate contracts, not a whole-project
 completion claim.
+
+Bot audio now also has an explicit bounded library capture path from a native
+host output boundary to original-rate PCM results; see [bot audio capture](../crates/pipecat-evals/BOT_AUDIO_CAPTURE.md).
+It captures only chunks received before scenario completion. Audio transcription,
+judging, output recording CLI and live-provider acceptance remain separate.

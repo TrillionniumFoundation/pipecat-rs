@@ -1,4 +1,5 @@
 //! Owned native sessions with bounded transport, handshake, runtime, and cancellation.
+use crate::bot_audio::{BotAudioLimits, BotAudioRun, Capture};
 use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
 use crate::{
     events::{EventLimits, EventStream},
@@ -127,6 +128,7 @@ pub struct EvalSession {
     active_expectation: i64,
     recordings: BTreeMap<usize, RecordedAudio>,
     playback: Option<Playback>,
+    capture: Option<Capture>,
 }
 impl EvalSession {
     pub fn new(
@@ -184,11 +186,12 @@ impl EvalSession {
             active_expectation: -1,
             recordings: BTreeMap::new(),
             playback: None,
+            capture: None,
         })
     }
     /// Replace selected user turns with real recorded PCM input. The user text
     /// remains a judge reference and is never sent as text for these turns.
-    /// Requires a compatible raw-audio endpoint; EvalBotHost remains text-only.
+    /// Requires a compatible endpoint, such as EvalBotHost with_raw_audio_input(true).
     /// Validate all indices and aggregate storage before any connection.
     pub fn with_recorded_audio_inputs(
         mut self,
@@ -221,6 +224,42 @@ impl EvalSession {
     }
     /// Dropping this future also drops its transport owner; no reader task is detached.
     pub async fn run(mut self, cancel: Cancellation) -> ScriptResult {
+        self.run_inner(cancel).await;
+        self.result
+    }
+    /// Capture bounded original-rate bot PCM while evaluating. No STT or judging
+    /// is performed on the audio. A successful text assertion can end capture
+    /// before synthesis finishes; use an explicit scenario completion event.
+    /// Invalid limits fail before connection. Runtime failures retain admitted chunks.
+    pub async fn run_with_bot_audio(
+        mut self,
+        cancel: Cancellation,
+        limits: BotAudioLimits,
+    ) -> Result<BotAudioRun, EvalError> {
+        limits.validate()?;
+        let mut url = url::Url::parse(&self.url).map_err(|e| EvalError::Scenario(e.to_string()))?;
+        let pairs: Vec<_> = url
+            .query_pairs()
+            .filter(|(key, _)| key != "skip_tts" && key != "capture_bot_audio")
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        url.set_query(None);
+        {
+            let mut query = url.query_pairs_mut();
+            for (k, v) in pairs {
+                query.append_pair(&k, &v);
+            }
+            query.append_pair("capture_bot_audio", "true");
+        }
+        self.url = url.into();
+        self.capture = Some(Capture::new(limits));
+        self.run_inner(cancel).await;
+        Ok(BotAudioRun {
+            result: self.result,
+            chunks: self.capture.take().unwrap().chunks,
+        })
+    }
+    async fn run_inner(&mut self, cancel: Cancellation) {
         let started = Instant::now();
         self.stream = EventStream::new(self.options.event_limits.clone());
         let max_duration = self.options.max_duration;
@@ -278,7 +317,6 @@ impl EvalSession {
         self.result.duration_ms = started.elapsed().as_millis() as u64;
         self.result.passed = self.result.failures.is_empty()
             && self.result.turns.iter().all(|t| t.status == "passed");
-        self.result
     }
     /// The hosted runner retries only before a WebSocket is established. No
     /// user turn or RTVI handshake is replayed on a fresh connection.
@@ -430,7 +468,7 @@ impl EvalSession {
             } else {
                 self.send(
                     "send-text",
-                    json!({"content":user,"options":{"run_immediately":true,"audio_response":false}}),
+                    json!({"content":user,"options":{"run_immediately":true,"audio_response":self.capture.is_some()}}),
                 ).await?;
             }
         } else if let Some(dtmf) = turn.dtmf {
@@ -725,6 +763,12 @@ impl EvalSession {
             };
         if envelope.message_type == "bot-ready" {
             return Ok(true);
+        }
+        if envelope.message_type == "eval-bot-audio" {
+            if let Some(capture) = &mut self.capture {
+                capture.ingest(envelope.data.as_ref().unwrap_or(&Value::Null))?;
+                return Ok(false);
+            }
         }
         self.stream.ingest(&envelope)?;
         Ok(false)

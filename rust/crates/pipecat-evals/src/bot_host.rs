@@ -1,10 +1,11 @@
-//! Explicitly selected, loopback-only text evaluation of application pipelines.
+//! Explicitly selected, loopback-only evaluation of application pipelines.
 //!
 //! This endpoint is separate from the capability/Origin-protected browser host.
 //! Each connection owns a fresh factory result. Factories must not detach work;
 //! slow processing belongs in the pipeline's bounded task manager.
 use crate::serializer::{decode_control, EvalControl, ObserverConfig, ReportLevel};
 use crate::Cancellation;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use pipecat_core::*;
 use pipecat_protocol::rtvi::{ClientCommand, Envelope};
 use pipecat_rtvi::{
@@ -207,6 +208,7 @@ pub struct EvalBotHost {
     listener: TcpListener,
     config: EvalBotHostConfig,
     raw_audio_input: bool,
+    audio_output: bool,
 }
 impl EvalBotHost {
     pub async fn bind(
@@ -229,15 +231,23 @@ impl EvalBotHost {
             listener: socket.listen(1)?,
             config,
             raw_audio_input: false,
+            audio_output: false,
         })
     }
     /// Accept single RTVI `raw-audio` messages containing 16 kHz mono PCM16.
     /// The application factory must supply its own audio processing/STT pipeline.
-    /// Output remains text-only; batch audio and binary WS packets stay unsupported.
+    /// Output stays text-only unless separately enabled; batch/binary input is unsupported.
     pub fn with_raw_audio_input(mut self, enabled: bool) -> Self {
         self.raw_audio_input = enabled;
         self
     }
+    /// Permit per-connection bot PCM capture. Only a capture_bot_audio=true
+    /// handshake enables synthesis; ordinary connections remain text-only.
+    pub fn with_audio_output(mut self, enabled: bool) -> Self {
+        self.audio_output = enabled;
+        self
+    }
+
     pub fn local_addr(&self) -> Result<SocketAddr, BotHostError> {
         Ok(self.listener.local_addr()?)
     }
@@ -264,6 +274,7 @@ impl EvalBotHost {
             }
             let flags = Arc::new(Mutex::new(None));
             let captured = flags.clone();
+            let allow_audio = self.audio_output;
             let authority = self.local_addr()?.to_string();
             let accepted = tokio::select! {
                 biased;
@@ -277,14 +288,17 @@ impl EvalBotHost {
                     let mut trigger = false;
                     let mut skip_seen = false;
                     let mut trigger_seen = false;
+                    let mut capture_audio = false;
                     for (key, value) in url::form_urlencoded::parse(request.uri().query().unwrap_or("").as_bytes()) {
                         match key.as_ref() {
                             "skip_tts" if !skip_seen && value == "true" => skip_seen = true,
+                            "capture_bot_audio" if allow_audio && !capture_audio && value == "true" => capture_audio = true,
                             "trigger_disconnect" if !trigger_seen && matches!(value.as_ref(), "true" | "false") => { trigger_seen = true; trigger = value == "true"; }
                             _ => return false,
                         }
                     }
-                    *captured.lock().unwrap() = Some(trigger);
+                    if capture_audio && skip_seen { return false; }
+                    *captured.lock().unwrap() = Some((trigger, capture_audio));
                     true
                 }) => result,
             };
@@ -295,8 +309,10 @@ impl EvalBotHost {
                     continue;
                 }
             };
-            let trigger = flags.lock().unwrap().take().unwrap_or(false);
-            let result = self.session(socket, factory, &cancel, deadline).await;
+            let (trigger, capture_audio) = flags.lock().unwrap().take().unwrap_or((false, false));
+            let result = self
+                .session(socket, factory, &cancel, deadline, capture_audio)
+                .await;
             report.sessions += 1;
             let exit = match result {
                 Ok(EvalBotExit::Disconnected) if trigger => EvalBotExit::TriggerDisconnect,
@@ -322,13 +338,16 @@ impl EvalBotHost {
         factory: &dyn EvalBotFactory,
         cancel: &Cancellation,
         host_deadline: Instant,
+        capture_audio: bool,
     ) -> Result<EvalBotExit, BotHostError> {
         let config = &self.config;
         let deadline = (Instant::now() + config.session_timeout).min(host_deadline);
         let startup = (Instant::now() + config.startup_timeout).min(deadline);
         let mut pending = VecDeque::new();
         let plan = during_startup(
-            factory.create(EvalBotSettings { skip_tts: true }),
+            factory.create(EvalBotSettings {
+                skip_tts: !capture_audio,
+            }),
             &mut socket,
             &mut pending,
             &self.listener,
@@ -354,6 +373,10 @@ impl EvalBotHost {
             capabilities.insert("raw_audio_input".into(), true.into());
             capabilities.insert("audio_output".into(), false.into());
         }
+        if capture_audio {
+            capabilities.insert("text_only".into(), false.into());
+            capabilities.insert("audio_output".into(), true.into());
+        }
         let rtvi = Arc::new(RtviProcessor::new(RtviConfig {
             command_capacity: config.transport.queue_capacity.max(2),
             event_capacity: config.event_capacity,
@@ -365,9 +388,9 @@ impl EvalBotHost {
         let handle = rtvi.handle();
         let observer = Arc::new(RtviObserver::new(
             RtviObserverParams {
-                bot_output_enabled: false,
-                bot_speaking_enabled: false,
-                bot_tts_enabled: false,
+                bot_output_enabled: capture_audio,
+                bot_speaking_enabled: capture_audio,
+                bot_tts_enabled: capture_audio,
                 max_message_bytes: config.transport.max_message_bytes,
                 max_pending_text_bytes: config.max_context_bytes,
                 dedup_capacity: config.max_processed_frames.min(4096),
@@ -393,17 +416,30 @@ impl EvalBotHost {
                 inner: processor,
                 budget: budget.clone(),
                 observer: None,
+                capture: None,
                 _owner: owners.track(),
             }));
         }
         processors.push(Arc::new(Boundary {
             inner: plan.assistant,
             budget: budget.clone(),
-            observer: Some((observer.clone(), events_tx)),
+            observer: Some((observer.clone(), events_tx.clone())),
+            capture: None,
             _owner: owners.track(),
         }));
         // Initialization must arrive at the tail before readiness or introductions.
-        processors.push(Arc::new(IdentityProcessor));
+        if capture_audio {
+            processors.push(Arc::new(Boundary {
+                inner: Arc::new(IdentityProcessor),
+                budget: budget.clone(),
+                observer: None,
+                capture: Some(events_tx),
+                _owner: owners.track(),
+            }));
+        } else {
+            drop(events_tx);
+            processors.push(Arc::new(IdentityProcessor));
+        }
         let mut pipeline_config = config.pipeline.clone();
         let cleanup_slice = config.shutdown_timeout
             / u32::try_from(processors.len() + 2).map_err(|_| BotHostError::Limit("processors"))?;
@@ -444,6 +480,7 @@ impl EvalBotHost {
                 &observer,
                 &budget,
                 plan.introduction,
+                capture_audio,
                 cancel,
                 startup,
                 deadline,
@@ -480,6 +517,7 @@ impl EvalBotHost {
         observer: &RtviObserver,
         budget: &Budget,
         introduction: Option<String>,
+        capture_audio: bool,
         cancel: &Cancellation,
         startup: Instant,
         deadline: Instant,
@@ -489,7 +527,9 @@ impl EvalBotHost {
         tokio::time::timeout_at(
             startup,
             sender.send(
-                Frame::new(FrameData::LlmConfigureOutput { skip_tts: true }),
+                Frame::new(FrameData::LlmConfigureOutput {
+                    skip_tts: !capture_audio,
+                }),
                 Direction::Downstream,
             ),
         )
@@ -564,8 +604,8 @@ impl EvalBotHost {
                                     input_admitted = true;
                                     let data = message.data.as_mut().and_then(Value::as_object_mut).ok_or_else(|| BotHostError::Invalid("send-text requires data".into()))?;
                                     let options = data.entry("options").or_insert_with(|| json!({})).as_object_mut().ok_or_else(|| BotHostError::Invalid("invalid send-text options".into()))?;
-                                    if options.get("audio_response").is_some_and(|v| v != false) { return Err(BotHostError::Invalid("audio responses are unsupported".into())); }
-                                    options.insert("audio_response".into(), false.into());
+                                    if options.get("audio_response").is_some_and(|v| v != &Value::Bool(capture_audio)) { return Err(BotHostError::Invalid("audio responses are unsupported".into())); }
+                                    options.insert("audio_response".into(), capture_audio.into());
                                     budget.context()?;
                                     handle.handle_message(message)?;
                                 }
@@ -593,7 +633,7 @@ impl EvalBotHost {
                 event = events.recv(), if events_open => match event {
                     Some(ObservedEvent::Envelope { envelope, fence }) => {
                         if !initialized { return Err(BotHostError::Invalid("application emitted before text configuration".into())); }
-                        if fence.is_current() { send_envelope(socket, envelope, config, cancel, deadline).await?; }
+                        if fence.is_current() { send_envelope(socket, envelope, config, cancel, deadline, capture_audio).await?; }
                     }
                     Some(ObservedEvent::Flush(ack)) => { let _ = ack.send(()); }
                     None => events_open = false,
@@ -605,7 +645,7 @@ impl EvalBotHost {
                         if let FrameData::OutputTransportMessageUrgent(value) | FrameData::OutputTransportMessage(value) = output.frame.data {
                             let envelope: Envelope = serde_json::from_value(value)?;
                             let bot_ready = envelope.message_type == "bot-ready";
-                            send_envelope(socket, envelope, config, cancel, deadline).await?;
+                            send_envelope(socket, envelope, config, cancel, deadline, capture_audio).await?;
                             if bot_ready { bot_ready_sent = true; if let Some(prompt) = introduction.take() { budget.context.append_rich(ChatMessage::new(ChatRole::Developer, prompt).into())?; budget.context()?; tokio::time::timeout(config.transport.write_timeout, sender.send(Frame::new(FrameData::LlmRun), Direction::Downstream)).await.map_err(|_| BotHostError::Timeout("introduction admission"))??; } }
                         }
                     }
@@ -706,20 +746,24 @@ async fn send_envelope(
     config: &EvalBotHostConfig,
     cancel: &Cancellation,
     deadline: Instant,
+    capture_audio: bool,
 ) -> Result<(), BotHostError> {
     // A text host never claims physical playback, even if an application emits
     // speaking or synthesis observations by mistake.
-    if matches!(
-        envelope.message_type.as_str(),
-        "bot-started-speaking"
-            | "bot-stopped-speaking"
-            | "bot-output"
-            | "bot-tts-text"
-            | "bot-tts-started"
-            | "bot-tts-stopped"
-            | "eval-bot-audio"
-            | "eval-bot-image"
-    ) {
+    if envelope.message_type == "eval-bot-image"
+        || (!capture_audio
+            && matches!(
+                envelope.message_type.as_str(),
+                "bot-started-speaking"
+                    | "bot-stopped-speaking"
+                    | "bot-output"
+                    | "bot-tts-text"
+                    | "bot-tts-started"
+                    | "bot-tts-stopped"
+                    | "eval-bot-audio"
+                    | "eval-bot-image"
+            ))
+    {
         return Err(BotHostError::Invalid(
             "non-text bot output on text eval host".into(),
         ));
@@ -814,6 +858,7 @@ struct Boundary {
     inner: Arc<dyn FrameProcessor>,
     budget: Arc<Budget>,
     observer: Option<(Arc<RtviObserver>, mpsc::Sender<ObservedEvent>)>,
+    capture: Option<mpsc::Sender<ObservedEvent>>,
 }
 #[async_trait]
 impl FrameProcessor for Boundary {
@@ -845,7 +890,12 @@ impl FrameProcessor for Boundary {
         // have entered the bounded transport. The host then finishes its writer;
         // Cancel deliberately bypasses both drains.
         if terminal && !frame.data.is_cancel() && self.budget.output_open.load(Ordering::SeqCst) {
-            if let Some((_, tx)) = &self.observer {
+            if let Some(tx) = self
+                .observer
+                .as_ref()
+                .map(|(_, tx)| tx)
+                .or(self.capture.as_ref())
+            {
                 let (ack, received) = tokio::sync::oneshot::channel();
                 tokio::time::timeout(self.budget.config.shutdown_timeout, async {
                     tx.send(ObservedEvent::Flush(ack))
@@ -872,8 +922,56 @@ impl FrameProcessor for Boundary {
                 }
                 observed
             });
+        let captured_audio = if self.capture.is_some() && direction == Direction::Downstream {
+            match &frame.data {
+                FrameData::OutputAudio(audio)
+                | FrameData::TtsAudio(audio)
+                | FrameData::SpeechOutputAudio(audio) => {
+                    if audio.num_channels != 1 {
+                        return Err(ProcessorError::fatal(
+                            "bot audio capture requires mono PCM16",
+                        ));
+                    }
+                    crate::bot_audio::validate_pcm(&audio.audio, audio.sample_rate)
+                        .map_err(processor_error)?;
+                    let encoded_len = audio.audio.len().div_ceil(3).saturating_mul(4);
+                    if encoded_len.saturating_add(128)
+                        > self.budget.config.transport.max_message_bytes
+                    {
+                        return Err(ProcessorError::fatal("bot audio wire byte limit exceeded"));
+                    }
+                    Some(Envelope {
+                        label: pipecat_protocol::rtvi::MESSAGE_LABEL.into(),
+                        message_type: "eval-bot-audio".into(),
+                        id: None,
+                        data: Some(
+                            json!({"audio":STANDARD.encode(&audio.audio),"sampleRate":audio.sample_rate}),
+                        ),
+                    })
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         let fence = ctx.invocation_fence()?;
         self.inner.process(frame, direction, ctx).await?;
+        if let (Some(tx), Some(envelope)) = (&self.capture, captured_audio) {
+            if fence.is_current()
+                && self.budget.output_open.load(Ordering::SeqCst)
+                && tx
+                    .try_send(ObservedEvent::Envelope {
+                        envelope,
+                        fence: fence.clone(),
+                    })
+                    .is_err()
+                && self.budget.output_open.load(Ordering::SeqCst)
+            {
+                return Err(ProcessorError::fatal(
+                    "eval audio capture queue full or closed",
+                ));
+            }
+        }
         if !terminal {
             self.budget.context().map_err(processor_error)?;
         }
@@ -1106,6 +1204,7 @@ mod tests {
             inner: Arc::new(IdentityProcessor),
             budget,
             observer: Some((observer, tx)),
+            capture: None,
             _owner: owners.track(),
         });
         let mut worker = Pipeline::new(vec![boundary])

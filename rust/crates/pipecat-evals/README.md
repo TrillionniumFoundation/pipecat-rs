@@ -560,3 +560,8 @@ Direct Unix CLI runs can opt into bounded recording bundles with
 parsing remains unchanged. Hosted suites can explicitly use `suite MANIFEST --recorded-audio`
 or `ReleaseManifest::load_recorded`; see [RECORDED_SUITE.md](RECORDED_SUITE.md). The host opt-in only adds single
 `raw-audio` input, preserving generated-text output and mandatory `skip_tts`.
+
+Optional library-only [bot audio capture](BOT_AUDIO_CAPTURE.md) exposes bounded
+original-rate PCM received during evaluation. Native host output needs explicit
+permission and an application PCM/TTS producer; capture does not transcribe or
+judge audio. Existing text and CLI behavior remain the default.
