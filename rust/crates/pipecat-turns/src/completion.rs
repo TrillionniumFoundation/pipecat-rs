@@ -225,6 +225,10 @@ pub struct LLMTurnCompletionStrategy {
     response_seen: bool,
     accepts_text: bool,
     voiced: bool,
+    completion_broadcasted: bool,
+    // System tool-start may overtake this response's normal start/text. Keep
+    // its permission until the ordered end, after all same-response text.
+    tool_pending_until_end: bool,
     speaking: bool,
     waiting: Option<Verdict>,
     deadline: Option<Duration>,
@@ -252,6 +256,8 @@ impl LLMTurnCompletionStrategy {
             response_seen: false,
             accepts_text: true,
             voiced: false,
+            completion_broadcasted: false,
+            tool_pending_until_end: false,
             speaking: false,
             waiting: None,
             deadline: None,
@@ -294,6 +300,7 @@ impl LLMTurnCompletionStrategy {
         self.accepts_text = false;
         self.cancel_deadline();
         self.reset_response();
+        self.tool_pending_until_end = false;
     }
     fn cancel_deadline(&mut self) {
         self.deadline = None;
@@ -301,10 +308,13 @@ impl LLMTurnCompletionStrategy {
     }
     fn fresh_segment(&mut self) {
         self.voiced = false;
+        self.tool_pending_until_end = false;
+        self.completion_broadcasted = false;
         self.reprompts = 0;
         self.cancel_deadline();
     }
     fn reset_response(&mut self) {
+        self.completion_broadcasted = false;
         self.prefix.clear();
         self.raw.clear();
         self.marker_tail.clear();
@@ -318,6 +328,10 @@ impl LLMTurnCompletionStrategy {
         self.marker_count = 0;
     }
     fn arm(&mut self, verdict: Verdict) {
+        if self.tool_pending_until_end {
+            self.cancel_deadline();
+            return;
+        }
         self.waiting = Some(verdict);
         self.deadline = if self.speaking || self.reprompts >= self.config.max_reprompts_per_segment
         {
@@ -373,6 +387,7 @@ impl LLMTurnCompletionStrategy {
                 self.cancel_deadline();
                 self.reset_response();
                 self.voiced = false;
+                self.tool_pending_until_end = false;
                 self.accepts_text = false;
             }
             FrameData::UserStartedSpeaking => self.fresh_segment(),
@@ -399,11 +414,19 @@ impl LLMTurnCompletionStrategy {
                 self.stop();
             }
             FrameData::Stop | FrameData::Cancel(_) | FrameData::CancelDetailed(_) => self.stop(),
+            data if direction == Direction::Downstream && tool_commitment(data) => {
+                self.cancel_deadline();
+                self.broadcast_completion(&mut output);
+                self.voiced = false;
+                self.tool_pending_until_end = true;
+            }
             FrameData::LlmResponseStart | FrameData::LlmFullResponseStart(_)
                 if direction == Direction::Downstream =>
             {
                 self.cancel_deadline();
+                let tool_broadcast = self.tool_pending_until_end && self.completion_broadcasted;
                 self.reset_response();
+                self.completion_broadcasted = tool_broadcast;
                 self.accepts_text = true;
             }
             FrameData::LlmResponseEnd | FrameData::LlmFullResponseEnd(_)
@@ -498,7 +521,7 @@ impl LLMTurnCompletionStrategy {
             self.verdict = Some(verdict);
             if verdict == Verdict::Complete {
                 self.voiced = true;
-                output.broadcast(FrameData::UserTurnInferenceCompleted);
+                self.broadcast_completion(output);
             }
             let marker = match verdict {
                 Verdict::Complete => &self.config.complete_marker,
@@ -590,7 +613,18 @@ impl LLMTurnCompletionStrategy {
         }
         self.marker_tail = scan[start..].to_owned();
     }
+    fn broadcast_completion(&mut self, output: &mut AggregationOutput) {
+        if !self.completion_broadcasted {
+            self.completion_broadcasted = true;
+            output.broadcast(FrameData::UserTurnInferenceCompleted);
+        }
+    }
     fn finish_response(&mut self, output: &mut AggregationOutput) {
+        if self.tool_pending_until_end {
+            self.voiced = false;
+            self.tool_pending_until_end = false;
+            self.cancel_deadline();
+        }
         if !self.response_seen {
             self.reset_response();
             return;
@@ -662,35 +696,45 @@ fn is_terminal(data: &FrameData) -> bool {
     )
 }
 fn relevant(data: &FrameData) -> bool {
-    matches!(
-        data,
-        FrameData::LlmText(_)
-            | FrameData::LlmResponseStart
-            | FrameData::LlmResponseEnd
-            | FrameData::LlmFullResponseStart(_)
-            | FrameData::LlmFullResponseEnd(_)
-    )
+    tool_commitment(data)
+        || matches!(
+            data,
+            FrameData::LlmText(_)
+                | FrameData::LlmResponseStart
+                | FrameData::LlmResponseEnd
+                | FrameData::LlmFullResponseStart(_)
+                | FrameData::LlmFullResponseEnd(_)
+        )
+}
+fn tool_commitment(data: &FrameData) -> bool {
+    match data {
+        FrameData::FunctionCallsStarted(calls) => !calls.is_empty(),
+        FrameData::FunctionCallsStartedDetailed(calls) => !calls.is_empty(),
+        _ => false,
+    }
 }
 fn invalidates_retry(data: &FrameData, direction: Direction) -> bool {
-    matches!(
-        data,
-        FrameData::Interruption
-            | FrameData::UserStartedSpeaking
-            | FrameData::LlmRun
-            | FrameData::VadUserStartedSpeaking(_)
-            | FrameData::VadUserStartedSpeakingDetailed(_)
-            | FrameData::LlmContext(_)
-            | FrameData::LlmContextDetailed(_)
-            | FrameData::End(_)
-            | FrameData::EndDetailed(_)
-            | FrameData::Stop
-            | FrameData::Cancel(_)
-            | FrameData::CancelDetailed(_)
-    ) || (direction == Direction::Downstream
-        && matches!(
+    (direction == Direction::Downstream && tool_commitment(data))
+        || matches!(
             data,
-            FrameData::LlmResponseStart | FrameData::LlmFullResponseStart(_)
-        ))
+            FrameData::Interruption
+                | FrameData::UserStartedSpeaking
+                | FrameData::LlmRun
+                | FrameData::VadUserStartedSpeaking(_)
+                | FrameData::VadUserStartedSpeakingDetailed(_)
+                | FrameData::LlmContext(_)
+                | FrameData::LlmContextDetailed(_)
+                | FrameData::End(_)
+                | FrameData::EndDetailed(_)
+                | FrameData::Stop
+                | FrameData::Cancel(_)
+                | FrameData::CancelDetailed(_)
+        )
+        || (direction == Direction::Downstream
+            && matches!(
+                data,
+                FrameData::LlmResponseStart | FrameData::LlmFullResponseStart(_)
+            ))
         || matches!(data, FrameData::LlmMessagesAppend(m) if m.run_llm)
         || matches!(data, FrameData::LlmMessagesAppendDetailed(m) if m.run_llm == Some(true))
 }

@@ -23,6 +23,7 @@ Source revision: `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
 | `_push_turn_text` complete path | Completion signal precedes marker and speech; one leading ASCII space is removed from currently buffered text |
 | `_push_turn_text` incomplete path | Marker is appended to context immediately; all response text is suppressed |
 | `_report_response` and `_turn_reset` | Bounded raw/marker report; unmarked fallback text is drained on response end |
+| `push_frame(FunctionCallsStartedFrame)` | Broadcasts completion, clears the voiced latch, then forwards the tool-start frame; the service emits this frame for a nonempty tool batch |
 | `process_frame` VAD/latch handling | Speech cancels waits and resets the voiced latch; stale complete while speaking becomes short/incomplete |
 | `_start_incomplete_timeout` | Defaults of five seconds for short and ten seconds for long |
 | `user_stop/llm_turn_completion_user_turn_stop_strategy.py` | Explicit strategy API exposes marker configuration and external-completion stop policy; service setup remains application-owned |
@@ -84,10 +85,26 @@ This module must not be used to rewrite signed Anthropic/Gemini response history
   extend it. No check-in is generated over continuing speech
 - Interruption discards pending unmarked text rather than flushing it. A stalled
   incomplete response produces a fatal error instead of creating another run
-- Source tool-start completion/latch behavior is excluded. Function-call frames
-  pass through; this downstream filter neither dispatches nor prevents tool
-  effects. Tool-effect admission and eager speculative inference need separate
-  integration stages
+- Nonempty downstream `FunctionCallsStarted` and its detailed LLM variant share
+  a per-response completion-broadcast latch with the complete marker. Empty
+  batches and upstream tool frames pass through without changing this state.
+  Repeated delivery of the same frame identity is ignored. This filter does not
+  dispatch tools or authorize their external effects. Broadcasting admits the
+  completion signal before forwarding the batch; it does not wait for every
+  downstream observer to finish before a fast tool callback can run
+- Native tool-start frames have system priority and can overtake their own normal
+  response-start/text frames. The tool commitment therefore survives that start
+  and clears the voiced latch again at the ordered response end. The standard
+  assistant waits for this end before admitting tool-result continuation. Ordinary
+  response starts without a tool commitment still do not authorize fresh speech.
+  This is a native ordering safeguard: Python computes its marker state inside
+  the service before enqueueing frames; an actual source tool-before-marker
+  sequence can still set its voiced latch again
+- A tool commitment cancels and invalidates an outstanding automatic re-prompt
+  and prevents a late same-response incomplete marker from rearming it. It does
+  not replenish the retry budget or change the marker report. Interruption,
+  explicit fresh-run/speech boundaries and terminal cleanup retire the pending
+  permission. Signed continuation carriers remain rejected
 
 These changes bound retention and retries and make stale context mutations
 explicit. They are not a claim of complete Python turn-management parity.

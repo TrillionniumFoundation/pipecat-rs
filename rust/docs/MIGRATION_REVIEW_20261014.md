@@ -103,9 +103,10 @@ Slice96 adds explicit typed Gemini Live thinking setup for tool-free conversatio
 sessions and delays a stored `turnComplete` while background reasoning remains
 `IN_PROGRESS`. See [thinking completion](../crates/pipecat-gemini-live/THINKING.md)
 for silence failures, local interruption attribution and session resumption.
-Thinking with tools is rejected before connection: NON_BLOCKING declarations,
-intermediate/silent tool responses and their cross-interruption ownership remain
-a distinct provider-semantic gap. This subset does not imply live-model
+Thinking with tools is rejected before connection. At that checkpoint,
+NON_BLOCKING declarations and intermediate/silent tool responses remained a
+separate provider-semantic gap; slice98's ordinary-Live subset is described below.
+This thinking subset does not imply live-model
 availability or reproduce Python's synthetic completion on watchdog expiry.
 
 Slice97 addresses an Anthropic provider-compatibility failure: a legal
@@ -115,3 +116,10 @@ Anthropic request replay path; see [the contract](../crates/pipecat-services/ANT
 This is not a claim that the fixed Python stream implemented the same chain:
 that source omitted these blocks, although its adapter could preserve explicitly
 supplied native Anthropic messages.
+
+Slice98 adds explicitly selected ordinary-Live NON_BLOCKING tools, intermediate
+and silent results, provider cancellation and cross-interruption/resumption
+ownership. See [ASYNC_TOOLS.md](../crates/pipecat-gemini-live/ASYNC_TOOLS.md) for
+the exact model profiles and required matching ToolExecutor registration policy.
+Thinking with tools remains rejected. Local WebSocket and production pipeline
+qualification does not establish remote model acceptance or exactly-once effects.
