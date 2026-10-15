@@ -304,10 +304,11 @@ Unsupported capabilities fail validation rather than being approximated:
 - Judge/provider Python factory configuration, explainers, simulated personas,
   goals/metrics, provider services, Python bot subprocesses, Python suite manifests,
   runner HTTP requests, recording and cache orchestration
-- Broad audio modalities, TTS/STT/VAD inference,
-  transcript-audio alignment, `tts_response`, recording, and scripted image-file
-  input. The bounded recorded-input library API described below is available
-  separately for compatible audio-capable endpoints
+- Broad source-configured audio modalities, TTS/provider factories,
+  transcript-audio alignment, `tts_response`, and scripted image-file input.
+  Bounded recorded input, received-PCM capture/WAV export, and the optional
+  native Silero/HTTP STT spoken-response library path are described below.
+  They do not implement source recording/cache orchestration.
 - No report dashboard, persistent runs/logs directory, progress callbacks,
   process respawn/retry, distributed scheduling, or descendant process containment
 - The native manifest retains source labels, scenario expansion, per-label
@@ -567,3 +568,11 @@ permission and an application PCM/TTS producer; capture does not transcribe or
 judge audio. Unix `run ... --bot-audio-wav NEW.wav` exports same-rate received
 chunks for exactly one scenario, with bounded no-clobber publication and explicit
 partial/empty results. Existing text and CLI behavior remain the default.
+
+## Spoken response evaluation
+
+An explicit optional library path now connects received 16 kHz bot PCM to native
+Silero segmentation, bounded HTTP STT and completed-turn `response` text checks.
+See [BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md) for the API, model prerequisites,
+limits and differences from the fixed Python SmartTurn default. Existing text
+loaders/CLI modes keep their existing behavior.

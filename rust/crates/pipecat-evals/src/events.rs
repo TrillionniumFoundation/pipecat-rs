@@ -66,6 +66,24 @@ impl EventStream {
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
     }
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn accepts_audio_reply(&self) -> bool {
+        !self.awaiting_reply
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn transcribed_response(
+        &mut self,
+        epoch: u64,
+        text: String,
+    ) -> Result<(), EvalError> {
+        if epoch != self.epoch || self.awaiting_reply || text.is_empty() {
+            return Ok(());
+        }
+        if text.len() > self.limits.max_text_bytes {
+            return Err(EvalError::Limit("audio response text"));
+        }
+        self.append(json!({"type":"response", "text":text}))
+    }
     pub(crate) fn pending_responses(&self) -> Vec<Value> {
         self.queue
             .iter()

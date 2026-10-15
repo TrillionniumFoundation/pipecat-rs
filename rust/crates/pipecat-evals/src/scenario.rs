@@ -41,7 +41,10 @@ impl Expectation {
     }
     pub fn aggregates(&self) -> bool {
         (self.text_contains.is_some() || self.eval.is_some())
-            && matches!(self.event.as_str(), "llm_response" | "user_transcription")
+            && matches!(
+                self.event.as_str(),
+                "llm_response" | "response" | "user_transcription"
+            )
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +197,32 @@ impl ScriptScenario {
             return Err(EvalError::Limit("scenario bytes"));
         }
         Ok(())
+    }
+    /// Validate the explicit native audio-response subset. File loaders retain
+    /// their existing text-mode response alias; this is for typed scenarios.
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn audio_response_validation_copy(&self) -> Result<Self, EvalError> {
+        if self.needs_judge() {
+            return Err(EvalError::Unsupported(
+                "audio response currently supports text predicates, not classifier judgments"
+                    .into(),
+            ));
+        }
+        let mut copy = self.clone();
+        for turn in &mut copy.turns {
+            if let Some(after) = &mut turn.send_after {
+                if after.event.as_deref() == Some("response") {
+                    after.event = Some("llm_response".into());
+                }
+            }
+            for expectation in &mut turn.expect {
+                if expectation.event == "response" {
+                    expectation.event = "llm_response".into();
+                }
+            }
+        }
+        copy.validate()?;
+        Ok(copy)
     }
     pub fn observer_config(&self) -> Value {
         let mut config = Map::new();

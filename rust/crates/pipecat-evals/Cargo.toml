@@ -6,9 +6,16 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
+# Explicit real-time PCM -> Silero -> HTTP STT response evaluation.
+bot-audio-transcription = ["dep:pipecat-speech", "dep:pipecat-vad", "dep:pipecat-services"]
 # Native child executable used only by the process ownership integration tests.
 process-fixtures = []
 native-bot-example = ["dep:pipecat-processors", "dep:pipecat-services", "dep:reqwest"]
+
+[[test]]
+name = "bot_audio_response"
+path = "tests/bot_audio_response.rs"
+required-features = ["bot-audio-transcription"]
 
 [[bin]]
 name = "eval-process-fixture"
@@ -26,6 +33,8 @@ path = "examples/native_text_bot.rs"
 required-features = ["native-bot-example"]
 
 [dependencies]
+pipecat-speech = { path = "../pipecat-speech", optional = true }
+pipecat-vad = { path = "../pipecat-vad", optional = true }
 pipecat-audio = { path = "../pipecat-audio" }
 pipecat-processors = { path = "../pipecat-processors", optional = true }
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }

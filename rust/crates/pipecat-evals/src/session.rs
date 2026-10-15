@@ -1,5 +1,7 @@
 //! Owned native sessions with bounded transport, handshake, runtime, and cancellation.
 use crate::bot_audio::{BotAudioLimits, BotAudioRun, Capture};
+#[cfg(feature = "bot-audio-transcription")]
+use crate::bot_transcription::{BotTranscription, BotTranscriptionConfig};
 use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
 use crate::{
     events::{EventLimits, EventStream},
@@ -123,12 +125,17 @@ pub struct EvalSession {
     active_turn_started: Option<Instant>,
     phase: &'static str,
     wire_messages: usize,
+    bot_ready_received: bool,
     wire_bytes: usize,
     judge: Option<EvalJudge>,
     active_expectation: i64,
     recordings: BTreeMap<usize, RecordedAudio>,
     playback: Option<Playback>,
     capture: Option<Capture>,
+    #[cfg(feature = "bot-audio-transcription")]
+    transcription_config: Option<BotTranscriptionConfig>,
+    #[cfg(feature = "bot-audio-transcription")]
+    transcription: Option<BotTranscription>,
 }
 impl EvalSession {
     pub fn new(
@@ -181,13 +188,60 @@ impl EvalSession {
             active_turn_started: None,
             phase: "connect",
             wire_messages: 0,
+            bot_ready_received: false,
             wire_bytes: 0,
             judge,
             active_expectation: -1,
             recordings: BTreeMap::new(),
             playback: None,
             capture: None,
+            #[cfg(feature = "bot-audio-transcription")]
+            transcription_config: None,
+            #[cfg(feature = "bot-audio-transcription")]
+            transcription: None,
         })
+    }
+    /// Evaluate `response` predicates from real received 16 kHz mono PCM.
+    /// This opt-in library path uses local Silero segmentation, HTTP STT and
+    /// native speech-timeout turn aggregation; remote speaking reports never
+    /// close an audio segment. Supply a typed scenario with `response` events.
+    /// The normal file loader retains its text-mode `response` alias.
+    /// Classifier judgments, CLI configuration and other audio rates are not
+    /// supported by this explicit subset. All resources are session-owned.
+    #[cfg(feature = "bot-audio-transcription")]
+    pub fn with_bot_transcription(
+        scenario: ScriptScenario,
+        url: impl Into<String>,
+        options: SessionOptions,
+        config: BotTranscriptionConfig,
+    ) -> Result<Self, EvalError> {
+        config.validate()?;
+        let validated = scenario.audio_response_validation_copy()?;
+        let mut session = Self::construct(validated, url.into(), options, None)?;
+        session.scenario = scenario;
+        session.enable_bot_audio_url()?;
+        session.capture = Some(Capture::new(BotAudioLimits::default()));
+        session.transcription_config = Some(config);
+        Ok(session)
+    }
+    fn enable_bot_audio_url(&mut self) -> Result<(), EvalError> {
+        let mut url = url::Url::parse(&self.url)
+            .map_err(|_| EvalError::Scenario("invalid bot URL".into()))?;
+        let pairs: Vec<_> = url
+            .query_pairs()
+            .filter(|(key, _)| key != "skip_tts" && key != "capture_bot_audio")
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect();
+        url.set_query(None);
+        {
+            let mut query = url.query_pairs_mut();
+            for (key, value) in pairs {
+                query.append_pair(&key, &value);
+            }
+            query.append_pair("capture_bot_audio", "true");
+        }
+        self.url = url.into();
+        Ok(())
     }
     /// Replace selected user turns with real recorded PCM input. The user text
     /// remains a judge reference and is never sent as text for these turns.
@@ -237,21 +291,13 @@ impl EvalSession {
         limits: BotAudioLimits,
     ) -> Result<BotAudioRun, EvalError> {
         limits.validate()?;
-        let mut url = url::Url::parse(&self.url).map_err(|e| EvalError::Scenario(e.to_string()))?;
-        let pairs: Vec<_> = url
-            .query_pairs()
-            .filter(|(key, _)| key != "skip_tts" && key != "capture_bot_audio")
-            .map(|(k, v)| (k.into_owned(), v.into_owned()))
-            .collect();
-        url.set_query(None);
-        {
-            let mut query = url.query_pairs_mut();
-            for (k, v) in pairs {
-                query.append_pair(&k, &v);
-            }
-            query.append_pair("capture_bot_audio", "true");
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() {
+            return Err(EvalError::Unsupported(
+                "use run for a transcription session".into(),
+            ));
         }
-        self.url = url.into();
+        self.enable_bot_audio_url()?;
         self.capture = Some(Capture::new(limits));
         self.run_inner(cancel).await;
         Ok(BotAudioRun {
@@ -262,6 +308,7 @@ impl EvalSession {
     async fn run_inner(&mut self, cancel: Cancellation) {
         let started = Instant::now();
         self.stream = EventStream::new(self.options.event_limits.clone());
+        self.bot_ready_received = false;
         let max_duration = self.options.max_duration;
         let outcome = tokio::select! {
             biased;
@@ -332,6 +379,10 @@ impl EvalSession {
         }
     }
     async fn drive(&mut self) -> Result<(), EvalError> {
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(config) = self.transcription_config.take() {
+            self.transcription = Some(BotTranscription::new(config)?);
+        }
         if self.socket.is_none() {
             self.socket =
                 Some(WebSocketSession::connect(&self.url, self.options.transport.clone()).await?);
@@ -409,11 +460,46 @@ impl EvalSession {
         self.active_turn_started = None;
         Ok(())
     }
+    fn turn_boundary(&mut self) -> Result<(), EvalError> {
+        self.stream.turn_boundary();
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(engine) = &mut self.transcription {
+            engine.set_epoch(self.stream.epoch())?;
+        }
+        Ok(())
+    }
     async fn run_turn(&mut self, index: usize, turn: ScriptTurn) -> Result<(), EvalError> {
         self.matcher.reset_turn();
         // Drain the bounded transport admission queue before the send boundary so
         // already received output cannot satisfy a subsequent user turn.
         self.drain_received().await?;
+        #[cfg(feature = "bot-audio-transcription")]
+        if turn.send_after.is_none() && (turn.user.is_some() || turn.dtmf.is_some()) {
+            let deadline = Instant::now() + self.options.bot_quiet_timeout;
+            if let Some(engine) = &mut self.transcription {
+                engine.request_idle_notification();
+            }
+            while self
+                .transcription
+                .as_ref()
+                .is_some_and(|engine| !engine.is_idle())
+            {
+                if Instant::now() >= deadline {
+                    return Err(EvalError::Timeout("bot transcription settlement"));
+                }
+                // Do not periodically cancel pump: it may already own a
+                // completed transcript while draining admitted interruption
+                // packets before publication. The engine's tick emits an idle
+                // notification, and pump enforces the same absolute deadline.
+                self.pump(deadline).await.map_err(|error| {
+                    if matches!(error, EvalError::Timeout("event")) {
+                        EvalError::Timeout("bot transcription settlement")
+                    } else {
+                        error
+                    }
+                })?;
+            }
+        }
         if let Some(after) = turn.send_after {
             let target = if let Some(event) = after.event {
                 let deadline = Instant::now() + self.options.send_after_timeout;
@@ -446,13 +532,13 @@ impl EvalSession {
                 }
             }
             if turn.user.is_none() && turn.dtmf.is_none() && index > 0 {
-                self.stream.turn_boundary();
+                self.turn_boundary()?;
             }
         }
         let mut audio_completion = None;
         if let Some(user) = turn.user {
             self.record_pending_reply()?;
-            self.stream.turn_boundary();
+            self.turn_boundary()?;
             if let Some(judge) = &mut self.judge {
                 judge.add_user_message(&user)?;
             }
@@ -473,7 +559,7 @@ impl EvalSession {
             }
         } else if let Some(dtmf) = turn.dtmf {
             self.record_pending_reply()?;
-            self.stream.turn_boundary();
+            self.turn_boundary()?;
             if let Some(judge) = &mut self.judge {
                 judge.add_user_message(&format!("(DTMF keypad input: {dtmf})"))?;
             }
@@ -702,7 +788,7 @@ impl EvalSession {
         self.send_envelope(serializer::control(self.next_id, kind, data))
             .await
     }
-    async fn send_envelope(&self, envelope: Envelope) -> Result<(), EvalError> {
+    async fn send_envelope(&mut self, envelope: Envelope) -> Result<(), EvalError> {
         let wire = envelope.encode()?;
         let sender = self
             .socket
@@ -721,6 +807,11 @@ impl EvalSession {
         if Instant::now() >= deadline {
             return Err(EvalError::Timeout("event"));
         }
+        // Internal drains may consume readiness while another select branch
+        // wins. Preserve the handshake fact independently of that return value.
+        if self.phase == "handshake" && self.bot_ready_received {
+            return Ok(true);
+        }
         let mut health = self.playback.as_ref().map(Playback::health);
         let audio_error = async {
             if let Some(rx) = &mut health {
@@ -735,12 +826,38 @@ impl EvalSession {
             }
             std::future::pending::<String>().await
         };
-        let packet = tokio::select! {
-            biased;
-            error = audio_error => return Err(EvalError::Scenario(error)),
-            packet = tokio::time::timeout_at(deadline, self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv()) => packet.map_err(|_| EvalError::Timeout("event"))?.ok_or(EvalError::Disconnected)?,
+        let (recognized, packet) = {
+            let transcription = async {
+                #[cfg(feature = "bot-audio-transcription")]
+                if let Some(engine) = &mut self.transcription {
+                    return engine.next().await;
+                }
+                std::future::pending::<Result<(u64, String), EvalError>>().await
+            };
+            tokio::select! {
+                biased;
+                _ = tokio::time::sleep_until(deadline) => return Err(EvalError::Timeout("event")),
+                result = transcription => (Some(result), None),
+                error = audio_error => return Err(EvalError::Scenario(error)),
+                packet = tokio::time::timeout_at(deadline, self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv()) => {
+                    (None, Some(packet.map_err(|_| EvalError::Timeout("event"))?.ok_or(EvalError::Disconnected)?))
+                }
+            }
         };
-        self.ingest(packet)
+        if let Some(result) = recognized {
+            let (epoch, text) = result?;
+            #[cfg(feature = "bot-audio-transcription")]
+            {
+                // Fence against interruption packets already admitted before
+                // recognition completed; this does not authenticate remote PCM.
+                self.drain_received().await?;
+                self.stream.transcribed_response(epoch, text)?;
+            }
+            #[cfg(not(feature = "bot-audio-transcription"))]
+            let _ = (epoch, text);
+            return Ok(self.phase == "handshake" && self.bot_ready_received);
+        }
+        self.ingest(packet.expect("pump selects either recognition or transport"))
     }
     fn ingest(&mut self, packet: Packet) -> Result<bool, EvalError> {
         let bytes = match packet {
@@ -762,15 +879,39 @@ impl EvalSession {
                 Err(_) => return Ok(false),
             };
         if envelope.message_type == "bot-ready" {
+            self.bot_ready_received = true;
             return Ok(true);
         }
         if envelope.message_type == "eval-bot-audio" {
             if let Some(capture) = &mut self.capture {
                 capture.ingest(envelope.data.as_ref().unwrap_or(&Value::Null))?;
+                #[cfg(feature = "bot-audio-transcription")]
+                if let Some(engine) = &mut self.transcription {
+                    let chunk = capture
+                        .chunks
+                        .last()
+                        .expect("successful capture is nonempty");
+                    if chunk.sample_rate != 16_000 {
+                        return Err(EvalError::Unsupported(
+                            "audio response requires 16 kHz PCM".into(),
+                        ));
+                    }
+                    if self.stream.accepts_audio_reply() {
+                        engine.ingest(
+                            chunk.audio.clone(),
+                            chunk.sample_rate,
+                            self.stream.epoch(),
+                        )?;
+                    }
+                }
                 return Ok(false);
             }
         }
         self.stream.ingest(&envelope)?;
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(engine) = &mut self.transcription {
+            engine.set_epoch(self.stream.epoch())?;
+        }
         Ok(false)
     }
     async fn drain_received(&mut self) -> Result<(), EvalError> {
@@ -801,6 +942,18 @@ impl EvalSession {
         Ok(())
     }
     pub(crate) async fn shutdown(&mut self) {
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(mut engine) = self.transcription.take() {
+            if let Err(error) = engine.finish() {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "response".into(),
+                    reason: error.to_string(),
+                    kind: "audio_cleanup_error".into(),
+                });
+            }
+        }
         if let Some(playback) = &mut self.playback {
             if let Err(error) = playback.finish().await {
                 self.result.fail(AssertionFailure {
@@ -890,4 +1043,49 @@ fn connect_url(raw: &str, scenario: &ScriptScenario) -> Result<String, EvalError
         }
     }
     Ok(url.into())
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn internally_drained_ready_survives_discarded_ingest_return() {
+        let scenario = crate::ScenarioFile::from_value(json!({"name":"ready", "turns":[]}))
+            .unwrap()
+            .scenarios
+            .remove(0);
+        let mut session =
+            EvalSession::new(scenario, "ws://127.0.0.1:1", SessionOptions::default()).unwrap();
+        session.phase = "handshake";
+        assert!(!session.bot_ready_received);
+        // Exactly the old drain behavior: consume the packet but discard its
+        // bool. No new socket packet exists to rescue the handshake afterward.
+        let _ = session
+            .ingest(Packet::Text(
+                json!({"label":"rtvi-ai", "type":"bot-ready", "data":{"version":"2.2.0"}})
+                    .to_string(),
+            ))
+            .unwrap();
+        assert!(session
+            .pump(Instant::now() + Duration::from_secs(1))
+            .await
+            .unwrap());
+        assert!(
+            session.socket.is_none(),
+            "the remembered fact must not need another receive"
+        );
+        assert!(matches!(
+            session.pump(Instant::now()).await,
+            Err(EvalError::Timeout("event"))
+        ));
+        // A pre-cancelled run still resets transient readiness before selecting
+        // cancellation and never attempts to connect.
+        let cancel = Cancellation::new();
+        cancel.cancel();
+        session.run_inner(cancel).await;
+        assert!(!session.bot_ready_received);
+        assert!(!session.result.passed);
+        assert!(session.socket.is_none());
+    }
 }

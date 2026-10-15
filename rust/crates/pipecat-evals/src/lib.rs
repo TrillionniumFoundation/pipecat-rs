@@ -1,7 +1,11 @@
 //! Native, bounded RTVI scripted behavioral evaluations. No Python runtime or fallback.
 #![forbid(unsafe_code)]
 mod bot_audio;
+#[cfg(feature = "bot-audio-transcription")]
+mod bot_transcription;
 pub use bot_audio::{BotAudioChunk, BotAudioLimits, BotAudioRun};
+#[cfg(feature = "bot-audio-transcription")]
+pub use bot_transcription::BotTranscriptionConfig;
 pub mod bot_host;
 mod bounded_yaml;
 pub mod events;
