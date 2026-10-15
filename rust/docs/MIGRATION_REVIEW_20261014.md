@@ -58,4 +58,8 @@ completion claim.
 Bot audio now also has an explicit bounded library capture path from a native
 host output boundary to original-rate PCM results; see [bot audio capture](../crates/pipecat-evals/BOT_AUDIO_CAPTURE.md).
 It captures only chunks received before scenario completion. Audio transcription,
-judging, output recording CLI and live-provider acceptance remain separate.
+judging and live-provider acceptance remain separate. A Unix direct CLI run can
+now explicitly export those received bot chunks as a bounded same-rate mono WAV,
+with no-clobber publication and preserved evaluation results on artifact failure.
+This bot-only arrival-order artifact omits gaps, user tracks, resampling and
+mixing; it is not full Python conversation-recorder parity or audio scoring.

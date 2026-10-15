@@ -43,6 +43,39 @@ pub struct BotAudioRun {
     pub result: ScriptResult,
     pub chunks: Vec<BotAudioChunk>,
 }
+impl BotAudioRun {
+    /// Encode received mono PCM chunks in arrival order, without silence or mixing.
+    /// Empty capture returns `None`. Mixed rates and invalid/publicly modified
+    /// chunks are rejected before allocation; this is not a timeline recording.
+    pub fn to_wav(&self) -> Result<Option<Vec<u8>>, EvalError> {
+        if self.chunks.len() > 16_384 {
+            return Err(EvalError::Limit("bot audio WAV chunks"));
+        }
+        let Some(first) = self.chunks.first() else {
+            return Ok(None);
+        };
+        let mut bytes = 0_usize;
+        for chunk in &self.chunks {
+            validate_pcm(&chunk.audio, chunk.sample_rate)?;
+            if chunk.sample_rate != first.sample_rate {
+                return Err(EvalError::Unsupported(
+                    "mixed-rate bot audio WAV export".into(),
+                ));
+            }
+            bytes = bytes
+                .checked_add(chunk.audio.len())
+                .filter(|bytes| *bytes <= 16 * 1024 * 1024)
+                .ok_or(EvalError::Limit("bot audio WAV bytes"))?;
+        }
+        let mut pcm = Vec::with_capacity(bytes);
+        for chunk in &self.chunks {
+            pcm.extend_from_slice(&chunk.audio);
+        }
+        pipecat_audio::pcm_to_wav(&pcm, first.sample_rate, 1)
+            .map(Some)
+            .map_err(|error| EvalError::Scenario(format!("bot audio WAV: {error}")))
+    }
+}
 pub(crate) struct Capture {
     limits: BotAudioLimits,
     bytes: usize,

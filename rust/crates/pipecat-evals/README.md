@@ -561,7 +561,9 @@ parsing remains unchanged. Hosted suites can explicitly use `suite MANIFEST --re
 or `ReleaseManifest::load_recorded`; see [RECORDED_SUITE.md](RECORDED_SUITE.md). The host opt-in only adds single
 `raw-audio` input, preserving generated-text output and mandatory `skip_tts`.
 
-Optional library-only [bot audio capture](BOT_AUDIO_CAPTURE.md) exposes bounded
+Optional [bot audio capture](BOT_AUDIO_CAPTURE.md) exposes bounded
 original-rate PCM received during evaluation. Native host output needs explicit
 permission and an application PCM/TTS producer; capture does not transcribe or
-judge audio. Existing text and CLI behavior remain the default.
+judge audio. Unix `run ... --bot-audio-wav NEW.wav` exports same-rate received
+chunks for exactly one scenario, with bounded no-clobber publication and explicit
+partial/empty results. Existing text and CLI behavior remain the default.

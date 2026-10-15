@@ -1,8 +1,11 @@
 //! Native scripted evaluation CLI; exit 0 for pass, 1 for failed runs, 2 for invalid input.
+#[path = "support/wav_output.rs"]
+mod wav_output;
+
 use pipecat_evals::{
     process::ProcessOptions,
     release::{run_release, ReleaseManifest},
-    Cancellation, EvalSession, RecordedScenarioFile, ScenarioFile, SessionOptions,
+    BotAudioLimits, Cancellation, EvalSession, RecordedScenarioFile, ScenarioFile, SessionOptions,
 };
 #[tokio::main]
 async fn main() {
@@ -19,9 +22,10 @@ async fn main() {
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     let suite = (2..=3).contains(&args.len()) && args[0] == "suite";
-    let single = (3..=5).contains(&args.len()) && args[0] == "run";
+    let single = (3..=7).contains(&args.len()) && args[0] == "run";
     let mut stop_bot = false;
     let mut recorded = false;
+    let mut bot_audio_wav = None;
     if suite && args.len() == 3 {
         if args[2] != "--recorded-audio" {
             return Err(pipecat_evals::EvalError::Scenario(
@@ -31,10 +35,22 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         recorded = true;
     }
     if single {
-        for flag in &args[3..] {
+        let mut flags = args[3..].iter();
+        while let Some(flag) = flags.next() {
             match flag.as_str() {
                 "--stop-bot" if !stop_bot => stop_bot = true,
                 "--recorded-audio" if !recorded => recorded = true,
+                "--bot-audio-wav" if bot_audio_wav.is_none() => {
+                    let path = flags
+                        .next()
+                        .filter(|path| !path.starts_with("--") && !path.is_empty())
+                        .ok_or_else(|| {
+                            pipecat_evals::EvalError::Scenario(
+                                "--bot-audio-wav needs a file path".into(),
+                            )
+                        })?;
+                    bot_audio_wav = Some(path.as_str());
+                }
                 _ => {
                     return Err(pipecat_evals::EvalError::Scenario(
                         "unknown or duplicate run flag".into(),
@@ -46,7 +62,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio]".into()));
     }
     // Parse every source and option before installing the signal task or launching a bot.
     let manifest = if suite {
@@ -82,6 +98,12 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                 .collect::<Result<Vec<_>, _>>()?;
         }
     }
+    if bot_audio_wav.is_some() && sessions.len() != 1 {
+        return Err(pipecat_evals::EvalError::Scenario(
+            "--bot-audio-wav requires exactly one scenario".into(),
+        ));
+    }
+    let mut wav_output = bot_audio_wav.map(wav_output::Output::prepare).transpose()?;
     let cancel = Cancellation::new();
     let signal_cancel = cancel.clone();
     let signal = tokio::spawn(async move {
@@ -103,9 +125,21 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         } else {
             let mut passed = true;
             for session in sessions {
-                let result = session.run(cancel.clone()).await;
-                passed &= result.passed;
-                println!("{}", serde_json::to_string(&result)?);
+                if let Some(output) = wav_output.take() {
+                    let run = session.run_with_bot_audio(cancel.clone(), BotAudioLimits::default()).await?;
+                    passed &= run.result.passed;
+                    // Preserve the evaluation result even when artifact publication fails.
+                    println!("{}", serde_json::to_string(&run.result)?);
+                    match output.publish(&run) {
+                        Ok(Some(bytes)) => eprintln!("bot audio WAV saved ({bytes} bytes); received chunks only, possibly partial"),
+                        Ok(None) => eprintln!("no WAV written: empty bot audio capture"),
+                        Err(error) => return Err(pipecat_evals::EvalError::Scenario(format!("bot audio WAV artifact: {error}"))),
+                    }
+                } else {
+                    let result = session.run(cancel.clone()).await;
+                    passed &= result.passed;
+                    println!("{}", serde_json::to_string(&result)?);
+                }
             }
             Ok(passed)
         }

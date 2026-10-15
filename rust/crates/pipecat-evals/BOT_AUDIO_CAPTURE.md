@@ -3,7 +3,7 @@
 `EvalSession::run_with_bot_audio(cancel, BotAudioLimits::default())` evaluates the
 same scripted text/events while returning `BotAudioRun { result, chunks }`.
 Each chunk contains original-rate mono little-endian signed PCM16 bytes and its
-sample rate. It is a library API, not a CLI recording switch. Existing `run`,
+sample rate. The CLI can explicitly export these received chunks as a WAV (below). Existing `run`,
 scenario schemas, hosted suite results and text-only defaults are unchanged.
 
 For the native loopback host, explicitly build
@@ -34,7 +34,7 @@ received PCM. Dropping the run future keeps the existing owned-task cancellation
 contract, but provides no returned partial result.
 
 The result performs no resampling, STT, TTS-text reconstruction, audio judging,
-WAV writing, mixing, or speaker segmentation. `tts_response` and heard-speech
+mixing, or speaker segmentation. Optional WAV export only packages received PCM. `tts_response` and heard-speech
 `response` in the Python harness are different downstream event paths; neither
 is implemented by exposing these bytes. Real human-speech evaluation still needs
 an application-selected transcription/judging path and separate qualification.
@@ -77,3 +77,57 @@ is a visible pipeline failure, never silent capture truncation.
 Qualification uses local generated PCM and actual native WebSocket transport.
 It does not qualify a microphone, speaker, browser playback, live provider or
 speech recognizer.
+
+## Explicit CLI WAV export (Unix)
+
+Run exactly one scenario against an audio-capable endpoint:
+
+```sh
+pipecat-eval run scenario.yaml ws://127.0.0.1:8765 --bot-audio-wav received.wav
+```
+
+`--recorded-audio` and `--stop-bot` may also be supplied. All scenarios, options
+and the output destination are validated before connection. Multiple scenarios
+are rejected for this flag. Hosted `suite` output capture is not implemented.
+The endpoint must permit capture and its application must generate PCM/TTS;
+this flag does not install a speech provider. The original result JSON remains
+on stdout. Artifact status/errors are printed on stderr.
+
+`BotAudioRun::to_wav()` returns `None` for empty capture, otherwise a PCM16 mono
+WAV. It revalidates all public chunks before allocating a concatenation: at most
+16384 chunks and 16 MiB PCM, complete nonempty samples, one common rate among
+8/16/24/48 kHz. Mixed rates are rejected. The CLI uses the default capture limit
+of 8 MiB/4096 chunks. Concatenation preserves arrival order and omits timing gaps;
+it is not a timeline recording. The captured bytes, concatenation and encoded
+WAV may coexist (up to three PCM-sized buffers plus the WAV header).
+
+Empty capture produces no final file and explicitly reports this on stderr.
+Failed or cancelled evaluations can still export their already received valid
+prefix; an otherwise successful evaluation can also have incomplete speech.
+The usual evaluation exit status is preserved (0 passed, 1 failed). Invalid
+export data or artifact I/O failure returns exit 2 after printing the unchanged
+evaluation result, so its original failure reason remains available.
+
+The destination's parent must already exist. Existing destinations, including
+symlinks, are rejected. Preparation creates a private mode-0600 (subject to umask)
+empty temporary file in the canonical parent before connecting. After the session
+has closed its owners, bounded WAV writing flushes and synchronizes that file,
+then publishes through a same-directory hard link that cannot replace a target
+created meanwhile. The owned temporary name is removed and the parent directory
+is synchronized. A post-publication failure explicitly reports that the file was
+created; the final file is not deleted as rollback. Normal unwinding removes only
+a temporary name with the recorded device/inode. An identification failure after
+creation reports the retained temporary path; a crash, forced kill, directory
+replacement or cleanup I/O failure may also leave a temporary file.
+
+This is a trusted-local path facility, not a filesystem sandbox. Parent symlinks
+are resolved, but concurrent hostile directory replacement is not secured. No
+existing file permissions are changed and no output directory is created. Other
+platforms reject this explicit publication mode before connection.
+
+The pinned Python `EvalClientRecorder` can align user/bot tracks by timestamps,
+insert gaps, resample/mix and overwrite a destination while creating parents.
+This narrower native export intentionally implements none of those operations;
+it rejects mixed-rate chunks instead of using the last rate for the whole track.
+Local qualification checks generated PCM and real CLI/host WebSocket traffic,
+not intelligibility, STT, physical playback or audio-response scoring.
