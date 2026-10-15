@@ -56,6 +56,40 @@ impl ResumptionPolicy {
     }
 }
 
+/// Explicit reasoning depth for a provider model that supports Live thinking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ThinkingLevel {
+    Low,
+    Medium,
+    High,
+}
+
+/// Opt-in background reasoning. This subset supports conversation sessions
+/// without tools. The timeout is silence between valid application messages,
+/// not a total reasoning deadline; expiry is an error, never a synthetic end.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThinkingPolicy {
+    pub level: ThinkingLevel,
+    pub silence_timeout: Duration,
+}
+impl Default for ThinkingPolicy {
+    fn default() -> Self {
+        Self {
+            level: ThinkingLevel::Low,
+            silence_timeout: Duration::from_secs(30),
+        }
+    }
+}
+impl ThinkingPolicy {
+    pub(crate) fn validate(&self) -> Result<(), GeminiError> {
+        if self.silence_timeout.is_zero() || self.silence_timeout > Duration::from_secs(86_400) {
+            return Err(GeminiError::Invalid("thinking silence timeout"));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Limits {
     pub queue_capacity: usize,

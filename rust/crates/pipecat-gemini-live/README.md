@@ -210,8 +210,7 @@ acknowledged. The pipeline owns and joins its receive work on cleanup.
 
 The following are not implemented, and no pass-through setting/action advertises
 them: automatic replay, handle-less session rebuilding, Vertex authentication, ephemeral token
-creation, initial-history configuration, context-window compression, thinking
-configuration/background reasoning, non-blocking/scheduled/streaming tools,
+creation, initial-history configuration, context-window compression, thinking tools/budgets, non-blocking/scheduled/streaming tools,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
 file input and image formats beyond the bounded RGB video path, Google File API upload/list/get/delete, live setting
 updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,
@@ -273,3 +272,10 @@ Conversation-mode downstream InputImage/UserImage now connect to realtime video
 with bounded native JPEG encoding, service-wide one-second admission, pause and
 owned cancellation cleanup. See [VIDEO_INPUT.md](VIDEO_INPUT.md) for exact limits,
 source differences and evidence. This does not qualify live camera/browser use.
+
+## Explicit thinking subset
+
+[Thinking completion](THINKING.md) documents `with_thinking`: typed level setup
+for tool-free conversation sessions, deferred completion during background
+reasoning, bounded silence failure, and interruption/resumption ownership. The
+default client remains unchanged.

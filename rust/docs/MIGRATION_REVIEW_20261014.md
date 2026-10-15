@@ -98,3 +98,12 @@ uses a saved provider handle and never replays already sent actions. It does not
 establish lossless delivery, handle-less history reseeding, transparent message
 index recovery or live-provider qualification. Future gaps must be checked
 against actual code and source, rather than inferred from older inventory rows.
+
+Slice96 adds explicit typed Gemini Live thinking setup for tool-free conversation
+sessions and delays a stored `turnComplete` while background reasoning remains
+`IN_PROGRESS`. See [thinking completion](../crates/pipecat-gemini-live/THINKING.md)
+for silence failures, local interruption attribution and session resumption.
+Thinking with tools is rejected before connection: NON_BLOCKING declarations,
+intermediate/silent tool responses and their cross-interruption ownership remain
+a distinct provider-semantic gap. This subset does not imply live-model
+availability or reproduce Python's synthetic completion on watchdog expiry.

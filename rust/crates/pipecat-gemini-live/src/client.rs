@@ -93,6 +93,7 @@ fn retire_pending(
 pub struct GeminiClient {
     config: Arc<GeminiConfig>,
     resumption: Option<ResumptionPolicy>,
+    thinking: Option<ThinkingPolicy>,
 }
 impl GeminiClient {
     pub fn new(config: GeminiConfig) -> Result<Self, GeminiError> {
@@ -116,6 +117,7 @@ impl GeminiClient {
         Ok(Self {
             config: Arc::new(config),
             resumption: None,
+            thinking: None,
         })
     }
     /// Opt in to bounded receive-side recovery with an opaque server handle.
@@ -129,6 +131,23 @@ impl GeminiClient {
         self.resumption = Some(policy);
         Ok(self)
     }
+    /// Enable typed thinking setup and defer utterance completion while the
+    /// provider reports IN_PROGRESS. Select a compatible model explicitly.
+    /// Thinking tools and transcription-only mode are outside this subset.
+    pub fn with_thinking(mut self, policy: ThinkingPolicy) -> Result<Self, GeminiError> {
+        policy.validate()?;
+        if self.config.mode == SessionMode::Transcription || !self.config.session.tools.is_empty() {
+            return Err(GeminiError::Unsupported(
+                "thinking requires conversation mode without tools",
+            ));
+        }
+        let mut setup = protocol::setup(&self.config);
+        setup["setup"]["generationConfig"]["thinkingConfig"] =
+            serde_json::json!({"thinkingLevel": policy.level});
+        protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
+        self.thinking = Some(policy);
+        Ok(self)
+    }
     pub fn config(&self) -> &GeminiConfig {
         &self.config
     }
@@ -136,7 +155,13 @@ impl GeminiClient {
     /// drops its socket; it does not leave a detached handshake task.
     pub async fn connect(&self) -> Result<GeminiSession, GeminiError> {
         let config = &self.config;
-        let (socket, update) = open_socket(config, self.resumption.as_ref(), None).await?;
+        let (socket, update) = open_socket(
+            config,
+            self.resumption.as_ref(),
+            None,
+            self.thinking.as_ref(),
+        )
+        .await?;
         let mut handle = None;
         apply_resumption(&mut handle, update);
         let (tx, rx) = mpsc::channel(config.limits.queue_capacity);
@@ -153,6 +178,7 @@ impl GeminiClient {
         };
         let worker_sender = sender.clone();
         let policy = self.resumption.clone();
+        let thinking = self.thinking.clone();
         let worker = tokio::spawn(async move {
             run(
                 socket,
@@ -160,8 +186,11 @@ impl GeminiClient {
                 events_tx,
                 control_rx,
                 worker_sender,
-                policy,
-                handle,
+                WorkerOptions {
+                    policy,
+                    handle,
+                    thinking,
+                },
             )
             .await
         });
@@ -187,8 +216,13 @@ async fn open_socket(
     config: &GeminiConfig,
     policy: Option<&ResumptionPolicy>,
     handle: Option<&str>,
+    thinking: Option<&ThinkingPolicy>,
 ) -> Result<(Socket, Option<protocol::ResumptionUpdate>), GeminiError> {
     let mut setup = protocol::setup(config);
+    if let Some(thinking) = thinking {
+        setup["setup"]["generationConfig"]["thinkingConfig"] =
+            serde_json::json!({"thinkingLevel": thinking.level});
+    }
     if policy.is_some() {
         setup["setup"]["sessionResumption"] = match handle {
             Some(handle) => serde_json::json!({"handle": handle}),
@@ -486,15 +520,31 @@ fn recoverable_read(
     }
 }
 
+struct WorkerOptions {
+    policy: Option<ResumptionPolicy>,
+    handle: Option<String>,
+    thinking: Option<ThinkingPolicy>,
+}
+
 async fn run(
     mut socket: Socket,
     mut commands: mpsc::Receiver<Command>,
     events: mpsc::Sender<GeminiEvent>,
     mut control: watch::Receiver<Control>,
     sender: GeminiSender,
-    policy: Option<ResumptionPolicy>,
-    mut handle: Option<String>,
+    options: WorkerOptions,
 ) -> Result<(), GeminiError> {
+    let WorkerOptions {
+        policy,
+        mut handle,
+        thinking,
+    } = options;
+    struct HeldCompletion {
+        origin: Origin,
+        generation: u64,
+        deadline: Instant,
+    }
+    let mut held: Option<HeldCompletion> = None;
     let mut reconnects = 0usize;
     let mut go_away = false;
     let mut tool_ids = ToolIds::new()?;
@@ -507,6 +557,7 @@ async fn run(
     let mut generation = sender.generation();
     let mut output_active = false;
     let mut busy = false;
+    let mut busy_generation = generation;
     let mut suppressed = false;
     let mut activity = false;
     let mut has_audio = false;
@@ -525,6 +576,7 @@ async fn run(
                     sender.config.limits.max_pending_tools,
                 );
                 generation = current;
+                held = None;
                 suppressed = busy || output_active;
                 output_active = false;
             }
@@ -541,12 +593,15 @@ async fn run(
             enum Wake {
                 Control,
                 Deadline,
+                ThinkingDeadline,
                 Message(Option<Result<Message, tokio_tungstenite::tungstenite::Error>>),
                 Command(Option<Command>),
             }
+            let thinking_at = held.as_ref().map(|h| h.deadline);
             let wake = tokio::select! { biased;
                 _ = control.changed() => Wake::Control,
                 _ = tokio::time::sleep_until(finish_at), if finishing => Wake::Deadline,
+                _ = tokio::time::sleep_until(thinking_at.unwrap_or(finish_at)), if thinking_at.is_some() => Wake::ThinkingDeadline,
                 message = socket.next() => Wake::Message(message),
                 command = commands.recv() => Wake::Command(command),
             };
@@ -557,6 +612,12 @@ async fn run(
                     }
                 }
                 Wake::Deadline => return Err(GeminiError::Timeout("finish")),
+                Wake::ThinkingDeadline => {
+                    if held.as_ref().is_some_and(|h| h.generation == sender.generation()) {
+                        return Err(GeminiError::Timeout("thinking silence"));
+                    }
+                    held = None;
+                }
                 Wake::Message(message) => {
                     if let Some(policy) = policy.as_ref().filter(|_| {
                         recoverable_read(&message, go_away)
@@ -575,9 +636,13 @@ async fn run(
                         // bounded queue until setupComplete; no sent action is replayed.
                         drop(socket);
                         let (replacement, update) = {
-                            let connecting = open_socket(&sender.config, Some(policy), Some(token));
+                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref());
                             tokio::pin!(connecting);
                             loop {
+                                if held.as_ref().is_some_and(|h| h.generation != sender.generation()) {
+                                    held = None;
+                                }
+                                let thinking_at = held.as_ref().map(|h| h.deadline);
                                 if control.borrow().cancel
                                     || sender.finishing.load(Ordering::SeqCst)
                                 {
@@ -587,6 +652,12 @@ async fn run(
                                     changed = control.changed() => {
                                         if changed.is_err() { return Err(GeminiError::Closed); }
                                         control.borrow_and_update();
+                                    }
+                                    _ = tokio::time::sleep_until(thinking_at.unwrap_or(finish_at)), if thinking_at.is_some() => {
+                                        if held.as_ref().is_some_and(|h| h.generation == sender.generation()) {
+                                            return Err(GeminiError::Timeout("thinking silence"));
+                                        }
+                                        held = None;
                                     }
                                     result = &mut connecting => break result?,
                                 }
@@ -627,10 +698,18 @@ async fn run(
                         }
                         _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
                     };
-                    let packet = protocol::parse(&bytes, &sender.config, policy.as_ref())?;
+                    let packet = if thinking.is_some() {
+                        protocol::parse_with_thinking(&bytes, &sender.config, policy.as_ref(), true)?
+                    } else {
+                        protocol::parse(&bytes, &sender.config, policy.as_ref())?
+                    };
                     if packet.setup_complete {
                         return Err(GeminiError::Protocol("duplicate setupComplete"));
                     }
+                    if let (Some(held), Some(thinking)) = (&mut held, &thinking) {
+                        held.deadline = Instant::now() + thinking.silence_timeout;
+                    }
+                    let interaction_status = packet.interaction_status;
                     apply_resumption(&mut handle, packet.resumption);
                     for mut event in packet.events {
                         if policy.is_some() && matches!(event, Event::GoAway { .. }) {
@@ -638,6 +717,7 @@ async fn run(
                             continue;
                         }
                         if matches!(event, Event::Interrupted) {
+                            held = None;
                             sender.interrupt().await;
                             retire_pending(
                                 &mut pending,
@@ -649,6 +729,7 @@ async fn run(
                             output_active = false;
                             // The protocol follows interrupted with turnComplete.
                             busy = true;
+                            busy_generation = generation;
                         }
                         if let Event::ToolCalls(calls) = &mut event {
                             for call in calls {
@@ -691,8 +772,27 @@ async fn run(
                             }
                         }
                         if matches!(event, Event::TurnComplete) {
-                            busy = false;
-                            has_audio = false;
+                            if let Some(thinking) = &thinking {
+                                if interaction_status == Some(protocol::InteractionStatus::InProgress) {
+                                    if !suppressed {
+                                        held.get_or_insert_with(|| HeldCompletion {
+                                            origin: if output_active { output_origin.clone() } else { input_origin.clone() },
+                                            generation,
+                                            deadline: Instant::now() + thinking.silence_timeout,
+                                        });
+                                        busy = true;
+                                        busy_generation = generation;
+                                    }
+                                    continue;
+                                }
+                                held = None;
+                            }
+                            // An identifiable locally suppressed old turn must not
+                            // clear a newer admitted input's busy state.
+                            if thinking.is_none() || !suppressed || busy_generation != generation {
+                                busy = false;
+                                has_audio = false;
+                            }
                         }
                         if sender.config.mode == SessionMode::Transcription
                             && matches!(event, Event::InputTranscription { is_final: true, .. })
@@ -711,6 +811,7 @@ async fn run(
                             output_active = true;
                             if !matches!(event, Event::TurnComplete) {
                                 busy = true;
+                                busy_generation = generation;
                             }
                         }
                         let origin = if event.is_output() || matches!(event, Event::ToolCalls(_)) {
@@ -763,6 +864,25 @@ async fn run(
                             )?;
                         }
                     }
+                    if thinking.is_some() && interaction_status == Some(protocol::InteractionStatus::Idle) {
+                        if let Some(completion) = held.take() {
+                            if completion.generation == generation && generation == sender.generation() {
+                                emit(&events, GeminiEvent {
+                                    event: Event::TurnComplete,
+                                    origin: completion.origin,
+                                    generation: completion.generation,
+                                })?;
+                                busy = false;
+                                has_audio = false;
+                                output_active = false;
+                            }
+                        } else if suppressed {
+                            // IDLE acknowledges the old drain, but is not a new
+                            // completion and cannot finish newer queued input.
+                            if busy_generation != generation { busy = false; }
+                            suppressed = false;
+                        }
+                    }
                 }
                 Wake::Command(command) => {
                     let Some(command) = command else {
@@ -787,6 +907,7 @@ async fn run(
                                 .await?;
                             }
                             busy = true;
+                            busy_generation = generation;
                         }
                         finishing = true;
                         finish_at = Instant::now() + sender.config.limits.finish_timeout;
@@ -846,6 +967,9 @@ async fn run(
                         .await?;
                     }
                     input_origin = command.origin;
+                    if matches!(action, Action::ActivityEnd | Action::Audio(_) | Action::AudioStreamEnd | Action::RealtimeText(_) | Action::ClientContent { turn_complete: true, .. } | Action::ToolResponses(_)) {
+                        busy_generation = command.generation;
+                    }
                     match action {
                         Action::ActivityStart { preroll } => {
                             activity = true;
@@ -1185,5 +1309,58 @@ mod resumption_tests {
             ),
             Err(GeminiError::Unsupported("session resumption"))
         ));
+    }
+}
+
+#[cfg(test)]
+mod thinking_configuration_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn thinking_policy_rejects_unbounded_and_incompatible_settings_before_connect() {
+        for duration in [Duration::ZERO, Duration::from_secs(86_401)] {
+            assert!(matches!(
+                GeminiClient::new(GeminiConfig::new("fixture", "model"))
+                    .unwrap()
+                    .with_thinking(ThinkingPolicy {
+                        level: ThinkingLevel::Low,
+                        silence_timeout: duration
+                    }),
+                Err(GeminiError::Invalid("thinking silence timeout"))
+            ));
+        }
+        let mut config = GeminiConfig::new("fixture", "model");
+        config.session.tools.push(FunctionDeclaration {
+            name: "tool".into(),
+            description: String::new(),
+            parameters: serde_json::json!({}),
+        });
+        assert!(matches!(
+            GeminiClient::new(config)
+                .unwrap()
+                .with_thinking(ThinkingPolicy::default()),
+            Err(GeminiError::Unsupported(_))
+        ));
+        let config = GeminiConfig::transcription("fixture", "model");
+        assert!(matches!(
+            GeminiClient::new(config)
+                .unwrap()
+                .with_thinking(ThinkingPolicy::default()),
+            Err(GeminiError::Unsupported(_))
+        ));
+        for level in [
+            ThinkingLevel::Low,
+            ThinkingLevel::Medium,
+            ThinkingLevel::High,
+        ] {
+            assert!(GeminiClient::new(GeminiConfig::new("fixture", "model"))
+                .unwrap()
+                .with_thinking(ThinkingPolicy {
+                    level,
+                    ..ThinkingPolicy::default()
+                })
+                .is_ok());
+        }
     }
 }

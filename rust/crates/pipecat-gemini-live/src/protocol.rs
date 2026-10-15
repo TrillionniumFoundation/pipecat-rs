@@ -259,7 +259,13 @@ pub(crate) struct ResumptionUpdate {
     pub resumable: bool,
     pub new_handle: Option<String>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InteractionStatus {
+    InProgress,
+    Idle,
+}
 pub(crate) struct Parsed {
+    pub interaction_status: Option<InteractionStatus>,
     pub resumption: Option<ResumptionUpdate>,
     pub setup_complete: bool,
     pub events: Vec<Event>,
@@ -269,6 +275,15 @@ pub(crate) fn parse(
     bytes: &[u8],
     config: &GeminiConfig,
     policy: Option<&ResumptionPolicy>,
+) -> Result<Parsed, GeminiError> {
+    parse_with_thinking(bytes, config, policy, false)
+}
+
+pub(crate) fn parse_with_thinking(
+    bytes: &[u8],
+    config: &GeminiConfig,
+    policy: Option<&ResumptionPolicy>,
+    thinking: bool,
 ) -> Result<Parsed, GeminiError> {
     if bytes.len() > config.limits.max_message_bytes {
         return Err(GeminiError::TooLarge);
@@ -330,16 +345,19 @@ pub(crate) fn parse(
     let mut events = Vec::new();
     let mut generation_complete = false;
     let mut turn_complete = false;
+    let mut interaction_status = None;
     if let Some(content) = packet.server_content {
-        if content
-            .interaction_status
-            .as_deref()
-            .is_some_and(|s| !matches!(s, "IDLE" | "INTERACTION_STATUS_UNSPECIFIED"))
-        {
-            return Err(GeminiError::Unsupported(
-                "background reasoning interaction status",
-            ));
-        }
+        interaction_status = match content.interaction_status.as_deref() {
+            Some("IN_PROGRESS") if thinking => Some(InteractionStatus::InProgress),
+            Some("REQUIRES_ACTION") if thinking => Some(InteractionStatus::Idle),
+            Some("IDLE") => Some(InteractionStatus::Idle),
+            None | Some("INTERACTION_STATUS_UNSPECIFIED") => None,
+            Some(_) => {
+                return Err(GeminiError::Unsupported(
+                    "background reasoning interaction status",
+                ))
+            }
+        };
         if content.grounding_metadata.is_some() || content.url_context_metadata.is_some() {
             return Err(GeminiError::Unsupported("search/URL grounding"));
         }
@@ -451,6 +469,7 @@ pub(crate) fn parse(
         return Err(GeminiError::TooLarge);
     }
     Ok(Parsed {
+        interaction_status,
         resumption,
         setup_complete: packet.setup_complete.is_some(),
         events,
@@ -521,5 +540,52 @@ mod video_tests {
             action_messages(&action, &config),
             Err(GeminiError::Unsupported(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod thinking_tests {
+    use super::*;
+
+    #[test]
+    fn thinking_status_is_explicit_and_default_stays_strict() {
+        let config = GeminiConfig::new("fixture", "model");
+        for (status, expected) in [
+            ("IN_PROGRESS", Some(InteractionStatus::InProgress)),
+            ("IDLE", Some(InteractionStatus::Idle)),
+            ("REQUIRES_ACTION", Some(InteractionStatus::Idle)),
+            ("INTERACTION_STATUS_UNSPECIFIED", None),
+        ] {
+            let bytes = serde_json::to_vec(&json!({"serverContent": {
+                "interactionStatus": status, "turnComplete": true,
+                "generationComplete": true
+            }}))
+            .unwrap();
+            let parsed = parse_with_thinking(&bytes, &config, None, true).unwrap();
+            assert_eq!(parsed.interaction_status, expected);
+            assert_eq!(
+                parsed.events,
+                [Event::GenerationComplete, Event::TurnComplete]
+            );
+            assert_eq!(
+                parse(&bytes, &config, None).is_err(),
+                matches!(status, "IN_PROGRESS" | "REQUIRES_ACTION")
+            );
+        }
+        let bytes = br#"{"serverContent":{"interactionStatus":"UNKNOWN","modelTurn":{"parts":[{"text":"not admitted"}]}}}"#;
+        assert!(matches!(
+            parse_with_thinking(bytes, &config, None, true),
+            Err(GeminiError::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn thinking_parser_preserves_packet_tool_order_before_completion() {
+        let config = GeminiConfig::new("fixture", "model");
+        let bytes = br#"{"serverContent":{"interactionStatus":"IDLE","turnComplete":true},"toolCall":{"functionCalls":[{"name":"unexpected","id":"call"}]}}"#;
+        let parsed = parse_with_thinking(bytes, &config, None, true).unwrap();
+        assert!(matches!(parsed.events[0], Event::ToolCalls(_)));
+        assert_eq!(parsed.events[1], Event::TurnComplete);
+        // The session rejects this undeclared tool before applying completion.
     }
 }
