@@ -304,7 +304,7 @@ Unsupported capabilities fail validation rather than being approximated:
 - Judge/provider Python factory configuration, explainers, simulated personas,
   goals/metrics, provider services, Python bot subprocesses, Python suite manifests,
   runner HTTP requests, recording and cache orchestration
-- YAML/CLI audio modalities, automatic file loading, TTS/STT/VAD inference,
+- Broad audio modalities, suite/release audio loading, TTS/STT/VAD inference,
   transcript-audio alignment, `tts_response`, recording, and scripted image-file
   input. The bounded recorded-input library API described below is available
   separately for compatible audio-capable endpoints
@@ -555,5 +555,7 @@ recordings through paced `raw-audio` messages and existing transcription/text
 assertions. See [RECORDED_AUDIO.md](RECORDED_AUDIO.md) for budgets, ownership,
 source differences and the real native pipeline fixture. This opt-in library
 path can target the built-in host with `EvalBotHost::with_raw_audio_input(true)`;
-YAML/CLI recording loading remains unsupported. The host opt-in only adds single
+Direct Unix CLI runs can opt into bounded recording bundles with
+`--recorded-audio`; see [RECORDED_SCENARIOS.md](RECORDED_SCENARIOS.md). Default
+parsing and suite/release audio support remain unchanged. The host opt-in only adds single
 `raw-audio` input, preserving generated-text output and mandatory `skip_tts`.

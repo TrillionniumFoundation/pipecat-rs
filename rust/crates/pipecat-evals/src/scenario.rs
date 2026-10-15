@@ -92,6 +92,7 @@ impl ScenarioFile {
             &mut budget,
             &mut construction,
             0,
+            None,
         )?;
         Self::from_value(serde_json::to_value(yaml).map_err(|e| invalid(&e.to_string()))?)
     }
@@ -103,6 +104,12 @@ impl ScenarioFile {
         Self::from_value(serde_json::to_value(yaml).map_err(|e| invalid(&e.to_string()))?)
     }
     pub fn from_value(value: Value) -> Result<Self, EvalError> {
+        Self::from_value_with(value, |_| Ok(()))
+    }
+    pub(crate) fn from_value_with(
+        value: Value,
+        mut preprocess: impl FnMut(&mut Map<String, Value>) -> Result<(), EvalError>,
+    ) -> Result<Self, EvalError> {
         let mut root = object(value, "scenario file")?;
         let name = nonempty(root.get("name"), "file name")?.to_owned();
         let entries = root.remove("scenarios");
@@ -129,9 +136,11 @@ impl ScenarioFile {
                 let mut merged = root.clone();
                 merged.extend(entry.clone());
                 merged.insert("name".into(), format!("{name}/{entry_name}").into());
+                preprocess(&mut merged)?;
                 scenarios.push(parse_script(merged)?);
             }
         } else {
+            preprocess(&mut root)?;
             scenarios.push(parse_script(root)?);
         }
         Ok(Self { name, scenarios })
@@ -445,15 +454,21 @@ fn load_yaml(
     budget: &mut usize,
     construction: &mut ConstructionBudget,
     depth: usize,
+    bundle_root: Option<&Path>,
 ) -> Result<serde_yaml::Value, EvalError> {
     let path = path.canonicalize()?;
     if stack.len() >= 8 || stack.contains(&path) {
         return Err(invalid("include cycle or depth exceeds 8"));
     }
-    let mut bytes = Vec::new();
-    std::fs::File::open(&path)?
-        .take((MAX_FILE_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)?;
+    let bytes = if let Some(root) = bundle_root {
+        crate::recorded_scenario::read_regular(&path, root, MAX_FILE_BYTES)?
+    } else {
+        let mut bytes = Vec::new();
+        std::fs::File::open(&path)?
+            .take((MAX_FILE_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)?;
+        bytes
+    };
     if bytes.len() > MAX_FILE_BYTES || bytes.len() > *budget {
         return Err(EvalError::Limit("scenario/include bytes"));
     }
@@ -471,6 +486,7 @@ fn load_yaml(
         budget,
         construction,
         depth,
+        bundle_root,
     )?;
     stack.pop();
     Ok(value)
@@ -482,6 +498,7 @@ fn resolve_yaml(
     budget: &mut usize,
     construction: &mut ConstructionBudget,
     depth: usize,
+    bundle_root: Option<&Path>,
 ) -> Result<(), EvalError> {
     match value {
         serde_yaml::Value::Tagged(tag) => {
@@ -495,11 +512,26 @@ fn resolve_yaml(
             if path.len() > 4096 {
                 return Err(EvalError::Limit("include path bytes"));
             }
-            *value = load_yaml(&base.join(path), stack, budget, construction, depth)?;
+            *value = load_yaml(
+                &base.join(path),
+                stack,
+                budget,
+                construction,
+                depth,
+                bundle_root,
+            )?;
         }
         serde_yaml::Value::Sequence(seq) => {
             for value in seq {
-                resolve_yaml(value, base, stack, budget, construction, depth + 1)?;
+                resolve_yaml(
+                    value,
+                    base,
+                    stack,
+                    budget,
+                    construction,
+                    depth + 1,
+                    bundle_root,
+                )?;
             }
         }
         serde_yaml::Value::Mapping(map) => {
@@ -507,10 +539,32 @@ fn resolve_yaml(
                 if !key.is_string() {
                     return Err(invalid("mapping keys must be strings"));
                 }
-                resolve_yaml(value, base, stack, budget, construction, depth + 1)?;
+                resolve_yaml(
+                    value,
+                    base,
+                    stack,
+                    budget,
+                    construction,
+                    depth + 1,
+                    bundle_root,
+                )?;
             }
         }
         _ => {}
     }
     Ok(())
+}
+
+/// Retains the ordinary include resolver's per-including-file path semantics.
+pub(crate) fn load_recorded_value(path: &Path, root: &Path) -> Result<Value, EvalError> {
+    let mut budget = MAX_DOCUMENT_BYTES;
+    let value = load_yaml(
+        path,
+        &mut Vec::new(),
+        &mut budget,
+        &mut ConstructionBudget::default(),
+        0,
+        Some(root),
+    )?;
+    Ok(serde_json::to_value(value)?)
 }

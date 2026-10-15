@@ -7,6 +7,8 @@ pub mod judge;
 pub mod matcher;
 pub mod process;
 mod recorded_audio;
+mod recorded_scenario;
+pub use recorded_scenario::RecordedScenarioFile;
 pub mod release;
 pub use recorded_audio::RecordedAudio;
 pub mod scenario;

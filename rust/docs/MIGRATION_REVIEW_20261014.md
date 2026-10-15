@@ -40,12 +40,14 @@ Follow-up status after the focused review: the optional cache/reasoning usage
 projection and rolling RTVI audio levels now have their own qualified native
 paths (see [usage details](../crates/pipecat-rtvi/USAGE_DETAILS.md) and
 [audio levels](../crates/pipecat-rtvi/AUDIO_LEVELS.md)). Recorded
-user audio now has a bounded library-only client path described in
-[recorded audio](../crates/pipecat-evals/RECORDED_AUDIO.md); this does not resolve YAML audio scenarios,
-synthesized users, bot-audio transcription/judging, or live-provider qualification.
+user audio now has a bounded library client path described in
+[recorded audio](../crates/pipecat-evals/RECORDED_AUDIO.md); synthesized users,
+bot-audio transcription/judging and live-provider qualification remain separate.
 The built-in eval host now separately offers opt-in single raw-audio reception
 for that 16 kHz mono library path, while keeping generated-text output. Its actual
 local receiving pipeline is covered by a PCM-byte fixture; human speech still
 requires application-provided STT/VAD or a realtime model. YAML/CLI recording
-loading is not enabled. These are separate contracts, not a whole-project
+loading now has an explicit Unix direct-run opt-in for bounded trusted-local
+WAV bundles; suite/release loading, synthesized users and audio output judging
+remain separate. See [recorded scenarios](../crates/pipecat-evals/RECORDED_SCENARIOS.md). These are separate contracts, not a whole-project
 completion claim.

@@ -24,8 +24,9 @@ assert!(result.passed, "{:?}", result.failures);
 
 The endpoint must admit RTVI `raw-audio` and route it through its own STT/VAD or
 realtime model. The built-in `EvalBotHost` accepts this input only when explicitly constructed
-with `.with_raw_audio_input(true)`; its default and CLI scenario parser remain
-text-only. The session constructor does not enable host capabilities. The
+with `.with_raw_audio_input(true)`; its default remains text-only. Direct CLI
+runs can explicitly load Unix recording bundles with `--recorded-audio` (see
+[RECORDED_SCENARIOS.md](RECORDED_SCENARIOS.md)); default parsing remains text-only. The session constructor does not enable host capabilities. The
 local integration fixture demonstrates a genuine WebSocket → `RtviProcessor` →
 PCM recognition fixture → native `RtviObserver` → evaluation assertion path. It
 recognizes fixed sample bytes, not human speech; no live STT/provider/browser or

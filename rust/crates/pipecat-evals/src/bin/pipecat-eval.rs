@@ -2,7 +2,7 @@
 use pipecat_evals::{
     process::ProcessOptions,
     release::{run_release, ReleaseManifest},
-    Cancellation, EvalSession, ScenarioFile, SessionOptions,
+    Cancellation, EvalSession, RecordedScenarioFile, ScenarioFile, SessionOptions,
 };
 #[tokio::main]
 async fn main() {
@@ -19,11 +19,26 @@ async fn main() {
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     let suite = args.len() == 2 && args[0] == "suite";
-    let single =
-        (args.len() == 3 || (args.len() == 4 && args[3] == "--stop-bot")) && args[0] == "run";
+    let single = (3..=5).contains(&args.len()) && args[0] == "run";
+    let mut stop_bot = false;
+    let mut recorded = false;
+    if single {
+        for flag in &args[3..] {
+            match flag.as_str() {
+                "--stop-bot" if !stop_bot => stop_bot = true,
+                "--recorded-audio" if !recorded => recorded = true,
+                _ => {
+                    return Err(pipecat_evals::EvalError::Scenario(
+                        "unknown or duplicate run flag".into(),
+                    ))
+                }
+            }
+        }
+    }
+
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot]\n       pipecat-eval suite NATIVE-MANIFEST.yaml".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio]\n       pipecat-eval suite NATIVE-MANIFEST.yaml".into()));
     }
     // Parse every source and option before installing the signal task or launching a bot.
     let manifest = if suite {
@@ -33,22 +48,27 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     };
     let mut sessions = Vec::new();
     if single {
-        let file = ScenarioFile::load(&args[1])?;
         let options = SessionOptions {
-            stop_bot: args.len() == 4,
+            stop_bot,
             ..Default::default()
         };
-        if options.stop_bot && file.scenarios.len() > 1 {
-            return Err(pipecat_evals::EvalError::Scenario(
-                "--stop-bot with several scenarios needs independent bot endpoints; use run_suite"
-                    .into(),
-            ));
+        if recorded {
+            let file = RecordedScenarioFile::load(&args[1])?;
+            if options.stop_bot && file.len() > 1 {
+                return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
+            }
+            sessions = file.into_sessions(&args[2], options)?;
+        } else {
+            let file = ScenarioFile::load(&args[1])?;
+            if options.stop_bot && file.scenarios.len() > 1 {
+                return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use run_suite".into()));
+            }
+            sessions = file
+                .scenarios
+                .into_iter()
+                .map(|scenario| EvalSession::new(scenario, &args[2], options.clone()))
+                .collect::<Result<Vec<_>, _>>()?;
         }
-        sessions = file
-            .scenarios
-            .into_iter()
-            .map(|scenario| EvalSession::new(scenario, &args[2], options.clone()))
-            .collect::<Result<Vec<_>, _>>()?;
     }
     let cancel = Cancellation::new();
     let signal_cancel = cancel.clone();
