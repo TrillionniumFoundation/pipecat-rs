@@ -19,8 +19,8 @@ Build with `--features bot-audio-transcription`. Construct a typed scenario with
 The ordinary constructors still reject a literal typed `response` event. Existing
 file loaders keep their text-mode `response` to `llm_response` alias. The CLI
 selects spoken responses only with the explicit flag below, for both `run` and
-compiled-child `suite`. Classifier
-`eval` predicates are not accepted by this initial audio-response constructor.
+compiled-child `suite`. Explicit `eval` criteria on spoken `response` and
+`function_call` use the configured native classifier judge (see below).
 
 `BotTranscriptionConfig::new` consumes a `SileroVadAnalyzer`, `SpeechConfig`, and
 `TranscriptionRequest`. The analyzer must use 16,000 Hz and `stop_secs = 0.4`.
@@ -168,7 +168,7 @@ any scenario runs. `--stop-bot` still requires one scenario.
 Only this explicit loader preserves `expect.response` and `send_after.response`
 as spoken transcript events. Explicit `llm_response` remains reported LLM text;
 default loaders and CLI runs retain their prior alias and validation behavior.
-Classifier predicates remain unsupported. `--recorded-audio` can be combined with
+`--recorded-audio` can be combined with
 this mode, reusing its existing bounded WAV loader and outer-scenario-directory
 media paths. `--bot-audio-wav` is mutually exclusive for `run`.
 Cancellation, deadlines and old-generation cleanup use the existing transcription
@@ -227,8 +227,9 @@ text plans keep their existing bounds.
 
 The input recording limits still apply across the complete manifest and repeats.
 They are separate from each session's bot PCM/transcription limits. No audio
-file export, playback, live-provider accuracy qualification or classifier judge
-is implied by a successful spoken-response suite.
+file export, playback or live-provider accuracy qualification is implied by a
+successful spoken-response suite. Semantic judgments run only when explicit
+`eval` criteria and a judge configuration are supplied.
 
 ## Owned native model loading
 
@@ -328,3 +329,50 @@ joins both owners. Active inference teardown can block until native code
 returns; this policy adds no hard cancellation deadline. Queue overflow or
 model failure is an evaluation failure, not silent audio truncation. The
 existing total PCM, per-segment, transcript and HTTP limits remain in force.
+
+
+## Semantic judgments of spoken responses
+
+In the explicit audio-response mode, `expect.response.eval` judges completed,
+current-epoch STT text. The same existing `judge.eval` configuration used by text
+sessions selects the classifier, endpoint, credential environment variable and
+bounded request options. No credential, classifier service or billable request
+is provisioned implicitly. Configuration and missing credentials are checked
+before model loading or any connection in the CLI and release preparation paths.
+The classifier's modality remains text: its input is the recognized transcript,
+not raw PCM. This evaluates intended spoken meaning, not audio quality.
+
+Library callers may inject an owned `EvalJudge` with
+`EvalSession::with_bot_transcription_and_judge`. Both constructors support
+semantic `response` and `function_call` checks. Parallel `llm_response` events
+remain available for ordinary text predicates, but `llm_response.eval` in audio
+mode is rejected before connection. The pinned Python matcher can judge that
+combination; this native subset avoids combining two reply evidence sources in
+one transcript. Use ordinary text mode to judge generated LLM text.
+
+Only spoken `response` events enter this session's judge transcript. Consumed
+segments are appended once; queued spoken tails are recorded before the next
+user boundary. Consecutive bot segments merge into one latest reply. This keeps
+the existing native full-conversation context, including segments consumed by
+non-eval checks; the source matcher appends only deltas encountered by eval
+checks. User recording reference text remains the user-side context and is not
+sent as replacement input audio.
+
+`Continue` waits for further spoken segments within the original expectation
+budget. `No` takes one local activity snapshot: actual VAD speech, a held stop,
+an open local turn, queued STT segments or in-flight STT can defer rejection to
+that original deadline. Otherwise it waits the judge's bounded No grace. Pure
+queued silence and periodic window bookkeeping do not extend grace. A later
+speech start does not retroactively extend the snapshot. The pinned source uses
+a one-time remote speaking snapshot instead; remote speaking reports are not an
+audio completion authority here. Each subsequent response can produce a new
+judgment over the merged reply.
+
+Classifier requests retain the existing immutable transcript revision, cache,
+request/response limits, deadline and epoch fence. While awaiting a verdict the
+session continues processing audio. A session-owned pending-recognition slot
+keeps an already claimed STT result across cancellation of the event pump; it
+is committed once after the admitted-input fence or discarded on an old epoch.
+No extra background judge task is created. Cancellation closes the owned HTTP
+future and follows the existing VAD/Smart Turn/transport cleanup contract.
+These protocol fixtures do not establish live recognizer/classifier accuracy.

@@ -240,10 +240,14 @@ impl ScriptScenario {
     /// validation copy leaves the original response events unchanged.
     #[cfg(feature = "bot-audio-transcription")]
     pub(crate) fn audio_response_validation_copy(&self) -> Result<Self, EvalError> {
-        if self.needs_judge() {
+        if self
+            .turns
+            .iter()
+            .flat_map(|turn| &turn.expect)
+            .any(|expectation| expectation.eval.is_some() && expectation.event == "llm_response")
+        {
             return Err(EvalError::Unsupported(
-                "audio response currently supports text predicates, not classifier judgments"
-                    .into(),
+                "audio response classifier judgments support response and function_call; use text mode to judge llm_response".into(),
             ));
         }
         let mut copy = self.clone();

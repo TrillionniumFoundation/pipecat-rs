@@ -84,10 +84,10 @@ impl EventStream {
         }
         self.append(json!({"type":"response", "text":text}))
     }
-    pub(crate) fn pending_responses(&self) -> Vec<Value> {
+    pub(crate) fn pending_responses(&self, event_type: &str) -> Vec<Value> {
         self.queue
             .iter()
-            .filter(|event| event["type"] == "llm_response")
+            .filter(|event| event["type"] == event_type)
             .cloned()
             .collect()
     }

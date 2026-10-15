@@ -214,8 +214,10 @@ source `{python}` / `{bot}` spawn templates are rejected.
 Paths resolve relative to the manifest. Bot paths additionally use `bots_dir`;
 scenario references ending in `.yaml`, `.yml` or `.json` resolve directly, while
 other names resolve below `scenarios_dir` with `.yaml` added. scenario files use
-the existing bounded loader; unsupported judge providers, audio and simulated scenarios fail before
-any process launches. All scenario/config inputs are validated before execution.
+the existing bounded loader; unsupported judge providers and simulated scenarios
+fail before any process launches. Ordinary loading remains text-only; explicit
+recorded-input and spoken-response suite modes are documented separately below.
+All scenario/config inputs are validated before execution.
 
 `runner_body` accepts exactly one `path` or inline mapping `data`. A path must
 contain a bounded YAML/JSON mapping and defaults the child's cwd to the body
@@ -307,7 +309,9 @@ Unsupported capabilities fail validation rather than being approximated:
 - Broad source-configured audio modalities, TTS/provider factories,
   transcript-audio alignment, `tts_response`, and scripted image-file input.
   Bounded recorded input, received-PCM capture/WAV export, and the optional
-  native Silero/HTTP STT spoken-response library path are described below.
+  native Silero/HTTP STT spoken-response library, direct-run and hosted-suite
+  paths are described below. Owned model loading and optional Smart Turn
+  endpointing are documented in BOT_AUDIO_RESPONSE.md.
   They do not implement source recording/cache orchestration.
 - No report dashboard, persistent runs/logs directory, progress callbacks,
   process respawn/retry, distributed scheduling, or descendant process containment
@@ -357,7 +361,10 @@ launcher admission, Linux `/proc` absence after reap and owned-task quiescence. 
 
 Scripted text `response`/`llm_response` and `function_call` expectations accept
 `eval: <criterion>` (1..8192 UTF-8 bytes). Deterministic text/name/argument checks
-still apply before classifier inference. `function_call_stopped`, image, audio,
+still apply before classifier inference. Explicit spoken-response mode also
+accepts `response.eval` over completed STT text and `function_call.eval`; see
+[BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md) for source selection and its
+narrow mixed-event restrictions. `function_call_stopped`, raw audio, images,
 simulation, metrics, and other event types do not support native `eval`.
 
 The CLI, independent endpoint suites, and native hosted release sessions use:

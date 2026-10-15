@@ -549,6 +549,22 @@ impl BotTranscription {
     pub(crate) fn request_idle_notification(&mut self) {
         self.idle_notified = false;
     }
+    /// A No verdict may await the rest of already active local speech. Pure
+    /// queued silence and periodic VAD-window bookkeeping do not extend grace.
+    pub(crate) fn reply_in_progress(&self) -> bool {
+        self.local_speaking
+            || self.held_stop
+            || self.turn_active
+            || !self.pending.is_empty()
+            || self.inflight.is_some()
+            || !self.ready.is_empty()
+            || self
+                .shared
+                .activity
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .vad_busy
+    }
     pub(crate) fn is_idle(&self) -> bool {
         if self.finished || self.shared.failure().is_some() {
             return false;
@@ -2048,6 +2064,35 @@ mod tests {
             idle_notified: false,
         };
         (engine, output, input)
+    }
+
+    #[test]
+    fn judge_no_grace_distinguishes_local_reply_from_silence_bookkeeping() {
+        let (mut engine, _output, _input) = test_engine();
+        {
+            let mut activity = engine.shared.activity.lock().unwrap();
+            activity.queued_bytes = 640;
+            activity.processing = true;
+            activity.tail_unsettled = true;
+            activity.output_events = 1;
+        }
+        assert!(!engine.reply_in_progress());
+        engine.shared.activity.lock().unwrap().vad_busy = true;
+        assert!(engine.reply_in_progress());
+        engine.shared.activity.lock().unwrap().vad_busy = false;
+        engine.local_speaking = true;
+        assert!(engine.reply_in_progress());
+        engine.local_speaking = false;
+        engine.held_stop = true;
+        assert!(engine.reply_in_progress());
+        engine.held_stop = false;
+        engine.turn_active = true;
+        assert!(engine.reply_in_progress());
+        engine.turn_active = false;
+        engine.ready.push_back((0, "admitted reply".into()));
+        assert!(engine.reply_in_progress());
+        engine.ready.clear();
+        assert!(!engine.reply_in_progress());
     }
 
     #[tokio::test]

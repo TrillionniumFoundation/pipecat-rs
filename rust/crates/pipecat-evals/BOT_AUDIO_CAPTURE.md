@@ -38,6 +38,8 @@ mixing, or speaker segmentation. Optional WAV export only packages received PCM.
 `response` in the Python harness are different downstream event paths; neither
 is implemented by exposing these bytes. Real human-speech evaluation still needs
 an application-selected transcription/judging path and separate qualification.
+The distinct native [spoken-response path](BOT_AUDIO_RESPONSE.md) supplies local
+VAD, HTTP STT and explicit semantic judgments; capture itself does not.
 
 ## Wire, bounds and source differences
 

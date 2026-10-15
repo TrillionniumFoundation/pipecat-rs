@@ -59,9 +59,10 @@ continuous idle silence and ownership rules are described in
 - Group headers and entries use the existing shallow override rules. Entries
   replace entire values; user-provider dictionaries are not deep-merged.
 - Default `suite`/release manifest loading still rejects audio; explicit recorded
-  suites are described in [RECORDED_SUITE.md](RECORDED_SUITE.md). Other routes reject audio
-  scenarios. This flag only extends direct `run`; it never drops recording
-  mappings and then evaluates reference text instead.
+  suites are described in [RECORDED_SUITE.md](RECORDED_SUITE.md). Ordinary loaders
+  still reject audio; explicit spoken-response modes are documented separately
+  in [BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md). No route silently drops
+  recording mappings and evaluates reference text instead.
 
 ## Paths, reads and memory limits
 

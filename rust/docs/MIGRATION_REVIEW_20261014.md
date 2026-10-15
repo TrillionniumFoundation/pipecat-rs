@@ -14,7 +14,7 @@ Gemini Live rejected InputImage/UserImage. The bounded RGB video path described 
 service boundary. Full pixel-format parity, live capture and provider acceptance
 remain separate.
 
-Other concrete entry points still deserving staged work:
+Historical slice80 candidates (status updated below):
 
 - Rich usage to clients: services decode cache-read/write and reasoning token
   fields and retain full usage in frame metadata, but core Metric::LlmUsage and
@@ -42,7 +42,7 @@ paths (see [usage details](../crates/pipecat-rtvi/USAGE_DETAILS.md) and
 [audio levels](../crates/pipecat-rtvi/AUDIO_LEVELS.md)). Recorded
 user audio now has a bounded library client path described in
 [recorded audio](../crates/pipecat-evals/RECORDED_AUDIO.md); synthesized users,
-bot-audio transcription/judging and live-provider qualification remain separate.
+live-provider qualification remained separate at that checkpoint.
 The built-in eval host now separately offers opt-in single raw-audio reception
 for that 16 kHz mono library path, while keeping generated-text output. Its actual
 local receiving pipeline is covered by a PCM-byte fixture; human speech still
@@ -51,15 +51,47 @@ loading now has an explicit Unix direct-run opt-in for bounded trusted-local
 WAV bundles. Explicit hosted suite recording input now reuses the same loader and
 native child ownership, with whole-manifest/repeat budgets and pre-spawn plan
 revalidation; see [recorded suites](../crates/pipecat-evals/RECORDED_SUITE.md).
-Synthesized users and audio output judging remain separate. See also
+Synthesized users remained separate at that checkpoint. See also
 [recorded scenarios](../crates/pipecat-evals/RECORDED_SCENARIOS.md). These are separate contracts, not a whole-project
 completion claim.
 
 Bot audio now also has an explicit bounded library capture path from a native
 host output boundary to original-rate PCM results; see [bot audio capture](../crates/pipecat-evals/BOT_AUDIO_CAPTURE.md).
-It captures only chunks received before scenario completion. Audio transcription,
-judging and live-provider acceptance remain separate. A Unix direct CLI run can
+It captures only chunks received before scenario completion. Capture alone does
+not transcribe or judge those chunks; live-provider acceptance remains separate. A Unix direct CLI run can
 now explicitly export those received bot chunks as a bounded same-rate mono WAV,
 with no-clobber publication and preserved evaluation results on artifact failure.
 This bot-only arrival-order artifact omits gaps, user tracks, resampling and
 mixing; it is not full Python conversation-recorder parity or audio scoring.
+
+
+## Current focused status, 2026-10-15
+
+Slices89–93 connect captured bot PCM to real local Silero segmentation, bounded
+HTTP STT and completed `response` events, through explicit direct-run and hosted
+suite configuration. Owned native loading preserves cooperative cancellation and
+actual joins; optional Smart Turn adds local model endpointing. See
+[BOT_AUDIO_RESPONSE.md](../crates/pipecat-evals/BOT_AUDIO_RESPONSE.md) for the
+precise limits and source timing differences. The older rows above are not
+current evidence that audio transcription is missing.
+
+Slice94 targets the remaining semantic-judge connection: actual spoken STT text
+must reach the existing classifier independently from reported LLM text, with
+Continue/No, interruption and cancellation ownership verified end-to-end. Its
+qualification is recorded separately; this inventory is not a whole-project
+parity or live-provider claim.
+
+Remaining substantial evaluation paths include:
+
+- Synthesized scripted user speech: file-backed recorded inputs exist, but
+  source `user.speech` synthesis and its cache contract are not connected.
+- Timestamp-aligned two-sided recording: bot-only received-chunk WAV export
+  omits user tracks, gaps, resampling/mixing and interruption-tail accounting.
+- Scripted user-image delivery: observation exists, but scenario image loading
+  and the host image-request workflow remain rejected.
+- Simulated callers/personas: scripted evaluation is implemented; the source
+  persona conversation, hangup and goal-scoring owner is a separate larger path.
+
+Gemini long-session resumption/reconnect also remains a concrete service-level
+candidate. Any next slice must recheck its current source and implementation,
+not infer absence from this historical inventory or inflate coverage counts.

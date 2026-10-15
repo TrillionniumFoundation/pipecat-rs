@@ -136,6 +136,15 @@ pub struct EvalSession {
     transcription_config: Option<BotTranscriptionConfig>,
     #[cfg(feature = "bot-audio-transcription")]
     transcription: Option<BotTranscription>,
+    #[cfg(feature = "bot-audio-transcription")]
+    pending_recognition: Option<(u64, String)>,
+    #[cfg(all(test, feature = "bot-audio-transcription"))]
+    recognition_drain_gate: Option<RecognitionDrainGate>,
+}
+#[cfg(all(test, feature = "bot-audio-transcription"))]
+struct RecognitionDrainGate {
+    entered: Option<tokio::sync::oneshot::Sender<()>>,
+    release: std::sync::Arc<tokio::sync::Notify>,
 }
 impl EvalSession {
     pub fn new(
@@ -199,6 +208,10 @@ impl EvalSession {
             transcription_config: None,
             #[cfg(feature = "bot-audio-transcription")]
             transcription: None,
+            #[cfg(feature = "bot-audio-transcription")]
+            pending_recognition: None,
+            #[cfg(all(test, feature = "bot-audio-transcription"))]
+            recognition_drain_gate: None,
         })
     }
     /// Evaluate `response` predicates from real received 16 kHz mono PCM.
@@ -206,8 +219,8 @@ impl EvalSession {
     /// native speech-timeout turn aggregation; remote speaking reports never
     /// close an audio segment. Supply a typed scenario with `response` events.
     /// The normal file loader retains its text-mode `response` alias.
-    /// Classifier judgments and other audio rates are not
-    /// supported by this explicit subset. All resources are session-owned.
+    /// Classifier judgments use only completed spoken responses, with the
+    /// scenario's explicit judge configuration. All resources are session-owned.
     #[cfg(feature = "bot-audio-transcription")]
     pub fn with_bot_transcription(
         scenario: ScriptScenario,
@@ -215,9 +228,38 @@ impl EvalSession {
         options: SessionOptions,
         config: BotTranscriptionConfig,
     ) -> Result<Self, EvalError> {
+        let validated = scenario.audio_response_validation_copy()?;
+        let judge = if scenario.needs_judge() {
+            Some(validated.judge.as_ref().and_then(|settings| settings.eval.as_ref())
+                .ok_or_else(|| EvalError::Scenario("audio eval assertions require judge.eval configuration or EvalSession::with_bot_transcription_and_judge".into()))?.build()?)
+        } else {
+            None
+        };
+        Self::construct_bot_transcription(scenario, url.into(), options, config, judge)
+    }
+    /// Evaluate spoken responses using an explicitly supplied, session-owned judge.
+    /// Its transcript contains STT responses, never parallel LLM text observations.
+    #[cfg(feature = "bot-audio-transcription")]
+    pub fn with_bot_transcription_and_judge(
+        scenario: ScriptScenario,
+        url: impl Into<String>,
+        options: SessionOptions,
+        config: BotTranscriptionConfig,
+        judge: EvalJudge,
+    ) -> Result<Self, EvalError> {
+        Self::construct_bot_transcription(scenario, url.into(), options, config, Some(judge))
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    fn construct_bot_transcription(
+        scenario: ScriptScenario,
+        url: String,
+        options: SessionOptions,
+        config: BotTranscriptionConfig,
+        judge: Option<EvalJudge>,
+    ) -> Result<Self, EvalError> {
         config.validate()?;
         let validated = scenario.audio_response_validation_copy()?;
-        let mut session = Self::construct(validated, url.into(), options, None)?;
+        let mut session = Self::construct(validated, url, options, judge)?;
         session.scenario = scenario;
         session.enable_bot_audio_url()?;
         session.capture = Some(Capture::new(BotAudioLimits::default()));
@@ -309,6 +351,10 @@ impl EvalSession {
         let started = Instant::now();
         self.stream = EventStream::new(self.options.event_limits.clone());
         self.bot_ready_received = false;
+        #[cfg(feature = "bot-audio-transcription")]
+        {
+            self.pending_recognition = None;
+        }
         let max_duration = self.options.max_duration;
         let outcome = tokio::select! {
             biased;
@@ -463,6 +509,10 @@ impl EvalSession {
     fn turn_boundary(&mut self) -> Result<(), EvalError> {
         self.stream.turn_boundary();
         #[cfg(feature = "bot-audio-transcription")]
+        {
+            self.pending_recognition = None;
+        }
+        #[cfg(feature = "bot-audio-transcription")]
         if let Some(engine) = &mut self.transcription {
             engine.set_epoch(self.stream.epoch())?;
         }
@@ -473,6 +523,8 @@ impl EvalSession {
         // Drain the bounded transport admission queue before the send boundary so
         // already received output cannot satisfy a subsequent user turn.
         self.drain_received().await?;
+        #[cfg(feature = "bot-audio-transcription")]
+        self.publish_pending_recognition()?;
         #[cfg(feature = "bot-audio-transcription")]
         if turn.send_after.is_none() && (turn.user.is_some() || turn.dtmf.is_some()) {
             let deadline = Instant::now() + self.options.bot_quiet_timeout;
@@ -620,8 +672,22 @@ impl EvalSession {
         }
         Ok(())
     }
+    fn judged_response_event(&self) -> &'static str {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() || self.transcription.is_some() {
+            return "response";
+        }
+        "llm_response"
+    }
+    fn judge_reply_busy(&self) -> bool {
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(engine) = &self.transcription {
+            return engine.reply_in_progress();
+        }
+        self.stream.bot_speaking
+    }
     fn record_event(&mut self, event: &Value) -> Result<(), EvalError> {
-        if event["type"] == "llm_response" {
+        if event["type"] == self.judged_response_event() {
             if let Some(judge) = &mut self.judge {
                 judge.add_assistant_message(event["text"].as_str().unwrap_or(""))?;
             }
@@ -632,7 +698,7 @@ impl EvalSession {
         if self.judge.is_some() {
             // Only output before the send boundary is attributed to the old turn.
             // Preserve other pending events for the normal turn-boundary filter.
-            for event in self.stream.pending_responses() {
+            for event in self.stream.pending_responses(self.judged_response_event()) {
                 self.record_event(&event)?;
             }
         }
@@ -683,7 +749,7 @@ impl EvalSession {
                     }
                     last_decision = Some(decision);
                     no_deadline = if decision == JudgeDecision::No {
-                        Some(if self.stream.bot_speaking {
+                        Some(if self.judge_reply_busy() {
                             deadline
                         } else {
                             (Instant::now() + self.judge.as_ref().unwrap().no_grace()).min(deadline)
@@ -715,7 +781,7 @@ impl EvalSession {
             if let Some(event) = self.stream.pop() {
                 if criterion.is_some()
                     && !is_call
-                    && event["type"] == "llm_response"
+                    && event["type"] == self.judged_response_event()
                     && event["text"].as_str().is_none_or(|s| s.trim().is_empty())
                 {
                     continue;
@@ -763,6 +829,8 @@ impl EvalSession {
                 tokio::time::timeout_at(deadline, self.drain_received())
                     .await
                     .map_err(|_| EvalError::Judge(ClassifierError::Deadline))??;
+                #[cfg(feature = "bot-audio-transcription")]
+                self.publish_pending_recognition()?;
                 if Instant::now() >= deadline {
                     return Err(EvalError::Judge(ClassifierError::Deadline));
                 }
@@ -812,6 +880,11 @@ impl EvalSession {
         if self.phase == "handshake" && self.bot_ready_received {
             return Ok(true);
         }
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.pending_recognition.is_some() {
+            self.drain_recognition().await?;
+            return Ok(self.phase == "handshake" && self.bot_ready_received);
+        }
         let mut health = self.playback.as_ref().map(Playback::health);
         let audio_error = async {
             if let Some(rx) = &mut health {
@@ -845,19 +918,46 @@ impl EvalSession {
             }
         };
         if let Some(result) = recognized {
-            let (epoch, text) = result?;
+            let recognition = result?;
             #[cfg(feature = "bot-audio-transcription")]
             {
-                // Fence against interruption packets already admitted before
-                // recognition completed; this does not authenticate remote PCM.
-                self.drain_received().await?;
-                self.stream.transcribed_response(epoch, text)?;
+                // Own the popped result before the first await: classifier
+                // completion may cancel this pump while the fence is pending.
+                self.pending_recognition = Some(recognition);
+                self.drain_recognition().await?;
             }
             #[cfg(not(feature = "bot-audio-transcription"))]
-            let _ = (epoch, text);
+            let _ = recognition;
             return Ok(self.phase == "handshake" && self.bot_ready_received);
         }
         self.ingest(packet.expect("pump selects either recognition or transport"))
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    async fn drain_recognition(&mut self) -> Result<(), EvalError> {
+        #[cfg(test)]
+        {
+            if let Some(gate) = &mut self.recognition_drain_gate {
+                if let Some(entered) = gate.entered.take() {
+                    let _ = entered.send(());
+                }
+                gate.release.notified().await;
+            }
+            self.recognition_drain_gate = None;
+        }
+        // Fence admitted interruption packets before publication. This cannot
+        // authenticate untagged remote PCM that arrives after a new epoch.
+        self.drain_received().await?;
+        self.publish_pending_recognition()
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    fn publish_pending_recognition(&mut self) -> Result<(), EvalError> {
+        if let Some((epoch, text)) = &self.pending_recognition {
+            // Keep ownership on a budget/error path. Append is atomic; the
+            // bounded copy is released on successful admission or stale drop.
+            self.stream.transcribed_response(*epoch, text.clone())?;
+            self.pending_recognition = None;
+        }
+        Ok(())
     }
     fn ingest(&mut self, packet: Packet) -> Result<bool, EvalError> {
         let bytes = match packet {
@@ -942,6 +1042,10 @@ impl EvalSession {
         Ok(())
     }
     pub(crate) async fn shutdown(&mut self) {
+        #[cfg(feature = "bot-audio-transcription")]
+        {
+            self.pending_recognition = None;
+        }
         #[cfg(feature = "bot-audio-transcription")]
         if let Some(mut engine) = self.transcription.take() {
             if let Err(error) = engine.finish() {
@@ -1087,5 +1191,224 @@ mod readiness_tests {
         assert!(!session.bot_ready_received);
         assert!(!session.result.passed);
         assert!(session.socket.is_none());
+    }
+}
+
+#[cfg(all(test, feature = "bot-audio-transcription"))]
+mod recognition_ownership_tests {
+    use super::*;
+    use std::{future::Future, sync::Arc, task::Poll};
+    use tokio::sync::{oneshot, Notify};
+
+    const WAIT: Duration = Duration::from_secs(2);
+
+    fn session(limits: EventLimits) -> EvalSession {
+        let scenario = crate::ScenarioFile::from_value(json!({
+            "name": "recognition ownership", "turns": []
+        }))
+        .unwrap()
+        .scenarios
+        .remove(0);
+        EvalSession::new(
+            scenario,
+            "ws://127.0.0.1:1",
+            SessionOptions {
+                event_limits: limits,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    async fn socket_pair() -> (WebSocketSession, WebSocketSession) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        let config = SessionConfig {
+            connect_timeout: WAIT,
+            write_timeout: Duration::from_millis(250),
+            close_timeout: Duration::from_millis(250),
+            ..Default::default()
+        };
+        // Keep both owners here instead of spawning a peer that an assertion
+        // could strand. The listener wait is bounded even if connect fails.
+        let accept = async {
+            let (stream, _) = tokio::time::timeout(WAIT, listener.accept())
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+            WebSocketSession::accept(stream, config.clone())
+                .await
+                .map_err(|error| error.to_string())
+        };
+        let connect = async {
+            WebSocketSession::connect(&url, config.clone())
+                .await
+                .map_err(|error| error.to_string())
+        };
+        let (client, peer) = tokio::join!(connect, accept);
+        match (client, peer) {
+            (Ok(client), Ok(peer)) => (client, peer),
+            (client, peer) => {
+                let errors = (client.as_ref().err().cloned(), peer.as_ref().err().cloned());
+                // A partially established connection still owns its transport
+                // task. Join it before reporting setup failure.
+                tokio::join!(
+                    async {
+                        if let Ok(client) = client {
+                            let _ = client.cancel().await;
+                        }
+                    },
+                    async {
+                        if let Ok(peer) = peer {
+                            let _ = peer.cancel().await;
+                        }
+                    }
+                );
+                panic!("loopback socket setup failed: {errors:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_recognition_drain_keeps_owned_result_and_resumes_once() {
+        let mut session = session(EventLimits::default());
+        let (client, peer) = socket_pair().await;
+        session.socket = Some(client);
+        // Seed the ownership state immediately after engine.next() has popped
+        // a result. This exercises cancellation of the publication fence, not
+        // a particular native STT scheduling order.
+        let recognition = (session.stream.epoch(), "owned spoken reply".to_owned());
+        session.pending_recognition = Some(recognition.clone());
+        let (entered_tx, mut entered_rx) = oneshot::channel();
+        let release = Arc::new(Notify::new());
+        session.recognition_drain_gate = Some(RecognitionDrainGate {
+            entered: Some(entered_tx),
+            release: release.clone(),
+        });
+
+        let first_poll = {
+            let mut pump = Box::pin(session.pump(Instant::now() + WAIT));
+            // Exactly one poll reaches the gate and must be Pending. Dropping
+            // this future models the competing judge select branch winning.
+            std::future::poll_fn(|cx| Poll::Ready(pump.as_mut().poll(cx))).await
+        };
+        let entered = entered_rx.try_recv();
+        let retained_after_cancel = session.pending_recognition.clone();
+        let events_before_resume = session.stream.events_seen.len();
+
+        // Always release before any behavioral assertion, including if the
+        // first poll unexpectedly completed. Real transport drain follows.
+        release.notify_one();
+        let resumed = tokio::time::timeout(WAIT, session.pump(Instant::now() + WAIT)).await;
+        let retained_after_resume = session.pending_recognition.clone();
+        let repeated_publication = session.publish_pending_recognition();
+        let events = session.stream.events_seen.clone();
+        let queued = session.stream.pop();
+        let duplicate = session.stream.pop();
+
+        let (client_closed, peer_closed) = tokio::join!(
+            async {
+                match session.socket.take() {
+                    Some(client) => Some(client.cancel().await),
+                    None => None,
+                }
+            },
+            peer.cancel()
+        );
+        // Both transport tasks have actually joined before checking results.
+        assert!(matches!(client_closed, Some(Ok(()))));
+        assert!(peer_closed.is_ok());
+        assert!(first_poll.is_pending());
+        assert!(entered.is_ok());
+        assert_eq!(retained_after_cancel, Some(recognition));
+        assert_eq!(events_before_resume, 0);
+        assert!(matches!(resumed, Ok(Ok(false))));
+        assert!(retained_after_resume.is_none());
+        assert!(repeated_publication.is_ok());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["type"], "response");
+        assert_eq!(events[0]["text"], "owned spoken reply");
+        assert_eq!(queued.as_ref(), events.first());
+        assert!(duplicate.is_none());
+    }
+
+    #[test]
+    fn stale_recognition_is_dropped_without_blocking_current_epoch() {
+        let mut session = session(EventLimits::default());
+        session.pending_recognition = Some((session.stream.epoch(), "stale".into()));
+        session.stream.drop_pending_bot_output();
+        let stale = session.publish_pending_recognition();
+        let stale_retained = session.pending_recognition.clone();
+        let stale_events = session.stream.events_seen.len();
+        session.pending_recognition = Some((session.stream.epoch(), "current".into()));
+        let current = session.publish_pending_recognition();
+        let repeated = session.publish_pending_recognition();
+
+        assert!(stale.is_ok());
+        assert!(stale_retained.is_none());
+        assert_eq!(stale_events, 0);
+        assert!(current.is_ok());
+        assert!(repeated.is_ok());
+        assert!(session.pending_recognition.is_none());
+        assert_eq!(session.stream.events_seen.len(), 1);
+        assert_eq!(session.stream.events_seen[0]["text"], "current");
+    }
+
+    #[test]
+    fn event_budget_failure_retains_recognition_without_partial_append() {
+        let mut session = session(EventLimits {
+            max_events: 1,
+            ..Default::default()
+        });
+        session.pending_recognition = Some((session.stream.epoch(), "first".into()));
+        let first = session.publish_pending_recognition();
+        let admitted = session.stream.events_seen.clone();
+        let pending = (session.stream.epoch(), "retained".to_owned());
+        session.pending_recognition = Some(pending.clone());
+        let failed = session.publish_pending_recognition();
+        let failed_again = session.publish_pending_recognition();
+        let queued = session.stream.pop();
+        let duplicate = session.stream.pop();
+
+        assert!(first.is_ok());
+        assert!(matches!(failed, Err(EvalError::Limit("event history"))));
+        assert!(matches!(
+            failed_again,
+            Err(EvalError::Limit("event history"))
+        ));
+        assert_eq!(session.pending_recognition, Some(pending));
+        assert_eq!(session.stream.events_seen, admitted);
+        assert_eq!(admitted.len(), 1);
+        assert_eq!(queued.as_ref(), admitted.first());
+        assert!(duplicate.is_none());
+    }
+
+    #[test]
+    fn turn_boundary_clears_owned_recognition() {
+        let mut session = session(EventLimits::default());
+        let epoch = session.stream.epoch();
+        session.pending_recognition = Some((epoch, "previous turn".into()));
+        let boundary = session.turn_boundary();
+        let pending_after_boundary = session.pending_recognition.clone();
+        let published = session.publish_pending_recognition();
+
+        assert!(boundary.is_ok());
+        assert_eq!(session.stream.epoch(), epoch + 1);
+        assert!(pending_after_boundary.is_none());
+        assert!(session.pending_recognition.is_none());
+        assert!(published.is_ok());
+        assert!(session.stream.events_seen.is_empty());
+    }
+
+    #[tokio::test]
+    async fn shutdown_clears_owned_recognition_without_publication() {
+        let mut session = session(EventLimits::default());
+        session.pending_recognition = Some((session.stream.epoch(), "unfinished".into()));
+        session.shutdown().await;
+
+        assert!(session.pending_recognition.is_none());
+        assert!(session.stream.events_seen.is_empty());
+        assert!(session.socket.is_none());
+        assert!(session.transcription.is_none());
     }
 }
