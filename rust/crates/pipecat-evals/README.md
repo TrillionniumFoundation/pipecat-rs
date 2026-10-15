@@ -576,3 +576,15 @@ Silero segmentation, bounded HTTP STT and completed-turn `response` text checks.
 See [BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md) for the API, model prerequisites,
 limits and differences from the fixed Python SmartTurn default. Existing text
 loaders/CLI modes keep their existing behavior.
+
+### Spoken-response CLI runs
+
+The optional `bot-audio-transcription` feature also supports explicit
+`run SCENARIOS URL --bot-audio-response CONFIG.json`. It evaluates real received
+16 kHz PCM through Silero and the configured HTTP recognizer, preserving spoken
+`response` separately from `llm_response`. Configuration and all scenarios/models
+are validated before connecting. Multiple scenarios and `--recorded-audio` are
+supported; suites and simultaneous WAV export are not. See
+[BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md#explicit-cli-run-configuration) for
+required endpoint, credential-environment and local model/runtime fields, limits,
+privacy implications and the unchanged default text behavior.

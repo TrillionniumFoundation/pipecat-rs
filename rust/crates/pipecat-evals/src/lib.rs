@@ -3,9 +3,13 @@
 mod bot_audio;
 #[cfg(feature = "bot-audio-transcription")]
 mod bot_transcription;
+#[cfg(feature = "bot-audio-transcription")]
+mod bot_transcription_settings;
 pub use bot_audio::{BotAudioChunk, BotAudioLimits, BotAudioRun};
 #[cfg(feature = "bot-audio-transcription")]
 pub use bot_transcription::BotTranscriptionConfig;
+#[cfg(feature = "bot-audio-transcription")]
+pub use bot_transcription_settings::BotTranscriptionSettings;
 pub mod bot_host;
 mod bounded_yaml;
 pub mod events;

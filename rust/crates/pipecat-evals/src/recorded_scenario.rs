@@ -1,7 +1,7 @@
 //! Explicit trusted-local recorded bundles; ordinary scenario parsing is unchanged.
 use crate::{
-    recorded_audio::MAX_TOTAL_BYTES, EvalError, EvalSession, RecordedAudio, ScenarioFile,
-    ScriptScenario, SessionOptions,
+    recorded_audio::MAX_TOTAL_BYTES, scenario::ResponseParseMode, EvalError, EvalSession,
+    RecordedAudio, ScenarioFile, ScriptScenario, SessionOptions,
 };
 use serde_json::{Map, Value};
 use std::{
@@ -31,11 +31,38 @@ impl RecordedScenarioFile {
             MAX_RECORDINGS,
         )
     }
+    /// Preserve explicit audio response events while retaining all recorded
+    /// bundle checks and validating before reading recording payloads.
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn load_audio_response(path: impl AsRef<Path>) -> Result<Self, EvalError> {
+        Self::load_bounded_with_mode(
+            path.as_ref(),
+            MAX_BUNDLE_WAV_BYTES,
+            MAX_TOTAL_BYTES,
+            MAX_RECORDINGS,
+            ResponseParseMode::AudioResponse,
+        )
+    }
     pub(crate) fn load_bounded(
         path: &Path,
         wav_limit: usize,
         pcm_limit: usize,
         reference_limit: usize,
+    ) -> Result<Self, EvalError> {
+        Self::load_bounded_with_mode(
+            path,
+            wav_limit,
+            pcm_limit,
+            reference_limit,
+            ResponseParseMode::Text,
+        )
+    }
+    fn load_bounded_with_mode(
+        path: &Path,
+        wav_limit: usize,
+        pcm_limit: usize,
+        reference_limit: usize,
+        mode: ResponseParseMode,
     ) -> Result<Self, EvalError> {
         let wav_limit = wav_limit.min(MAX_BUNDLE_WAV_BYTES);
         let pcm_limit = pcm_limit.min(MAX_TOTAL_BYTES);
@@ -53,7 +80,7 @@ impl RecordedScenarioFile {
         let mut pending = Vec::new();
         let mut count = 0usize;
         let mut expanded_bytes = 0usize;
-        let file = ScenarioFile::from_value_with(value, |raw| {
+        let file = ScenarioFile::from_value_with_mode(value, mode, |raw| {
             expanded_bytes = expanded_bytes
                 .checked_add(serde_json::to_vec(raw)?.len())
                 .ok_or(EvalError::Limit("expanded recorded scenario bytes"))?;

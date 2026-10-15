@@ -17,8 +17,9 @@ and provider entitlement require separate qualification.
 Build with `--features bot-audio-transcription`. Construct a typed scenario with
 `response` text predicates, then call `with_bot_transcription(...).run(cancel)`.
 The ordinary constructors still reject a literal typed `response` event. Existing
-file loaders keep their text-mode `response` to `llm_response` alias; the CLI and
-hosted-suite configuration do not automatically select this feature. Classifier
+file loaders keep their text-mode `response` to `llm_response` alias. The CLI
+selects spoken responses only with the explicit flag below; hosted suites do not
+yet accept this configuration. Classifier
 `eval` predicates are not accepted by this initial audio-response constructor.
 
 `BotTranscriptionConfig::new` consumes a `SileroVadAnalyzer`, `SpeechConfig`, and
@@ -115,3 +116,58 @@ Local tests must exercise real Silero inference and inspect the actual multipart
 WAV before a deterministic HTTP peer returns text. That establishes model and
 protocol wiring, generation fences and resource ownership; a scripted HTTP peer
 is not a test of a production speech recognizer's acoustic accuracy.
+
+## Explicit CLI run configuration
+
+With `bot-audio-transcription` enabled, use:
+
+```sh
+pipecat-eval run scenarios.yaml ws://127.0.0.1:8765 --bot-audio-response stt.json
+```
+
+A trusted-local JSON configuration explicitly chooses the endpoint, model,
+credential environment variable and installed runtime/model files:
+
+```json
+{
+  "base_url": "http://127.0.0.1:9000/v1",
+  "model": "local-recognizer",
+  "api_key_env": "LOCAL_STT_KEY",
+  "onnx_runtime": "models/libonnxruntime.so",
+  "silero_model": "models/silero_vad.onnx",
+  "timeout_ms": 8000
+}
+```
+
+The named environment variable must already exist. No credential is created,
+printed or selected from a fallback variable. HTTPS endpoints and loopback HTTP
+are supported under the existing SpeechClient URL policy; redirects are disabled.
+Choosing a remote service explicitly sends received bot audio there and may incur
+that service's charges. Tests use only local protocol fixtures and dummy keys.
+`language` is optional; timeout is 1–30000 ms, default 8000. Unknown or duplicate
+JSON fields are errors. The configuration is a regular file of at most 32 KiB.
+
+Relative runtime/model paths resolve from the canonical configuration target
+directory (including when the supplied configuration path is a symlink). Explicit
+paths take precedence over runtime/model environment defaults. Runtime files are
+bounded to 128 MiB and model files to 16 MiB. Assets are checked as regular files,
+then the native loader reopens their canonical paths. This trusted-local path
+policy is not a sandbox against concurrent directory or file replacement.
+The Unix file loader refuses nonregular files without blocking on FIFOs.
+
+All scenarios, options, recorded-input references and model instances are prepared
+before the first WebSocket connection or HTTP request. The explicit mode permits
+1–16 scenarios, checked before model instantiation, each with independent recurrent
+state and a real preflight inference. Native loading/inference has no hard wall
+clock deadline. ONNX runtime initialization is process-global: an already loaded
+different runtime path is rejected, rather than switched per session. A bad later scenario or model fails the whole preparation before
+any scenario runs. `--stop-bot` still requires one scenario.
+
+Only this explicit loader preserves `expect.response` and `send_after.response`
+as spoken transcript events. Explicit `llm_response` remains reported LLM text;
+default loaders and CLI runs retain their prior alias and validation behavior.
+Classifier predicates remain unsupported. `--recorded-audio` can be combined with
+this mode, reusing its existing bounded WAV loader and outer-scenario-directory
+media paths. `--bot-audio-wav` is mutually exclusive. Suite rejects this flag.
+Cancellation, deadlines and old-generation cleanup use the existing transcription
+session owners; this CLI entry does not change completion or acoustic guarantees.

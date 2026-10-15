@@ -22,10 +22,11 @@ async fn main() {
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     let suite = (2..=3).contains(&args.len()) && args[0] == "suite";
-    let single = (3..=7).contains(&args.len()) && args[0] == "run";
+    let single = (3..=9).contains(&args.len()) && args[0] == "run";
     let mut stop_bot = false;
     let mut recorded = false;
     let mut bot_audio_wav = None;
+    let mut bot_audio_response = None;
     if suite && args.len() == 3 {
         if args[2] != "--recorded-audio" {
             return Err(pipecat_evals::EvalError::Scenario(
@@ -51,6 +52,17 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                         })?;
                     bot_audio_wav = Some(path.as_str());
                 }
+                "--bot-audio-response" if bot_audio_response.is_none() => {
+                    let path = flags
+                        .next()
+                        .filter(|path| !path.starts_with("--") && !path.is_empty())
+                        .ok_or_else(|| {
+                            pipecat_evals::EvalError::Scenario(
+                                "--bot-audio-response needs a configuration file path".into(),
+                            )
+                        })?;
+                    bot_audio_response = Some(path.as_str());
+                }
                 _ => {
                     return Err(pipecat_evals::EvalError::Scenario(
                         "unknown or duplicate run flag".into(),
@@ -62,7 +74,18 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio]".into()));
+    }
+    if bot_audio_response.is_some() && bot_audio_wav.is_some() {
+        return Err(pipecat_evals::EvalError::Scenario(
+            "--bot-audio-response and --bot-audio-wav are mutually exclusive".into(),
+        ));
+    }
+    #[cfg(not(feature = "bot-audio-transcription"))]
+    if bot_audio_response.is_some() {
+        return Err(pipecat_evals::EvalError::Unsupported(
+            "--bot-audio-response requires the bot-audio-transcription build feature".into(),
+        ));
     }
     // Parse every source and option before installing the signal task or launching a bot.
     let manifest = if suite {
@@ -80,13 +103,22 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             stop_bot,
             ..Default::default()
         };
-        if recorded {
+        #[cfg(feature = "bot-audio-transcription")]
+        if let Some(config) = bot_audio_response {
+            sessions = pipecat_evals::BotTranscriptionSettings::load(config)?.into_sessions(
+                &args[1],
+                &args[2],
+                options.clone(),
+                recorded,
+            )?;
+        }
+        if bot_audio_response.is_none() && recorded {
             let file = RecordedScenarioFile::load(&args[1])?;
             if options.stop_bot && file.len() > 1 {
                 return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
             }
             sessions = file.into_sessions(&args[2], options)?;
-        } else {
+        } else if bot_audio_response.is_none() {
             let file = ScenarioFile::load(&args[1])?;
             if options.stop_bot && file.scenarios.len() > 1 {
                 return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use run_suite".into()));

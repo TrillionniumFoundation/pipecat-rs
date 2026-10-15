@@ -206,7 +206,7 @@ impl EvalSession {
     /// native speech-timeout turn aggregation; remote speaking reports never
     /// close an audio segment. Supply a typed scenario with `response` events.
     /// The normal file loader retains its text-mode `response` alias.
-    /// Classifier judgments, CLI configuration and other audio rates are not
+    /// Classifier judgments and other audio rates are not
     /// supported by this explicit subset. All resources are session-owned.
     #[cfg(feature = "bot-audio-transcription")]
     pub fn with_bot_transcription(

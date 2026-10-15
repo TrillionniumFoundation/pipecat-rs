@@ -84,6 +84,12 @@ pub struct ScenarioFile {
     pub name: String,
     pub scenarios: Vec<ScriptScenario>,
 }
+#[derive(Clone, Copy)]
+pub(crate) enum ResponseParseMode {
+    Text,
+    #[cfg(feature = "bot-audio-transcription")]
+    AudioResponse,
+}
 impl ScenarioFile {
     /// Load JSON or YAML, resolving bounded !include tags relative to each file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
@@ -99,6 +105,30 @@ impl ScenarioFile {
         )?;
         Self::from_value(serde_json::to_value(yaml).map_err(|e| invalid(&e.to_string()))?)
     }
+    /// Load the explicit audio-response subset from a trusted local bundle.
+    /// Includes must remain beneath the supplied outer file's directory and use
+    /// the recorded loader's bounded regular-file reads (Unix only).
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn load_audio_response(path: impl AsRef<Path>) -> Result<Self, EvalError> {
+        let supplied = path.as_ref();
+        let root = supplied
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."))
+            .canonicalize()?;
+        let path = supplied.canonicalize()?;
+        let value = load_recorded_value(&path, &root)?;
+        let mut expanded_bytes = 0usize;
+        Self::from_value_with_mode(value, ResponseParseMode::AudioResponse, |raw| {
+            expanded_bytes = expanded_bytes
+                .checked_add(serde_json::to_vec(raw)?.len())
+                .ok_or(EvalError::Limit("expanded audio response scenario bytes"))?;
+            if expanded_bytes > MAX_DOCUMENT_BYTES {
+                return Err(EvalError::Limit("expanded audio response scenario bytes"));
+            }
+            Ok(())
+        })
+    }
     pub fn from_json(text: &str) -> Result<Self, EvalError> {
         if text.len() > MAX_FILE_BYTES {
             return Err(EvalError::Limit("scenario file bytes"));
@@ -111,6 +141,13 @@ impl ScenarioFile {
     }
     pub(crate) fn from_value_with(
         value: Value,
+        preprocess: impl FnMut(&mut Map<String, Value>) -> Result<(), EvalError>,
+    ) -> Result<Self, EvalError> {
+        Self::from_value_with_mode(value, ResponseParseMode::Text, preprocess)
+    }
+    pub(crate) fn from_value_with_mode(
+        value: Value,
+        mode: ResponseParseMode,
         mut preprocess: impl FnMut(&mut Map<String, Value>) -> Result<(), EvalError>,
     ) -> Result<Self, EvalError> {
         let mut root = object(value, "scenario file")?;
@@ -140,11 +177,11 @@ impl ScenarioFile {
                 merged.extend(entry.clone());
                 merged.insert("name".into(), format!("{name}/{entry_name}").into());
                 preprocess(&mut merged)?;
-                scenarios.push(parse_script(merged)?);
+                scenarios.push(parse_script(merged, mode)?);
             }
         } else {
             preprocess(&mut root)?;
-            scenarios.push(parse_script(root)?);
+            scenarios.push(parse_script(root, mode)?);
         }
         Ok(Self { name, scenarios })
     }
@@ -199,7 +236,8 @@ impl ScriptScenario {
         Ok(())
     }
     /// Validate the explicit native audio-response subset. File loaders retain
-    /// their existing text-mode response alias; this is for typed scenarios.
+    /// their existing text-mode response alias unless explicitly opted in. The
+    /// validation copy leaves the original response events unchanged.
     #[cfg(feature = "bot-audio-transcription")]
     pub(crate) fn audio_response_validation_copy(&self) -> Result<Self, EvalError> {
         if self.needs_judge() {
@@ -271,7 +309,10 @@ impl ScriptScenario {
             .any(|e| e.eval.is_some())
     }
 }
-fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError> {
+fn parse_script(
+    mut raw: Map<String, Value>,
+    mode: ResponseParseMode,
+) -> Result<ScriptScenario, EvalError> {
     for key in ["persona", "goal", "success", "metrics", "simulation"] {
         if raw.contains_key(key) {
             return Err(EvalError::Unsupported(format!(
@@ -333,7 +374,9 @@ fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError
                 let exp = exp
                     .as_object_mut()
                     .ok_or_else(|| invalid("expectation must be a mapping"))?;
-                if exp.get("event") == Some(&Value::String("response".into())) {
+                if matches!(mode, ResponseParseMode::Text)
+                    && exp.get("event") == Some(&Value::String("response".into()))
+                {
                     exp.insert("event".into(), "llm_response".into());
                 }
                 let is_call = exp
@@ -378,7 +421,13 @@ fn parse_script(mut raw: Map<String, Value>) -> Result<ScriptScenario, EvalError
     }
     let scenario: ScriptScenario =
         serde_json::from_value(Value::Object(raw)).map_err(|e| invalid(&e.to_string()))?;
-    scenario.validate()?;
+    match mode {
+        ResponseParseMode::Text => scenario.validate()?,
+        #[cfg(feature = "bot-audio-transcription")]
+        ResponseParseMode::AudioResponse => {
+            scenario.audio_response_validation_copy()?;
+        }
+    }
     Ok(scenario)
 }
 fn validate_expectation(exp: &Expectation) -> Result<(), EvalError> {

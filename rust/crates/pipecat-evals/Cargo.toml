@@ -17,6 +17,11 @@ name = "bot_audio_response"
 path = "tests/bot_audio_response.rs"
 required-features = ["bot-audio-transcription"]
 
+[[test]]
+name = "bot_audio_response_cli"
+path = "tests/bot_audio_response_cli.rs"
+required-features = ["bot-audio-transcription"]
+
 [[bin]]
 name = "eval-process-fixture"
 path = "tests/support/process_fixture.rs"
