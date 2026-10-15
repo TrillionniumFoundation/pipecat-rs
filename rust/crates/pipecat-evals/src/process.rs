@@ -5,7 +5,7 @@
 use crate::{
     matcher::{AssertionFailure, ScriptResult},
     suite::serialized_size,
-    Cancellation, EvalError, EvalSession, ScriptScenario, SessionOptions,
+    Cancellation, EvalError, EvalSession, RecordedAudio, ScriptScenario, SessionOptions,
 };
 use serde::Serialize;
 use std::{
@@ -319,9 +319,30 @@ pub async fn run_hosted(
     command: NativeCommand,
     scenario: ScriptScenario,
     bot_url: String,
+    session_options: SessionOptions,
+    options: ProcessOptions,
+    cancel: Cancellation,
+) -> Result<HostedResult, EvalError> {
+    run_hosted_with_recordings(
+        command,
+        scenario,
+        bot_url,
+        session_options,
+        options,
+        cancel,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn run_hosted_with_recordings(
+    command: NativeCommand,
+    scenario: ScriptScenario,
+    bot_url: String,
     mut session_options: SessionOptions,
     options: ProcessOptions,
     cancel: Cancellation,
+    recordings: Option<Vec<(usize, RecordedAudio)>>,
 ) -> Result<HostedResult, EvalError> {
     command.validate()?;
     options.validate()?;
@@ -329,6 +350,9 @@ pub async fn run_hosted(
     session_options.stop_bot = true;
     let name = scenario.name.clone();
     let mut session = EvalSession::new(scenario, bot_url, session_options)?;
+    if let Some(recordings) = recordings {
+        session = session.with_recorded_audio_inputs(recordings)?;
+    }
     let mut report = ProcessReport::default();
     let result = if cancel.is_cancelled() {
         summary(

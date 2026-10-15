@@ -48,6 +48,9 @@ for that 16 kHz mono library path, while keeping generated-text output. Its actu
 local receiving pipeline is covered by a PCM-byte fixture; human speech still
 requires application-provided STT/VAD or a realtime model. YAML/CLI recording
 loading now has an explicit Unix direct-run opt-in for bounded trusted-local
-WAV bundles; suite/release loading, synthesized users and audio output judging
-remain separate. See [recorded scenarios](../crates/pipecat-evals/RECORDED_SCENARIOS.md). These are separate contracts, not a whole-project
+WAV bundles. Explicit hosted suite recording input now reuses the same loader and
+native child ownership, with whole-manifest/repeat budgets and pre-spawn plan
+revalidation; see [recorded suites](../crates/pipecat-evals/RECORDED_SUITE.md).
+Synthesized users and audio output judging remain separate. See also
+[recorded scenarios](../crates/pipecat-evals/RECORDED_SCENARIOS.md). These are separate contracts, not a whole-project
 completion claim.

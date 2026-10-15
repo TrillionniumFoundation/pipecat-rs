@@ -5,9 +5,10 @@
 use crate::{
     bounded_yaml::{self, ConstructionBudget},
     matcher::ScriptResult,
-    process::{run_hosted, HostedResult, NativeCommand, ProcessOptions},
+    process::{run_hosted_with_recordings, HostedResult, NativeCommand, ProcessOptions},
     suite::serialized_size,
-    Cancellation, EvalError, EvalSession, ScenarioFile, ScriptScenario, SessionOptions,
+    Cancellation, EvalError, EvalSession, RecordedAudio, RecordedScenarioFile, ScenarioFile,
+    ScriptScenario, SessionOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -87,6 +88,7 @@ pub struct ReleaseJob {
     pub concurrency: usize,
     command: NativeCommand,
     body: Option<Body>,
+    recordings: Option<Vec<(usize, RecordedAudio)>>,
 }
 /// Loaded and validated plans contain no executable shell templates. Use load()
 /// to validate every scenario and all configuration before executing any child.
@@ -119,9 +121,13 @@ fn bounded_file(path: &Path) -> Result<Vec<u8>, EvalError> {
     }
     Ok(bytes)
 }
-fn load_value(path: &Path) -> Result<Value, EvalError> {
-    let value =
-        bounded_yaml::parse_yaml(&bounded_file(path)?, &mut ConstructionBudget::default(), 0)?;
+fn load_value(path: &Path, recorded: bool) -> Result<Value, EvalError> {
+    let bytes = if recorded {
+        crate::recorded_scenario::read_regular(path, path.parent().unwrap(), 1024 * 1024)?
+    } else {
+        bounded_file(path)?
+    };
+    let value = bounded_yaml::parse_yaml(&bytes, &mut ConstructionBudget::default(), 0)?;
     Ok(serde_json::to_value(value)?)
 }
 fn invalid(message: &str) -> EvalError {
@@ -129,9 +135,17 @@ fn invalid(message: &str) -> EvalError {
 }
 impl ReleaseManifest {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        let path = path.as_ref().canonicalize()?;
+        Self::load_mode(path.as_ref(), false)
+    }
+    /// Opt into preloaded Unix PCM16 recordings in every referenced scenario.
+    /// The ordinary loader and native compiled-child ownership remain unchanged.
+    pub fn load_recorded(path: impl AsRef<Path>) -> Result<Self, EvalError> {
+        Self::load_mode(path.as_ref(), true)
+    }
+    fn load_mode(path: &Path, recorded: bool) -> Result<Self, EvalError> {
+        let path = path.canonicalize()?;
         let base = path.parent().unwrap();
-        let value = load_value(&path)?;
+        let value = load_value(&path, recorded)?;
         if value.get("native_version") != Some(&Value::from(1)) {
             return Err(EvalError::Unsupported("release manifests require native_version: 1 and compiled bot paths; Python spawn templates are unsupported".into()));
         }
@@ -152,6 +166,8 @@ impl ReleaseManifest {
             ));
         }
         let mut expanded = Vec::new();
+        let mut wav_bytes = 0usize;
+        let mut audio_budget = AudioBudget::default();
         let mut pairs = HashSet::new();
         let mut caps = BTreeMap::<String, usize>::new();
         for entry in input.suite {
@@ -181,7 +197,7 @@ impl ReleaseManifest {
                     data: None,
                 }) => {
                     let path = base.join(path).canonicalize()?;
-                    if !load_value(&path)?.is_object() {
+                    if !load_value(&path, recorded)?.is_object() {
                         return Err(invalid("runner_body file must hold a mapping"));
                     }
                     Some(Body::Path(path))
@@ -233,7 +249,35 @@ impl ReleaseManifest {
                     base.join(&input.scenarios_dir)
                         .join(format!("{reference}.yaml"))
                 };
-                for scenario in ScenarioFile::load(path)?.scenarios {
+                let scenarios = if recorded {
+                    let file = RecordedScenarioFile::load_bounded(
+                        &path,
+                        16 * 1024 * 1024 - wav_bytes,
+                        (crate::recorded_audio::MAX_TOTAL_BYTES - audio_budget.pcm_bytes)
+                            / input.repeat,
+                        (128 - audio_budget.references) / input.repeat,
+                    )?;
+                    wav_bytes = wav_bytes
+                        .checked_add(file.wav_bytes)
+                        .ok_or(EvalError::Limit("release recording WAV bytes"))?;
+                    if wav_bytes > 16 * 1024 * 1024 {
+                        return Err(EvalError::Limit("release recording WAV bytes"));
+                    }
+                    file.into_parts()
+                        .into_iter()
+                        .map(|(s, clips)| (s, Some(clips)))
+                        .collect::<Vec<_>>()
+                } else {
+                    ScenarioFile::load(path)?
+                        .scenarios
+                        .into_iter()
+                        .map(|s| (s, None))
+                        .collect()
+                };
+                for (scenario, recordings) in scenarios {
+                    if let Some(clips) = &recordings {
+                        audio_budget.admit(&scenario, clips, input.repeat)?;
+                    }
                     if !pairs.insert((name.clone(), scenario.name.clone())) {
                         return Err(invalid("duplicate entry label/scenario pair"));
                     }
@@ -249,6 +293,7 @@ impl ReleaseManifest {
                         concurrency: cap,
                         command: command.clone(),
                         body: body.clone(),
+                        recordings,
                     });
                 }
             }
@@ -273,6 +318,77 @@ impl ReleaseManifest {
         })
     }
 }
+// Rechecked after loading because ReleaseManifest.jobs and scenario are public.
+// Charge each logical repeat even though RecordedAudio clones share Arc storage.
+#[derive(Default)]
+struct AudioBudget {
+    references: usize,
+    pcm_bytes: usize,
+    scenario_bytes: usize,
+}
+impl AudioBudget {
+    fn admit(
+        &mut self,
+        scenario: &ScriptScenario,
+        clips: &[(usize, RecordedAudio)],
+        repeat: usize,
+    ) -> Result<(), EvalError> {
+        let indices = clips
+            .iter()
+            .map(|(index, _)| *index)
+            .collect::<HashSet<_>>();
+        if indices.len() != clips.len()
+            || clips.iter().any(|(index, _)| {
+                scenario.turns.get(*index).is_none_or(|turn| {
+                    turn.user.as_ref().is_none_or(|s| s.trim().is_empty()) || turn.dtmf.is_some()
+                })
+            })
+            || scenario
+                .turns
+                .iter()
+                .enumerate()
+                .any(|(index, turn)| turn.user.is_some() && !indices.contains(&index))
+        {
+            return Err(invalid("recorded release needs exactly one recording for every spoken turn and no DTMF conflict"));
+        }
+        let pcm = clips
+            .iter()
+            .try_fold(0usize, |sum, (_, clip)| {
+                sum.checked_add(clip.pcm_bytes().len())
+            })
+            .ok_or(EvalError::Limit("release recording PCM bytes"))?;
+        for (total, count, max, label) in [
+            (
+                &mut self.references,
+                clips.len(),
+                128,
+                "release recording references",
+            ),
+            (
+                &mut self.pcm_bytes,
+                pcm,
+                crate::recorded_audio::MAX_TOTAL_BYTES,
+                "release recording PCM bytes",
+            ),
+            (
+                &mut self.scenario_bytes,
+                serialized_size(scenario)?,
+                4 * 1024 * 1024,
+                "release recorded scenario bytes",
+            ),
+        ] {
+            *total = count
+                .checked_mul(repeat)
+                .and_then(|n| total.checked_add(n))
+                .ok_or(EvalError::Limit(label))?;
+            if *total > max {
+                return Err(EvalError::Limit(label));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// An owned, private per-run body file. Deleted after process/pipe teardown,
 /// including cancellation and dropped futures. It is never a result artifact.
 struct BodyFile(PathBuf);
@@ -339,13 +455,14 @@ impl ReleaseJob {
                 _ => arg,
             })
             .collect();
-        let hosted = run_hosted(
+        let hosted = run_hosted_with_recordings(
             command,
             self.scenario.clone(),
             format!("ws://127.0.0.1:{}", self.port),
             session,
             process,
             cancel,
+            self.recordings.clone(),
         )
         .await?;
         Ok(self.record(hosted))
@@ -404,6 +521,7 @@ pub async fn run_release_with_budget(
     {
         return Err(invalid("invalid release plan size/concurrency"));
     }
+    let mut audio_budget = AudioBudget::default();
     let mut ports = HashSet::new();
     let mut identities = HashSet::new();
     let mut caps = BTreeMap::<String, usize>::new();
@@ -427,11 +545,15 @@ pub async fn run_release_with_budget(
             ));
         }
         job.command.validate()?;
-        EvalSession::new(
+        let prepared = EvalSession::new(
             job.scenario.clone(),
             format!("ws://127.0.0.1:{}", job.port),
             session.clone(),
         )?;
+        if let Some(clips) = &job.recordings {
+            audio_budget.admit(&job.scenario, clips, 1)?;
+            prepared.with_recorded_audio_inputs(clips.clone())?;
+        }
     }
     for job in &mut manifest.jobs {
         job.concurrency = caps[&job.name];

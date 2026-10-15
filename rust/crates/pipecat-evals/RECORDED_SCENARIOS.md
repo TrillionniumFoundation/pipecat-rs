@@ -58,7 +58,8 @@ continuous idle silence and ownership rules are described in
   a recording cannot share a turn with DTMF.
 - Group headers and entries use the existing shallow override rules. Entries
   replace entire values; user-provider dictionaries are not deep-merged.
-- The `suite`/release/process-manifest routes remain unchanged and reject audio
+- Default `suite`/release manifest loading still rejects audio; explicit recorded
+  suites are described in [RECORDED_SUITE.md](RECORDED_SUITE.md). Other routes reject audio
   scenarios. This flag only extends direct `run`; it never drops recording
   mappings and then evaluates reference text instead.
 

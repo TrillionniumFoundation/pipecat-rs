@@ -17,14 +17,31 @@ const MAX_EXPANDED_SCENARIO_BYTES: usize = 4 * 1024 * 1024;
 pub struct RecordedScenarioFile {
     name: String,
     scenarios: Vec<(ScriptScenario, Vec<(usize, RecordedAudio)>)>,
+    pub(crate) wav_bytes: usize,
 }
 impl RecordedScenarioFile {
     /// Read bounded YAML/JSON and PCM16 WAVs before any network connection.
     /// Media paths use the supplied outer file's parent directory; includes retain the
     /// ordinary native loader's per-including-file path semantics.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
+        Self::load_bounded(
+            path.as_ref(),
+            MAX_BUNDLE_WAV_BYTES,
+            MAX_TOTAL_BYTES,
+            MAX_RECORDINGS,
+        )
+    }
+    pub(crate) fn load_bounded(
+        path: &Path,
+        wav_limit: usize,
+        pcm_limit: usize,
+        reference_limit: usize,
+    ) -> Result<Self, EvalError> {
+        let wav_limit = wav_limit.min(MAX_BUNDLE_WAV_BYTES);
+        let pcm_limit = pcm_limit.min(MAX_TOTAL_BYTES);
+        let reference_limit = reference_limit.min(MAX_RECORDINGS);
         ensure_supported()?;
-        let supplied = path.as_ref();
+        let supplied = path;
         let root = supplied
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -47,7 +64,7 @@ impl RecordedScenarioFile {
             count = count
                 .checked_add(paths.len())
                 .ok_or(EvalError::Limit("recording references"))?;
-            if count > MAX_RECORDINGS {
+            if count > reference_limit {
                 return Err(EvalError::Limit("recording references"));
             }
             pending.push(paths);
@@ -72,7 +89,7 @@ impl RecordedScenarioFile {
                 planned_bytes = planned_bytes
                     .checked_add(size)
                     .ok_or(EvalError::Limit("recording bundle bytes"))?;
-                if planned_bytes > MAX_BUNDLE_WAV_BYTES {
+                if planned_bytes > wav_limit {
                     return Err(EvalError::Limit("recording bundle bytes"));
                 }
                 resolved.push((index, p));
@@ -85,18 +102,25 @@ impl RecordedScenarioFile {
         for (scenario, paths) in file.scenarios.into_iter().zip(canonical) {
             let mut clips = Vec::with_capacity(paths.len());
             for (index, path) in paths {
-                let bytes = read_regular(&path, root, MAX_WAV_BYTES)?;
+                let bytes = read_regular(&path, root, MAX_WAV_BYTES.min(wav_limit - actual_bytes))?;
                 actual_bytes = actual_bytes
                     .checked_add(bytes.len())
                     .ok_or(EvalError::Limit("recording bundle bytes"))?;
-                if actual_bytes > MAX_BUNDLE_WAV_BYTES {
+                if actual_bytes > wav_limit {
                     return Err(EvalError::Limit("recording bundle bytes"));
+                }
+                // Inspect borrowed PCM before allocating owned clip bytes. A suite
+                // supplies its remaining aggregate allowance to this same loader.
+                let parsed = pipecat_audio::read_pcm16_wav(&bytes)
+                    .map_err(|e| invalid(&format!("recording WAV: {e}")))?;
+                if parsed.pcm.len() > pcm_limit - pcm_bytes {
+                    return Err(EvalError::Limit("recording PCM bundle bytes"));
                 }
                 let clip = RecordedAudio::from_wav(&bytes)?;
                 pcm_bytes = pcm_bytes
                     .checked_add(clip.pcm_bytes().len())
                     .ok_or(EvalError::Limit("recording PCM bundle bytes"))?;
-                if pcm_bytes > MAX_TOTAL_BYTES {
+                if pcm_bytes > pcm_limit {
                     return Err(EvalError::Limit("recording PCM bundle bytes"));
                 }
                 clips.push((index, clip));
@@ -106,6 +130,7 @@ impl RecordedScenarioFile {
         Ok(Self {
             name: file.name,
             scenarios,
+            wav_bytes: actual_bytes,
         })
     }
     pub fn name(&self) -> &str {
@@ -116,6 +141,9 @@ impl RecordedScenarioFile {
     }
     pub fn is_empty(&self) -> bool {
         self.scenarios.is_empty()
+    }
+    pub(crate) fn into_parts(self) -> Vec<(ScriptScenario, Vec<(usize, RecordedAudio)>)> {
+        self.scenarios
     }
     /// Construct all sessions without connecting; recordings are already owned.
     pub fn into_sessions(

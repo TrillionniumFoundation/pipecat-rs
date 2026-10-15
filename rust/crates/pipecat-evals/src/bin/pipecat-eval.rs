@@ -18,10 +18,18 @@ async fn main() {
     }
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
-    let suite = args.len() == 2 && args[0] == "suite";
+    let suite = (2..=3).contains(&args.len()) && args[0] == "suite";
     let single = (3..=5).contains(&args.len()) && args[0] == "run";
     let mut stop_bot = false;
     let mut recorded = false;
+    if suite && args.len() == 3 {
+        if args[2] != "--recorded-audio" {
+            return Err(pipecat_evals::EvalError::Scenario(
+                "unknown suite flag".into(),
+            ));
+        }
+        recorded = true;
+    }
     if single {
         for flag in &args[3..] {
             match flag.as_str() {
@@ -38,11 +46,15 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio]\n       pipecat-eval suite NATIVE-MANIFEST.yaml".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio]".into()));
     }
     // Parse every source and option before installing the signal task or launching a bot.
     let manifest = if suite {
-        Some(ReleaseManifest::load(&args[1])?)
+        Some(if recorded {
+            ReleaseManifest::load_recorded(&args[1])?
+        } else {
+            ReleaseManifest::load(&args[1])?
+        })
     } else {
         None
     };
