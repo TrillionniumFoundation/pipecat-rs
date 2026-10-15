@@ -209,7 +209,7 @@ acknowledged. The pipeline owns and joins its receive work on cleanup.
 ## Deliberate exclusions
 
 The following are not implemented, and no pass-through setting/action advertises
-them: session resumption/reconnect/replay, Vertex authentication, ephemeral token
+them: automatic replay, handle-less session rebuilding, Vertex authentication, ephemeral token
 creation, initial-history configuration, context-window compression, thinking
 configuration/background reasoning, non-blocking/scheduled/streaming tools,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
@@ -217,8 +217,10 @@ file input and image formats beyond the bounded RGB video path, Google File API 
 updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,
 tracing spans, transcription aggregation timeouts, or playback-status reporting.
 Related frame input, recognized unsupported server semantics, and unknown config
-fields are rejected. `GoAway` is exposed as an event and an actionable frame
-error; no automatic reconnection is attempted. Idle network black holes remain
+fields are rejected. By default `GoAway` is exposed as an event and an actionable
+frame error. Explicit bounded receive-side recovery is available through
+`GeminiClient::with_session_resumption`; see [Session resumption](SESSION_RESUMPTION.md)
+for handle validity, delivery limitations and finish/cancel behavior. Idle network black holes remain
 pending until caller cancellation or finish; there is no implicit idle timeout.
 
 This API is intentionally explicit about these boundaries rather than presenting

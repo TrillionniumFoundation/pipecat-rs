@@ -253,12 +253,23 @@ struct ProviderError {
     message: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResumptionUpdate {
+    pub resumable: bool,
+    pub new_handle: Option<String>,
+}
 pub(crate) struct Parsed {
+    pub resumption: Option<ResumptionUpdate>,
     pub setup_complete: bool,
     pub events: Vec<Event>,
     pub cancellations: Vec<String>,
 }
-pub(crate) fn parse(bytes: &[u8], config: &GeminiConfig) -> Result<Parsed, GeminiError> {
+pub(crate) fn parse(
+    bytes: &[u8],
+    config: &GeminiConfig,
+    policy: Option<&ResumptionPolicy>,
+) -> Result<Parsed, GeminiError> {
     if bytes.len() > config.limits.max_message_bytes {
         return Err(GeminiError::TooLarge);
     }
@@ -297,9 +308,25 @@ pub(crate) fn parse(bytes: &[u8], config: &GeminiConfig) -> Result<Parsed, Gemin
             message: redact_key(&error.message, &config.api_key),
         });
     }
-    if packet.session_resumption_update.is_some() {
-        return Err(GeminiError::Unsupported("session resumption"));
-    }
+    let resumption = match packet.session_resumption_update {
+        Some(value) => {
+            let policy = policy.ok_or(GeminiError::Unsupported("session resumption"))?;
+            let update: ResumptionUpdate = serde_json::from_value(value)
+                .map_err(|_| GeminiError::Protocol("invalid session resumption update"))?;
+            if update
+                .new_handle
+                .as_ref()
+                .is_some_and(|h| h.len() > policy.max_handle_bytes)
+            {
+                return Err(GeminiError::TooLarge);
+            }
+            if update.resumable && update.new_handle.as_ref().is_none_or(|h| h.is_empty()) {
+                return Err(GeminiError::Protocol("resumable update requires a handle"));
+            }
+            Some(update)
+        }
+        None => None,
+    };
     let mut events = Vec::new();
     let mut generation_complete = false;
     let mut turn_complete = false;
@@ -424,6 +451,7 @@ pub(crate) fn parse(bytes: &[u8], config: &GeminiConfig) -> Result<Parsed, Gemin
         return Err(GeminiError::TooLarge);
     }
     Ok(Parsed {
+        resumption,
         setup_complete: packet.setup_complete.is_some(),
         events,
         cancellations,

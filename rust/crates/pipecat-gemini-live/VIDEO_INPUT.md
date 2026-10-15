@@ -7,7 +7,9 @@ All successful, paused and throttled inputs retain their original frame,
 direction and envelope. User/request/text metadata is forwarded, not sent as
 provider context. Transcription mode and files remain unsupported; upstream
 images retain the native bypass. This closes sampled-image input to the Live
-service; it does not implement capture, resize, browser video or session resume.
+service; it does not implement capture, resize or browser video. Optional
+receive-side session recovery is a separate [client policy](SESSION_RESUMPTION.md);
+it never replays video already sent before a disconnect.
 
 Only exact packed, top-down RGB is accepted: dimensions 1..=2048 per axis,
 at most 262144 pixels, and at most 786432 input bytes. A short buffer is rejected;

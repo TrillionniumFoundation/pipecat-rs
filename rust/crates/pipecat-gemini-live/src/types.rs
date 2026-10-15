@@ -28,6 +28,34 @@ pub enum GeminiError {
     Closed,
 }
 
+/// Explicit bounded receive-side session recovery. Sent actions are never replayed.
+/// A saved handle need not cover the most recent input: this is not a guarantee
+/// of lossless delivery or exactly-once provider output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResumptionPolicy {
+    /// Total successful or failed reconnect attempts per logical session.
+    pub max_reconnects: usize,
+    /// UTF-8 bytes retained for a single opaque provider handle.
+    pub max_handle_bytes: usize,
+}
+impl Default for ResumptionPolicy {
+    fn default() -> Self {
+        Self {
+            max_reconnects: 2,
+            max_handle_bytes: 4096,
+        }
+    }
+}
+impl ResumptionPolicy {
+    pub(crate) fn validate(&self) -> Result<(), GeminiError> {
+        if !(1..=8).contains(&self.max_reconnects) || !(1..=65536).contains(&self.max_handle_bytes)
+        {
+            return Err(GeminiError::Invalid("session resumption limits"));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Limits {
     pub queue_capacity: usize,
@@ -125,7 +153,8 @@ pub struct FunctionDeclaration {
 }
 
 /// Connection-time configuration. No untyped pass-through for unsupported
-/// resumption, advanced video settings, tools, or provider-managed background work is provided.
+/// advanced video settings or provider-managed background work is provided.
+/// Bounded resumption is enabled separately on `GeminiClient`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SessionConfig {

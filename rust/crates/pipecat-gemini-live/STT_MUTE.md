@@ -33,9 +33,11 @@ Pinned ProfHepta/pipecat `af9f9da9d7afddaa8811c0e0251b32566c980bdf`:
   still sends finalization after its base handles VAD stop. Its receive callbacks
   do not suppress already in-flight transcription results.
 
-The source reconnect buffering check precedes mute. Native Gemini has no
-reconnect/replay implementation, so this patch does not reproduce that source
-path. Native audio passthrough is fixed on, rather than exposing the source base
+The source reconnect buffering check precedes mute. Native optional
+[session resumption](SESSION_RESUMPTION.md) keeps the existing bounded command
+queue during a replacement handshake. Muted input is still filtered before that
+queue; native does not reproduce the source pre-mute buffering path or replay
+already sent audio. Native audio passthrough is fixed on, rather than exposing the source base
 option. Provider input remains downstream-only, unlike the source base's audio
 handler without a direction guard.
 

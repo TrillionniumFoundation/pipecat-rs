@@ -75,9 +75,9 @@ actual joins; optional Smart Turn adds local model endpointing. See
 precise limits and source timing differences. The older rows above are not
 current evidence that audio transcription is missing.
 
-Slice94 targets the remaining semantic-judge connection: actual spoken STT text
-must reach the existing classifier independently from reported LLM text, with
-Continue/No, interruption and cancellation ownership verified end-to-end. Its
+Slice94 connects actual spoken STT text to the existing semantic classifier
+independently from reported LLM text, with Continue/No, interruption and
+cancellation ownership verified end-to-end. Its
 qualification is recorded separately; this inventory is not a whole-project
 parity or live-provider claim.
 
@@ -92,6 +92,9 @@ Remaining substantial evaluation paths include:
 - Simulated callers/personas: scripted evaluation is implemented; the source
   persona conversation, hangup and goal-scoring owner is a separate larger path.
 
-Gemini long-session resumption/reconnect also remains a concrete service-level
-candidate. Any next slice must recheck its current source and implementation,
-not infer absence from this historical inventory or inflate coverage counts.
+Slice95 adds an explicit bounded Gemini receive-side session-resumption policy;
+see [its contract](../crates/pipecat-gemini-live/SESSION_RESUMPTION.md). Recovery
+uses a saved provider handle and never replays already sent actions. It does not
+establish lossless delivery, handle-less history reseeding, transparent message
+index recovery or live-provider qualification. Future gaps must be checked
+against actual code and source, rather than inferred from older inventory rows.

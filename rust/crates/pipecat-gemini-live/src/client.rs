@@ -92,6 +92,7 @@ fn retire_pending(
 #[derive(Clone)]
 pub struct GeminiClient {
     config: Arc<GeminiConfig>,
+    resumption: Option<ResumptionPolicy>,
 }
 impl GeminiClient {
     pub fn new(config: GeminiConfig) -> Result<Self, GeminiError> {
@@ -114,7 +115,19 @@ impl GeminiClient {
         }
         Ok(Self {
             config: Arc::new(config),
+            resumption: None,
         })
+    }
+    /// Opt in to bounded receive-side recovery with an opaque server handle.
+    /// Connect/setup/write/protocol failures are terminal; no action is replayed.
+    /// Handles are private to each session and never shared by cloned clients.
+    pub fn with_session_resumption(
+        mut self,
+        policy: ResumptionPolicy,
+    ) -> Result<Self, GeminiError> {
+        policy.validate()?;
+        self.resumption = Some(policy);
+        Ok(self)
     }
     pub fn config(&self) -> &GeminiConfig {
         &self.config
@@ -123,57 +136,9 @@ impl GeminiClient {
     /// drops its socket; it does not leave a detached handshake task.
     pub async fn connect(&self) -> Result<GeminiSession, GeminiError> {
         let config = &self.config;
-        let url = endpoint(config)?;
-        let request = url
-            .as_str()
-            .into_client_request()
-            .map_err(|_| GeminiError::Invalid("WebSocket request"))?;
-        let ws_config = WebSocketConfig::default()
-            .max_message_size(Some(config.limits.max_message_bytes))
-            .max_frame_size(Some(config.limits.max_message_bytes));
-        let (mut socket, _) = timeout(
-            config.limits.connect_timeout,
-            tokio_tungstenite::connect_async_with_config(request, Some(ws_config), true),
-        )
-        .await
-        .map_err(|_| GeminiError::Timeout("connect"))?
-        .map_err(transport)?;
-        timeout(config.limits.setup_timeout, async {
-            socket
-                .send(Message::Text(protocol::setup(config).to_string().into()))
-                .await
-                .map_err(transport)?;
-            loop {
-                let message = socket
-                    .next()
-                    .await
-                    .ok_or(GeminiError::Closed)?
-                    .map_err(transport)?;
-                let bytes = match message {
-                    Message::Text(s) => s.as_bytes().to_vec(),
-                    Message::Binary(b) => b.to_vec(),
-                    Message::Ping(bytes) => {
-                        socket.send(Message::Pong(bytes)).await.map_err(transport)?;
-                        continue;
-                    }
-                    Message::Pong(_) => continue,
-                    Message::Close(_) => return Err(GeminiError::Closed),
-                    _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
-                };
-                let packet = protocol::parse(&bytes, config)?;
-                if !packet.setup_complete
-                    || !packet.events.is_empty()
-                    || !packet.cancellations.is_empty()
-                {
-                    return Err(GeminiError::Protocol(
-                        "expected setupComplete before content",
-                    ));
-                }
-                return Ok(());
-            }
-        })
-        .await
-        .map_err(|_| GeminiError::Timeout("setup"))??;
+        let (socket, update) = open_socket(config, self.resumption.as_ref(), None).await?;
+        let mut handle = None;
+        apply_resumption(&mut handle, update);
         let (tx, rx) = mpsc::channel(config.limits.queue_capacity);
         let (events_tx, events_rx) = mpsc::channel(config.limits.queue_capacity);
         let (control_tx, control_rx) = watch::channel(Control::default());
@@ -187,10 +152,19 @@ impl GeminiClient {
             admission: Arc::new(std::sync::Mutex::new(())),
         };
         let worker_sender = sender.clone();
-        let worker =
-            tokio::spawn(
-                async move { run(socket, rx, events_tx, control_rx, worker_sender).await },
-            );
+        let policy = self.resumption.clone();
+        let worker = tokio::spawn(async move {
+            run(
+                socket,
+                rx,
+                events_tx,
+                control_rx,
+                worker_sender,
+                policy,
+                handle,
+            )
+            .await
+        });
         Ok(GeminiSession {
             sender,
             events: events_rx,
@@ -198,6 +172,84 @@ impl GeminiClient {
         })
     }
 }
+fn apply_resumption(handle: &mut Option<String>, update: Option<protocol::ResumptionUpdate>) {
+    if let Some(update) = update {
+        // Unlike the pinned source, a non-resumable update revokes the old token.
+        *handle = if update.resumable {
+            update.new_handle
+        } else {
+            None
+        };
+    }
+}
+
+async fn open_socket(
+    config: &GeminiConfig,
+    policy: Option<&ResumptionPolicy>,
+    handle: Option<&str>,
+) -> Result<(Socket, Option<protocol::ResumptionUpdate>), GeminiError> {
+    let mut setup = protocol::setup(config);
+    if policy.is_some() {
+        setup["setup"]["sessionResumption"] = match handle {
+            Some(handle) => serde_json::json!({"handle": handle}),
+            None => serde_json::json!({}),
+        };
+    }
+    protocol::check_json_size(&setup, config.limits.max_message_bytes)?;
+    let url = endpoint(config)?;
+    let request = url
+        .as_str()
+        .into_client_request()
+        .map_err(|_| GeminiError::Invalid("WebSocket request"))?;
+    let ws_config = WebSocketConfig::default()
+        .max_message_size(Some(config.limits.max_message_bytes))
+        .max_frame_size(Some(config.limits.max_message_bytes));
+    let (mut socket, _) = timeout(
+        config.limits.connect_timeout,
+        tokio_tungstenite::connect_async_with_config(request, Some(ws_config), true),
+    )
+    .await
+    .map_err(|_| GeminiError::Timeout("connect"))?
+    .map_err(transport)?;
+    let update = timeout(config.limits.setup_timeout, async {
+        socket
+            .send(Message::Text(setup.to_string().into()))
+            .await
+            .map_err(transport)?;
+        loop {
+            let message = socket
+                .next()
+                .await
+                .ok_or(GeminiError::Closed)?
+                .map_err(transport)?;
+            let bytes = match message {
+                Message::Text(s) => s.as_bytes().to_vec(),
+                Message::Binary(b) => b.to_vec(),
+                Message::Ping(bytes) => {
+                    socket.send(Message::Pong(bytes)).await.map_err(transport)?;
+                    continue;
+                }
+                Message::Pong(_) => continue,
+                Message::Close(_) => return Err(GeminiError::Closed),
+                _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
+            };
+            let packet = protocol::parse(&bytes, config, policy)?;
+            if !packet.setup_complete
+                || !packet.events.is_empty()
+                || !packet.cancellations.is_empty()
+            {
+                return Err(GeminiError::Protocol(
+                    "expected setupComplete before content",
+                ));
+            }
+            return Ok(packet.resumption);
+        }
+    })
+    .await
+    .map_err(|_| GeminiError::Timeout("setup"))??;
+    Ok((socket, update))
+}
+
 fn endpoint(config: &GeminiConfig) -> Result<Url, GeminiError> {
     let mut url = Url::parse(&config.endpoint).map_err(|_| GeminiError::Invalid("endpoint"))?;
     let loopback = url.host_str().is_some_and(|h| {
@@ -333,6 +385,7 @@ impl GeminiSender {
                 origin: Origin::default(),
                 generation: self.generation(),
             });
+            self.control.send_modify(|_| {});
         }
         Ok(())
     }
@@ -413,13 +466,37 @@ async fn video_write_gate<'a>(
     }
 }
 
+fn recoverable_read(
+    message: &Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
+    go_away: bool,
+) -> bool {
+    use tokio_tungstenite::tungstenite::{error::ProtocolError, Error};
+    match message {
+        None => true,
+        Some(Err(Error::Io(_) | Error::ConnectionClosed | Error::AlreadyClosed)) => true,
+        Some(Err(Error::Protocol(ProtocolError::ResetWithoutClosingHandshake))) => true,
+        Some(Ok(Message::Close(frame))) => {
+            match frame.as_ref().map(|frame| u16::from(frame.code)) {
+                Some(1001 | 1011 | 1012 | 1013) => true,
+                Some(1000) | None => go_away,
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
 async fn run(
     mut socket: Socket,
     mut commands: mpsc::Receiver<Command>,
     events: mpsc::Sender<GeminiEvent>,
     mut control: watch::Receiver<Control>,
     sender: GeminiSender,
+    policy: Option<ResumptionPolicy>,
+    mut handle: Option<String>,
 ) -> Result<(), GeminiError> {
+    let mut reconnects = 0usize;
+    let mut go_away = false;
     let mut tool_ids = ToolIds::new()?;
     let mut pending = HashMap::<String, PendingTool>::new();
     // Retain a bounded cancellation window without making abandoned calls
@@ -481,6 +558,52 @@ async fn run(
                 }
                 Wake::Deadline => return Err(GeminiError::Timeout("finish")),
                 Wake::Message(message) => {
+                    if let Some(policy) = policy.as_ref().filter(|_| {
+                        recoverable_read(&message, go_away)
+                            && !finishing
+                            && !sender.finishing.load(Ordering::SeqCst)
+                    }) {
+                        let token = handle.as_deref().ok_or(GeminiError::Closed)?;
+                        if reconnects >= policy.max_reconnects {
+                            return Err(GeminiError::Protocol(
+                                "session resumption attempts exhausted",
+                            ));
+                        }
+                        reconnects += 1;
+                        // No old socket, reader or writer survives the replacement.
+                        // Only setup is sent again. Commands remain in the existing
+                        // bounded queue until setupComplete; no sent action is replayed.
+                        drop(socket);
+                        let (replacement, update) = {
+                            let connecting = open_socket(&sender.config, Some(policy), Some(token));
+                            tokio::pin!(connecting);
+                            loop {
+                                if control.borrow().cancel
+                                    || sender.finishing.load(Ordering::SeqCst)
+                                {
+                                    return Err(GeminiError::Closed);
+                                }
+                                tokio::select! { biased;
+                                    changed = control.changed() => {
+                                        if changed.is_err() { return Err(GeminiError::Closed); }
+                                        control.borrow_and_update();
+                                    }
+                                    result = &mut connecting => break result?,
+                                }
+                            }
+                        };
+                        socket = replacement;
+                        // End/Cancel racing with the handshake win before any new
+                        // command or provider content can be consumed.
+                        if control.borrow().cancel || sender.finishing.load(Ordering::SeqCst) {
+                            return Err(GeminiError::Closed);
+                        }
+                        apply_resumption(&mut handle, update);
+                        go_away = false;
+                        // The top of the loop applies interruption generation changes
+                        // before reading either the replacement socket or commands.
+                        continue;
+                    }
                     let bytes = match message.ok_or(GeminiError::Closed)?.map_err(transport)? {
                         Message::Text(s) => s.as_bytes().to_vec(),
                         Message::Binary(b) => b.to_vec(),
@@ -504,11 +627,16 @@ async fn run(
                         }
                         _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
                     };
-                    let packet = protocol::parse(&bytes, &sender.config)?;
+                    let packet = protocol::parse(&bytes, &sender.config, policy.as_ref())?;
                     if packet.setup_complete {
                         return Err(GeminiError::Protocol("duplicate setupComplete"));
                     }
+                    apply_resumption(&mut handle, packet.resumption);
                     for mut event in packet.events {
+                        if policy.is_some() && matches!(event, Event::GoAway { .. }) {
+                            go_away = true;
+                            continue;
+                        }
                         if matches!(event, Event::Interrupted) {
                             sender.interrupt().await;
                             retire_pending(
@@ -972,5 +1100,90 @@ mod video_generation_tests {
         assert!(result.is_none());
         assert!(shutdown.is_ok());
         assert!(peer_result.unwrap().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod resumption_tests {
+    use super::*;
+    use tokio_tungstenite::tungstenite::protocol::{frame::coding::CloseCode, CloseFrame};
+
+    #[test]
+    fn go_away_does_not_override_fatal_close_codes() {
+        for code in [
+            1000u16, 1001, 1002, 1003, 1007, 1008, 1009, 1011, 1012, 1013,
+        ] {
+            let frame = Some(Ok(Message::Close(Some(CloseFrame {
+                code: CloseCode::from(code),
+                reason: "fixture".into(),
+            }))));
+            assert_eq!(
+                recoverable_read(&frame, false),
+                matches!(code, 1001 | 1011 | 1012 | 1013)
+            );
+            assert_eq!(
+                recoverable_read(&frame, true),
+                matches!(code, 1000 | 1001 | 1011 | 1012 | 1013)
+            );
+        }
+        assert!(!recoverable_read(&Some(Ok(Message::Close(None))), false));
+        assert!(recoverable_read(&Some(Ok(Message::Close(None))), true));
+    }
+
+    #[test]
+    fn resumption_policy_is_bounded_and_false_revokes_saved_token() {
+        for (max_reconnects, max_handle_bytes) in [(0, 1), (9, 1), (1, 0), (1, 65537)] {
+            assert!(ResumptionPolicy {
+                max_reconnects,
+                max_handle_bytes
+            }
+            .validate()
+            .is_err());
+        }
+        let mut handle = Some("previous".into());
+        apply_resumption(&mut handle, None);
+        assert_eq!(handle.as_deref(), Some("previous"));
+        apply_resumption(
+            &mut handle,
+            Some(protocol::ResumptionUpdate {
+                resumable: false,
+                new_handle: Some("must-not-replace".into()),
+            }),
+        );
+        assert!(handle.is_none());
+    }
+
+    #[test]
+    fn resumption_updates_are_validated_before_bundled_content() {
+        let config = GeminiConfig::new("fixture", "model");
+        let policy = ResumptionPolicy {
+            max_reconnects: 1,
+            max_handle_bytes: 4,
+        };
+        for update in [
+            serde_json::json!({"resumable": true}),
+            serde_json::json!({"resumable": true, "newHandle": ""}),
+            serde_json::json!({"resumable": false, "newHandle": "too-long"}),
+            serde_json::json!({"resumable": "true", "newHandle": "x"}),
+        ] {
+            let packet = serde_json::json!({
+                "sessionResumptionUpdate": update,
+                "serverContent": {"modelTurn": {"parts": [{"text": "not admitted"}]}}
+            });
+            assert!(protocol::parse(
+                &serde_json::to_vec(&packet).unwrap(),
+                &config,
+                Some(&policy)
+            )
+            .is_err());
+        }
+        assert!(matches!(
+            protocol::parse(
+                br#"{"sessionResumptionUpdate":{"resumable":true,"newHandle":"x"}}"#,
+                &config,
+                None
+            ),
+            Err(GeminiError::Unsupported("session resumption"))
+        ));
     }
 }
