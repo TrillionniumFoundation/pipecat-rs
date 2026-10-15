@@ -57,7 +57,7 @@ impl RecordedScenarioFile {
             ResponseParseMode::Text,
         )
     }
-    fn load_bounded_with_mode(
+    pub(crate) fn load_bounded_with_mode(
         path: &Path,
         wav_limit: usize,
         pcm_limit: usize,

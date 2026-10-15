@@ -142,42 +142,52 @@ impl BotTranscriptionSettings {
             )?
             .with_recorded_audio_inputs(clips.iter().cloned())?;
         }
-        let runtime = RuntimeOptions {
-            library_path: self.runtime,
-        };
         let mut sessions = Vec::with_capacity(parts.len());
         for (scenario, clips) in parts {
-            let mut model = SileroModel::load(&runtime, &self.model).map_err(|_| {
-                invalid("bot transcription native runtime or model could not be loaded")
-            })?;
-            // Exercise actual input/output shapes before connecting, then start
-            // each independent analyzer from clean recurrent state.
-            let probability = model
-                .predict_pcm16(&[0; 512], 16_000)
-                .map_err(|_| invalid("bot transcription model preflight inference failed"))?;
-            if !probability.is_finite() || !(0.0..=1.0).contains(&probability) {
-                return Err(invalid(
-                    "bot transcription model preflight probability is invalid",
-                ));
-            }
-            model.reset();
-            let analyzer = SileroVadAnalyzer::new(
-                model,
-                16_000,
-                VadParams {
-                    stop_secs: 0.4,
-                    ..Default::default()
-                },
-            )
-            .map_err(|_| invalid("bot transcription analyzer configuration is invalid"))?;
-            let config =
-                BotTranscriptionConfig::new(analyzer, self.speech.clone(), self.request.clone())?;
+            let config = self.build_config()?;
             sessions.push(
                 EvalSession::with_bot_transcription(scenario, url, options.clone(), config)?
                     .with_recorded_audio_inputs(clips)?,
             );
         }
         Ok(sessions)
+    }
+
+    /// Build a fresh model with checked inference and clean recurrent state.
+    /// Native loading/inference is synchronous and has no hard deadline. The
+    /// caller owns the result; no background loader or analyzer is started here.
+    pub(crate) fn build_config(&self) -> Result<BotTranscriptionConfig, EvalError> {
+        // Suite attempts may start long after settings were read. Reject
+        // disappeared, nonregular or oversized assets again before native code
+        // opens them. These trusted-local path checks are not a TOCTOU sandbox.
+        let runtime = RuntimeOptions {
+            library_path: checked_asset(&self.runtime, 128 * 1024 * 1024)?,
+        };
+        let model_path = checked_asset(&self.model, 16 * 1024 * 1024)?;
+        let mut model = SileroModel::load(&runtime, &model_path).map_err(|_| {
+            invalid("bot transcription native runtime or model could not be loaded")
+        })?;
+        // Exercise actual input/output shapes before connecting, then start
+        // each independent analyzer from clean recurrent state.
+        let probability = model
+            .predict_pcm16(&[0; 512], 16_000)
+            .map_err(|_| invalid("bot transcription model preflight inference failed"))?;
+        if !probability.is_finite() || !(0.0..=1.0).contains(&probability) {
+            return Err(invalid(
+                "bot transcription model preflight probability is invalid",
+            ));
+        }
+        model.reset();
+        let analyzer = SileroVadAnalyzer::new(
+            model,
+            16_000,
+            VadParams {
+                stop_secs: 0.4,
+                ..Default::default()
+            },
+        )
+        .map_err(|_| invalid("bot transcription analyzer configuration is invalid"))?;
+        BotTranscriptionConfig::new(analyzer, self.speech.clone(), self.request.clone())
     }
 }
 fn invalid(message: &str) -> EvalError {

@@ -63,3 +63,7 @@ libc = "0.2"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "bot_audio_response_suite"
+required-features = ["bot-audio-transcription"]

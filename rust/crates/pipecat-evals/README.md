@@ -584,7 +584,9 @@ The optional `bot-audio-transcription` feature also supports explicit
 16 kHz PCM through Silero and the configured HTTP recognizer, preserving spoken
 `response` separately from `llm_response`. Configuration and all scenarios/models
 are validated before connecting. Multiple scenarios and `--recorded-audio` are
-supported; suites and simultaneous WAV export are not. See
+supported. Hosted `suite MANIFEST --bot-audio-response CONFIG.json` also supports
+explicit spoken checks, with per-attempt independent models and at most sixteen
+concurrent attempts. Simultaneous WAV export is unsupported. See
 [BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md#explicit-cli-run-configuration) for
 required endpoint, credential-environment and local model/runtime fields, limits,
 privacy implications and the unchanged default text behavior.

@@ -18,8 +18,8 @@ Build with `--features bot-audio-transcription`. Construct a typed scenario with
 `response` text predicates, then call `with_bot_transcription(...).run(cancel)`.
 The ordinary constructors still reject a literal typed `response` event. Existing
 file loaders keep their text-mode `response` to `llm_response` alias. The CLI
-selects spoken responses only with the explicit flag below; hosted suites do not
-yet accept this configuration. Classifier
+selects spoken responses only with the explicit flag below, for both `run` and
+compiled-child `suite`. Classifier
 `eval` predicates are not accepted by this initial audio-response constructor.
 
 `BotTranscriptionConfig::new` consumes a `SileroVadAnalyzer`, `SpeechConfig`, and
@@ -168,6 +168,64 @@ as spoken transcript events. Explicit `llm_response` remains reported LLM text;
 default loaders and CLI runs retain their prior alias and validation behavior.
 Classifier predicates remain unsupported. `--recorded-audio` can be combined with
 this mode, reusing its existing bounded WAV loader and outer-scenario-directory
-media paths. `--bot-audio-wav` is mutually exclusive. Suite rejects this flag.
+media paths. `--bot-audio-wav` is mutually exclusive for `run`.
 Cancellation, deadlines and old-generation cleanup use the existing transcription
 session owners; this CLI entry does not change completion or acoustic guarantees.
+
+## Explicit hosted suite configuration
+
+```sh
+pipecat-eval suite native-manifest.yaml --bot-audio-response stt.json
+pipecat-eval suite native-manifest.yaml --recorded-audio --bot-audio-response stt.json
+```
+
+The feature-gated library entry is
+`ReleaseManifest::load_audio_response(path, settings, recorded_audio)`, followed
+by the existing `run_release` or `run_release_with_budget`. The settings use the
+same explicit configuration described above. The compiled bot must enable bot
+PCM capture; enabling STT on the evaluator does not provision TTS in the bot.
+Both `response` and `send_after.response` preserve their spoken meaning. The
+ordinary suite loader, text alias and process/report formats remain unchanged.
+
+The whole plan is revalidated immediately before execution, including public
+job/scenario mutations, ports, process/session options, recording budgets and
+result-summary capacity. After validation, one disposable real model/preflight
+inference per distinct settings instance checks runtime usability before any
+child is launched. A pre-cancelled plan does not load a model or launch children.
+This is a usability check at that instant, not a promise that mutable local model
+files will remain available later.
+
+Each scheduled attempt creates a fresh analyzer and recurrent state before its
+own child spawn. Models are not preloaded for every repeat. An audio plan permits
+at most sixteen concurrent attempts; audio per-label limits also cannot exceed
+sixteen. Higher requested limits are rejected rather than silently reduced.
+The default concurrency remains four; text-only plans retain their existing
+maximum of thirty-two. Immutable
+settings are shared, not analyzer state. If a model becomes unavailable after
+preflight, the affected attempt fails through the existing process-error result
+with no child PID. Subsequent attempts and result retention follow the ordinary
+release scheduler policy.
+
+Cancellation is checked before and after per-attempt model construction. Native
+model loading and its preflight inference are synchronous and have no hard time
+bound; cancellation cannot preempt a native call. Unlike the Python suite's
+separate session subprocess, this model construction executes on a Tokio worker
+and can delay other attempts sharing that runtime. Concurrent local HTTP tests
+do not establish process-level pacing isolation or real-time scheduling.
+Once a session runs, its
+existing PCM/HTTP/analysis-thread ownership and the hosted child's teardown are
+shared with the library path. Forced child termination proves process reaping,
+not application-specific cleanup callbacks. Results remain in input/attempt
+order and retain the existing bounded-summary behavior.
+
+Recorded and spoken-response jobs share a 4 MiB serialized-scenario allowance
+across the complete manifest, charging every logical repeat exactly once. The
+loader rejects overflow before expanding jobs, and execution rechecks caller
+mutations before making validation copies or loading models. A counting writer
+avoids allocating a separate JSON serialization buffer. Ordinary non-recorded
+text plans keep their existing bounds.
+
+The input recording limits still apply across the complete manifest and repeats.
+They are separate from each session's bot PCM/transcription limits. No audio
+file export, playback, live-provider accuracy qualification or classifier judge
+is implied by a successful spoken-response suite.

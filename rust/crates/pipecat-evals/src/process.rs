@@ -339,16 +339,53 @@ pub(crate) async fn run_hosted_with_recordings(
     command: NativeCommand,
     scenario: ScriptScenario,
     bot_url: String,
+    session_options: SessionOptions,
+    options: ProcessOptions,
+    cancel: Cancellation,
+    recordings: Option<Vec<(usize, RecordedAudio)>>,
+) -> Result<HostedResult, EvalError> {
+    run_hosted_prepared(
+        command,
+        scenario,
+        bot_url,
+        session_options,
+        options,
+        cancel,
+        recordings,
+        #[cfg(feature = "bot-audio-transcription")]
+        None,
+    )
+    .await
+}
+
+/// Share exactly the same child, pipe and session teardown for plain sessions
+/// and an independently prepared spoken-response configuration.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_hosted_prepared(
+    command: NativeCommand,
+    scenario: ScriptScenario,
+    bot_url: String,
     mut session_options: SessionOptions,
     options: ProcessOptions,
     cancel: Cancellation,
     recordings: Option<Vec<(usize, RecordedAudio)>>,
+    #[cfg(feature = "bot-audio-transcription")] transcription: Option<
+        crate::BotTranscriptionConfig,
+    >,
 ) -> Result<HostedResult, EvalError> {
     command.validate()?;
     options.validate()?;
     let address = validate_local_url(&bot_url)?;
     session_options.stop_bot = true;
     let name = scenario.name.clone();
+    #[cfg(feature = "bot-audio-transcription")]
+    let mut session = match transcription {
+        Some(config) => {
+            EvalSession::with_bot_transcription(scenario, bot_url, session_options, config)?
+        }
+        None => EvalSession::new(scenario, bot_url, session_options)?,
+    };
+    #[cfg(not(feature = "bot-audio-transcription"))]
     let mut session = EvalSession::new(scenario, bot_url, session_options)?;
     if let Some(recordings) = recordings {
         session = session.with_recorded_audio_inputs(recordings)?;

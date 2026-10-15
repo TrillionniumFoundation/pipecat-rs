@@ -5,7 +5,8 @@
 use crate::{
     bounded_yaml::{self, ConstructionBudget},
     matcher::ScriptResult,
-    process::{run_hosted_with_recordings, HostedResult, NativeCommand, ProcessOptions},
+    process::{run_hosted_prepared, HostedResult, NativeCommand, ProcessOptions},
+    scenario::ResponseParseMode,
     suite::serialized_size,
     Cancellation, EvalError, EvalSession, RecordedAudio, RecordedScenarioFile, ScenarioFile,
     ScriptScenario, SessionOptions,
@@ -19,6 +20,8 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use tokio::task::JoinSet;
+#[cfg(feature = "bot-audio-transcription")]
+use {crate::BotTranscriptionSettings, std::sync::Arc};
 const MAX_RUNS: usize = 128;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 
@@ -89,6 +92,10 @@ pub struct ReleaseJob {
     command: NativeCommand,
     body: Option<Body>,
     recordings: Option<Vec<(usize, RecordedAudio)>>,
+    // Only settings/credentials are shared across repeats. Every executing
+    // attempt owns its own model, analyzer state and HTTP configuration.
+    #[cfg(feature = "bot-audio-transcription")]
+    audio_response: Option<Arc<BotTranscriptionSettings>>,
 }
 /// Loaded and validated plans contain no executable shell templates. Use load()
 /// to validate every scenario and all configuration before executing any child.
@@ -135,30 +142,69 @@ fn invalid(message: &str) -> EvalError {
 }
 impl ReleaseManifest {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        Self::load_mode(path.as_ref(), false)
+        Self::load_mode(path.as_ref(), false, ResponseParseMode::Text)
     }
     /// Opt into preloaded Unix PCM16 recordings in every referenced scenario.
     /// The ordinary loader and native compiled-child ownership remain unchanged.
     pub fn load_recorded(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        Self::load_mode(path.as_ref(), true)
+        Self::load_mode(path.as_ref(), true, ResponseParseMode::Text)
     }
-    fn load_mode(path: &Path, recorded: bool) -> Result<Self, EvalError> {
+    /// Preserve explicit `response` events as spoken transcripts for every
+    /// attempt, optionally with preloaded recorded user input. The complete
+    /// plan is bounded before execution, with at most sixteen concurrent runs.
+    /// Serialized audio scenarios total at most 4 MiB across logical repeats.
+    /// Settings are retained without loading a model. `run_release` first
+    /// preflights and drops one real model per distinct settings object, then
+    /// loads an independent model for each attempt before launching its child.
+    #[cfg(feature = "bot-audio-transcription")]
+    pub fn load_audio_response(
+        path: impl AsRef<Path>,
+        settings: BotTranscriptionSettings,
+        recorded_audio: bool,
+    ) -> Result<Self, EvalError> {
+        let mut manifest = Self::load_mode(
+            path.as_ref(),
+            recorded_audio,
+            ResponseParseMode::AudioResponse,
+        )?;
+        let settings = Arc::new(settings);
+        for job in &mut manifest.jobs {
+            job.audio_response = Some(settings.clone());
+        }
+        Ok(manifest)
+    }
+    fn load_mode(
+        path: &Path,
+        recorded: bool,
+        response_mode: ResponseParseMode,
+    ) -> Result<Self, EvalError> {
         let path = path.canonicalize()?;
         let base = path.parent().unwrap();
-        let value = load_value(&path, recorded)?;
+        let regular_files = recorded;
+        #[cfg(feature = "bot-audio-transcription")]
+        let regular_files =
+            regular_files || matches!(response_mode, ResponseParseMode::AudioResponse);
+        let concurrency_limit = match response_mode {
+            ResponseParseMode::Text => 32,
+            #[cfg(feature = "bot-audio-transcription")]
+            ResponseParseMode::AudioResponse => 16,
+        };
+        let value = load_value(&path, regular_files)?;
         if value.get("native_version") != Some(&Value::from(1)) {
             return Err(EvalError::Unsupported("release manifests require native_version: 1 and compiled bot paths; Python spawn templates are unsupported".into()));
         }
         let input: ManifestInput = serde_json::from_value(value)?;
         if input.native_version != 1
-            || !(1..=32).contains(&input.concurrency)
+            || !(1..=concurrency_limit).contains(&input.concurrency)
             || !(1..=MAX_RUNS).contains(&input.repeat)
             || input.suite.is_empty()
             || input.suite.len() > MAX_RUNS
         {
-            return Err(invalid(
-                "manifest requires 1..32 concurrency and 1..128 repeat/entries",
-            ));
+            return Err(invalid(if concurrency_limit == 16 {
+                "audio response manifest requires 1..16 concurrency and 1..128 repeat/entries"
+            } else {
+                "manifest requires 1..32 concurrency and 1..128 repeat/entries"
+            }));
         }
         if input.record || input.cache_dir.is_some() {
             return Err(EvalError::Unsupported(
@@ -184,8 +230,12 @@ impl ReleaseManifest {
                 ));
             }
             let cap = entry.concurrency.unwrap_or(input.concurrency);
-            if !(1..=32).contains(&cap) {
-                return Err(invalid("entry concurrency must be 1..32"));
+            if !(1..=concurrency_limit).contains(&cap) {
+                return Err(invalid(if concurrency_limit == 16 {
+                    "audio response entry concurrency must be 1..16"
+                } else {
+                    "entry concurrency must be 1..32"
+                }));
             }
             caps.entry(name.clone())
                 .and_modify(|c| *c = (*c).min(cap))
@@ -197,7 +247,7 @@ impl ReleaseManifest {
                     data: None,
                 }) => {
                     let path = base.join(path).canonicalize()?;
-                    if !load_value(&path, recorded)?.is_object() {
+                    if !load_value(&path, regular_files)?.is_object() {
                         return Err(invalid("runner_body file must hold a mapping"));
                     }
                     Some(Body::Path(path))
@@ -250,12 +300,13 @@ impl ReleaseManifest {
                         .join(format!("{reference}.yaml"))
                 };
                 let scenarios = if recorded {
-                    let file = RecordedScenarioFile::load_bounded(
+                    let file = RecordedScenarioFile::load_bounded_with_mode(
                         &path,
                         16 * 1024 * 1024 - wav_bytes,
                         (crate::recorded_audio::MAX_TOTAL_BYTES - audio_budget.pcm_bytes)
                             / input.repeat,
                         (128 - audio_budget.references) / input.repeat,
+                        response_mode,
                     )?;
                     wav_bytes = wav_bytes
                         .checked_add(file.wav_bytes)
@@ -268,15 +319,28 @@ impl ReleaseManifest {
                         .map(|(s, clips)| (s, Some(clips)))
                         .collect::<Vec<_>>()
                 } else {
-                    ScenarioFile::load(path)?
-                        .scenarios
-                        .into_iter()
-                        .map(|s| (s, None))
-                        .collect()
+                    let file = match response_mode {
+                        ResponseParseMode::Text => ScenarioFile::load(path)?,
+                        #[cfg(feature = "bot-audio-transcription")]
+                        ResponseParseMode::AudioResponse => {
+                            ScenarioFile::load_audio_response(path)?
+                        }
+                    };
+                    file.scenarios.into_iter().map(|s| (s, None)).collect()
                 };
                 for (scenario, recordings) in scenarios {
                     if let Some(clips) = &recordings {
                         audio_budget.admit(&scenario, clips, input.repeat)?;
+                    }
+                    #[cfg(feature = "bot-audio-transcription")]
+                    if recordings.is_none()
+                        && matches!(response_mode, ResponseParseMode::AudioResponse)
+                    {
+                        audio_budget.admit_scenario(
+                            &scenario,
+                            input.repeat,
+                            "release audio response scenario bytes",
+                        )?;
                     }
                     if !pairs.insert((name.clone(), scenario.name.clone())) {
                         return Err(invalid("duplicate entry label/scenario pair"));
@@ -294,6 +358,8 @@ impl ReleaseManifest {
                         command: command.clone(),
                         body: body.clone(),
                         recordings,
+                        #[cfg(feature = "bot-audio-transcription")]
+                        audio_response: None,
                     });
                 }
             }
@@ -320,6 +386,8 @@ impl ReleaseManifest {
 }
 // Rechecked after loading because ReleaseManifest.jobs and scenario are public.
 // Charge each logical repeat even though RecordedAudio clones share Arc storage.
+// Recorded and spoken-response jobs share one scenario allowance; a recorded
+// spoken-response job is counted once, not once for each audio mode.
 #[derive(Default)]
 struct AudioBudget {
     references: usize,
@@ -370,12 +438,6 @@ impl AudioBudget {
                 crate::recorded_audio::MAX_TOTAL_BYTES,
                 "release recording PCM bytes",
             ),
-            (
-                &mut self.scenario_bytes,
-                serialized_size(scenario)?,
-                4 * 1024 * 1024,
-                "release recorded scenario bytes",
-            ),
         ] {
             *total = count
                 .checked_mul(repeat)
@@ -384,6 +446,23 @@ impl AudioBudget {
             if *total > max {
                 return Err(EvalError::Limit(label));
             }
+        }
+        self.admit_scenario(scenario, repeat, "release recorded scenario bytes")
+    }
+    fn admit_scenario(
+        &mut self,
+        scenario: &ScriptScenario,
+        repeat: usize,
+        label: &'static str,
+    ) -> Result<(), EvalError> {
+        // Count through the serializer's writer, without allocating a JSON
+        // copy, including when public jobs have been changed after loading.
+        self.scenario_bytes = serialized_size(scenario)?
+            .checked_mul(repeat)
+            .and_then(|bytes| self.scenario_bytes.checked_add(bytes))
+            .ok_or(EvalError::Limit(label))?;
+        if self.scenario_bytes > 4 * 1024 * 1024 {
+            return Err(EvalError::Limit(label));
         }
         Ok(())
     }
@@ -431,12 +510,41 @@ impl Drop for BodyFile {
     }
 }
 impl ReleaseJob {
+    fn concurrency_limit(&self) -> usize {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.audio_response.is_some() {
+            return 16;
+        }
+        32
+    }
+    fn validation_scenario(&self) -> Result<ScriptScenario, EvalError> {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.audio_response.is_some() {
+            return self.scenario.audio_response_validation_copy();
+        }
+        Ok(self.scenario.clone())
+    }
     async fn run(
         self,
         session: SessionOptions,
         process: ProcessOptions,
         cancel: Cancellation,
     ) -> Result<ReleaseRun, EvalError> {
+        if cancel.is_cancelled() {
+            return Ok(self.failed("cancelled", "release run cancelled before launch"));
+        }
+        #[cfg(feature = "bot-audio-transcription")]
+        let transcription = if let Some(settings) = &self.audio_response {
+            // Loading and inference stay in this task's owner. They cannot be
+            // bounded by an async timeout or delegated to a detached loader.
+            let config = settings.build_config();
+            if cancel.is_cancelled() {
+                return Ok(self.failed("cancelled", "release run cancelled before launch"));
+            }
+            Some(config?)
+        } else {
+            None
+        };
         let mut command = self.command.clone();
         let body_file = match &self.body {
             Some(Body::Inline(data)) => Some(BodyFile::create(data)?),
@@ -455,7 +563,7 @@ impl ReleaseJob {
                 _ => arg,
             })
             .collect();
-        let hosted = run_hosted_with_recordings(
+        let hosted = run_hosted_prepared(
             command,
             self.scenario.clone(),
             format!("ws://127.0.0.1:{}", self.port),
@@ -463,6 +571,8 @@ impl ReleaseJob {
             process,
             cancel,
             self.recordings.clone(),
+            #[cfg(feature = "bot-audio-transcription")]
+            transcription,
         )
         .await?;
         Ok(self.record(hosted))
@@ -515,7 +625,15 @@ pub async fn run_release_with_budget(
     if !(1024..=MAX_BYTES).contains(&max_bytes) {
         return Err(invalid("release result budget must be 1KiB..64MiB"));
     }
-    if !(1..=32).contains(&manifest.concurrency)
+    // Public jobs can be combined across plans. Any spoken-response job keeps
+    // the whole scheduler at the audio cap, even in a mixed plain/audio plan.
+    let concurrency_limit = manifest
+        .jobs
+        .iter()
+        .map(ReleaseJob::concurrency_limit)
+        .min()
+        .unwrap_or(32);
+    if !(1..=concurrency_limit).contains(&manifest.concurrency)
         || manifest.jobs.is_empty()
         || manifest.jobs.len() > MAX_RUNS
     {
@@ -539,19 +657,34 @@ pub async fn run_release_with_budget(
         caps.entry(job.name.clone())
             .and_modify(|cap| *cap = (*cap).min(job.concurrency))
             .or_insert(job.concurrency);
-        if !(1..=32).contains(&job.concurrency) || job.port == 0 || !ports.insert(job.port) {
-            return Err(invalid(
-                "release jobs require nonzero unique ports and 1..32 concurrency",
-            ));
+        if !(1..=job.concurrency_limit()).contains(&job.concurrency)
+            || job.port == 0
+            || !ports.insert(job.port)
+        {
+            return Err(invalid(if job.concurrency_limit() == 16 {
+                "audio response release jobs require nonzero unique ports and 1..16 concurrency"
+            } else {
+                "release jobs require nonzero unique ports and 1..32 concurrency"
+            }));
         }
         job.command.validate()?;
+        if let Some(clips) = &job.recordings {
+            audio_budget.admit(&job.scenario, clips, 1)?;
+        }
+        #[cfg(feature = "bot-audio-transcription")]
+        if job.recordings.is_none() && job.audio_response.is_some() {
+            audio_budget.admit_scenario(
+                &job.scenario,
+                1,
+                "release audio response scenario bytes",
+            )?;
+        }
         let prepared = EvalSession::new(
-            job.scenario.clone(),
+            job.validation_scenario()?,
             format!("ws://127.0.0.1:{}", job.port),
             session.clone(),
         )?;
         if let Some(clips) = &job.recordings {
-            audio_budget.admit(&job.scenario, clips, 1)?;
             prepared.with_recorded_audio_inputs(clips.clone())?;
         }
     }
@@ -579,6 +712,29 @@ pub async fn run_release_with_budget(
     })? + manifest.jobs.len().saturating_sub(1);
     if stored + reserved > max_bytes {
         return Err(EvalError::Limit("release summary budget"));
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    {
+        // A fully validated plan may contain jobs from different loaded
+        // manifests. Preflight each distinct settings object once, dropping its
+        // real model immediately so repeat expansion retains no model instances.
+        let mut preflighted = HashSet::new();
+        for job in &manifest.jobs {
+            if cancel.is_cancelled() {
+                break;
+            }
+            let Some(settings) = &job.audio_response else {
+                continue;
+            };
+            if !preflighted.insert(Arc::as_ptr(settings)) {
+                continue;
+            }
+            let config = settings.build_config();
+            if cancel.is_cancelled() {
+                break;
+            }
+            drop(config?);
+        }
     }
     let mut results = vec![None; manifest.jobs.len()];
     let mut pending = manifest.jobs.into_iter().enumerate().collect::<Vec<_>>();
