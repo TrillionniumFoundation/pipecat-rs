@@ -796,18 +796,46 @@ async fn review_arguments_done_executes_and_delivers_result_before_response_done
         FrameData::InputText(TextFrame::new("new question after tool")),
     )
     .await;
-    let mut item = peer.command().await;
-    while item["type"] == "session.update" {
-        item = peer.command().await;
+    // Paired typed input emits a real manual interruption. Its empty preroll
+    // clears once; durable item admission may precede or follow that clear.
+    // Both must precede inference, with at most one existing session update.
+    let mut items = 0;
+    let mut clears = 0;
+    let mut updates = 0;
+    let mut created = false;
+    for _ in 0..4 {
+        let command = peer.command().await;
+        match command["type"].as_str() {
+            Some("session.update") => {
+                updates += 1;
+                assert_eq!(updates, 1, "typed input must not repeat session updates");
+            }
+            Some("conversation.item.create") => {
+                items += 1;
+                assert_eq!(items, 1, "typed input must create exactly one durable item");
+                assert_eq!(
+                    command["item"]["content"][0]["text"],
+                    "new question after tool"
+                );
+            }
+            Some("input_audio_buffer.clear") => {
+                clears += 1;
+                assert_eq!(clears, 1, "the manual interruption must clear exactly once");
+            }
+            Some("response.create") => {
+                assert_eq!(
+                    (items, clears),
+                    (1, 1),
+                    "inference follows the item and clear"
+                );
+                created = true;
+                break;
+            }
+            _ => panic!("unexpected typed-input command: {command:?}"),
+        }
     }
-    assert_eq!(item["type"], "conversation.item.create");
-    assert_eq!(
-        item["item"]["content"][0]["text"],
-        "new question after tool"
-    );
-    assert_eq!(
-        peer.command().await["type"],
-        "response.create",
+    assert!(
+        created,
         "an explicit new input must retain inference intent after tool continuation"
     );
     peer.response_start("text-after-tool");
@@ -1199,21 +1227,42 @@ async fn review_reinjected_old_run_cannot_acquire_the_new_interruption_epoch() {
         .await
         .unwrap();
     barrier(&mut worker).await;
+    let mut manual_clears = 0;
     while let Ok(Some(command)) = timeout(Duration::from_millis(120), peer.commands.recv()).await {
         assert_ne!(
             command["type"], "response.create",
             "a retained old inference fence cannot become current on reinjection"
         );
-        assert_eq!(
-            command["type"], "session.update",
-            "only durable context settings are permissible for this stale empty run"
+        assert!(
+            matches!(
+                command["type"].as_str(),
+                Some("session.update" | "input_audio_buffer.clear")
+            ),
+            "only durable settings and the manual interruption's clear are permissible: {command}"
+        );
+        manual_clears += usize::from(command["type"] == "input_audio_buffer.clear");
+        assert!(
+            manual_clears <= 1,
+            "stale inference must not duplicate the manual clear"
         );
     }
     inject(&worker, FrameData::LlmRun).await;
     let mut fresh = peer.command().await;
-    while fresh["type"] == "session.update" {
+    while matches!(
+        fresh["type"].as_str(),
+        Some("session.update" | "input_audio_buffer.clear")
+    ) {
+        manual_clears += usize::from(fresh["type"] == "input_audio_buffer.clear");
+        assert!(
+            manual_clears <= 1,
+            "stale inference must not duplicate the manual clear"
+        );
         fresh = peer.command().await;
     }
+    assert_eq!(
+        manual_clears, 1,
+        "the resolved manual interruption owns one clear before fresh inference"
+    );
     assert_eq!(
         fresh["type"], "response.create",
         "the next current operation must remain admissible after stale inference is suppressed"

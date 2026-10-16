@@ -38,6 +38,7 @@ pub struct OpenAiRealtimeProcessor {
     receive_ready: Arc<tokio::sync::Notify>,
     user_id: String,
     manual_turns: bool,
+    audio_preroll_override: bool,
 }
 impl OpenAiRealtimeProcessor {
     pub fn new(mut client: RealtimeClient) -> Result<Self, RealtimeError> {
@@ -63,8 +64,14 @@ impl OpenAiRealtimeProcessor {
         let manual_turns = audio
             .and_then(|a| a.input.as_ref())
             .is_none_or(|i| i.turn_detection.is_none());
+        if manual_turns && client.config().limits.max_audio_chunk_bytes < 2 {
+            return Err(RealtimeError::Invalid(
+                "manual PCM preroll requires a full sample per audio chunk",
+            ));
+        }
         // The paired user's configured strategies own pipeline interruptions.
         client.pipeline_turns = true;
+        client.audio_preroll_bytes = manual_turns.then_some(24_000);
         let context = ContextState::with_instructions(client.config().session.instructions.clone());
         Ok(Self {
             client,
@@ -79,7 +86,20 @@ impl OpenAiRealtimeProcessor {
             receive_ready: Arc::new(tokio::sync::Notify::new()),
             user_id: String::new(),
             manual_turns,
+            audio_preroll_override: false,
         })
+    }
+    /// Pin the manual-turn PCM16/24000mono replay suffix, overriding VAD auto-size.
+    /// Requires a finite positive duration of at least one sample and at most 5 s.
+    /// Server-VAD sessions remain unchanged. Captured bytes reflect local flush,
+    /// not provider ACK; interruption preserves the rolling suffix across commits.
+    pub fn with_user_audio_preroll_secs(mut self, seconds: f64) -> Result<Self, RealtimeError> {
+        let bytes = crate::client::preroll_bytes_for_duration(seconds)?;
+        if self.manual_turns {
+            self.client.audio_preroll_bytes = Some(bytes);
+        }
+        self.audio_preroll_override = true;
+        Ok(self)
     }
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = user_id.into();
@@ -712,6 +732,20 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
             return Ok(());
         }
         match &frame.data {
+            FrameData::SpeechControlParams(params)
+                if self.manual_turns && !self.audio_preroll_override =>
+            {
+                if let Some(vad) = &params.vad_params {
+                    if !vad.start_secs.is_finite() || vad.start_secs < 0.0 {
+                        return Err(processor_error(RealtimeError::Invalid(
+                            "invalid VAD start duration",
+                        )));
+                    }
+                    let bytes = crate::client::preroll_bytes_for_duration(vad.start_secs + 0.3)
+                        .map_err(processor_error)?;
+                    self.sender()?.resize_audio_preroll(bytes);
+                }
+            }
             FrameData::Interruption => {
                 let sender = self.sender()?;
                 let generation = sender.generation();

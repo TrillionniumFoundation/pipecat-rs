@@ -20,7 +20,7 @@ use tokio::{
     net::TcpStream,
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
-    time::{timeout, Instant},
+    time::{timeout, timeout_at, Instant},
 };
 use tokio_tungstenite::{
     tungstenite::{
@@ -28,6 +28,10 @@ use tokio_tungstenite::{
     },
     MaybeTlsStream, WebSocketStream,
 };
+
+mod preroll;
+pub(crate) use preroll::bytes_for_duration as preroll_bytes_for_duration;
+use preroll::Preroll;
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type ResponseFences = Arc<Mutex<HashMap<String, InvocationFence>>>;
@@ -57,6 +61,41 @@ where
         match fence {
             Some(fence) => fence.with_current(admit).unwrap_or(Poll::Ready(Ok(false))),
             None => admit(),
+        }
+    })
+    .await?;
+    if admitted {
+        futures_util::future::poll_fn(|cx| Pin::new(&mut *sink).poll_flush(cx)).await?;
+    }
+    Ok(admitted)
+}
+
+// Epoch admission shares the sender gate through readiness and start_send.
+// An admitted frame is flushed once even if interrupted while flushing.
+async fn send_epoch_fenced<S, Item>(
+    sink: &mut S,
+    item: Item,
+    generation: &AtomicU64,
+    gate: &Mutex<()>,
+    expected: u64,
+) -> Result<bool, S::Error>
+where
+    S: Sink<Item> + Unpin,
+{
+    let mut item = Some(item);
+    let admitted = futures_util::future::poll_fn(|cx| {
+        let _guard = gate.lock().unwrap_or_else(|e| e.into_inner());
+        if generation.load(Ordering::Acquire) != expected {
+            return Poll::Ready(Ok(false));
+        }
+        match Pin::new(&mut *sink).poll_ready(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+            Poll::Ready(Ok(())) => Poll::Ready(
+                Pin::new(&mut *sink)
+                    .start_send(item.take().expect("one epoch admission"))
+                    .map(|()| true),
+            ),
         }
     })
     .await?;
@@ -271,6 +310,7 @@ fn transport(e: tungstenite::Error) -> RealtimeError {
 pub struct RealtimeClient {
     config: RealtimeConfig,
     pub(crate) pipeline_turns: bool,
+    pub(crate) audio_preroll_bytes: Option<usize>,
 }
 impl RealtimeClient {
     pub fn config(&self) -> &RealtimeConfig {
@@ -281,10 +321,12 @@ impl RealtimeClient {
         Ok(Self {
             config,
             pipeline_turns: false,
+            audio_preroll_bytes: None,
         })
     }
     /// Opens a single authenticated connection. Redirects and automatic retries
-    /// are deliberately unsupported, so credentials and audio are never replayed.
+    /// are deliberately unsupported. The paired manual-turn processor alone may
+    /// replay its bounded PCM suffix within this same connection on interruption.
     pub async fn connect(&self) -> Result<RealtimeSession, RealtimeError> {
         let c = &self.config;
         let mut url = endpoint(&c.endpoint)?;
@@ -324,6 +366,7 @@ impl RealtimeClient {
         let mut actor = Actor::new(c.clone(), generation.clone(), emission_gate, events_tx);
         actor.response_fences = response_fences;
         actor.pipeline_turns = self.pipeline_turns;
+        actor.audio_preroll = self.audio_preroll_bytes.map(Preroll::new);
         // session.update precedes every user action, including appended audio.
         actor
             .write_action(
@@ -351,6 +394,7 @@ struct Control {
     generation: u64,
     playback: Option<PlaybackPosition>,
     close: bool,
+    preroll_bytes: Option<usize>,
 }
 struct Command {
     action: Action,
@@ -449,6 +493,12 @@ impl RealtimeSender {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
                 mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
             })
+    }
+    /// Ordered control barrier: resize is applied before a coalesced interruption.
+    /// It never changes generation, playback, or the sticky close request.
+    pub(crate) fn resize_audio_preroll(&self, bytes: usize) {
+        let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        self.control.send_modify(|c| c.preroll_bytes = Some(bytes));
     }
     pub fn generation(&self) -> u64 {
         self.generation.load(Ordering::Acquire)
@@ -595,6 +645,7 @@ struct ToolState {
     context_id: Option<String>,
 }
 struct Actor {
+    audio_preroll: Option<Preroll>,
     response_fences: ResponseFences,
     pipeline_turns: bool,
     config: RealtimeConfig,
@@ -630,6 +681,7 @@ impl Actor {
     ) -> Self {
         let ready_deadline = Instant::now() + config.limits.connect_timeout;
         Self {
+            audio_preroll: None,
             response_fences: Arc::new(Mutex::new(HashMap::new())),
             pipeline_turns: false,
             config,
@@ -660,17 +712,70 @@ impl Actor {
     fn epoch(&self) -> u64 {
         self.generation.load(Ordering::Acquire)
     }
-    async fn write(&mut self, socket: &mut Socket, mut value: Value) -> Result<(), RealtimeError> {
-        self.sequence += 1;
+    async fn write(&mut self, socket: &mut Socket, value: Value) -> Result<(), RealtimeError> {
+        self.write_before(
+            socket,
+            value,
+            Instant::now() + self.config.limits.operation_timeout,
+        )
+        .await
+    }
+    async fn write_before<S>(
+        &mut self,
+        socket: &mut S,
+        mut value: Value,
+        deadline: Instant,
+    ) -> Result<(), RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        self.sequence = self
+            .sequence
+            .checked_add(1)
+            .ok_or(RealtimeError::TooLarge)?;
         value["event_id"] = json!(format!("pc_evt_{}", self.sequence));
         let wire = serde_json::to_string(&value)
             .map_err(|_| RealtimeError::Invalid("event serialization"))?;
         if wire.len() > self.config.limits.max_message_bytes {
             return Err(RealtimeError::TooLarge);
         }
-        timeout(
-            self.config.limits.operation_timeout,
-            socket.send(Message::Text(wire.into())),
+        timeout_at(deadline, socket.send(Message::Text(wire.into())))
+            .await
+            .map_err(|_| RealtimeError::Timeout("write"))?
+            .map_err(transport)
+    }
+    async fn write_epoch_before<S>(
+        &mut self,
+        socket: &mut S,
+        mut value: Value,
+        deadline: Instant,
+        generation: u64,
+    ) -> Result<bool, RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        if Instant::now() >= deadline {
+            return Err(RealtimeError::Timeout("write"));
+        }
+        self.sequence = self
+            .sequence
+            .checked_add(1)
+            .ok_or(RealtimeError::TooLarge)?;
+        value["event_id"] = json!(format!("pc_evt_{}", self.sequence));
+        let wire = serde_json::to_string(&value)
+            .map_err(|_| RealtimeError::Invalid("event serialization"))?;
+        if wire.len() > self.config.limits.max_message_bytes {
+            return Err(RealtimeError::TooLarge);
+        }
+        timeout_at(
+            deadline,
+            send_epoch_fenced(
+                socket,
+                Message::Text(wire.into()),
+                &self.generation,
+                &self.emission_gate,
+                generation,
+            ),
         )
         .await
         .map_err(|_| RealtimeError::Timeout("write"))?
@@ -745,7 +850,33 @@ impl Actor {
                 if audio.len() > self.config.limits.max_audio_chunk_bytes {
                     return Err(RealtimeError::TooLarge);
                 }
-                json!({"type":"input_audio_buffer.append", "audio":STANDARD.encode(audio)})
+                if self.audio_preroll.is_some() && audio.len() % 2 != 0 {
+                    return Err(RealtimeError::Invalid(
+                        "audio preroll requires aligned PCM16",
+                    ));
+                }
+                let value =
+                    json!({"type":"input_audio_buffer.append", "audio":STANDARD.encode(&audio)});
+                if self.audio_preroll.is_some() {
+                    if !self
+                        .write_epoch_before(
+                            socket,
+                            value,
+                            Instant::now() + self.config.limits.operation_timeout,
+                            generation,
+                        )
+                        .await?
+                    {
+                        return Err(RealtimeError::Interrupted);
+                    }
+                } else {
+                    self.write(socket, value).await?;
+                }
+                // Local sink flush succeeded; no claim of provider acceptance.
+                if let Some(preroll) = &mut self.audio_preroll {
+                    preroll.append(&audio);
+                }
+                return Ok(());
             }
             Action::CommitAudio => json!({"type":"input_audio_buffer.commit"}),
             Action::ClearAudio => json!({"type":"input_audio_buffer.clear"}),
@@ -927,23 +1058,103 @@ impl Actor {
         }
         Ok(())
     }
-    async fn interrupt(
+    async fn write_interrupt_before<S>(
         &mut self,
-        socket: &mut Socket,
-        control: Control,
-    ) -> Result<(), RealtimeError> {
-        if self.active.is_some() || self.pending.is_some() {
-            self.write(socket, json!({"type":"response.cancel"}))
-                .await?;
-        }
-        if let Some(position) = control.playback {
-            self.write_action(
+        socket: &mut S,
+        value: Value,
+        deadline: Instant,
+        generation: u64,
+    ) -> Result<bool, RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        if self.audio_preroll.is_some() {
+            self.write_epoch_before(socket, value, deadline, generation)
+                .await
+        } else {
+            // Standalone/server-VAD retain their existing write behavior.
+            self.write_before(
                 socket,
-                Action::TruncateItem(position),
-                control.generation,
-                None,
+                value,
+                Instant::now() + self.config.limits.operation_timeout,
             )
             .await?;
+            Ok(true)
+        }
+    }
+    async fn interrupt<S>(&mut self, socket: &mut S, control: Control) -> Result<(), RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        let deadline = Instant::now() + self.config.limits.operation_timeout;
+        if self.audio_preroll.is_some() && control.generation != self.epoch() {
+            return Ok(());
+        }
+        if let Some(preroll) = &self.audio_preroll {
+            let suffix = preroll.snapshot();
+            if !self
+                .write_interrupt_before(
+                    socket,
+                    json!({"type":"input_audio_buffer.clear"}),
+                    deadline,
+                    control.generation,
+                )
+                .await?
+            {
+                return Ok(());
+            }
+            // Reserve envelope/event-id bytes; base64 expands each 3 bytes to4.
+            let max_chunk = self
+                .config
+                .limits
+                .max_message_bytes
+                .saturating_sub(128)
+                .checked_div(4)
+                .and_then(|n| n.checked_mul(3))
+                .ok_or(RealtimeError::TooLarge)?
+                .min(self.config.limits.max_audio_chunk_bytes)
+                & !1;
+            if max_chunk == 0 && !suffix.is_empty() {
+                return Err(RealtimeError::TooLarge);
+            }
+            for chunk in suffix.chunks(max_chunk.max(2)) {
+                if self.audio_preroll.is_some() && control.generation != self.epoch() {
+                    return Ok(());
+                }
+                if !self
+                    .write_interrupt_before(
+                        socket,
+                        json!({"type":"input_audio_buffer.append", "audio":STANDARD.encode(chunk)}),
+                        deadline,
+                        control.generation,
+                    )
+                    .await?
+                {
+                    return Ok(());
+                }
+            }
+        }
+        if self.audio_preroll.is_some() && control.generation != self.epoch() {
+            return Ok(());
+        }
+        // Keep native cancel eligibility: unlike Python, no idle cancel is sent.
+        if (self.active.is_some() || self.pending.is_some())
+            && !self
+                .write_interrupt_before(
+                    socket,
+                    json!({"type":"response.cancel"}),
+                    deadline,
+                    control.generation,
+                )
+                .await?
+        {
+            return Ok(());
+        }
+        if self.audio_preroll.is_some() && control.generation != self.epoch() {
+            return Ok(());
+        }
+        if let Some(position) = control.playback {
+            if !self.write_interrupt_before(socket, json!({"type":"conversation.item.truncate", "item_id":position.item_id, "content_index":position.content_index, "audio_end_ms":position.audio_end_ms}), deadline, control.generation).await? { return Ok(()); }
         }
         // The paired executor owns terminal settlement. A successful receipt
         // can already be admitted but delayed before its upstream relay.
@@ -978,7 +1189,59 @@ impl Actor {
         mut control: watch::Receiver<Control>,
     ) -> Result<(), RealtimeError> {
         let mut preserved = VecDeque::new();
+        let mut pending_control = false;
+        let mut handled_generation = 0;
         loop {
+            if self.ready && pending_control {
+                let value = control.borrow_and_update().clone();
+                pending_control = false;
+                if value.close {
+                    return Ok(());
+                }
+                if let (Some(preroll), Some(bytes)) = (&mut self.audio_preroll, value.preroll_bytes)
+                {
+                    preroll.resize(bytes);
+                }
+                if value.generation != handled_generation {
+                    if self.pipeline_turns {
+                        let admitted = commands.len();
+                        for _ in 0..admitted {
+                            let Ok(command) = commands.try_recv() else {
+                                break;
+                            };
+                            if matches!(
+                                command.action,
+                                Action::ToolResult { .. }
+                                    | Action::CreateItem { .. }
+                                    | Action::UpdateSession(_)
+                            ) {
+                                let result = self
+                                    .write_action(
+                                        socket,
+                                        command.action,
+                                        command.generation,
+                                        command.inference_fence,
+                                    )
+                                    .await;
+                                if let Some(reply) = command.reply {
+                                    let _ = reply.send(result.clone());
+                                }
+                                result?;
+                            } else {
+                                if preserved.len() >= self.config.limits.queue_capacity {
+                                    return Err(RealtimeError::Backpressure);
+                                }
+                                preserved.push_back(command);
+                            }
+                        }
+                    }
+                    self.interrupt(socket, value.clone()).await?;
+                    if value.generation == self.epoch() {
+                        handled_generation = value.generation;
+                    }
+                }
+                continue;
+            }
             if self.finishing && self.active.is_none() && self.pending.is_none() {
                 return Ok(());
             }
@@ -993,24 +1256,26 @@ impl Actor {
                     if changed.is_err() { return Ok(()); }
                     let value = control.borrow_and_update().clone();
                     if value.close { return Ok(()); }
-                    if self.pipeline_turns && self.ready {
-                        // Local history acceptance is durable. Settle queued final
-                        // outcomes before cancelling still-open calls, while stale
-                        // inference and audio retain interruption semantics.
-                        let admitted = commands.len();
-                        for _ in 0..admitted {
-                            let Ok(command) = commands.try_recv() else { break; };
-                            if matches!(command.action, Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)) {
-                                let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
-                                if let Some(reply) = command.reply { let _ = reply.send(result.clone()); }
-                                result?;
-                            } else {
-                                if preserved.len() >= self.config.limits.queue_capacity { return Err(RealtimeError::Backpressure); }
-                                preserved.push_back(command);
+                    if self.audio_preroll.is_some() {
+                        pending_control = true;
+                    } else {
+                        // Preserve pre-existing standalone/server-VAD control timing.
+                        if self.pipeline_turns && self.ready {
+                            let admitted = commands.len();
+                            for _ in 0..admitted {
+                                let Ok(command) = commands.try_recv() else { break; };
+                                if matches!(command.action, Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)) {
+                                    let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
+                                    if let Some(reply) = command.reply { let _ = reply.send(result.clone()); }
+                                    result?;
+                                } else {
+                                    if preserved.len() >= self.config.limits.queue_capacity { return Err(RealtimeError::Backpressure); }
+                                    preserved.push_back(command);
+                                }
                             }
                         }
+                        self.interrupt(socket, value).await?;
                     }
-                    self.interrupt(socket, value).await?;
                 }
                 _ = tokio::time::sleep_until(self.ready_deadline), if !self.ready => return Err(RealtimeError::Timeout("session readiness")),
                 _ = tokio::time::sleep_until(deadline), if self.deadline.is_some() => return Err(RealtimeError::Timeout("response")),
@@ -1041,7 +1306,7 @@ impl Actor {
                     let failure = result.clone();
                     let unacknowledged = command.reply.is_none();
                     if let Some(reply) = command.reply { let _ = reply.send(result); }
-                    if fatal || (unacknowledged && failure.is_err()) { return failure; }
+                    if fatal || (unacknowledged && failure.is_err() && failure != Err(RealtimeError::Interrupted)) { return failure; }
                 }
             }
         }
@@ -1078,6 +1343,7 @@ impl Actor {
                         generation,
                         playback: None,
                         close: false,
+                        preroll_bytes: None,
                     },
                 )
                 .await?;
@@ -1354,3 +1620,6 @@ fn check_queued_action(action: &Action, limits: &RealtimeLimits) -> Result<(), R
 
 #[cfg(test)]
 mod review_fenced_sink;
+
+#[cfg(test)]
+mod review_preroll_sink;

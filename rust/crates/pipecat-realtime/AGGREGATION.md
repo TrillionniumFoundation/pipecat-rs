@@ -67,10 +67,12 @@ empty function list clears them. Auto/none/required tool choices are supported.
 Named choices, grouped/provider-specific tool schemas, named messages, opaque
 extensions, multimodal/signed context and speculative inference fail explicitly.
 Image input and output-mode/prompt-cache/summarization controls also fail
-explicitly. Manual mode commits on resolved UserStoppedSpeaking; Python's
-VAD-autosized pre-roll clear/replay and audio/video pause controls are not
-implemented or qualified here. SpeechControlParams is forwarded without
-changing the native session. Server-VAD input does not use that pre-roll.
+explicitly. Manual mode commits on resolved UserStoppedSpeaking. Local interruption
+uses the bounded, VAD-autosized audio window described in [manual-turn pre-roll](PREROLL.md):
+clear, replay the successfully flushed suffix, then the existing cancellation and
+acknowledged truncation. An explicit duration overrides automatic sizing.
+Audio/video pause controls remain upstream; server-VAD input does not use this
+pre-roll window.
 
 The paired user emits sealed, process-local causes for InputText, LlmRun and
 message edits. Each binds the exact bounded snapshot, producer sequence, append

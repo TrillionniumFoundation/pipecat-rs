@@ -123,3 +123,11 @@ ownership. See [ASYNC_TOOLS.md](../crates/pipecat-gemini-live/ASYNC_TOOLS.md) fo
 the exact model profiles and required matching ToolExecutor registration policy.
 Thinking with tools remains rejected. Local WebSocket and production pipeline
 qualification does not establish remote model acceptance or exactly-once effects.
+
+Slice100 adds bounded manual-turn interruption audio pre-roll to the paired
+OpenAI Realtime processor. See [PREROLL.md](../crates/pipecat-realtime/PREROLL.md)
+for the successful-local-flush window, clear/replay/cancel/truncate order,
+readiness and generation boundaries, and explicit differences from the fixed
+Python service. The standalone client and server-VAD path retain their existing
+behavior. This closes a provider-buffer lifecycle gap; it does not establish
+remote processing acknowledgements, speech-recognition quality or reconnection.

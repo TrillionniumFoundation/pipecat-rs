@@ -75,7 +75,9 @@ in their original direction. Socket I/O and response processing run outside
 
 Output includes LLM response start/end, LLM text, interim/final transcriptions,
 TTS audio and start/stop, tool-in-progress, usage metrics, speech activity, and
-upstream error frames. `RealtimeFrameMapper` is usable separately. Split PCM
+upstream error frames. Manual-turn interruption additionally uses a bounded
+[pre-roll clear/replay window](PREROLL.md); standalone and server-VAD sessions
+retain their existing input-buffer behavior. `RealtimeFrameMapper` is usable separately. Split PCM
 samples are assembled; an incomplete final sample is rejected. A response with
 multiple audio items emits one TTS start/stop pair. Frame metadata retains
 session/conversation/response/item/content/context correlation.
