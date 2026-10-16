@@ -98,6 +98,12 @@ exposed as **non-final** fragments: neither model turn completion nor a local
 timer is claimed to prove that an independently delivered input transcript is
 finished. This differs deliberately from Python's timeout-based aggregation.
 Applications needing final STT utterances should use transcription mode.
+Dedicated transcription broadcasts `SttMetadata` after forwarding Start and on
+matching metadata requests. Its configured TTFS P99 budget defaults to 0.60
+seconds; `with_ttfs_p99_latency` allows an override or the source's `None` fallback
+of 1.0 second. These are configuration values, not runtime measurements. See
+[STT metadata and turn-stop budgets](STT_METADATA.md) for ordering, targeting,
+the existing speech-timeout floor, and deliberate source differences.
 
 Dedicated transcription defaults to a shared, last-observed audio user ID:
 valid downstream `UserAudio` sets it from `user_id`, while `InputAudio` clears it.

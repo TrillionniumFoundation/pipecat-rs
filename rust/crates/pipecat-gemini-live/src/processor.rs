@@ -3,7 +3,8 @@ use pipecat_core::{
     async_trait, AggregatedTextFrame, AudioRawFrame, ChatMessage, ChatRole, Direction,
     ErrorCategory, ErrorFrame, Frame, FrameData, FrameProcessor, FunctionCallCancelFrame,
     FunctionCallInProgressFrame, LlmContextFrame, Metric, ProcessorContext, ProcessorError,
-    StartFrame, TextFrame, TranscriptionFrame, TtsStartedFrame, TtsStoppedFrame,
+    ProcessorReference, ServiceMetadataFrame, StartFrame, SttMetadataFrame, TextFrame,
+    TranscriptionFrame, TtsStartedFrame, TtsStoppedFrame,
 };
 use serde_json::json;
 use std::{
@@ -25,6 +26,7 @@ pub struct GeminiLiveProcessor {
     preroll_bytes: usize,
     explicit_preroll: bool,
     user_id: Option<String>,
+    stt_ttfs_p99_latency: Option<f64>,
     audio_paused: AtomicBool,
     start_audio_paused: bool,
     video: crate::video::VideoEncoder,
@@ -58,6 +60,7 @@ impl GeminiLiveProcessor {
             preroll_bytes,
             explicit_preroll: false,
             user_id: None,
+            stt_ttfs_p99_latency: Some(0.60),
             audio_paused: AtomicBool::new(false),
             start_audio_paused: false,
             video: Default::default(),
@@ -71,6 +74,37 @@ impl GeminiLiveProcessor {
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = Some(user_id.into());
         self
+    }
+    /// Dedicated STT's configured P99 time-to-final-transcript budget in seconds.
+    /// Defaults to `Some(0.60)` from the pinned Python service; this is not a
+    /// measurement. `None` selects its base-service fallback of 1.0 second.
+    /// Finite overrides in 0..=300 seconds are accepted. Conversation mode ignores
+    /// this setting. The configured value is retained across setup and reuse.
+    pub fn with_ttfs_p99_latency(mut self, value: Option<f64>) -> Result<Self, GeminiError> {
+        if value.is_some_and(|value| !value.is_finite() || !(0.0..=300.0).contains(&value)) {
+            return Err(GeminiError::Invalid("TTFS latency"));
+        }
+        self.stt_ttfs_p99_latency = value;
+        Ok(self)
+    }
+    async fn stt_metadata(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        ctx.broadcast(Frame::new(FrameData::SttMetadata(SttMetadataFrame {
+            base: ServiceMetadataFrame {
+                service_name: self.name().into(),
+                user_turn_strategies: None,
+            },
+            ttfs_p99_latency: self.stt_ttfs_p99_latency.unwrap_or(1.0),
+        })))
+        .await
+    }
+    fn targets_self(&self, target: &ProcessorReference) -> bool {
+        match target {
+            ProcessorReference::Name(name) => name == self.name(),
+            ProcessorReference::Local(target) => {
+                // Compare identity without depending on trait-object vtables.
+                std::ptr::addr_eq(target.0.as_ref(), self as &dyn FrameProcessor)
+            }
+        }
     }
     /// Initial conversation-audio pause state, restored on each setup.
     /// Paused frames still pass through. Transcription mode ignores this setting
@@ -490,6 +524,18 @@ impl FrameProcessor for GeminiLiveProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        if self.client.config().mode == SessionMode::Transcription {
+            if frame.data.is_start() {
+                ctx.push(frame, direction).await?;
+                return self.stt_metadata(ctx).await;
+            }
+            if let FrameData::ServiceSwitcherRequestMetadata(target) = &frame.data {
+                if self.targets_self(target) {
+                    self.stt_metadata(ctx).await?;
+                }
+                return ctx.push(frame, direction).await;
+            }
+        }
         if let (SessionMode::Transcription, FrameData::SttMute(muted)) =
             (self.client.config().mode, &frame.data)
         {
