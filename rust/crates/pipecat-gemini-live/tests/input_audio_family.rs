@@ -1017,9 +1017,13 @@ async fn both_native_modes_preserve_default_and_fixed_transcript_identity() {
                 })
                 .collect();
             assert_eq!(transcripts.len(), 3);
-            for (frame, text) in transcripts {
+            for ((frame, text), dynamic_id) in transcripts
+                .into_iter()
+                .zip(["first-speaker", "", "second-speaker"])
+            {
                 assert_eq!(frame.direction, Direction::Downstream);
-                assert_eq!(text.user_id, fixed_id.unwrap_or(""));
+                let expected_id = fixed_id.unwrap_or(if transcription { dynamic_id } else { "" });
+                assert_eq!(text.user_id, expected_id);
                 assert_eq!(text.text, "heard user");
                 assert_eq!(text.language.as_deref(), Some("en-US"));
                 assert!(!text.timestamp.is_empty());

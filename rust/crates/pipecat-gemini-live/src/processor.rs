@@ -10,7 +10,7 @@ use std::{
     collections::VecDeque,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
 };
 use tokio::time::Instant;
@@ -24,7 +24,7 @@ pub struct GeminiLiveProcessor {
     state: Mutex<InputState>,
     preroll_bytes: usize,
     explicit_preroll: bool,
-    user_id: String,
+    user_id: Option<String>,
     audio_paused: AtomicBool,
     start_audio_paused: bool,
     video: crate::video::VideoEncoder,
@@ -35,6 +35,8 @@ pub struct GeminiLiveProcessor {
 struct InputState {
     activity: bool,
     stt_muted: bool,
+    // Each setup owns a new label; a retired receiver cannot read the next run.
+    stt_user_id: Arc<Mutex<String>>,
     preroll: VecDeque<u8>,
     preroll_bytes: usize,
     initial_context: Option<LlmContextFrame>,
@@ -55,7 +57,7 @@ impl GeminiLiveProcessor {
             }),
             preroll_bytes,
             explicit_preroll: false,
-            user_id: String::new(),
+            user_id: None,
             audio_paused: AtomicBool::new(false),
             start_audio_paused: false,
             video: Default::default(),
@@ -63,8 +65,11 @@ impl GeminiLiveProcessor {
             start_video_paused: false,
         }
     }
+    /// Fixed transcription label, including an explicitly empty string.
+    /// Without an override, dedicated STT follows the latest valid downstream
+    /// audio's user ID; conversation mode keeps its empty default.
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
-        self.user_id = user_id.into();
+        self.user_id = Some(user_id.into());
         self
     }
     /// Initial conversation-audio pause state, restored on each setup.
@@ -410,8 +415,19 @@ impl FrameProcessor for GeminiLiveProcessor {
             .map_err(|_| ProcessorError::fatal("Gemini state lock poisoned"))? =
             Some(sender.clone());
         let output = ctx.clone();
-        let user_id = self.user_id.clone();
+        let user_id = self.user_id.clone().unwrap_or_default();
         let mode = self.client.config().mode;
+        let stt_user_id = if mode == SessionMode::Transcription && self.user_id.is_none() {
+            Some(
+                self.state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
+                    .stt_user_id
+                    .clone(),
+            )
+        } else {
+            None
+        };
         let emit_metrics = config.enable_usage_metrics;
         ctx.spawn("gemini-live-receive", false, async move {
             let mut mapper = GeminiFrameMapper::new(mode, user_id);
@@ -437,6 +453,15 @@ impl FrameProcessor for GeminiLiveProcessor {
                     continue;
                 }
                 let is_output = event.event.is_output();
+                if matches!(event.event, Event::InputTranscription { .. }) {
+                    if let Some(user_id) = &stt_user_id {
+                        // A service-level label at receipt, not per-audio attribution.
+                        mapper.user_id = user_id
+                            .lock()
+                            .map_err(|_| ProcessorError::fatal("Gemini STT label lock poisoned"))?
+                            .clone();
+                    }
+                }
                 for frame in mapper.frames(&event) {
                     if let FrameData::Error(error) = &frame.data {
                         output.push_error(error.clone()).await?;
@@ -522,26 +547,52 @@ impl FrameProcessor for GeminiLiveProcessor {
                     if audio.audio.len() > self.client.config().limits.max_audio_bytes {
                         return Err(processor_error(GeminiError::TooLarge));
                     }
-                    if !audio.audio.is_empty() {
-                        let mut state = self
-                            .state
-                            .lock()
-                            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
-                        if manual && !state.activity {
-                            // Evict before extending, so a large input never enlarges the ring.
-                            let slice = &audio.audio
-                                [audio.audio.len().saturating_sub(state.preroll_bytes)..];
-                            while state.preroll.len() + slice.len() > state.preroll_bytes {
-                                state.preroll.pop_front();
-                            }
-                            state.preroll.extend(slice);
-                        } else {
-                            let mut origin = origin;
-                            if audio.context_id.is_some() {
-                                origin.context_id = audio.context_id.clone();
-                            }
-                            self.enqueue(Action::Audio(audio.audio.clone()), origin)?;
+                    let dynamic_stt_user_id = self.client.config().mode == SessionMode::Transcription
+                        && self.user_id.is_none();
+                    let admit_audio = || {
+                        if dynamic_stt_user_id {
+                            let state = self
+                                .state
+                                .lock()
+                                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                            *state.stt_user_id.lock().map_err(|_| {
+                                ProcessorError::fatal("Gemini STT label lock poisoned")
+                            })? = match &frame.data {
+                                FrameData::UserAudio(user_audio) => user_audio.user_id.clone(),
+                                _ => String::new(),
+                            };
                         }
+                        // Valid empty input still updates the observed label. A later
+                        // enqueue error does not roll it back or authorize a flush.
+                        if !audio.audio.is_empty() {
+                            let mut state = self
+                                .state
+                                .lock()
+                                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                            if manual && !state.activity {
+                                // Evict before extending, so a large input never enlarges the ring.
+                                let slice = &audio.audio
+                                    [audio.audio.len().saturating_sub(state.preroll_bytes)..];
+                                while state.preroll.len() + slice.len() > state.preroll_bytes {
+                                    state.preroll.pop_front();
+                                }
+                                state.preroll.extend(slice);
+                            } else {
+                                let mut origin = origin;
+                                if audio.context_id.is_some() {
+                                    origin.context_id = audio.context_id.clone();
+                                }
+                                self.enqueue(Action::Audio(audio.audio.clone()), origin)?;
+                            }
+                        }
+                        Ok::<(), ProcessorError>(())
+                    };
+                    if dynamic_stt_user_id {
+                        ctx.invocation_fence()?
+                            .with_current(admit_audio)
+                            .ok_or_else(|| ProcessorError::new("stale Gemini STT audio"))??;
+                    } else {
+                        admit_audio()?;
                     }
                 }
                 FrameData::UserStartedSpeaking if manual => {

@@ -99,12 +99,35 @@ timer is claimed to prove that an independently delivered input transcript is
 finished. This differs deliberately from Python's timeout-based aggregation.
 Applications needing final STT utterances should use transcription mode.
 
-Both native modes keep the default empty transcript user ID or the explicit
-fixed `with_user_id` override; an input `UserAudio.user_id` neither updates that
-identity nor becomes a wire field. Input transcripts have no inferred source
-frame/context correlation. This matches conversational Python Gemini Live's
-empty speaker default. Dynamic speaker attribution in Python's separate
-`GeminiSTTService` remains outside this native family contract.
+Dedicated transcription defaults to a shared, last-observed audio user ID:
+valid downstream `UserAudio` sets it from `user_id`, while `InputAudio` clears it.
+The update follows PCM geometry, rate, channel and raw-size validation, but
+precedes the empty-input check and provider enqueue. Valid empty audio therefore
+changes the label without sending PCM; invalid, muted and upstream audio do not
+change it. An enqueue rejection retains the observed label. The label is not an
+admission receipt and grants no finalization/flush eligibility.
+
+Each interim or final input transcription reads the latest shared label when
+the receiver maps that event. A delayed response to an older audio chunk can
+therefore carry a newer label. This is a service-level label, not per-audio
+attribution or provider speaker diarization; it creates no source-frame/context
+correlation or wire field. New setup starts with an empty dynamic label, including
+sequential processor reuse. End draining retains the current label; stop/cancel
+use the existing owned-task cleanup, and an old receiver cannot read a later
+setup's label. `with_user_id(...)`, including an explicitly empty string, remains
+a fixed override in both modes. Conversation mode retains its empty default,
+and standalone `GeminiFrameMapper::new` retains its fixed supplied label.
+
+The pinned Python source (`ProfHepta/pipecat`
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`)
+[`STTService.process_audio_frame`](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/stt_service.py#L433-L454)
+checks reconnect buffering, mute and usability before updating `_user_id`, then
+ignores empty audio. Gemini's
+[`interim and final handlers`](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/google/gemini_live/stt.py#L507-L539)
+read that shared ID. Native keeps its stricter PCM validation and downstream-only
+admission, explicit fixed override and per-setup reset; it does not add Python's
+pre-mute reconnect buffering or usability lifecycle. Existing resumption and
+flush ownership are unchanged.
 
 ## Turns, tools, correlation and interruption
 
