@@ -107,6 +107,34 @@ Optional provider cache, reasoning, audio and tool-use counts are preserved as
 The original provider totals and public event/mapper APIs remain unchanged;
 known usage fields are strictly typed, and no provider accounting is recomputed.
 
+Conversation-mode output transcription emits an `LlmText` observation copy
+before the existing `TtsText`. The copy has `append_to_context=false` to avoid
+adding the same transcription to assistant context twice, and
+`skip_tts=Some(true)` to bypass synthesis in downstream TTS processors that honor
+that flag. Both frames retain the exact text, including whitespace, and
+`includes_inter_frame_spaces=true`. The original `TtsText` keeps its existing
+`word` aggregation, context, `append_to_context=true`, `skip_tts=Some(true)` and
+`will_be_spoken=true`; it is still generated-text metadata, not playback proof.
+RTVI's existing enabled LLM observer now sees `bot-llm-text` and includes the copy
+in its existing sentence-based `bot-transcription` accumulation. Repeated chunks
+are not deduplicated, including overlap with separately reported model text.
+Model text and dedicated/input transcription mapping are otherwise unchanged.
+
+The two output frames have distinct frame IDs but the same event's local
+`gemini_generation`, `source_frame_id` and `context_id` when present. They use the
+existing per-frame generation gate and queue admission in order. They are not an
+atomic pair: interruption, cancellation or backpressure can leave an already
+admitted prefix without its later frame, and no rollback or combined-delivery
+acknowledgement is promised.
+
+The pinned Python
+[`_push_output_transcription_text_frames`](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/google/gemini_live/llm.py#L2450-L2467)
+uses the same LLM-copy-before-TTS order and disables context append on the copy.
+Its helper leaves `skip_tts=None` and selects sentence aggregation for TTS text.
+Native explicitly sets `skip_tts=Some(true)` for the observation copy and retains its
+existing TTS text settings; this is the scoped observation contract, not full
+Python output-transcription lifecycle parity.
+
 Dedicated transcription mode maps `interimInputTranscription` to interim frames
 and `inputTranscription` to final utterances, preserving reported BCP-47 language
 and adding a local receipt timestamp. Conversational input transcription is

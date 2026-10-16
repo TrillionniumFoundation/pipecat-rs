@@ -3814,6 +3814,7 @@ dependencies = [
  "pipecat-core",
  "pipecat-processors",
  "pipecat-rtvi",
+ "pipecat-streaming-speech",
  "pipecat-turns",
  "serde",
  "serde_json",

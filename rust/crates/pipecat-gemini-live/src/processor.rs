@@ -923,6 +923,9 @@ impl GeminiFrameMapper {
             Event::OutputTranscription(transcript) if self.mode == SessionMode::Conversation => {
                 let mut text = TextFrame::llm(&transcript.text);
                 text.skip_tts = Some(true);
+                let mut llm_text = text.clone();
+                llm_text.append_to_context = false;
+                data.push(FrameData::LlmText(llm_text));
                 data.push(FrameData::TtsText(AggregatedTextFrame {
                     text,
                     aggregated_by: "word".into(),
