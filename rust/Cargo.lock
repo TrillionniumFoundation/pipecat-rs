@@ -4119,6 +4119,8 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
+ "jpeg-decoder",
+ "jpeg-encoder",
  "pipecat-core",
  "pipecat-processors",
  "pipecat-services",

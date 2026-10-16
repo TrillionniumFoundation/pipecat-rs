@@ -14,12 +14,14 @@ pipecat-core = { path = "../pipecat-core" }
 tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3", features = ["sink"] }
 base64 = "0.22"
+jpeg-encoder = { version = "=0.6.1", default-features = false, features = ["std"] }
 url = "2"
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+jpeg-decoder = { version = "=0.3.2", path = "../../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }
 pipecat-turns = { path = "../pipecat-turns" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-processors = { path = "../pipecat-processors" }

@@ -6,6 +6,7 @@ mod client;
 mod context;
 mod processor;
 mod types;
+mod video;
 
 pub use client::*;
 pub use processor::*;

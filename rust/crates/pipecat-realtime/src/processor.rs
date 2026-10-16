@@ -16,6 +16,7 @@ use std::{
         Arc, Mutex,
     },
 };
+use tokio::time::Instant;
 struct AudioItem {
     generation: u64,
     bytes: u64,
@@ -23,8 +24,20 @@ struct AudioItem {
 }
 type AudioItems = Arc<Mutex<HashMap<(String, u32), AudioItem>>>;
 
+#[derive(Default)]
+struct VideoInput {
+    last_sample: Option<Instant>,
+    sequence: u64,
+}
+
 /// Single-session PCM adapter. Place a paired user aggregator before this service
 /// and its assistant after delivery. A tool executor needs the result relay below.
+///
+/// Raw camera input is bounded packed RGB with one-second sampling and detail
+/// "auto". Encoding is owned but awaited in the System lane: local controls
+/// wait for that bounded work, with no hard cancellation deadline. Interruption
+/// retires an image once admitted to this service queue; queued Cancel alone
+/// does not, so a preceding image may write before Cancel is processed.
 pub struct OpenAiRealtimeProcessor {
     client: RealtimeClient,
     sender: Mutex<Option<RealtimeSender>>,
@@ -39,6 +52,11 @@ pub struct OpenAiRealtimeProcessor {
     user_id: String,
     manual_turns: bool,
     audio_preroll_override: bool,
+    video: crate::video::VideoEncoder,
+    video_input: Mutex<VideoInput>,
+    video_paused: AtomicBool,
+    start_video_paused: bool,
+    video_closed: AtomicBool,
 }
 impl OpenAiRealtimeProcessor {
     pub fn new(mut client: RealtimeClient) -> Result<Self, RealtimeError> {
@@ -87,7 +105,83 @@ impl OpenAiRealtimeProcessor {
             user_id: String::new(),
             manual_turns,
             audio_preroll_override: false,
+            video: Default::default(),
+            video_input: Default::default(),
+            video_paused: AtomicBool::new(false),
+            start_video_paused: false,
+            video_closed: AtomicBool::new(false),
         })
+    }
+    /// Initial camera pause state. The processor remains single-session.
+    pub fn with_video_input_paused(mut self, paused: bool) -> Self {
+        self.start_video_paused = paused;
+        self.video_paused = AtomicBool::new(paused);
+        self
+    }
+    /// Pause new camera samples. Already admitted encoding/queued work is not
+    /// retracted; unpausing neither resets the one-second sampling window nor
+    /// reopens a closed processor. This subset uses image detail "auto".
+    pub fn set_video_input_paused(&self, paused: bool) {
+        self.video_paused.store(paused, Ordering::SeqCst);
+    }
+    async fn send_video(
+        &self,
+        image: &pipecat_core::ImageRawFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.video_paused.load(Ordering::SeqCst) || self.video_closed.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        let sender = self.sender()?;
+        let generation = sender.generation();
+        let fence = ctx.invocation_fence()?;
+        let selected = fence
+            .with_current(|| {
+                if self.video_closed.load(Ordering::SeqCst)
+                    || self.video_paused.load(Ordering::SeqCst)
+                {
+                    return Ok(None);
+                }
+                let mut state = self
+                    .video_input
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("realtime video input lock poisoned"))?;
+                let now = Instant::now();
+                if state.last_sample.is_some_and(|last| {
+                    now.duration_since(last) < std::time::Duration::from_secs(1)
+                }) {
+                    return Ok(None);
+                }
+                let sequence = state
+                    .sequence
+                    .checked_add(1)
+                    .ok_or_else(|| ProcessorError::fatal("realtime camera identity exhausted"))?;
+                // Source sampling advances before image conversion; invalid/failed
+                // samples still occupy this interval. Pause never resets it.
+                state.last_sample = Some(now);
+                state.sequence = sequence;
+                Ok::<_, ProcessorError>(Some(format!("pc_camera_{sequence}")))
+            })
+            .transpose()?
+            .flatten();
+        let Some(id) = selected else {
+            return Ok(());
+        };
+        let limit = self.client.config().limits.max_message_bytes;
+        let reject = |error| processor_error(error).with_permanence_override(false);
+        let max_jpeg = crate::video::jpeg_budget(limit).map_err(reject)?;
+        let jpeg = self.video.encode(image, max_jpeg).await.map_err(reject)?;
+        if self.video_closed.load(Ordering::SeqCst)
+            || generation != sender.generation()
+            || !fence.is_current()
+        {
+            return Ok(());
+        }
+        let action = crate::video::camera_action(jpeg, id).map_err(reject)?;
+        sender
+            .try_send_camera(action, generation, fence)
+            .map_err(reject)?;
+        Ok(())
     }
     /// Pin the manual-turn PCM16/24000mono replay suffix, overriding VAD auto-size.
     /// Requires a finite positive duration of at least one sample and at most 5 s.
@@ -487,6 +581,8 @@ impl OpenAiRealtimeProcessor {
         Ok(())
     }
     fn close(&self) -> Result<(), ProcessorError> {
+        self.video_closed.store(true, Ordering::SeqCst);
+        self.video.cancel();
         let sender = {
             self.sender
                 .lock()
@@ -544,6 +640,15 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         if config.audio_in_sample_rate != 24_000 || config.audio_out_sample_rate != 24_000 {
             return Err(ProcessorError::new("realtime pipeline requires 24000 Hz input and output; resample upstream/downstream"));
         }
+        self.video.reset().await.map_err(processor_error)?;
+        self.video_paused
+            .store(self.start_video_paused, Ordering::SeqCst);
+        self.video_closed.store(false, Ordering::SeqCst);
+        *self
+            .video_input
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime video input lock poisoned"))? =
+            VideoInput::default();
         let mut session = self.client.connect().await.map_err(processor_error)?;
         let sender = session.sender();
         *self
@@ -836,12 +941,37 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         }
         if direction == Direction::Downstream {
             match &frame.data {
-                FrameData::InputImage(_)
-                | FrameData::LlmConfigureOutput { .. }
+                FrameData::InputImage(image) => self.send_video(image, ctx).await?,
+                FrameData::UserImage(image) => {
+                    // Reject rich/callback authority before pause or sampling can
+                    // hide it. A passive camera sample is consumed here: forwarding
+                    // it would enter the paired assistant's rich-image handler.
+                    frame
+                        .require_no_native_llm_continuation()
+                        .map_err(|error| ProcessorError::new(error.to_string()))?;
+                    if image.append_to_context == Some(true)
+                        || image.run_llm == Some(true)
+                        || image.request.as_ref().is_some_and(|request| {
+                            request.append_to_context == Some(true)
+                                || request.function_name.is_some()
+                                || request.tool_call_id.is_some()
+                                || request.result_callback.is_some()
+                        })
+                    {
+                        return Err(ProcessorError::new(
+                            "realtime camera requires passive UserImage without context, inference or tool/callback requests",
+                        ));
+                    }
+                    self.send_video(&image.image, ctx).await?;
+                    return Ok(());
+                }
+                FrameData::LlmConfigureOutput { .. }
                 | FrameData::LlmEnablePromptCaching { .. }
                 | FrameData::LlmSummarizeContext(_)
                 | FrameData::LlmContextSummaryRequest(_) => {
-                    return Err(ProcessorError::new("this realtime adapter does not support image, output-mode, prompt-cache or summarization controls"));
+                    return Err(ProcessorError::new(
+                        "this realtime adapter does not support output-mode, prompt-cache or summarization controls",
+                    ));
                 }
                 FrameData::InputAudio(audio)
                 | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
@@ -1057,13 +1187,20 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         ctx.push(frame, direction).await
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        self.video_closed.store(true, Ordering::SeqCst);
+        // Stop does not run cleanup. A dropped encode waiter still owns its
+        // blocking job here, which must join before this terminal completes.
+        let encoded = self.video.finish().await.map_err(processor_error);
         if let Ok(sender) = self.sender() {
             sender.finish().await.map_err(processor_error)?;
         }
-        Ok(())
+        encoded
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
-        self.close()
+        let closed = self.close();
+        let encoded = self.video.finish().await.map_err(processor_error);
+        closed?;
+        encoded
     }
 }
 
@@ -1352,4 +1489,245 @@ fn processor_error(error: RealtimeError) -> ProcessorError {
         }
         _ => ErrorCategory::Unknown,
     })
+}
+
+#[cfg(test)]
+mod camera_ownership_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use pipecat_core::{ImageRawFrame, Pipeline, PipelineConfig, WorkerState};
+    use std::time::Duration;
+    use tokio::time::timeout;
+    use tokio_tungstenite::tungstenite::{error::ProtocolError, Message};
+
+    #[derive(Clone, Copy, Debug)]
+    enum Terminal {
+        ProviderEnd,
+        RuntimeEnd,
+        Stop,
+        Cancel,
+    }
+
+    async fn blocked_encoding_terminal(terminal: Terminal) {
+        let wait = Duration::from_secs(5);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = RealtimeConfig::new("camera-owned-encode-fixture");
+        config.endpoint = format!("ws://{}", listener.local_addr().unwrap());
+        config.limits.operation_timeout = Duration::from_secs(2);
+        let mut peer = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            let mut ws = tokio_tungstenite::accept_async(tcp)
+                .await
+                .map_err(|e| e.to_string())?;
+            ws.next()
+                .await
+                .ok_or("missing session update")?
+                .map_err(|e| e.to_string())?;
+            ws.send(Message::Text(json!({"event_id":"camera-ready","type":"session.updated","session":{"id":"camera-owned-session","type":"realtime"}}).to_string().into())).await.map_err(|e| e.to_string())?;
+            let mut messages = Vec::<serde_json::Value>::new();
+            while let Some(message) = ws.next().await {
+                let message = match message {
+                    Err(tokio_tungstenite::tungstenite::Error::Protocol(
+                        ProtocolError::ResetWithoutClosingHandshake,
+                    )) if matches!(terminal, Terminal::Cancel) => return Ok(messages),
+                    result => result.map_err(|e| e.to_string())?,
+                };
+                match message {
+                    Message::Close(_) => {
+                        match ws.flush().await {
+                            Ok(())
+                            | Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => {}
+                            Err(error) => return Err(error.to_string()),
+                        }
+                        return Ok(messages);
+                    }
+                    Message::Text(text) => {
+                        if messages.len() >= 16 {
+                            return Err("unbounded camera fixture traffic".into());
+                        }
+                        messages.push(serde_json::from_str(&text).map_err(|e| e.to_string())?);
+                    }
+                    _ => {}
+                }
+            }
+            if matches!(terminal, Terminal::Cancel) {
+                Ok::<_, String>(messages)
+            } else {
+                Err("graceful camera terminal ended without Close".into())
+            }
+        });
+        let processor =
+            Arc::new(OpenAiRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+        let gate = processor.video.test_gate();
+        let created = Pipeline::new(vec![processor.clone()])
+            .start(PipelineConfig {
+                shutdown_timeout: Duration::from_secs(2),
+                start: StartFrame {
+                    audio_in_sample_rate: 24_000,
+                    audio_out_sample_rate: 24_000,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await;
+        let mut worker = match created {
+            Ok(worker) => worker,
+            Err(error) => {
+                gate.release();
+                peer.abort();
+                let _ = peer.await;
+                panic!("camera pipeline start: {error}");
+            }
+        };
+        let observed = timeout(wait, async {
+            while !worker
+                .recv()
+                .await
+                .ok_or("missing Start")?
+                .frame
+                .data
+                .is_start()
+            {}
+            worker
+                .sender()
+                .send(
+                    Frame::new(FrameData::InputImage(ImageRawFrame {
+                        image: vec![31; 12],
+                        size: (2, 2),
+                        format: Some("RGB".into()),
+                    })),
+                    Direction::Downstream,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            while !gate.entered() {
+                tokio::task::yield_now().await;
+            }
+            match terminal {
+                Terminal::ProviderEnd => {
+                    processor
+                        .sender()
+                        .map_err(|e| e.to_string())?
+                        .interrupt(None);
+                    worker.end().await.map_err(|e| e.to_string())?;
+                }
+                Terminal::RuntimeEnd | Terminal::Stop => {
+                    worker
+                        .sender()
+                        .send(Frame::interruption(), Direction::Downstream)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    // This fixture has the service at index 0. Returning from
+                    // send proves Interruption reached this exact service queue
+                    // and retired its raw fence, despite the occupied System lane.
+                    if matches!(terminal, Terminal::Stop) {
+                        worker
+                            .sender()
+                            .send(Frame::new(FrameData::Stop), Direction::Downstream)
+                            .await
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        worker.end().await.map_err(|e| e.to_string())?;
+                    }
+                    // System image processing is FIFO and is not preempted.
+                    // The normal End/Stop lane also waits for System completion.
+                }
+                Terminal::Cancel => {
+                    worker
+                        .cancel("cancel blocked camera encoder")
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    // Cancel admission closes pipeline input, but its service
+                    // callback cannot run until this System image completes.
+                }
+            }
+            Ok::<_, String>(
+                !worker.has_finished()
+                    && !gate.exited()
+                    && !processor.video_closed.load(Ordering::SeqCst),
+            )
+        })
+        .await;
+        // Release even on observation failure; never strand a blocking pool job.
+        gate.release();
+        if !matches!(observed, Ok(Ok(true))) {
+            let _ = timeout(wait, worker.cancel("camera observation failed")).await;
+        }
+        let mut join_timeout = None;
+        let joined = match timeout(wait, worker.join()).await {
+            Ok(result) => result,
+            Err(error) => {
+                let _ = timeout(wait, worker.cancel("camera join deadline")).await;
+                join_timeout = Some(error.to_string());
+                worker.join().await
+            }
+        };
+        let remote = match timeout(wait, &mut peer).await {
+            Ok(result) => result,
+            Err(error) => {
+                peer.abort();
+                let _ = peer.await;
+                panic!("camera peer deadline: {error}");
+            }
+        };
+        assert!(
+            matches!(observed, Ok(Ok(true))),
+            "{terminal:?}: {observed:?}"
+        );
+        assert!(
+            join_timeout.is_none(),
+            "camera join deadline: {join_timeout:?}"
+        );
+        let report = joined.unwrap();
+        assert_eq!(
+            report.state,
+            match terminal {
+                Terminal::Stop => WorkerState::Stopped,
+                Terminal::Cancel => WorkerState::Cancelled,
+                _ => WorkerState::Ended,
+            }
+        );
+        assert_eq!(report.total_errors, 0, "{:?}", report.errors);
+        assert!(
+            gate.exited(),
+            "blocking job must exit before terminal completes"
+        );
+        assert!(
+            processor.video.test_idle().await,
+            "the terminal must leave no owned blocking encoder job"
+        );
+        let wire = remote.unwrap().unwrap();
+        let camera_count = wire
+            .iter()
+            .filter(|value| value["type"] == "conversation.item.create")
+            .count();
+        assert!(
+            !wire.iter().any(|value| value["type"] == "response.create"),
+            "unexpected inference: {wire:?}"
+        );
+        if matches!(terminal, Terminal::Cancel) {
+            // Cancel does not retire the raw fence at queue admission. The
+            // preceding image can write once before the Cancel callback closes
+            // the sender; there is no retry or later new image admission.
+            assert!(camera_count <= 1, "repeated camera before Cancel: {wire:?}");
+        } else {
+            assert_eq!(camera_count, 0, "retired camera reached wire: {wire:?}");
+        }
+    }
+    #[tokio::test]
+    async fn camera_old_provider_epoch_encoding_is_not_relabelled_after_completion() {
+        blocked_encoding_terminal(Terminal::ProviderEnd).await;
+    }
+    #[tokio::test]
+    async fn camera_system_interruption_waits_for_encoding_then_end_joins_owner() {
+        blocked_encoding_terminal(Terminal::RuntimeEnd).await;
+    }
+    #[tokio::test]
+    async fn camera_system_encoding_completes_before_stop_without_cleanup() {
+        blocked_encoding_terminal(Terminal::Stop).await;
+    }
+    #[tokio::test]
+    async fn camera_cancel_waits_for_system_encoding_then_closes_and_joins() {
+        blocked_encoding_terminal(Terminal::Cancel).await;
+    }
 }

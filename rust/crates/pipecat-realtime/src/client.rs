@@ -108,6 +108,46 @@ where
     Ok(admitted)
 }
 
+/// Camera items are ephemeral input, unlike public durable CreateItem edits.
+/// Both original qualifications cover each readiness/start_send poll. Preserve
+/// the established sender-gate -> runtime-admission lock order, with no await
+/// under either lock. An admitted frame gets exactly one flush afterward.
+async fn send_camera_fenced<S, Item>(
+    sink: &mut S,
+    item: Item,
+    generation: &AtomicU64,
+    gate: &Mutex<()>,
+    expected: u64,
+    fence: &InvocationFence,
+) -> Result<bool, S::Error>
+where
+    S: Sink<Item> + Unpin,
+{
+    let mut item = Some(item);
+    let admitted = futures_util::future::poll_fn(|cx| {
+        let _guard = gate.lock().unwrap_or_else(|e| e.into_inner());
+        if generation.load(Ordering::Acquire) != expected {
+            return Poll::Ready(Ok(false));
+        }
+        fence
+            .with_current(|| match Pin::new(&mut *sink).poll_ready(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+                Poll::Ready(Ok(())) => Poll::Ready(
+                    Pin::new(&mut *sink)
+                        .start_send(item.take().expect("one camera admission"))
+                        .map(|()| true),
+                ),
+            })
+            .unwrap_or(Poll::Ready(Ok(false)))
+    })
+    .await?;
+    if admitted {
+        futures_util::future::poll_fn(|cx| Pin::new(&mut *sink).poll_flush(cx)).await?;
+    }
+    Ok(admitted)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RealtimeError {
     #[error("invalid realtime configuration or action: {0}")]
@@ -404,6 +444,23 @@ struct Command {
     generation: u64,
     reply: Option<oneshot::Sender<Result<(), RealtimeError>>>,
     inference_fence: Option<InvocationFence>,
+    // Only the adapter's private camera admission may set this. Public image
+    // CreateItem actions retain their existing durable-history semantics.
+    camera_fence: Option<InvocationFence>,
+}
+impl Command {
+    fn is_durable(&self) -> bool {
+        self.camera_fence.is_none()
+            && matches!(
+                self.action,
+                Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)
+            )
+    }
+    fn camera_is_stale(&self, generation: u64, finishing: bool) -> bool {
+        self.camera_fence
+            .as_ref()
+            .is_some_and(|fence| finishing || self.generation != generation || !fence.is_current())
+    }
 }
 #[derive(Clone)]
 pub struct RealtimeSender {
@@ -422,6 +479,38 @@ impl fmt::Debug for RealtimeSender {
     }
 }
 impl RealtimeSender {
+    pub(crate) fn try_send_camera(
+        &self,
+        action: Action,
+        generation: u64,
+        fence: InvocationFence,
+    ) -> Result<bool, RealtimeError> {
+        crate::video::check_camera(&action, self.limits.max_message_bytes)?;
+        // Never resample generation after an encoder suspension. The final
+        // socket admission repeats both checks; enqueue is not a wire receipt.
+        let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        if self.generation() != generation || self.control.borrow().close {
+            return Ok(false);
+        }
+        let check = fence.clone();
+        check
+            .with_current(|| {
+                self.tx
+                    .try_send(Command {
+                        action,
+                        generation,
+                        reply: None,
+                        inference_fence: None,
+                        camera_fence: Some(fence),
+                    })
+                    .map(|()| true)
+                    .map_err(|e| match e {
+                        mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
+                        mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
+                    })
+            })
+            .unwrap_or(Ok(false))
+    }
     /// Admit an adapter transaction without partially enqueueing its wire effects.
     pub(crate) fn response_fence(&self, id: &str) -> Option<InvocationFence> {
         self.response_fences
@@ -463,6 +552,7 @@ impl RealtimeSender {
                 generation,
                 reply: None,
                 inference_fence: fence.clone(),
+                camera_fence: None,
             };
             if let Some(fence) = fence {
                 fence.with_current(|| permit.send(command));
@@ -491,6 +581,7 @@ impl RealtimeSender {
                 generation: self.generation(),
                 reply: None,
                 inference_fence: None,
+                camera_fence: None,
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
@@ -527,6 +618,7 @@ impl RealtimeSender {
                 generation: self.generation(),
                 reply: Some(reply),
                 inference_fence: None,
+                camera_fence: None,
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,
@@ -806,6 +898,66 @@ impl Actor {
         .await
         .map_err(|_| RealtimeError::Timeout("write"))?
         .map_err(transport)
+    }
+    async fn write_command(
+        &mut self,
+        socket: &mut Socket,
+        action: Action,
+        generation: u64,
+        inference_fence: Option<InvocationFence>,
+        camera_fence: Option<InvocationFence>,
+    ) -> Result<(), RealtimeError> {
+        let Some(fence) = camera_fence else {
+            return self
+                .write_action(socket, action, generation, inference_fence)
+                .await;
+        };
+        self.write_camera(socket, action, generation, &fence).await
+    }
+    async fn write_camera<S>(
+        &mut self,
+        socket: &mut S,
+        action: Action,
+        generation: u64,
+        fence: &InvocationFence,
+    ) -> Result<(), RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        // Valid pre-Finish samples are ordered before Finish in the command
+        // lane. A private camera after Finish is never new graceful-end work.
+        if self.finishing || generation != self.epoch() || !fence.is_current() {
+            return Err(RealtimeError::Interrupted);
+        }
+        self.sequence = self
+            .sequence
+            .checked_add(1)
+            .ok_or(RealtimeError::TooLarge)?;
+        let event_id = format!("pc_evt_{}", self.sequence);
+        let wire =
+            crate::video::camera_wire(&action, &event_id, self.config.limits.max_message_bytes)?;
+        // Release the data URI representation before the complete JSON waits
+        // for sink readiness. Both remain independently size bounded.
+        drop(action);
+        let admitted = timeout(
+            self.config.limits.operation_timeout,
+            send_camera_fenced(
+                socket,
+                Message::Text(wire.into()),
+                &self.generation,
+                &self.emission_gate,
+                generation,
+                fence,
+            ),
+        )
+        .await
+        .map_err(|_| RealtimeError::Timeout("write"))?
+        .map_err(transport)?;
+        if admitted {
+            Ok(())
+        } else {
+            Err(RealtimeError::Interrupted)
+        }
     }
     async fn write_action(
         &mut self,
@@ -1270,18 +1422,20 @@ impl Actor {
                             let Ok(command) = commands.try_recv() else {
                                 break;
                             };
-                            if matches!(
-                                command.action,
-                                Action::ToolResult { .. }
-                                    | Action::CreateItem { .. }
-                                    | Action::UpdateSession(_)
-                            ) {
+                            if command.camera_is_stale(self.epoch(), self.finishing) {
+                                if let Some(reply) = command.reply {
+                                    let _ = reply.send(Err(RealtimeError::Interrupted));
+                                }
+                                continue;
+                            }
+                            if command.is_durable() {
                                 let result = self
-                                    .write_action(
+                                    .write_command(
                                         socket,
                                         command.action,
                                         command.generation,
                                         command.inference_fence,
+                                        command.camera_fence,
                                     )
                                     .await;
                                 if let Some(reply) = command.reply {
@@ -1325,8 +1479,12 @@ impl Actor {
                             let admitted = commands.len();
                             for _ in 0..admitted {
                                 let Ok(command) = commands.try_recv() else { break; };
-                                if matches!(command.action, Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)) {
-                                    let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
+                                if command.camera_is_stale(self.epoch(), self.finishing) {
+                                    if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); }
+                                    continue;
+                                }
+                                if command.is_durable() {
+                                    let result = self.write_command(socket, command.action, command.generation, command.inference_fence, command.camera_fence).await;
                                     if let Some(reply) = command.reply { let _ = reply.send(result.clone()); }
                                     result?;
                                 } else {
@@ -1356,13 +1514,17 @@ impl Actor {
                 }
                 command = async { match preserved.pop_front() { Some(command) => Some(command), None => commands.recv().await } }, if self.ready => {
                     let Some(command) = command else { return Ok(()); };
+                    if command.camera_is_stale(self.epoch(), self.finishing) {
+                        if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); }
+                        continue;
+                    }
                     let finishing = matches!(command.action, Action::Finish);
                     if !finishing && command.reply.as_ref().is_some_and(|r| r.is_closed()) { continue; }
-                    let durable = self.pipeline_turns && matches!(command.action, Action::CreateItem { .. } | Action::UpdateSession(_) | Action::ToolResult { .. });
+                    let durable = self.pipeline_turns && command.is_durable();
                     if !finishing && !durable && command.generation != self.epoch() {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); } continue;
                     }
-                    let result = self.write_action(socket, command.action, command.generation, command.inference_fence).await;
+                    let result = self.write_command(socket, command.action, command.generation, command.inference_fence, command.camera_fence).await;
                     let fatal = matches!(result, Err(RealtimeError::Transport | RealtimeError::Closed | RealtimeError::Timeout(_)));
                     let failure = result.clone();
                     let unacknowledged = command.reply.is_none();
@@ -1704,3 +1866,350 @@ mod review_preroll_sink;
 
 #[cfg(test)]
 mod review_cancel_receipts;
+
+#[cfg(test)]
+mod camera_admission_tests {
+    use super::*;
+    use pipecat_core::{
+        async_trait, Direction, Frame, FrameData, FrameProcessor, Pipeline, PipelineConfig,
+        PipelineWorker, ProcessorContext, ProcessorError,
+    };
+    use std::{
+        sync::atomic::{AtomicBool, AtomicUsize},
+        task::{Context, Waker},
+    };
+
+    #[derive(Default)]
+    struct State {
+        ready: AtomicBool,
+        flush_ready: AtomicBool,
+        ready_polls: AtomicUsize,
+        flush_polls: AtomicUsize,
+        values: Mutex<Vec<Value>>,
+        waker: Mutex<Option<Waker>>,
+    }
+    impl State {
+        fn wake(&self) {
+            if let Some(waker) = self.waker.lock().unwrap().take() {
+                waker.wake();
+            }
+        }
+        async fn polled(&self, count: &AtomicUsize) -> bool {
+            timeout(Duration::from_secs(3), async {
+                while count.load(Ordering::SeqCst) == 0 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .is_ok()
+        }
+    }
+    struct ControlledSink(Arc<State>);
+    impl Sink<Message> for ControlledSink {
+        type Error = tungstenite::Error;
+        fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            self.0.ready_polls.fetch_add(1, Ordering::SeqCst);
+            *self.0.waker.lock().unwrap() = Some(cx.waker().clone());
+            if self.0.ready.load(Ordering::SeqCst) {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+        fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
+            let Message::Text(text) = item else {
+                panic!("camera requires text wire")
+            };
+            self.0
+                .values
+                .lock()
+                .unwrap()
+                .push(serde_json::from_str(&text).unwrap());
+            Ok(())
+        }
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            self.0.flush_polls.fetch_add(1, Ordering::SeqCst);
+            *self.0.waker.lock().unwrap() = Some(cx.waker().clone());
+            if self.0.flush_ready.load(Ordering::SeqCst) {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+        fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            self.poll_flush(cx)
+        }
+    }
+    #[derive(Default)]
+    struct Capture(Mutex<Option<InvocationFence>>);
+    #[async_trait]
+    impl FrameProcessor for Capture {
+        fn name(&self) -> &str {
+            "camera-fence-source"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if matches!(&frame.data, FrameData::Text(t) if t.text == "capture") {
+                *self.0.lock().unwrap() = Some(ctx.invocation_fence()?);
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    async fn source() -> (PipelineWorker, InvocationFence) {
+        let capture = Arc::new(Capture::default());
+        let mut worker = Pipeline::new(vec![capture.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        assert!(timeout(Duration::from_secs(3), worker.recv())
+            .await
+            .unwrap()
+            .unwrap()
+            .frame
+            .data
+            .is_start());
+        worker
+            .sender()
+            .send(Frame::text("capture"), Direction::Downstream)
+            .await
+            .unwrap();
+        assert!(matches!(
+            timeout(Duration::from_secs(3), worker.recv())
+                .await
+                .unwrap()
+                .unwrap()
+                .frame
+                .data,
+            FrameData::Text(_)
+        ));
+        let fence = capture.0.lock().unwrap().take().unwrap();
+        (worker, fence)
+    }
+    async fn interrupt(worker: &mut PipelineWorker) -> bool {
+        if !matches!(
+            timeout(
+                Duration::from_secs(3),
+                worker
+                    .sender()
+                    .send(Frame::interruption(), Direction::Downstream)
+            )
+            .await,
+            Ok(Ok(()))
+        ) {
+            return false;
+        }
+        matches!(timeout(Duration::from_secs(3), worker.recv()).await, Ok(Some(item)) if matches!(item.frame.data, FrameData::Interruption))
+    }
+    async fn close(mut worker: PipelineWorker) {
+        let ended = timeout(Duration::from_secs(3), worker.end()).await;
+        if !matches!(ended, Ok(Ok(()))) {
+            let _ = timeout(
+                Duration::from_secs(3),
+                worker.cancel("camera source End failed"),
+            )
+            .await;
+        }
+        let mut join_timeout = false;
+        let joined = match timeout(Duration::from_secs(3), worker.join()).await {
+            Ok(result) => result,
+            Err(_) => {
+                join_timeout = true;
+                let _ = timeout(
+                    Duration::from_secs(3),
+                    worker.cancel("camera source join deadline"),
+                )
+                .await;
+                worker.join().await
+            }
+        };
+        assert!(matches!(ended, Ok(Ok(()))), "{ended:?}");
+        assert!(!join_timeout, "camera source join deadline");
+        let report = joined.unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+    fn actor() -> Actor {
+        let (tx, _rx) = mpsc::channel(8);
+        Actor::new(
+            RealtimeConfig::new("local-camera-model"),
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(Mutex::new(())),
+            tx,
+        )
+    }
+    fn camera() -> Action {
+        crate::video::camera_action(vec![1, 2, 3], "pc_camera_1".into()).unwrap()
+    }
+
+    async fn operation_result(
+        mut operation: JoinHandle<Result<(), RealtimeError>>,
+    ) -> Result<Result<(), RealtimeError>, String> {
+        match timeout(Duration::from_secs(3), &mut operation).await {
+            Ok(result) => result.map_err(|error| error.to_string()),
+            Err(error) => {
+                operation.abort();
+                let _ = operation.await;
+                Err(error.to_string())
+            }
+        }
+    }
+    #[tokio::test]
+    async fn camera_pending_readiness_rechecks_raw_fence_and_provider_epoch() {
+        for raw_fence in [false, true] {
+            let (mut worker, fence) = source().await;
+            let mut actor = actor();
+            let generation = actor.generation.clone();
+            let gate = actor.emission_gate.clone();
+            let state = Arc::new(State::default());
+            let operation_state = state.clone();
+            let operation = tokio::spawn(async move {
+                actor
+                    .write_camera(&mut ControlledSink(operation_state), camera(), 0, &fence)
+                    .await
+            });
+            let polled = state.polled(&state.ready_polls).await;
+            let interrupted = if raw_fence {
+                interrupt(&mut worker).await
+            } else {
+                let _guard = gate.lock().unwrap();
+                generation.fetch_add(1, Ordering::AcqRel);
+                true
+            };
+            state.ready.store(true, Ordering::SeqCst);
+            state.flush_ready.store(true, Ordering::SeqCst);
+            state.wake();
+            let result = operation_result(operation).await;
+            let values = state.values.lock().unwrap().clone();
+            let flushes = state.flush_polls.load(Ordering::SeqCst);
+            close(worker).await;
+            assert!(polled && interrupted);
+            assert_eq!(result.unwrap(), Err(RealtimeError::Interrupted));
+            assert!(values.is_empty());
+            assert_eq!(flushes, 0);
+        }
+    }
+    #[tokio::test]
+    async fn camera_admitted_flush_survives_both_retirements_without_resending() {
+        let (mut worker, fence) = source().await;
+        let mut actor = actor();
+        let generation = actor.generation.clone();
+        let gate = actor.emission_gate.clone();
+        let state = Arc::new(State::default());
+        state.ready.store(true, Ordering::SeqCst);
+        let operation_state = state.clone();
+        let operation = tokio::spawn(async move {
+            actor
+                .write_camera(&mut ControlledSink(operation_state), camera(), 0, &fence)
+                .await
+        });
+        let polled = state.polled(&state.flush_polls).await;
+        let interrupted = interrupt(&mut worker).await;
+        {
+            let _guard = gate.lock().unwrap();
+            generation.fetch_add(1, Ordering::AcqRel);
+        }
+        state.flush_ready.store(true, Ordering::SeqCst);
+        state.wake();
+        let result = operation_result(operation).await;
+        let ready_polls = state.ready_polls.load(Ordering::SeqCst);
+        let values = state.values.lock().unwrap().clone();
+        close(worker).await;
+        assert!(polled && interrupted);
+        assert_eq!(result.unwrap(), Ok(()));
+        assert_eq!(ready_polls, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0]["type"], "conversation.item.create");
+        assert_eq!(values[0]["item"]["content"][0]["detail"], "auto");
+    }
+    #[tokio::test]
+    async fn camera_pending_flush_timeout_never_retries_ambiguous_item() {
+        let (worker, fence) = source().await;
+        let mut actor = actor();
+        actor.config.limits.operation_timeout = Duration::from_millis(25);
+        let state = Arc::new(State::default());
+        state.ready.store(true, Ordering::SeqCst);
+        let result = actor
+            .write_camera(&mut ControlledSink(state.clone()), camera(), 0, &fence)
+            .await;
+        let count = state.values.lock().unwrap().len();
+        let ready_polls = state.ready_polls.load(Ordering::SeqCst);
+        close(worker).await;
+        assert_eq!(result, Err(RealtimeError::Timeout("write")));
+        assert_eq!(count, 1);
+        assert_eq!(ready_polls, 1);
+    }
+    #[tokio::test]
+    async fn camera_finishing_event_id_overflow_and_full_wire_budget_reject_before_sink() {
+        let (worker, fence) = source().await;
+        let mut actor = actor();
+        let state = Arc::new(State::default());
+        state.ready.store(true, Ordering::SeqCst);
+        state.flush_ready.store(true, Ordering::SeqCst);
+        let mut sink = ControlledSink(state.clone());
+        actor.finishing = true;
+        let finishing = actor.write_camera(&mut sink, camera(), 0, &fence).await;
+        actor.finishing = false;
+        actor.sequence = u64::MAX;
+        let overflow = actor.write_camera(&mut sink, camera(), 0, &fence).await;
+        actor.sequence = u64::MAX - 1;
+        actor.config.limits.max_message_bytes = 64;
+        let budget = actor.write_camera(&mut sink, camera(), 0, &fence).await;
+        let rejected_polls = state.ready_polls.load(Ordering::SeqCst);
+        actor.sequence = u64::MAX - 1;
+        actor.config.limits.max_message_bytes = 4096;
+        let accepted = actor.write_camera(&mut sink, camera(), 0, &fence).await;
+        let values = state.values.lock().unwrap().clone();
+        close(worker).await;
+        assert_eq!(finishing, Err(RealtimeError::Interrupted));
+        assert_eq!(overflow, Err(RealtimeError::TooLarge));
+        assert_eq!(budget, Err(RealtimeError::TooLarge));
+        assert_eq!(rejected_polls, 0);
+        assert_eq!(accepted, Ok(()));
+        assert_eq!(values[0]["event_id"], "pc_evt_18446744073709551615");
+    }
+    #[tokio::test]
+    async fn private_camera_queue_capacity_and_retirement_do_not_change_public_durable_items() {
+        let (worker, fence) = source().await;
+        let (tx, mut rx) = mpsc::channel(1);
+        let (control, _control_rx) = watch::channel(Control::default());
+        let sender = RealtimeSender {
+            tx,
+            control,
+            generation: Arc::new(AtomicU64::new(0)),
+            emission_gate: Arc::new(Mutex::new(())),
+            limits: RealtimeLimits::default(),
+            response_fences: Default::default(),
+        };
+        let first = sender.try_send_camera(camera(), 0, fence.clone());
+        let full = sender.try_send_camera(camera(), 0, fence.clone());
+        let private = rx.try_recv().ok();
+        let qualifications = private.as_ref().map(|command| {
+            (
+                command.is_durable(),
+                command.camera_is_stale(0, false),
+                command.camera_is_stale(1, false),
+                command.camera_is_stale(0, true),
+            )
+        });
+        let private_empty = rx.try_recv().is_err();
+        let sent_public = sender.try_send(camera());
+        let public = rx.try_recv().ok();
+        sender.interrupt(None);
+        let stale = sender.try_send_camera(camera(), 0, fence);
+        let stale_empty = rx.try_recv().is_err();
+        close(worker).await;
+        assert_eq!(first, Ok(true));
+        assert_eq!(full, Err(RealtimeError::Backpressure));
+        assert_eq!(qualifications, Some((false, false, true, true)));
+        assert!(private_empty);
+        assert_eq!(sent_public, Ok(()));
+        let public = public.expect("ordinary CreateItem must enqueue");
+        assert!(public.is_durable());
+        assert!(!public.camera_is_stale(1, true));
+        assert_eq!(stale, Ok(false));
+        assert!(stale_empty);
+    }
+}

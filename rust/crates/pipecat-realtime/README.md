@@ -54,6 +54,10 @@ final results and results for interrupted calls are discarded.
 
 ## Frame processing
 
+See [bounded raw camera input](CAMERA.md) for sampled RGB-to-JPEG user items,
+passive image handling, interruption guards and owned encoder shutdown. Camera
+upload does not trigger a response or add rich images to the shared context.
+
 See [paired realtime aggregation](AGGREGATION.md) for the required bidirectional
 topology, explicit seed ownership, state-only snapshots, final-tool relay,
 playback semantics and intentionally unsupported context mutations.

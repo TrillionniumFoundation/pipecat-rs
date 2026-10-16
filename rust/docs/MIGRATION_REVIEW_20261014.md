@@ -143,3 +143,10 @@ active-response create conflicts retain fatal paired handling without generic
 pending-create continuation. Standalone raw error events remain visible. This
 intentionally does not reproduce Python's unconditional code-only suppression,
 and does not close pending-only cancellation or active-response conflict gaps.
+
+Slice102 adds bounded raw-camera input to OpenAI Realtime. See
+[CAMERA.md](../crates/pipecat-realtime/CAMERA.md) for the one-second sampling,
+RGB/JPEG limits, passive UserImage consumption and private stale-write guards.
+It inserts image items without automatically starting inference. Gemini
+conversation transcription aggregation and ordered paired-context delivery remain
+a separate open gap; the camera work does not implement that design.
