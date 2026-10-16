@@ -29,6 +29,9 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
+mod cancel_receipts;
+use cancel_receipts::{CancelReceipt, CancelReceipts};
+
 mod preroll;
 pub(crate) use preroll::bytes_for_duration as preroll_bytes_for_duration;
 use preroll::Preroll;
@@ -645,6 +648,7 @@ struct ToolState {
     context_id: Option<String>,
 }
 struct Actor {
+    cancel_receipts: CancelReceipts,
     audio_preroll: Option<Preroll>,
     response_fences: ResponseFences,
     pipeline_turns: bool,
@@ -681,6 +685,7 @@ impl Actor {
     ) -> Self {
         let ready_deadline = Instant::now() + config.limits.connect_timeout;
         Self {
+            cancel_receipts: CancelReceipts::new(config.limits.max_message_bytes),
             audio_preroll: None,
             response_fences: Arc::new(Mutex::new(HashMap::new())),
             pipeline_turns: false,
@@ -943,7 +948,18 @@ impl Actor {
                 self.deadline = Some(Instant::now() + self.config.limits.response_timeout);
                 return Ok(());
             }
-            Action::CancelResponse => json!({"type":"response.cancel"}),
+            Action::CancelResponse => {
+                // Internal batches retain their ordinary write path. Public
+                // send/try_send route cancellation through the control lane.
+                self.write_cancel_before(
+                    socket,
+                    Instant::now() + self.config.limits.operation_timeout,
+                    generation,
+                    false,
+                )
+                .await?;
+                return Ok(());
+            }
             Action::ToolResult {
                 call_id,
                 output,
@@ -1082,6 +1098,56 @@ impl Actor {
             Ok(true)
         }
     }
+    /// Register only a known active response and a successful local cancel flush.
+    /// This is not a provider acknowledgment, nor permission to release busy state.
+    async fn write_cancel_before<S>(
+        &mut self,
+        socket: &mut S,
+        deadline: Instant,
+        generation: u64,
+        epoch_fenced: bool,
+    ) -> Result<bool, RealtimeError>
+    where
+        S: Sink<Message, Error = tungstenite::Error> + Unpin,
+    {
+        let target = self
+            .active
+            .as_deref()
+            .filter(|_| self.pipeline_turns)
+            .filter(|id| !id.is_empty() && id.len() <= self.config.limits.max_message_bytes)
+            .and_then(|id| {
+                self.responses
+                    .iter()
+                    .rev()
+                    .find(|(response, _)| response == id)
+                    .map(|(_, context)| (Box::<str>::from(id), context.generation))
+            });
+        let written = if epoch_fenced {
+            self.write_interrupt_before(
+                socket,
+                json!({"type":"response.cancel"}),
+                deadline,
+                generation,
+            )
+            .await?
+        } else {
+            self.write_before(socket, json!({"type":"response.cancel"}), deadline)
+                .await?;
+            true
+        };
+        if let Some((response_id, response_generation)) = target.filter(|_| written) {
+            // Actor owns sequence. Capture this cancel's ID immediately,
+            // before any later truncate can advance it.
+            let request_id = format!("pc_evt_{}", self.sequence).into_boxed_str();
+            self.cancel_receipts.insert(CancelReceipt {
+                request_id,
+                response_id,
+                response_generation,
+                interrupt_generation: generation,
+            });
+        }
+        Ok(written)
+    }
     async fn interrupt<S>(&mut self, socket: &mut S, control: Control) -> Result<(), RealtimeError>
     where
         S: Sink<Message, Error = tungstenite::Error> + Unpin,
@@ -1140,12 +1206,7 @@ impl Actor {
         // Keep native cancel eligibility: unlike Python, no idle cancel is sent.
         if (self.active.is_some() || self.pending.is_some())
             && !self
-                .write_interrupt_before(
-                    socket,
-                    json!({"type":"response.cancel"}),
-                    deadline,
-                    control.generation,
-                )
+                .write_cancel_before(socket, deadline, control.generation, true)
                 .await?
         {
             return Ok(());
@@ -1313,6 +1374,21 @@ impl Actor {
     }
     async fn event(&mut self, socket: &mut Socket, wire: WireEvent) -> Result<(), RealtimeError> {
         let mut event = wire.event;
+        // Classify before generic create-error recovery. Only the nested
+        // error.event_id names a client request; wire.event_id names a server event.
+        // A consumed cancellation receipt changes no response, deadline, tool,
+        // input-buffer or continuation state, even across later generations.
+        let fenced_control_error = self.pipeline_turns
+            && matches!(&event, Event::Error { error } if matches!(error.code.as_deref(),
+                Some("response_cancel_not_active" | "conversation_already_has_active_response")));
+        if fenced_control_error
+            && matches!(&event, Event::Error { error } if self.cancel_receipts.consume(error))
+        {
+            return Ok(());
+        }
+        // Unmatched control errors retain the original redacted Event::Error
+        // delivery and paired processor fatal path. They must not release a
+        // pending create or invoke maybe_continue, even with its exact request ID.
         if matches!(event, Event::SpeechStarted { .. }) {
             let interrupt_response = match self
                 .config
@@ -1360,7 +1436,9 @@ impl Actor {
                 self.conversation_id = Some(conversation.id.clone())
             }
             Event::Error { error }
-                if error.event_id.is_some() && error.event_id == self.pending_event_id =>
+                if !fenced_control_error
+                    && error.event_id.is_some()
+                    && error.event_id == self.pending_event_id =>
             {
                 // Rejected creates never emit response.created/response.done. Only
                 // their exact request ID can release pending response admission.
@@ -1623,3 +1701,6 @@ mod review_fenced_sink;
 
 #[cfg(test)]
 mod review_preroll_sink;
+
+#[cfg(test)]
+mod review_cancel_receipts;

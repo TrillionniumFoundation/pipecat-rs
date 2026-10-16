@@ -113,6 +113,28 @@ preceding commands and drains the active response before closing; `close` and
 abort. Ordered finish is preserved across interruptions while awaiting readiness.
 A provider rejection releases pending response admission only when it identifies
 that exact response.create request; unrelated errors cannot release live work.
+The paired processor tolerates `response_cancel_not_active` only once for an
+exact nested `error.event_id` matching a same-session cancel that successfully
+flushed locally while targeting a known active response. The outer event ID is
+never request attribution, and local flush is not provider acknowledgement.
+Consuming this receipt does not release busy state, change deadlines, or create
+another response: the existing response-done path owns continuation. Receipts
+survive response completion and later turns, so a late old error cannot clear a
+new turn. Public cancellation/interruption and internal batch cancellation use
+the same cancel-only receipt recording boundary.
+
+The receipt window is FIFO with at most 64 entries and no time-based TTL. Total
+owned request/response ID payload is limited by `max_message_bytes`; fixed
+record/container overhead is separate from that payload bound. Oldest entries
+are evicted to satisfy either limit. A cancel still sends when its receipt is
+too large to register. Missing, unknown, evicted or duplicate IDs, pending-only
+cancels, and wrong codes retain fatal paired error handling. In particular,
+`conversation_already_has_active_response` is not recovered: both unrecovered
+control codes bypass generic pending-create recovery, with no automatic retry.
+The standalone client keeps delivering raw `Event::Error` events. This is more
+conservative than the pinned Python service's code-only suppression of both
+errors; it is not general response-conflict recovery.
+
 Set the pipeline shutdown deadline long enough for the configured response
 deadline when graceful draining is required.
 

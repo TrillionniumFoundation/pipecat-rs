@@ -131,3 +131,15 @@ readiness and generation boundaries, and explicit differences from the fixed
 Python service. The standalone client and server-VAD path retain their existing
 behavior. This closes a provider-buffer lifecycle gap; it does not establish
 remote processing acknowledgements, speech-recognition quality or reconnection.
+
+Slice101 implements a narrow paired OpenAI Realtime cancellation-race recovery.
+Local validation passed 113 executions covering 93 distinct tests. See the
+[recovery contract](../crates/pipecat-realtime/README.md#bounds-security-and-recovery).
+Only an exact nested request ID for a successfully locally flushed cancel of a
+known active response may consume `response_cancel_not_active` once. Its bounded
+64-entry FIFO has no TTL and survives response completion; consumption cannot
+release a newer turn or retry response creation. Unattributable errors and
+active-response create conflicts retain fatal paired handling without generic
+pending-create continuation. Standalone raw error events remain visible. This
+intentionally does not reproduce Python's unconditional code-only suppression,
+and does not close pending-only cancellation or active-response conflict gaps.
