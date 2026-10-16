@@ -3813,6 +3813,7 @@ dependencies = [
  "jpeg-encoder",
  "pipecat-core",
  "pipecat-processors",
+ "pipecat-rtvi",
  "pipecat-turns",
  "serde",
  "serde_json",

@@ -203,11 +203,69 @@ struct Packet {
     server_content: Option<Content>,
     tool_call: Option<ToolCalls>,
     tool_call_cancellation: Option<Cancellation>,
-    usage_metadata: Option<Usage>,
+    usage_metadata: Option<WireUsage>,
     go_away: Option<GoAway>,
     session_resumption_update: Option<Value>,
     error: Option<ProviderError>,
 }
+/// Provider accounting stays separate from the public three-total Usage shape.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WireUsage {
+    prompt_token_count: Option<u64>,
+    response_token_count: Option<u64>,
+    total_token_count: Option<u64>,
+    cached_content_token_count: Option<u64>,
+    thoughts_token_count: Option<u64>,
+    tool_use_prompt_token_count: Option<u64>,
+    prompt_tokens_details: Option<Vec<ModalityTokenCount>>,
+    response_tokens_details: Option<Vec<ModalityTokenCount>>,
+    cache_tokens_details: Option<Vec<ModalityTokenCount>>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModalityTokenCount {
+    modality: Option<String>,
+    token_count: Option<u64>,
+}
+
+/// Raw optional counts from one packet, never normalized or added to totals.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct UsageDetails {
+    pub cache_read_input_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
+    pub input_audio_tokens: Option<u64>,
+    pub output_audio_tokens: Option<u64>,
+    pub cache_read_input_audio_tokens: Option<u64>,
+    pub tool_use_prompt_tokens: Option<u64>,
+}
+impl WireUsage {
+    fn into_parts(self) -> (Usage, UsageDetails) {
+        fn first_audio(details: Option<Vec<ModalityTokenCount>>) -> Option<u64> {
+            // Find first, then read its count: None and zero both stop selection.
+            details?
+                .into_iter()
+                .find(|entry| entry.modality.as_deref() == Some("AUDIO"))?
+                .token_count
+        }
+        (
+            Usage {
+                prompt_token_count: self.prompt_token_count,
+                response_token_count: self.response_token_count,
+                total_token_count: self.total_token_count,
+            },
+            UsageDetails {
+                cache_read_input_tokens: self.cached_content_token_count,
+                reasoning_tokens: self.thoughts_token_count,
+                input_audio_tokens: first_audio(self.prompt_tokens_details),
+                output_audio_tokens: first_audio(self.response_tokens_details),
+                cache_read_input_audio_tokens: first_audio(self.cache_tokens_details),
+                tool_use_prompt_tokens: self.tool_use_prompt_token_count,
+            },
+        )
+    }
+}
+
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct Content {
@@ -286,6 +344,7 @@ pub(crate) struct Parsed {
     pub resumption: Option<ResumptionUpdate>,
     pub setup_complete: bool,
     pub events: Vec<Event>,
+    pub usage_details: Option<UsageDetails>,
     pub cancellations: Vec<String>,
 }
 pub(crate) fn parse(
@@ -331,6 +390,35 @@ pub(crate) fn parse_with_thinking(
     }
     if object.get("setupComplete").is_some_and(|v| !v.is_object()) {
         return Err(GeminiError::Protocol("setupComplete must be an object"));
+    }
+    // Serde-derived structs can also accept positional arrays. Wire usage
+    // objects and modality entries must remain JSON objects, never sequences.
+    if object
+        .get("usageMetadata")
+        .filter(|usage| !usage.is_null())
+        .is_some_and(|usage| {
+            !usage.is_object()
+                || [
+                    "promptTokensDetails",
+                    "responseTokensDetails",
+                    "cacheTokensDetails",
+                ]
+                .into_iter()
+                .any(|field| {
+                    usage
+                        .get(field)
+                        .filter(|details| !details.is_null())
+                        .is_some_and(|details| {
+                            details.as_array().is_none_or(|entries| {
+                                entries.iter().any(|entry| !entry.is_object())
+                            })
+                        })
+                })
+        })
+    {
+        return Err(GeminiError::Protocol(
+            "invalid or unsupported typed server message",
+        ));
     }
     let packet: Packet = serde_json::from_value(value)
         .map_err(|_| GeminiError::Protocol("invalid or unsupported typed server message"))?;
@@ -470,9 +558,11 @@ pub(crate) fn parse_with_thinking(
     if turn_complete {
         events.push(Event::TurnComplete);
     }
-    if let Some(usage) = packet.usage_metadata {
+    let usage_details = packet.usage_metadata.map(|usage| {
+        let (usage, details) = usage.into_parts();
         events.push(Event::Usage(usage));
-    }
+        details
+    });
     if let Some(go_away) = packet.go_away {
         events.push(Event::GoAway {
             time_left: go_away.time_left,
@@ -490,6 +580,7 @@ pub(crate) fn parse_with_thinking(
         resumption,
         setup_complete: packet.setup_complete.is_some(),
         events,
+        usage_details,
         cancellations,
     })
 }
@@ -604,5 +695,181 @@ mod thinking_tests {
         assert!(matches!(parsed.events[0], Event::ToolCalls(_)));
         assert_eq!(parsed.events[1], Event::TurnComplete);
         // The session rejects this undeclared tool before applying completion.
+    }
+}
+
+#[cfg(test)]
+mod usage_details_tests {
+    use super::*;
+
+    fn decode(usage: Value) -> Result<Parsed, GeminiError> {
+        let bytes = serde_json::to_vec(&json!({
+            "serverContent": {
+                "modelTurn": {"parts": [{"text": "not partially admitted"}]},
+                "turnComplete": true
+            },
+            "usageMetadata": usage
+        }))
+        .unwrap();
+        parse(&bytes, &GeminiConfig::new("fixture", "model"), None)
+    }
+
+    #[test]
+    fn usage_preserves_raw_totals_and_optional_zero() {
+        let parsed = decode(json!({
+            "promptTokenCount": 7, "responseTokenCount": 3, "totalTokenCount": 91,
+            "cachedContentTokenCount": 0, "thoughtsTokenCount": u64::MAX,
+            "toolUsePromptTokenCount": 5,
+            "promptTokensDetails": [{"modality": "AUDIO", "tokenCount": 2}],
+            "responseTokensDetails": [{"modality": "AUDIO", "tokenCount": 0}],
+            "cacheTokensDetails": [{"modality": "AUDIO", "tokenCount": 1}]
+        }))
+        .unwrap();
+        assert_eq!(
+            parsed.events.last(),
+            Some(&Event::Usage(Usage {
+                prompt_token_count: Some(7),
+                response_token_count: Some(3),
+                total_token_count: Some(91),
+            }))
+        );
+        assert_eq!(parsed.events[1], Event::TurnComplete);
+        assert_eq!(
+            parsed.usage_details,
+            Some(UsageDetails {
+                cache_read_input_tokens: Some(0),
+                reasoning_tokens: Some(u64::MAX),
+                input_audio_tokens: Some(2),
+                output_audio_tokens: Some(0),
+                cache_read_input_audio_tokens: Some(1),
+                tool_use_prompt_tokens: Some(5),
+            })
+        );
+        let incomplete = decode(json!({"thoughtsTokenCount": 2})).unwrap();
+        assert_eq!(
+            incomplete.events.last(),
+            Some(&Event::Usage(Usage::default()))
+        );
+        assert_eq!(incomplete.usage_details.unwrap().reasoning_tokens, Some(2));
+    }
+
+    #[test]
+    fn usage_audio_stops_at_first_exact_match_including_none_and_zero() {
+        for (first, expected) in [
+            (json!({"modality": "AUDIO"}), None),
+            (json!({"modality": "AUDIO", "tokenCount": null}), None),
+            (json!({"modality": "AUDIO", "tokenCount": 0}), Some(0)),
+            (json!({"modality": "AUDIO", "tokenCount": 4}), Some(4)),
+        ] {
+            let details = json!([
+                {"modality": "audio", "tokenCount": 100},
+                {"modality": "FUTURE", "tokenCount": 100},
+                {"modality": null, "tokenCount": 100},
+                first,
+                {"modality": "AUDIO", "tokenCount": 99}
+            ]);
+            let parsed = decode(json!({
+                "promptTokensDetails": details,
+                "responseTokensDetails": details,
+                "cacheTokensDetails": details
+            }))
+            .unwrap();
+            let usage = parsed.usage_details.unwrap();
+            assert_eq!(usage.input_audio_tokens, expected);
+            assert_eq!(usage.output_audio_tokens, expected);
+            assert_eq!(usage.cache_read_input_audio_tokens, expected);
+        }
+        for details in [Value::Null, json!([]), json!([{}, {"modality": "TEXT"}])] {
+            let parsed = decode(json!({
+                "promptTokensDetails": details,
+                "responseTokensDetails": details,
+                "cacheTokensDetails": details
+            }))
+            .unwrap();
+            assert_eq!(parsed.usage_details, Some(UsageDetails::default()));
+        }
+        assert_eq!(
+            decode(json!({})).unwrap().usage_details,
+            Some(UsageDetails::default())
+        );
+    }
+
+    #[test]
+    fn usage_known_types_are_validated_before_any_packet_event() {
+        let no_usage = decode(Value::Null).unwrap();
+        assert!(no_usage.usage_details.is_none());
+        assert!(!no_usage
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Usage(_))));
+        for invalid in [
+            json!([]),
+            json!([1, 2, 3]),
+            json!([1, 2, 3, 4, 5, 6, null, null, null]),
+            json!(true),
+            json!("usage"),
+        ] {
+            assert!(matches!(decode(invalid), Err(GeminiError::Protocol(_))));
+        }
+        let invalid_counts = [
+            json!(-1),
+            json!(1.0),
+            json!(1.5),
+            json!("1"),
+            json!(true),
+            json!({}),
+            json!([]),
+            serde_json::from_str("18446744073709551616").unwrap(),
+        ];
+        for field in [
+            "promptTokenCount",
+            "responseTokenCount",
+            "totalTokenCount",
+            "cachedContentTokenCount",
+            "thoughtsTokenCount",
+            "toolUsePromptTokenCount",
+        ] {
+            for invalid in &invalid_counts {
+                assert!(matches!(
+                    decode(json!({field: invalid})),
+                    Err(GeminiError::Protocol(_))
+                ));
+            }
+        }
+        for field in [
+            "promptTokensDetails",
+            "responseTokensDetails",
+            "cacheTokensDetails",
+        ] {
+            for invalid in [json!(1), json!(true), json!({}), json!("AUDIO")] {
+                assert!(matches!(
+                    decode(json!({field: invalid})),
+                    Err(GeminiError::Protocol(_))
+                ));
+            }
+            // Even entries after the selected AUDIO must be typed correctly.
+            for invalid in [
+                Value::Null,
+                json!(1),
+                json!(true),
+                json!([]),
+                json!(["AUDIO", 2]),
+                json!("AUDIO"),
+            ]
+            .into_iter()
+            .chain(
+                invalid_counts
+                    .iter()
+                    .map(|count| json!({"tokenCount": count})),
+            )
+            .chain(
+                [json!(1), json!(true), json!({}), json!([])]
+                    .into_iter()
+                    .map(|modality| json!({"modality": modality})),
+            ) {
+                let usage = json!({field: [{"modality": "AUDIO", "tokenCount": 0}, invalid]});
+                assert!(matches!(decode(usage), Err(GeminiError::Protocol(_))));
+            }
+        }
     }
 }

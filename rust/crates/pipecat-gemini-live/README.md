@@ -102,6 +102,11 @@ rather than misreported as a finished turn. Unknown server envelopes and unknown
 model-part semantics fail explicitly. Informational extra fields within known
 content/usage objects may be ignored; unsupported grounding fields are rejected.
 
+Optional provider cache, reasoning, audio and tool-use counts are preserved as
+[raw usage detail metadata](USAGE_DETAILS.md) on complete runtime usage metrics.
+The original provider totals and public event/mapper APIs remain unchanged;
+known usage fields are strictly typed, and no provider accounting is recomputed.
+
 Dedicated transcription mode maps `interimInputTranscription` to interim frames
 and `inputTranscription` to final utterances, preserving reported BCP-47 language
 and adding a local receipt timestamp. Conversational input transcription is

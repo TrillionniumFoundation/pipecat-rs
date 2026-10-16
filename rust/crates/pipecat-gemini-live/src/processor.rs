@@ -491,14 +491,15 @@ impl FrameProcessor for GeminiLiveProcessor {
         ctx.spawn("gemini-live-receive", false, async move {
             let mut mapper = GeminiFrameMapper::new(mode, user_id);
             let mut generation = sender.generation();
-            while let Some(result) = session.next_event().await {
-                let event = match result {
-                    Ok(event) => event,
+            while let Some(result) = session.next_event_with_details().await {
+                let received = match result {
+                    Ok(received) => received,
                     Err(error) => {
                         output.push_error(error_frame(error)).await?;
                         break;
                     }
                 };
+                let event = received.event;
                 if generation != sender.generation() {
                     mapper.reset();
                     generation = sender.generation();
@@ -521,7 +522,10 @@ impl FrameProcessor for GeminiLiveProcessor {
                             .clone();
                     }
                 }
-                for frame in mapper.frames(&event) {
+                for mut frame in mapper.frames(&event) {
+                    if let Some(details) = &received.usage_details {
+                        attach_usage_details(&mut frame, details);
+                    }
                     if let FrameData::Error(error) = &frame.data {
                         output.push_error(error.clone()).await?;
                     } else if is_output {
@@ -1042,6 +1046,47 @@ impl GeminiFrameMapper {
             .collect()
     }
 }
+// Runtime-only enrichment leaves standalone public mapper behavior unchanged.
+fn attach_usage_details(frame: &mut Frame, details: &crate::protocol::UsageDetails) {
+    let FrameData::Metrics(metrics) = &frame.data else {
+        return;
+    };
+    let [Metric::LlmUsage {
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        ..
+    }] = metrics.as_slice()
+    else {
+        return;
+    };
+    let mut usage = json!({
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    });
+    let mut reported = false;
+    for (key, count) in [
+        ("cache_read_input_tokens", details.cache_read_input_tokens),
+        ("reasoning_tokens", details.reasoning_tokens),
+        ("input_audio_tokens", details.input_audio_tokens),
+        ("output_audio_tokens", details.output_audio_tokens),
+        (
+            "cache_read_input_audio_tokens",
+            details.cache_read_input_audio_tokens,
+        ),
+        ("tool_use_prompt_tokens", details.tool_use_prompt_tokens),
+    ] {
+        if let Some(count) = count {
+            usage[key] = json!(count);
+            reported = true;
+        }
+    }
+    if reported {
+        frame.metadata.insert("llm_usage".into(), usage);
+    }
+}
+
 fn processor_error(error: GeminiError) -> ProcessorError {
     let frame = error_frame(error);
     ProcessorError::new(frame.error).with_category(frame.category)

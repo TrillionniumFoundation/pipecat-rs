@@ -685,9 +685,37 @@ impl GeminiSender {
     }
 }
 
+/// One bounded queue slot carries an event and only its own packet's details.
+#[derive(Debug)]
+pub(crate) struct ReceivedEvent {
+    pub event: GeminiEvent,
+    pub usage_details: Option<protocol::UsageDetails>,
+}
+impl ReceivedEvent {
+    fn from_packet(event: GeminiEvent, details: &mut Option<protocol::UsageDetails>) -> Self {
+        let usage_details = if matches!(event.event, Event::Usage(_)) {
+            details.take()
+        } else {
+            None
+        };
+        Self {
+            event,
+            usage_details,
+        }
+    }
+}
+impl From<GeminiEvent> for ReceivedEvent {
+    fn from(event: GeminiEvent) -> Self {
+        Self {
+            event,
+            usage_details: None,
+        }
+    }
+}
+
 pub struct GeminiSession {
     sender: GeminiSender,
-    events: mpsc::Receiver<GeminiEvent>,
+    events: mpsc::Receiver<ReceivedEvent>,
     worker: Option<JoinHandle<Result<(), GeminiError>>>,
 }
 impl GeminiSession {
@@ -695,7 +723,15 @@ impl GeminiSession {
         self.sender.clone()
     }
     pub async fn next_event(&mut self) -> Option<Result<GeminiEvent, GeminiError>> {
-        while let Some(mut event) = self.events.recv().await {
+        self.next_event_with_details()
+            .await
+            .map(|result| result.map(|received| received.event))
+    }
+    pub(crate) async fn next_event_with_details(
+        &mut self,
+    ) -> Option<Result<ReceivedEvent, GeminiError>> {
+        while let Some(mut received) = self.events.recv().await {
+            let event = &mut received.event;
             if let Event::NonBlockingToolCalls(calls) = &mut event.event {
                 let claimed = match self.sender.tool_admissions.lock() {
                     Ok(mut admissions) => {
@@ -712,12 +748,12 @@ impl GeminiSession {
                     Err(_) => return Some(Err(GeminiError::Closed)),
                 };
                 if claimed {
-                    return Some(Ok(event));
+                    return Some(Ok(received));
                 }
                 continue;
             }
             if !event.event.is_output() || event.generation == self.sender.generation() {
-                return Some(Ok(event));
+                return Some(Ok(received));
             }
         }
         let result = self.worker.as_mut()?.await;
@@ -809,7 +845,7 @@ struct WorkerOptions {
 async fn run(
     mut socket: Socket,
     mut commands: mpsc::Receiver<Command>,
-    events: mpsc::Sender<GeminiEvent>,
+    events: mpsc::Sender<ReceivedEvent>,
     mut control: watch::Receiver<Control>,
     sender: GeminiSender,
     options: WorkerOptions,
@@ -979,7 +1015,7 @@ async fn run(
                         }
                         _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
                     };
-                    let packet = if thinking.is_some() {
+                    let mut packet = if thinking.is_some() {
                         protocol::parse_with_thinking(&bytes, &sender.config, policy.as_ref(), true)?
                     } else {
                         protocol::parse(&bytes, &sender.config, policy.as_ref())?
@@ -1099,7 +1135,7 @@ async fn run(
                                     }
                                     (Event::ToolCalls(calls), output_origin.clone())
                                 };
-                                permit.send(GeminiEvent { event, origin, generation });
+                                permit.send(GeminiEvent { event, origin, generation }.into());
                             }
                             continue;
                         }
@@ -1154,11 +1190,10 @@ async fn run(
                         let ended = matches!(event, Event::TurnComplete);
                         emit(
                             &events,
-                            GeminiEvent {
-                                event,
-                                origin,
-                                generation,
-                            },
+                            ReceivedEvent::from_packet(
+                                GeminiEvent { event, origin, generation },
+                                &mut packet.usage_details,
+                            ),
                         )?;
                         if ended {
                             output_active = false;
@@ -1377,8 +1412,11 @@ async fn run(
         result
     }
 }
-fn emit(events: &mpsc::Sender<GeminiEvent>, event: GeminiEvent) -> Result<(), GeminiError> {
-    events.try_send(event).map_err(|error| match error {
+fn emit(
+    events: &mpsc::Sender<ReceivedEvent>,
+    event: impl Into<ReceivedEvent>,
+) -> Result<(), GeminiError> {
+    events.try_send(event.into()).map_err(|error| match error {
         mpsc::error::TrySendError::Full(_) => GeminiError::Backpressure("output"),
         mpsc::error::TrySendError::Closed(_) => GeminiError::Closed,
     })
@@ -1791,6 +1829,173 @@ mod non_blocking_admission_tests {
     }
 
     #[test]
+    fn usage_packet_envelope_takes_details_only_for_its_usage_event() {
+        for (wire, expected) in [
+            (
+                serde_json::json!({"serverContent": {"generationComplete": true, "turnComplete": true},
+                    "usageMetadata": {"promptTokenCount": 2, "responseTokenCount": 1,
+                        "totalTokenCount": 9, "cachedContentTokenCount": 3}}),
+                protocol::UsageDetails {
+                    cache_read_input_tokens: Some(3),
+                    ..Default::default()
+                },
+            ),
+            (
+                serde_json::json!({"usageMetadata": {"thoughtsTokenCount": 0}}),
+                protocol::UsageDetails {
+                    reasoning_tokens: Some(0),
+                    ..Default::default()
+                },
+            ),
+            (
+                serde_json::json!({"usageMetadata": {"promptTokenCount": 2,
+                    "responseTokenCount": 1, "totalTokenCount": 3}}),
+                protocol::UsageDetails::default(),
+            ),
+        ] {
+            let mut packet = protocol::parse(
+                &serde_json::to_vec(&wire).unwrap(),
+                &config("source-model"),
+                None,
+            )
+            .unwrap();
+            for event in packet.events {
+                let is_usage = matches!(event, Event::Usage(_));
+                let received = ReceivedEvent::from_packet(
+                    GeminiEvent {
+                        event,
+                        origin: Origin::default(),
+                        generation: 0,
+                    },
+                    &mut packet.usage_details,
+                );
+                assert_eq!(received.usage_details, is_usage.then_some(expected));
+                assert_eq!(packet.usage_details, (!is_usage).then_some(expected));
+            }
+            assert!(packet.usage_details.is_none());
+            let repeated = ReceivedEvent::from_packet(
+                GeminiEvent {
+                    event: Event::Usage(Usage::default()),
+                    origin: Origin::default(),
+                    generation: 0,
+                },
+                &mut packet.usage_details,
+            );
+            assert!(repeated.usage_details.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn usage_internal_receive_preserves_filter_claim_cancel_and_public_projection() {
+        for cancel_first in [false, true] {
+            let (sender, _commands) = sender();
+            let selected = tool("selected-with-usage", true);
+            sender
+                .tool_admissions
+                .lock()
+                .unwrap()
+                .register(&[&selected], &HashSet::new(), &sender.config.limits)
+                .unwrap();
+            let (events, rx) = mpsc::channel(5);
+            emit(
+                &events,
+                GeminiEvent {
+                    event: Event::Text {
+                        text: "stale".into(),
+                        thought: false,
+                    },
+                    origin: Origin::default(),
+                    generation: 0,
+                },
+            )
+            .unwrap();
+            emit(
+                &events,
+                GeminiEvent {
+                    event: Event::NonBlockingToolCalls(vec![selected.call.clone()]),
+                    origin: selected.origin.clone(),
+                    generation: selected.generation,
+                },
+            )
+            .unwrap();
+            for count in [0, 5, 9] {
+                emit(
+                    &events,
+                    ReceivedEvent {
+                        event: GeminiEvent {
+                            event: Event::Usage(Usage {
+                                prompt_token_count: Some(1),
+                                response_token_count: Some(2),
+                                total_token_count: Some(count),
+                            }),
+                            origin: Origin::default(),
+                            generation: 0,
+                        },
+                        usage_details: Some(protocol::UsageDetails {
+                            reasoning_tokens: Some(count),
+                            ..Default::default()
+                        }),
+                    },
+                )
+                .unwrap();
+            }
+            assert_eq!(
+                events.capacity(),
+                0,
+                "each event retains exactly one queue slot"
+            );
+            drop(events);
+            sender.interrupt().await;
+            if cancel_first {
+                sender.cancel();
+            }
+            let mut session = GeminiSession {
+                sender,
+                events: rx,
+                worker: None,
+            };
+            if !cancel_first {
+                let received = session.next_event_with_details().await.unwrap().unwrap();
+                assert!(matches!(
+                    received.event.event,
+                    Event::NonBlockingToolCalls(_)
+                ));
+                assert_eq!(received.event.origin, selected.origin);
+                assert_eq!(received.event.generation, selected.generation);
+                assert!(received.usage_details.is_none());
+                assert_eq!(
+                    session.sender.tool_admissions.lock().unwrap().ids[selected.call.id.as_str()],
+                    CallAdmission::Claimed
+                );
+            }
+            let first = session.next_event_with_details().await.unwrap().unwrap();
+            assert!(matches!(first.event.event, Event::Usage(_)));
+            assert_eq!(
+                first.event.generation, 0,
+                "usage survives output generation filtering"
+            );
+            assert_eq!(first.usage_details.unwrap().reasoning_tokens, Some(0));
+            let public = session.next_event().await.unwrap().unwrap();
+            assert!(matches!(
+                public.event,
+                Event::Usage(Usage {
+                    total_token_count: Some(5),
+                    ..
+                })
+            ));
+            let last = session.next_event_with_details().await.unwrap().unwrap();
+            assert_eq!(last.usage_details.unwrap().reasoning_tokens, Some(9));
+            assert!(session.next_event_with_details().await.is_none());
+            if cancel_first {
+                assert_eq!(
+                    session.sender.tool_admissions.lock().unwrap().ids[selected.call.id.as_str()],
+                    CallAdmission::Available
+                );
+            }
+        }
+    }
+
+    #[test]
     fn explicit_profiles_selection_and_unselected_setup_are_closed() {
         for model in [
             "gemini-3.8-live",
@@ -1977,22 +2182,28 @@ mod non_blocking_admission_tests {
                 .unwrap();
             let (events, rx) = mpsc::channel(4);
             events
-                .try_send(GeminiEvent {
-                    event: Event::NonBlockingToolCalls(vec![t.call.clone()]),
-                    origin: t.origin.clone(),
-                    generation: t.generation,
-                })
+                .try_send(
+                    GeminiEvent {
+                        event: Event::NonBlockingToolCalls(vec![t.call.clone()]),
+                        origin: t.origin.clone(),
+                        generation: t.generation,
+                    }
+                    .into(),
+                )
                 .unwrap();
             sender.interrupt().await;
             assert_ne!(sender.generation(), t.generation);
             if cancel_first {
                 sender.tool_admissions.lock().unwrap().revoke("selected");
                 events
-                    .try_send(GeminiEvent {
-                        event: Event::NonBlockingToolCallsCancelled(vec![t.call]),
-                        origin: t.origin.clone(),
-                        generation: t.generation,
-                    })
+                    .try_send(
+                        GeminiEvent {
+                            event: Event::NonBlockingToolCallsCancelled(vec![t.call]),
+                            origin: t.origin.clone(),
+                            generation: t.generation,
+                        }
+                        .into(),
+                    )
                     .unwrap();
             }
             drop(events);
@@ -2027,11 +2238,14 @@ mod non_blocking_admission_tests {
             .unwrap();
         let (events, rx) = mpsc::channel(1);
         events
-            .try_send(GeminiEvent {
-                event: Event::NonBlockingToolCalls(vec![t.call]),
-                origin: t.origin,
-                generation: t.generation,
-            })
+            .try_send(
+                GeminiEvent {
+                    event: Event::NonBlockingToolCalls(vec![t.call]),
+                    origin: t.origin,
+                    generation: t.generation,
+                }
+                .into(),
+            )
             .unwrap();
         let (release, released) = tokio::sync::oneshot::channel();
         let (entered, started) = tokio::sync::oneshot::channel();

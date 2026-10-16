@@ -23,5 +23,6 @@ workspace = true
 
 [dev-dependencies]
 pipecat-processors = { path = "../pipecat-processors" }
+pipecat-rtvi = { path = "../pipecat-rtvi" }
 pipecat-turns = { path = "../pipecat-turns" }
 tokio = { workspace = true, features = ["test-util"] }
