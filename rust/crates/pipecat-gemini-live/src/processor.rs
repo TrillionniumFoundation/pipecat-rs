@@ -25,6 +25,8 @@ pub struct GeminiLiveProcessor {
     preroll_bytes: usize,
     explicit_preroll: bool,
     user_id: String,
+    audio_paused: AtomicBool,
+    start_audio_paused: bool,
     video: crate::video::VideoEncoder,
     video_paused: AtomicBool,
     start_video_paused: bool,
@@ -54,6 +56,8 @@ impl GeminiLiveProcessor {
             preroll_bytes,
             explicit_preroll: false,
             user_id: String::new(),
+            audio_paused: AtomicBool::new(false),
+            start_audio_paused: false,
             video: Default::default(),
             video_paused: AtomicBool::new(false),
             start_video_paused: false,
@@ -62,6 +66,22 @@ impl GeminiLiveProcessor {
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = user_id.into();
         self
+    }
+    /// Initial conversation-audio pause state, restored on each setup.
+    /// Paused frames still pass through. Transcription mode ignores this setting
+    /// and uses the existing `SttMute` frame control instead.
+    pub fn with_audio_input_paused(mut self, paused: bool) -> Self {
+        self.start_audio_paused = paused;
+        self.audio_paused = AtomicBool::new(paused);
+        self
+    }
+    /// Pause new conversation audio before validation, sending or pre-roll retention.
+    /// Transcription mode ignores this setting. Existing pre-roll and activity
+    /// controls remain intact, so activity start can still flush buffered audio.
+    /// A frame that already observed the unpaused state can finish admission;
+    /// this does not retract that frame or already queued provider work.
+    pub fn set_audio_input_paused(&self, paused: bool) {
+        self.audio_paused.store(paused, Ordering::SeqCst);
     }
     /// Initial pause state, restored on each setup. Paused frames still pass through.
     pub fn with_video_input_paused(mut self, paused: bool) -> Self {
@@ -377,6 +397,8 @@ impl FrameProcessor for GeminiLiveProcessor {
             preroll_bytes: self.preroll_bytes,
             ..Default::default()
         };
+        self.audio_paused
+            .store(self.start_audio_paused, Ordering::SeqCst);
         self.video.reset().await.map_err(processor_error)?;
         self.video_paused
             .store(self.start_video_paused, Ordering::SeqCst);
@@ -473,17 +495,18 @@ impl FrameProcessor for GeminiLiveProcessor {
                 FrameData::SpeechControlParams(control) => self.update_preroll(control, ctx)?,
                 FrameData::InputAudio(audio)
                 | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
-                    let muted = if self.client.config().mode == SessionMode::Transcription {
-                        self.state
+                    let suppress_audio = match self.client.config().mode {
+                        SessionMode::Transcription => self.state
                             .lock()
                             .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
-                            .stt_muted
-                    } else {
-                        false
+                            .stt_muted,
+                        // The load is the pause admission boundary. A setter does
+                        // not retract frames that already observed an unpaused state.
+                        SessionMode::Conversation => self.audio_paused.load(Ordering::SeqCst),
                     };
-                    if muted {
-                        // Like STTService: suppress new recognition input, retaining
-                        // the native audio passthrough and already admitted results.
+                    if suppress_audio {
+                        // Preserve original audio passthrough without validating,
+                        // retaining or sending new input. Prior work is unaffected.
                         return ctx.push(frame, direction).await;
                     }
                     audio

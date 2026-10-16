@@ -78,9 +78,9 @@ The downstream frame adapter accepts both `InputAudio` and `UserAudio`'s inner
 PCM through the same validation, raw/encoded limits and manual-VAD path. It
 forwards the original outer frame, retaining its envelope and local tags. The
 inner audio context, including an explicitly empty context, takes precedence
-over envelope metadata for admitted audio. Valid empty PCM is forwarded without
-sending or buffering; invalid geometry/format and oversized chunks are still
-rejected before that suppression. Upstream audio and output/TTS audio remain
+over envelope metadata for admitted audio. When input is enabled, valid empty PCM
+is forwarded without sending or buffering; invalid geometry/format and oversized
+chunks are still rejected before that empty-input suppression. Upstream audio and output/TTS audio remain
 pass-through and are not replayed to Gemini. The adapter never resamples;
 applications may explicitly place the shared input transport/resampler before it.
 
@@ -104,8 +104,7 @@ fixed `with_user_id` override; an input `UserAudio.user_id` neither updates that
 identity nor becomes a wire field. Input transcripts have no inferred source
 frame/context correlation. This matches conversational Python Gemini Live's
 empty speaker default. Dynamic speaker attribution in Python's separate
-`GeminiSTTService` and the conversational service's pause API remain outside
-this native family contract.
+`GeminiSTTService` remains outside this native family contract.
 
 ## Turns, tools, correlation and interruption
 
@@ -122,6 +121,16 @@ automatically sizes the idle window to `start_secs + 0.1` seconds unless
 audio. See [VAD pre-roll controls](VAD_PREROLL.md) for validation, direction,
 reuse, and the pinned Python differences.
 Dedicated STT additionally flushes on VAD stop frames with `audioStreamEnd`.
+
+Conversation audio defaults to unpaused. `with_audio_input_paused` selects the
+initial state; `set_audio_input_paused` changes it through a retained typed
+`Arc<GeminiLiveProcessor>`. Paused downstream `InputAudio` and `UserAudio` pass
+through unchanged before PCM validation, provider admission or new idle-pre-roll
+retention. Existing pre-roll is preserved and can still flush at activity start;
+activity controls and previously admitted work remain active. Each setup restores
+the builder's initial state. Transcription mode ignores this switch and keeps its
+separate `SttMute` control. See [Conversation audio pause](AUDIO_INPUT_PAUSE.md)
+for an application control-handle example and concurrency/source boundaries.
 
 Dedicated transcription mode consumes `SttMute` in either direction. While muted,
 new downstream `InputAudio` and `UserAudio` retain normal frame passthrough but
