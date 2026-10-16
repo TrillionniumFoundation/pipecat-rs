@@ -76,13 +76,24 @@ protocol decoding. No implicit resampling, WAV decoding or stereo downmixing occ
 
 The downstream frame adapter accepts both `InputAudio` and `UserAudio`'s inner
 PCM through the same validation, raw/encoded limits and manual-VAD path. It
-forwards the original outer frame, retaining its envelope and local tags. The
-inner audio context, including an explicitly empty context, takes precedence
+forwards the original outer frame by default, retaining its envelope and local
+tags. The inner audio context, including an explicitly empty context, takes precedence
 over envelope metadata for admitted audio. When input is enabled, valid empty PCM
-is forwarded without sending or buffering; invalid geometry/format and oversized
-chunks are still rejected before that empty-input suppression. Upstream audio and output/TTS audio remain
-pass-through and are not replayed to Gemini. The adapter never resamples;
+is not sent or buffered; invalid geometry/format and oversized chunks are still
+rejected before that empty-input suppression. Upstream audio is not replayed to
+Gemini. Output/TTS audio remains pass-through. The adapter never resamples;
 applications may explicitly place the shared input transport/resampler before it.
+
+`GeminiLiveProcessor::with_audio_passthrough(false)` suppresses original
+`InputAudio` and `UserAudio` forwarding in both directions in dedicated
+transcription mode. The default is true, and conversation mode ignores the
+option. This is output routing, not recognition pause or a privacy control:
+normal downstream validation, provider admission and dynamic speaker-label
+updates still run, including label updates from valid empty PCM. Mute remains
+independent. Downstream SmartTurn and other acoustic/VAD processors need PCM;
+place them before this service or retain passthrough. See
+[STT audio passthrough](STT_AUDIO_PASSTHROUGH.md) for the complete routing contract
+and the explicit Python direction difference.
 
 Every supported content-bearing field and every model part in a bundled server
 message is handled before `turnComplete`. `generationComplete` does not close a
@@ -162,9 +173,9 @@ separate `SttMute` control. See [Conversation audio pause](AUDIO_INPUT_PAUSE.md)
 for an application control-handle example and concurrency/source boundaries.
 
 Dedicated transcription mode consumes `SttMute` in either direction. While muted,
-new downstream `InputAudio` and `UserAudio` retain normal frame passthrough but
-are not validated or admitted to the provider. Unmuting resumes new input; no
-muted audio is retained for replay. Previously admitted audio, asynchronous
+new downstream `InputAudio` and `UserAudio` follow the configured audio
+passthrough setting but are not validated or admitted to the provider. Unmuting
+resumes new input; no muted audio is retained for replay. Previously admitted audio, asynchronous
 transcripts, and VAD-stop finalization continue. This is recognition-input
 control, not a device microphone switch or withdrawal of sent data. Conversation
 mode keeps these controls as ordinary passthrough. Each native setup resets mute

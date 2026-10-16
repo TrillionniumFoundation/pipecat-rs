@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::time::Instant;
 
-/// Persistent Gemini Live service. Original frames pass through unchanged.
+/// Persistent Gemini Live service. Forwarded original frames stay unchanged.
 /// PCM is mono; resample explicitly elsewhere in the pipeline. Context seeding
 /// is one-time because the server already retains later live conversation.
 pub struct GeminiLiveProcessor {
@@ -26,6 +26,7 @@ pub struct GeminiLiveProcessor {
     preroll_bytes: usize,
     explicit_preroll: bool,
     user_id: Option<String>,
+    audio_passthrough: bool,
     stt_ttfs_p99_latency: Option<f64>,
     audio_paused: AtomicBool,
     start_audio_paused: bool,
@@ -60,6 +61,7 @@ impl GeminiLiveProcessor {
             preroll_bytes,
             explicit_preroll: false,
             user_id: None,
+            audio_passthrough: true,
             stt_ttfs_p99_latency: Some(0.60),
             audio_paused: AtomicBool::new(false),
             start_audio_paused: false,
@@ -74,6 +76,29 @@ impl GeminiLiveProcessor {
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = Some(user_id.into());
         self
+    }
+    /// Forward original dedicated STT `InputAudio` and `UserAudio` frames in
+    /// either direction. Defaults to true; conversation mode ignores this option.
+    /// Disabling forwarding does not pause recognition, validation or speaker
+    /// label updates. Place audio-dependent processors before this service when
+    /// disabled. The setting is retained across setup and sequential reuse.
+    pub fn with_audio_passthrough(mut self, value: bool) -> Self {
+        self.audio_passthrough = value;
+        self
+    }
+    async fn forward_original(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.client.config().mode == SessionMode::Transcription
+            && !self.audio_passthrough
+            && matches!(frame.data, FrameData::InputAudio(_) | FrameData::UserAudio(_))
+        {
+            return Ok(());
+        }
+        ctx.push(frame, direction).await
     }
     /// Dedicated STT's configured P99 time-to-final-transcript budget in seconds.
     /// Defaults to `Some(0.60)` from the pinned Python service; this is not a
@@ -576,9 +601,9 @@ impl FrameProcessor for GeminiLiveProcessor {
                         SessionMode::Conversation => self.audio_paused.load(Ordering::SeqCst),
                     };
                     if suppress_audio {
-                        // Preserve original audio passthrough without validating,
-                        // retaining or sending new input. Prior work is unaffected.
-                        return ctx.push(frame, direction).await;
+                        // Apply configured forwarding without validating, retaining
+                        // or sending new input. Prior work is unaffected.
+                        return self.forward_original(frame, direction, ctx).await;
                     }
                     audio
                         .validate()
@@ -786,7 +811,7 @@ impl FrameProcessor for GeminiLiveProcessor {
                 _ => {}
             }
         }
-        ctx.push(frame, direction).await
+        self.forward_original(frame, direction, ctx).await
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         if let Ok(sender) = self.sender() {
