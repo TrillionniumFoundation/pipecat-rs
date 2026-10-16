@@ -59,8 +59,13 @@ processing. A response error still prevents tool execution/admission. All wire
 records continue through shared metadata/tool processing even when their
 content is entirely hidden. Native tool deltas and visible content can both be
 processed from a single record; the source inherited loop instead prioritizes
-tool calls. Existing generic limitations remain, including server-reported model
-updates, audio transcript deltas, multi-candidate responses, legacy
+tool calls. Inherited audio transcript fallback uses visible content after the
+reasoning filter: hidden-only thoughts and held opening prefixes do not suppress
+the same choice's transcript. Transcripts bypass the reasoning parser; this wire
+behavior does not establish NVIDIA audio-model support. See the shared
+[audio transcript scope](README.md#client-api).
+Existing generic limitations remain, including server-reported model
+updates, multi-candidate responses, legacy
 `function_call`, and provider SDK/session features.
 
 The source baseline is Pipecat `af9f9da9d7afddaa8811c0e0251b32566c980bdf`:

@@ -168,7 +168,7 @@ impl OpenAiPreset {
                 "Python constructor-only routing and validation bypasses",
                 "nonstreaming inference transport",
             ],
-            Self::Nvidia => &["server-reported model updates", "audio transcript deltas"],
+            Self::Nvidia => &["server-reported model updates"],
             Self::Perplexity => &[
                 "tool declarations",
                 "citation and search-result response metadata",

@@ -320,6 +320,7 @@ impl ProtocolDecoder {
                     message: refusal.into(),
                 });
             }
+            let content_events_start = events.len();
             let content = optional_string(delta, "content")?.filter(|s| !s.is_empty());
             if let Some(reasoning) = &mut self.nvidia {
                 reasoning.delta(delta, content, &mut events)?;
@@ -374,6 +375,31 @@ impl ProtocolDecoder {
                         name: name.map(str::to_string),
                         arguments: arguments.into(),
                     });
+                }
+            }
+            // The source selects audio only after tools and visible content.
+            // NVIDIA filters content before that selection, so a held prefix
+            // or hidden-only thought must not suppress a spoken transcript.
+            // Inspect this choice only; do not feed audio into the think parser.
+            let visible_content = events[content_events_start..]
+                .iter()
+                .any(|event| matches!(event, StreamEvent::TextDelta(text) if !text.is_empty()));
+            let has_tools = delta
+                .get("tool_calls")
+                .and_then(Value::as_array)
+                .is_some_and(|calls| !calls.is_empty());
+            if !visible_content && !has_tools {
+                if let Some(audio) = delta.get("audio").filter(|audio| !audio.is_null()) {
+                    if !audio.is_object() {
+                        return Err(ServiceError::Protocol(
+                            "audio must be an object or null".into(),
+                        ));
+                    }
+                    if let Some(text) =
+                        optional_string(audio, "transcript")?.filter(|text| !text.is_empty())
+                    {
+                        events.push(StreamEvent::TextDelta(text.into()));
+                    }
                 }
             }
         }
@@ -980,4 +1006,281 @@ fn optional_block_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, Ser
 }
 fn has_thinking(message: &Message) -> bool {
     matches!(&message.content, Some(Content::Parts(parts)) if parts.iter().any(|part| matches!(part, ContentPart::Thinking { .. } | ContentPart::RedactedThinking { .. })))
+}
+
+#[cfg(test)]
+mod openai_audio_transcript_tests {
+    use super::*;
+
+    fn record(
+        decoder: &mut ProtocolDecoder,
+        value: Value,
+    ) -> Result<Vec<StreamEvent>, ServiceError> {
+        decoder.decode(SseEvent {
+            event: None,
+            data: value.to_string(),
+        })
+    }
+    fn delta(
+        decoder: &mut ProtocolDecoder,
+        value: Value,
+    ) -> Result<Vec<StreamEvent>, ServiceError> {
+        record(decoder, json!({"choices":[{"index":0,"delta":value}]}))
+    }
+    fn done(decoder: &mut ProtocolDecoder) -> Result<Vec<StreamEvent>, ServiceError> {
+        decoder.decode(SseEvent {
+            event: None,
+            data: "[DONE]".into(),
+        })
+    }
+    fn tool() -> Value {
+        json!({"index":0,"id":"call-audio","type":"function","function":{"name":"lookup","arguments":"{}"}})
+    }
+
+    #[test]
+    fn audio_transcript_fallback_ignores_partials_and_preserves_text_verbatim() {
+        let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        for value in [
+            json!({}),
+            json!({"audio":null}),
+            json!({"audio":{}}),
+            json!({"audio":{"id":"ignored","data":"not-decoded","expires_at":12}}),
+            json!({"audio":{"transcript":null}}),
+            json!({"audio":{"transcript":""}}),
+        ] {
+            assert!(delta(&mut decoder, value).unwrap().is_empty());
+        }
+        for text in [
+            " ",
+            "你好🙂",
+            "<think>literal spoken words</think>",
+            " tail\n",
+        ] {
+            assert_eq!(delta(&mut decoder, json!({"content":"","tool_calls":[],"audio":{"transcript":text,"data":"ignored","id":"ignored"}})).unwrap(), vec![StreamEvent::TextDelta(text.into())]);
+        }
+        assert!(done(&mut decoder).unwrap().is_empty());
+    }
+
+    #[test]
+    fn selected_audio_wrong_types_fail_and_poison_without_coercion() {
+        let mut values = vec![];
+        for audio in [json!(false), json!(0), json!(""), json!([]), json!([1])] {
+            values.push(json!({"audio":audio}));
+        }
+        for transcript in [json!(false), json!(0), json!(true), json!([]), json!({})] {
+            values.push(json!({"audio":{"transcript":transcript}}));
+        }
+        for value in values {
+            let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+            assert!(matches!(
+                delta(&mut decoder, value),
+                Err(ServiceError::Protocol(_))
+            ));
+            assert!(
+                matches!(delta(&mut decoder, json!({"audio":{"transcript":"late"}})), Err(ServiceError::Protocol(message)) if message.contains("poisoned"))
+            );
+            assert!(matches!(done(&mut decoder), Err(ServiceError::Protocol(_))));
+        }
+    }
+
+    #[test]
+    fn audio_priority_is_choice_local_without_changing_content_tool_coemission() {
+        for content in ["visible", " "] {
+            let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+            assert_eq!(
+                delta(&mut decoder, json!({"content":content,"audio":false})).unwrap(),
+                vec![StreamEvent::TextDelta(content.into())]
+            );
+        }
+        let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        let events = delta(
+            &mut decoder,
+            json!({"content":"visible","tool_calls":[tool()],"audio":{"transcript":[]}}),
+        )
+        .unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], StreamEvent::TextDelta("visible".into()));
+        assert!(
+            matches!(&events[1], StreamEvent::ToolCallDelta { name: Some(name), .. } if name == "lookup")
+        );
+        assert!(matches!(
+            done(&mut decoder).unwrap().as_slice(),
+            [StreamEvent::ToolCall(_)]
+        ));
+        let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        let events = delta(&mut decoder, json!({"tool_calls":[tool()],"audio":false})).unwrap();
+        assert!(matches!(
+            events.as_slice(),
+            [StreamEvent::ToolCallDelta { .. }]
+        ));
+        for value in [
+            json!({"tool_calls":{},"audio":{"transcript":"hidden"}}),
+            json!({"content":false,"audio":{"transcript":"hidden"}}),
+        ] {
+            assert!(matches!(
+                delta(&mut ProtocolDecoder::new(Provider::OpenAi), value),
+                Err(ServiceError::Protocol(_))
+            ));
+        }
+        let mut reasoning = ProtocolDecoder::new(Provider::OpenAi);
+        assert_eq!(
+            delta(
+                &mut reasoning,
+                json!({"reasoning_content":"plan","audio":{"transcript":"spoken"}})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ThoughtDelta("plan".into()),
+                StreamEvent::TextDelta("spoken".into())
+            ]
+        );
+        let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        assert_eq!(record(&mut decoder, json!({"choices":[
+            {"index":0,"delta":{"content":"first"}},
+            {"index":0,"delta":{"content":null,"tool_calls":[],"audio":{"transcript":"second"}}}
+        ]})).unwrap(), vec![StreamEvent::TextDelta("first".into()), StreamEvent::TextDelta("second".into())]);
+    }
+
+    #[test]
+    fn audio_terminal_chunk_and_usage_keep_existing_done_and_eof_contracts() {
+        for reason in ["stop", "length"] {
+            let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+            assert_eq!(record(&mut decoder, json!({"choices":[{"index":0,"finish_reason":reason,"delta":{"audio":{"transcript":"tail"}}}]})).unwrap(), vec![StreamEvent::TextDelta("tail".into())]);
+            assert!(!decoder.is_done());
+            assert_eq!(
+                delta(&mut decoder, json!({"audio":{"transcript":"before DONE"}})).unwrap(),
+                vec![StreamEvent::TextDelta("before DONE".into())]
+            );
+            for tokens in [2, 5] {
+                assert!(record(&mut decoder, json!({"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":tokens,"total_tokens":tokens+1}})).unwrap().is_empty());
+            }
+            assert_eq!(decoder.usage().unwrap().completion_tokens, 5);
+            assert!(done(&mut decoder).unwrap().is_empty());
+            assert!(decoder.is_done());
+            assert!(delta(&mut decoder, json!({"audio":false}))
+                .unwrap()
+                .is_empty());
+            assert!(decoder.end_of_stream().unwrap().is_empty());
+        }
+        let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        delta(&mut decoder, json!({"audio":{"transcript":"partial"}})).unwrap();
+        assert!(matches!(
+            decoder.end_of_stream(),
+            Err(ServiceError::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn nvidia_audio_bypasses_think_filter_without_consuming_held_content_or_boundaries() {
+        let mut decoder = ProtocolDecoder::with_preset(
+            Provider::OpenAi,
+            Some(crate::presets::OpenAiPreset::Nvidia),
+        );
+        assert_eq!(
+            delta(
+                &mut decoder,
+                json!({"content":"<thi","audio":{"transcript":"<think>literal</think>"}})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ResponseProgress,
+                StreamEvent::TextDelta("<think>literal</think>".into())
+            ]
+        );
+        assert_eq!(
+            delta(
+                &mut decoder,
+                json!({"content":"nk>hidden</think>","audio":{"transcript":"spoken"}})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ThoughtStart,
+                StreamEvent::ThoughtDelta("hidden".into()),
+                StreamEvent::ThoughtEnd,
+                StreamEvent::TextDelta("spoken".into())
+            ]
+        );
+        assert_eq!(
+            delta(&mut decoder, json!({"content":"visible","audio":false})).unwrap(),
+            vec![StreamEvent::TextDelta("visible".into())]
+        );
+        done(&mut decoder).unwrap();
+        assert!(decoder.finalize_response(true).is_empty());
+
+        let mut decoder = ProtocolDecoder::with_preset(
+            Provider::OpenAi,
+            Some(crate::presets::OpenAiPreset::Nvidia),
+        );
+        assert_eq!(
+            delta(
+                &mut decoder,
+                json!({"content":"<thi","audio":{"transcript":"first"}})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ResponseProgress,
+                StreamEvent::TextDelta("first".into())
+            ]
+        );
+        done(&mut decoder).unwrap();
+        assert_eq!(
+            decoder.finalize_response(true),
+            vec![StreamEvent::TextDelta("<thi".into())]
+        );
+
+        let mut decoder = ProtocolDecoder::with_preset(
+            Provider::OpenAi,
+            Some(crate::presets::OpenAiPreset::Nvidia),
+        );
+        assert_eq!(
+            delta(
+                &mut decoder,
+                json!({"reasoning_content":"plan","audio":{"transcript":"spoken"}})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ResponseProgress,
+                StreamEvent::ThoughtStart,
+                StreamEvent::ThoughtDelta("plan".into()),
+                StreamEvent::TextDelta("spoken".into())
+            ]
+        );
+        done(&mut decoder).unwrap();
+        assert_eq!(
+            decoder.finalize_response(true),
+            vec![StreamEvent::ThoughtEnd]
+        );
+
+        let mut decoder = ProtocolDecoder::with_preset(
+            Provider::OpenAi,
+            Some(crate::presets::OpenAiPreset::Nvidia),
+        );
+        assert_eq!(
+            delta(
+                &mut decoder,
+                json!({"content":"<think>hidden</think>visible rest","audio":false})
+            )
+            .unwrap(),
+            vec![
+                StreamEvent::ResponseProgress,
+                StreamEvent::ThoughtStart,
+                StreamEvent::ThoughtDelta("hidden".into()),
+                StreamEvent::ThoughtEnd,
+                StreamEvent::TextDelta("visible rest".into())
+            ]
+        );
+
+        let mut decoder = ProtocolDecoder::with_preset(
+            Provider::OpenAi,
+            Some(crate::presets::OpenAiPreset::Nvidia),
+        );
+        delta(
+            &mut decoder,
+            json!({"content":"<thi","audio":{"transcript":"already delivered"}}),
+        )
+        .unwrap();
+        // Cancellation discards the held content prefix. Audio neither flushes
+        // it early nor creates a new thought boundary to close.
+        assert!(decoder.finalize_response(false).is_empty());
+    }
 }

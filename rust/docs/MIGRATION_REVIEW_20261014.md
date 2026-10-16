@@ -150,3 +150,9 @@ RGB/JPEG limits, passive UserImage consumption and private stale-write guards.
 It inserts image items without automatically starting inference. Gemini
 conversation transcription aggregation and ordered paired-context delivery remain
 a separate open gap; the camera work does not implement that design.
+
+Slice103 adds caller-configured OpenAI Chat audio transcript fallback to the
+ordinary LLM text and assistant-history path (see
+[scope](../crates/pipecat-services/README.md#client-api)); generated-audio playback,
+audio-ID replay and live-provider acceptance remain outside this scope, and
+native production-chain qualification is tracked separately.

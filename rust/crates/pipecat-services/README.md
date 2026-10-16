@@ -67,6 +67,23 @@ size, invalid tool JSON, or missing terminal markers are errors. OpenAI requires
 reason and clean SSE EOF. Tool fragments are grouped by index and validated as
 JSON objects. No returned tool is executed by this crate.
 
+OpenAI Chat audio transcripts require an explicitly selected audio-capable model
+and caller-supplied `extra` parameters such as `modalities` and `audio`; defaults
+do not enable audio generation. A nonempty `delta.audio.transcript` becomes an
+ordinary text delta only when the same choice has neither nonempty tool calls
+nor visible content. NVIDIA applies its reasoning filter before that decision.
+Empty tool arrays do not suppress transcripts; whitespace is preserved. Missing,
+null or metadata-only audio objects emit no text. Unlike Python's permissive
+truthiness, a selected non-object audio value or non-string transcript is a
+protocol error (null is allowed). A finish reason does not discard the same
+chunk's transcript or replace the required `[DONE]` marker.
+
+Transcripts use the existing LLM text/`skip_tts` path and external assistant
+aggregation, not an audio output path. Generated `data`, `id` and `expires_at`
+are ignored: there is no audio decoding/playback or audio-ID history replay.
+This shared wire contract does not establish audio-model support for every
+compatible preset or live-provider acceptance.
+
 ## Context conversion
 
 `Context` owns messages, optional function tools, and tool choice. Conversion is
@@ -194,8 +211,9 @@ accounting, context conversion, and real pipeline interruption.
 
 Unsupported features are not labeled as implemented integrations:
 
-- OpenAI Responses, Realtime, image/audio generation, STT, TTS, and legacy
-  `function_call`; multiple completion candidates
+- OpenAI Responses, Realtime, image generation, generated-audio decoding/playback
+  or audio-ID history replay, STT, TTS, and legacy `function_call`; multiple
+  completion candidates
 - Anthropic server tools, automatic caching policies, batches,
   and Files API lifecycle
 - Gemini server code execution, multimodal output, live sessions, and Files API
