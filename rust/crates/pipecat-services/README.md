@@ -121,6 +121,42 @@ Anthropic cache input counts are included in prompt totals; Gemini thoughts
 count as output and tool-use prompt tokens count as input. Cache and reasoning
 counts remain optional instead of inventing measured zeros.
 
+Anthropic `message_start` and `message_delta` usage fields are cumulative
+snapshots. Each reported `input_tokens`, `output_tokens`,
+`cache_read_input_tokens` or `cache_creation_input_tokens` replaces its previous
+value, including zero, decreases and repeats. Missing or null fields retain the
+last value. Missing/null usage leaves the snapshot unchanged; an empty start
+usage object retains the existing zero-snapshot initialization, while an empty,
+unknown-only or all-null delta does not create usage when none was reported.
+The decoder keeps uncached input separately and recomputes native prompt totals
+from that input plus both latest cache counts, using the existing saturating
+unsigned-64-bit additions. Total adds output to that gross prompt. Later lower
+counts can therefore recover from earlier saturation without subtracting cache
+from an already saturated value.
+
+Anthropic `output_tokens_details.thinking_tokens` updates the existing optional
+`Usage.reasoning_tokens`; thinking is already included in output and is not
+added to completion or total again. Missing/null `output_tokens_details` retains
+the earlier reasoning count. Native validation is deliberately stricter than
+Python's SDK-object/truthiness path: non-null usage must be an object, each
+reported count must be a valid unsigned 64-bit integer, and a supplied details
+object must contain a valid unsigned `thinking_tokens`. An empty details object,
+a missing/null thinking count, wrong types, negative or out-of-range counts are
+protocol errors. Unknown usage fields are ignored. The entire usage update is
+validated before changing any counts or that delta's finish reason; an invalid
+record poisons the decoder and leaves the last successful snapshot available
+for the existing final usage report.
+
+The pinned Python
+[`_process_context` usage update](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/anthropic/llm.py#L626-L645)
+provides the cumulative replacement and thinking-as-output contract. Its
+[`_report_usage_metrics`](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/anthropic/llm.py#L726-L756)
+reports a net-of-cache prompt and includes cache in total; native retains its
+existing gross prompt convention and saturation. Native also retains the latest
+provider snapshot once on cancellation/failure rather than adopting Python's
+cancellation-time completion estimate. This changes no public Usage fields,
+core metric shape, stream completion markers or other providers' accounting.
+
 ## Sparse runtime settings
 
 `CompletionRequest.settings` is the core `LlmSettings` type. `Setting::NotGiven`

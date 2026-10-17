@@ -29,6 +29,7 @@ pub struct ProtocolDecoder {
     tools: BTreeMap<u32, PartialTool>,
     blocks: BTreeMap<u32, String>,
     usage: Option<Usage>,
+    anthropic_uncached_input_tokens: u64,
     finish_reason: Option<FinishReason>,
     done: bool,
     response_sequence: u64,
@@ -48,6 +49,7 @@ impl ProtocolDecoder {
             tools: BTreeMap::new(),
             blocks: BTreeMap::new(),
             usage: None,
+            anthropic_uncached_input_tokens: 0,
             finish_reason: None,
             done: false,
             response_sequence: RESPONSE_SEQUENCE.fetch_add(1, Ordering::Relaxed),
@@ -419,29 +421,7 @@ impl ProtocolDecoder {
         match kind {
             "ping" => {}
             "message_start" => {
-                let Some(usage) = value
-                    .pointer("/message/usage")
-                    .filter(|usage| usage.is_object())
-                else {
-                    return Ok(events);
-                };
-                let uncached = count(usage, "input_tokens");
-                let output = count(usage, "output_tokens");
-                let read = usage.get("cache_read_input_tokens").and_then(Value::as_u64);
-                let write = usage
-                    .get("cache_creation_input_tokens")
-                    .and_then(Value::as_u64);
-                let prompt = uncached
-                    .saturating_add(read.unwrap_or(0))
-                    .saturating_add(write.unwrap_or(0));
-                self.usage = Some(Usage {
-                    prompt_tokens: prompt,
-                    completion_tokens: output,
-                    total_tokens: prompt.saturating_add(output),
-                    cache_read_input_tokens: read,
-                    cache_creation_input_tokens: write,
-                    reasoning_tokens: None,
-                });
+                self.update_anthropic_usage(value.pointer("/message/usage"), true)?;
             }
             "content_block_start" => {
                 let index = index(value)?;
@@ -676,16 +656,10 @@ impl ProtocolDecoder {
                 }
             }
             "message_delta" => {
+                // Reject a malformed snapshot before changing either usage or reason.
+                self.update_anthropic_usage(value.get("usage"), false)?;
                 if let Some(reason) = value.pointer("/delta/stop_reason").and_then(Value::as_str) {
                     self.finish_reason = Some(normalize_reason(reason));
-                }
-                if let Some(output) = value
-                    .pointer("/usage/output_tokens")
-                    .and_then(Value::as_u64)
-                {
-                    let usage = self.usage.get_or_insert_with(Usage::default);
-                    usage.completion_tokens = output;
-                    usage.total_tokens = usage.prompt_tokens.saturating_add(output);
                 }
             }
             "message_stop" => {
@@ -722,6 +696,68 @@ impl ProtocolDecoder {
             _ => {}
         }
         Ok(events)
+    }
+    fn update_anthropic_usage(
+        &mut self,
+        value: Option<&Value>,
+        initialize: bool,
+    ) -> Result<(), ServiceError> {
+        let Some(value) = value.filter(|value| !value.is_null()) else {
+            return Ok(());
+        };
+        let object = value
+            .as_object()
+            .ok_or_else(|| ServiceError::Protocol("Anthropic usage must be an object".into()))?;
+        let optional_count = |key: &str| -> Result<Option<u64>, ServiceError> {
+            match object.get(key) {
+                None | Some(Value::Null) => Ok(None),
+                Some(value) => value.as_u64().map(Some).ok_or_else(|| {
+                    ServiceError::Protocol(format!("Anthropic usage {key} must be a u64"))
+                }),
+            }
+        };
+        // Validate the complete record before mutating any cumulative state.
+        let input = optional_count("input_tokens")?;
+        let output = optional_count("output_tokens")?;
+        let read = optional_count("cache_read_input_tokens")?;
+        let write = optional_count("cache_creation_input_tokens")?;
+        let reasoning = match object.get("output_tokens_details") {
+            None | Some(Value::Null) => None,
+            Some(details) => Some(
+                details
+                    .as_object()
+                    .and_then(|details| details.get("thinking_tokens"))
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| {
+                        ServiceError::Protocol(
+                            "Anthropic output_tokens_details requires u64 thinking_tokens".into(),
+                        )
+                    })?,
+            ),
+        };
+        if !initialize
+            && self.usage.is_none()
+            && [input, output, read, write, reasoning]
+                .iter()
+                .all(Option::is_none)
+        {
+            return Ok(());
+        }
+        // Keep uncached input separately: subtraction cannot undo a saturated
+        // gross prompt when a later cumulative cache count decreases.
+        let uncached = input.unwrap_or(self.anthropic_uncached_input_tokens);
+        let mut usage = self.usage.clone().unwrap_or_default();
+        usage.completion_tokens = output.unwrap_or(usage.completion_tokens);
+        usage.cache_read_input_tokens = read.or(usage.cache_read_input_tokens);
+        usage.cache_creation_input_tokens = write.or(usage.cache_creation_input_tokens);
+        usage.reasoning_tokens = reasoning.or(usage.reasoning_tokens);
+        usage.prompt_tokens = uncached
+            .saturating_add(usage.cache_read_input_tokens.unwrap_or(0))
+            .saturating_add(usage.cache_creation_input_tokens.unwrap_or(0));
+        usage.total_tokens = usage.prompt_tokens.saturating_add(usage.completion_tokens);
+        self.anthropic_uncached_input_tokens = uncached;
+        self.usage = Some(usage);
+        Ok(())
     }
     fn retain_bytes(&mut self, count: usize) -> Result<(), ServiceError> {
         self.history_bytes = self
