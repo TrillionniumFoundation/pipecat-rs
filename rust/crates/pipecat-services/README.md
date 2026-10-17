@@ -85,6 +85,21 @@ side effects; cancellation under backpressure can deliver only a prefix of that
 record's events. NVIDIA retains its existing reasoning-progress path, and Gemini
 Live is unchanged.
 
+Ordinary Gemini emits a separate `ThoughtStart`, `ThoughtDelta`, `ThoughtEnd`
+sequence for each nonempty thought text Part, matching the fixed Python
+`google/llm.py` baseline. Empty thought text emits no display events; whitespace
+is preserved. Adjacent thought Parts remain separate even within one SSE record.
+These boundaries do not commit signatures or history: the existing Gemini
+checkpoint remains after all accepted Parts in that record, and completed
+history still requires a successful response.
+
+If cancellation, timeout, or failure interrupts event delivery, Gemini closes
+only unclosed thought starts already queued in the bounded client channel,
+before final usage, error, and finish events. Queuing is not a processor or sink receipt.
+The consumer must keep draining to receive this closing boundary; dropping the
+receiver or aborting a pipeline task does not guarantee a delivered thought end.
+Rejected records enqueue none of their temporary display events.
+
 SSE supports LF, CRLF, CR, comments, UTF-8 BOM, multi-line data, and arbitrary
 UTF-8 network boundaries. Incomplete records, invalid UTF-8/JSON, excessive event
 size, invalid tool JSON, or missing terminal markers are errors. OpenAI requires

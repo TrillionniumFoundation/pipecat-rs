@@ -83,10 +83,13 @@ impl ProtocolDecoder {
         }
     }
     pub(crate) fn finalize_response(&mut self, completed: bool) -> Vec<StreamEvent> {
-        let Some(reasoning) = self.nvidia.as_mut() else {
+        let events = if let Some(reasoning) = self.nvidia.as_mut() {
+            reasoning.finish(completed)
+        } else if self.provider == Provider::Gemini {
+            Vec::new()
+        } else {
             return Vec::new();
         };
-        let events = reasoning.finish(completed);
         if completed {
             events
         } else {
@@ -932,11 +935,13 @@ impl ProtocolDecoder {
                             }]));
                             self.gemini_history.push(message);
                             if !text.is_empty() {
-                                events.push(if thought {
-                                    StreamEvent::ThoughtDelta(text.into())
+                                if thought {
+                                    events.push(StreamEvent::ThoughtStart);
+                                    events.push(StreamEvent::ThoughtDelta(text.into()));
+                                    events.push(StreamEvent::ThoughtEnd);
                                 } else {
-                                    StreamEvent::TextDelta(text.into())
-                                });
+                                    events.push(StreamEvent::TextDelta(text.into()));
+                                }
                             }
                         } else if let Some(call) = part.get("functionCall") {
                             if thought {
