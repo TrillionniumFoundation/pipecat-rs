@@ -606,10 +606,31 @@ fn check_raw(case: &Case, events: &[Result<StreamEvent, ServiceError>]) {
         events.len(),
         2 + usize::from(case.usage.is_some())
             + usize::from(case.outcome != Outcome::Success)
-            + usize::from(case.outcome == Outcome::Cancelled),
+            + 2 * usize::from(case.outcome == Outcome::Cancelled),
         "{}: {events:?}",
         case.label
     );
+    let progress: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter_map(|(i, event)| matches!(event, Ok(StreamEvent::ResponseProgress)).then_some(i))
+        .collect();
+    assert_eq!(
+        progress.len(),
+        usize::from(case.outcome == Outcome::Cancelled),
+        "{}: {events:?}",
+        case.label
+    );
+    if case.outcome == Outcome::Cancelled {
+        let text_index = events
+            .iter()
+            .position(|event| matches!(event, Ok(StreamEvent::TextDelta(text)) if text == MARKER))
+            .expect("cancel marker text");
+        assert!(
+            progress[0] < text_index,
+            "progress must precede marker text: {events:?}"
+        );
+    }
     let usages: Vec<_> = events
         .iter()
         .filter_map(|event| match event {

@@ -387,6 +387,10 @@ async fn body_cancel_idle_and_total_deadline_close_socket_without_retry() {
         ));
         assert!(matches!(
             stream.next().await,
+            Some(Ok(StreamEvent::ResponseProgress))
+        ));
+        assert!(matches!(
+            stream.next().await,
             Some(Ok(StreamEvent::TextDelta(_)))
         ));
         if mode == "cancel" {
@@ -480,6 +484,10 @@ async fn dropping_active_body_stream_closes_connection_and_does_not_retry() {
     assert!(matches!(
         stream.next().await,
         Some(Ok(StreamEvent::Started))
+    ));
+    assert!(matches!(
+        stream.next().await,
+        Some(Ok(StreamEvent::ResponseProgress))
     ));
     assert!(matches!(
         stream.next().await,

@@ -41,6 +41,7 @@ pub struct ProtocolDecoder {
     checkpoint_blocks: usize,
     nvidia: Option<crate::nvidia::NvidiaReasoning>,
     delivered_thought_depth: usize,
+    response_progress_reported: bool,
 }
 impl ProtocolDecoder {
     pub fn new(provider: Provider) -> Self {
@@ -61,6 +62,7 @@ impl ProtocolDecoder {
             checkpoint_blocks: 0,
             nvidia: None,
             delivered_thought_depth: 0,
+            response_progress_reported: false,
         }
     }
     pub(crate) fn with_preset(
@@ -152,7 +154,7 @@ impl ProtocolDecoder {
                     .into(),
             });
         }
-        let events = match self.provider {
+        let mut events = match self.provider {
             Provider::OpenAi => self.openai(&value),
             Provider::Anthropic => self.anthropic(&value, event.event.as_deref()),
             Provider::Gemini => self.gemini(&value),
@@ -174,6 +176,29 @@ impl ProtocolDecoder {
             return Err(ServiceError::Protocol(
                 "aggregate tool calls exceed size limit".into(),
             ));
+        }
+        // Match the reference adapters' first model event, including packets
+        // without visible text. Commit only after the whole record is accepted.
+        let model_progress = match self.provider {
+            Provider::OpenAi => {
+                self.nvidia.is_none()
+                    && value
+                        .get("choices")
+                        .and_then(Value::as_array)
+                        .is_some_and(|choices| !choices.is_empty())
+            }
+            Provider::Anthropic => matches!(
+                value
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .or(event.event.as_deref()),
+                Some("content_block_start" | "content_block_delta")
+            ),
+            Provider::Gemini => false,
+        };
+        if model_progress && !self.response_progress_reported {
+            self.response_progress_reported = true;
+            events.insert(0, StreamEvent::ResponseProgress);
         }
         Ok(events)
     }
@@ -1076,15 +1101,25 @@ mod openai_audio_transcript_tests {
     #[test]
     fn audio_transcript_fallback_ignores_partials_and_preserves_text_verbatim() {
         let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
-        for value in [
+        for (i, value) in [
             json!({}),
             json!({"audio":null}),
             json!({"audio":{}}),
             json!({"audio":{"id":"ignored","data":"not-decoded","expires_at":12}}),
             json!({"audio":{"transcript":null}}),
             json!({"audio":{"transcript":""}}),
-        ] {
-            assert!(delta(&mut decoder, value).unwrap().is_empty());
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(
+                delta(&mut decoder, value).unwrap(),
+                if i == 0 {
+                    vec![StreamEvent::ResponseProgress]
+                } else {
+                    vec![]
+                }
+            );
         }
         for text in [
             " ",
@@ -1125,7 +1160,10 @@ mod openai_audio_transcript_tests {
             let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
             assert_eq!(
                 delta(&mut decoder, json!({"content":content,"audio":false})).unwrap(),
-                vec![StreamEvent::TextDelta(content.into())]
+                vec![
+                    StreamEvent::ResponseProgress,
+                    StreamEvent::TextDelta(content.into())
+                ]
             );
         }
         let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
@@ -1134,10 +1172,11 @@ mod openai_audio_transcript_tests {
             json!({"content":"visible","tool_calls":[tool()],"audio":{"transcript":[]}}),
         )
         .unwrap();
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0], StreamEvent::TextDelta("visible".into()));
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0], StreamEvent::ResponseProgress);
+        assert_eq!(events[1], StreamEvent::TextDelta("visible".into()));
         assert!(
-            matches!(&events[1], StreamEvent::ToolCallDelta { name: Some(name), .. } if name == "lookup")
+            matches!(&events[2], StreamEvent::ToolCallDelta { name: Some(name), .. } if name == "lookup")
         );
         assert!(matches!(
             done(&mut decoder).unwrap().as_slice(),
@@ -1147,7 +1186,10 @@ mod openai_audio_transcript_tests {
         let events = delta(&mut decoder, json!({"tool_calls":[tool()],"audio":false})).unwrap();
         assert!(matches!(
             events.as_slice(),
-            [StreamEvent::ToolCallDelta { .. }]
+            [
+                StreamEvent::ResponseProgress,
+                StreamEvent::ToolCallDelta { .. }
+            ]
         ));
         for value in [
             json!({"tool_calls":{},"audio":{"transcript":"hidden"}}),
@@ -1166,6 +1208,7 @@ mod openai_audio_transcript_tests {
             )
             .unwrap(),
             vec![
+                StreamEvent::ResponseProgress,
                 StreamEvent::ThoughtDelta("plan".into()),
                 StreamEvent::TextDelta("spoken".into())
             ]
@@ -1174,14 +1217,14 @@ mod openai_audio_transcript_tests {
         assert_eq!(record(&mut decoder, json!({"choices":[
             {"index":0,"delta":{"content":"first"}},
             {"index":0,"delta":{"content":null,"tool_calls":[],"audio":{"transcript":"second"}}}
-        ]})).unwrap(), vec![StreamEvent::TextDelta("first".into()), StreamEvent::TextDelta("second".into())]);
+        ]})).unwrap(), vec![StreamEvent::ResponseProgress, StreamEvent::TextDelta("first".into()), StreamEvent::TextDelta("second".into())]);
     }
 
     #[test]
     fn audio_terminal_chunk_and_usage_keep_existing_done_and_eof_contracts() {
         for reason in ["stop", "length"] {
             let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
-            assert_eq!(record(&mut decoder, json!({"choices":[{"index":0,"finish_reason":reason,"delta":{"audio":{"transcript":"tail"}}}]})).unwrap(), vec![StreamEvent::TextDelta("tail".into())]);
+            assert_eq!(record(&mut decoder, json!({"choices":[{"index":0,"finish_reason":reason,"delta":{"audio":{"transcript":"tail"}}}]})).unwrap(), vec![StreamEvent::ResponseProgress, StreamEvent::TextDelta("tail".into())]);
             assert!(!decoder.is_done());
             assert_eq!(
                 delta(&mut decoder, json!({"audio":{"transcript":"before DONE"}})).unwrap(),

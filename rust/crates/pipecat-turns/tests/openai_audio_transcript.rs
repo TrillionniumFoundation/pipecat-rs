@@ -757,7 +757,7 @@ fn done(decoder: &mut ProtocolDecoder) -> Result<Vec<StreamEvent>, ServiceError>
 }
 #[test]
 fn audio_fallback_preserves_existing_tool_content_events_and_rejects_selected_wrong_types() {
-    for (payload, expected) in [
+    for (payload, mut expected) in [
         (
             json!({"audio":{"transcript":"audio"}}),
             vec![StreamEvent::TextDelta("audio".into())],
@@ -790,6 +790,7 @@ fn audio_fallback_preserves_existing_tool_content_events_and_rejects_selected_wr
         ),
     ] {
         let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
+        expected.insert(0, StreamEvent::ResponseProgress);
         assert_eq!(decode(&mut decoder, delta(payload)).unwrap(), expected);
         assert!(done(&mut decoder).unwrap().is_empty());
     }
@@ -804,6 +805,7 @@ fn audio_fallback_preserves_existing_tool_content_events_and_rejects_selected_wr
             .map(|text| StreamEvent::TextDelta(text.into()))
             .into_iter()
             .collect::<Vec<_>>();
+        expected.insert(0, StreamEvent::ResponseProgress);
         expected.push(StreamEvent::ToolCallDelta {
             index: 0,
             id: Some("call-audio".into()),
@@ -844,7 +846,10 @@ fn audio_fallback_preserves_existing_tool_content_events_and_rejects_selected_wr
         ));
     }
     let mut decoder = ProtocolDecoder::new(Provider::OpenAi);
-    assert!(decode(&mut decoder, finish_event()).unwrap().is_empty());
+    assert_eq!(
+        decode(&mut decoder, finish_event()).unwrap(),
+        vec![StreamEvent::ResponseProgress]
+    );
     assert!(
         !decoder.is_done(),
         "finish_reason alone is not the stream completion marker"

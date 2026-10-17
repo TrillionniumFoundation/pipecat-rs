@@ -73,7 +73,8 @@ fn sse_ignores_id_retry_and_dispatches_empty_data() {
 fn openai_interleaved_tools_aggregate_by_index_and_usage_is_latest_snapshot() {
     let mut d = ProtocolDecoder::new(Provider::OpenAi);
     let first=decode(&mut d,json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"b","type":"function","function":{"name":"weather","arguments":"{\"city\":\""}},{"index":0,"id":"a","type":"function","function":{"name":"time","arguments":"{"}}]}}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}})).unwrap();
-    assert_eq!(first.len(), 2);
+    assert_eq!(first.len(), 3);
+    assert_eq!(first[0], StreamEvent::ResponseProgress);
     decode(&mut d,json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}},{"index":1,"function":{"arguments":"北京\"}"}}]},"finish_reason":"tool_calls"}]})).unwrap();
     decode(&mut d,json!({"choices":[],"usage":{"prompt_tokens":20,"completion_tokens":30,"total_tokens":50,"prompt_tokens_details":{"cached_tokens":12,"cache_write_tokens":8},"completion_tokens_details":{"reasoning_tokens":7}}})).unwrap();
     let calls = done(&mut d).unwrap();
@@ -128,6 +129,7 @@ fn openai_content_and_reasoning_are_distinct() {
         )
         .unwrap(),
         vec![
+            StreamEvent::ResponseProgress,
             StreamEvent::TextDelta("answer".into()),
             StreamEvent::ThoughtDelta("thought".into())
         ]

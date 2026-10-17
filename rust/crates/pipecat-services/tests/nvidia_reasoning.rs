@@ -309,9 +309,13 @@ async fn generic_openai_retains_literal_markup_and_content_before_reasoning() {
     config.openai_preset = None;
     let events = collect(LlmClient::new(config).unwrap().stream(request()).unwrap()).await;
     assert_eq!(trace(&events), ["text:<think>x</think>", "thought:reason"]);
-    assert!(!events
-        .iter()
-        .any(|e| matches!(e, Ok(StreamEvent::ResponseProgress))));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, Ok(StreamEvent::ResponseProgress)))
+            .count(),
+        1
+    );
     bounded(task).await.unwrap();
 }
 

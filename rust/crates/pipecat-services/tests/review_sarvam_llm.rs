@@ -450,6 +450,10 @@ async fn sarvam_reuses_generic_utf8_tool_usage_and_literal_thought_contract() {
     });
     let mut stream = client.stream(request("sarvam-105b")).unwrap();
     assert_eq!(stream.next().await.unwrap().unwrap(), StreamEvent::Started);
+    assert_eq!(
+        stream.next().await.unwrap().unwrap(),
+        StreamEvent::ResponseProgress
+    );
     let first = tokio::time::timeout(Duration::from_secs(2), stream.next())
         .await
         .unwrap()

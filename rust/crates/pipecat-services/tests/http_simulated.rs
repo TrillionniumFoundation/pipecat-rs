@@ -116,6 +116,10 @@ async fn simulated_openai_http_streams_text_before_response_ends_and_sends_auth_
     assert_eq!(stream.next().await.unwrap().unwrap(), StreamEvent::Started);
     assert_eq!(
         stream.next().await.unwrap().unwrap(),
+        StreamEvent::ResponseProgress
+    );
+    assert_eq!(
+        stream.next().await.unwrap().unwrap(),
         StreamEvent::TextDelta("你好🙂".into())
     );
     assert!(
@@ -328,8 +332,15 @@ async fn simulated_cancellation_preserves_usage_and_ends_without_waiting_for_net
         .unwrap()
         .stream(request())
         .unwrap();
-    stream.next().await.unwrap().unwrap();
-    stream.next().await.unwrap().unwrap();
+    assert_eq!(stream.next().await.unwrap().unwrap(), StreamEvent::Started);
+    assert_eq!(
+        stream.next().await.unwrap().unwrap(),
+        StreamEvent::ResponseProgress
+    );
+    assert!(matches!(
+        stream.next().await.unwrap().unwrap(),
+        StreamEvent::TextDelta(_)
+    ));
     stream.cancel();
     let events = tokio::time::timeout(Duration::from_millis(100), collect(&mut stream))
         .await
@@ -393,8 +404,15 @@ async fn dropping_stream_closes_socket() {
         .unwrap()
         .stream(request())
         .unwrap();
-    stream.next().await.unwrap().unwrap();
-    stream.next().await.unwrap().unwrap();
+    assert_eq!(stream.next().await.unwrap().unwrap(), StreamEvent::Started);
+    assert_eq!(
+        stream.next().await.unwrap().unwrap(),
+        StreamEvent::ResponseProgress
+    );
+    assert!(matches!(
+        stream.next().await.unwrap().unwrap(),
+        StreamEvent::TextDelta(_)
+    ));
     drop(stream);
     assert_eq!(task.await.unwrap(), 0);
 }
