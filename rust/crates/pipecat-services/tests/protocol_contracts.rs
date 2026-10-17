@@ -218,8 +218,9 @@ fn google_preserves_non_normal_finish_reasons_and_empty_turns() {
 fn google_tools_have_unique_ids_and_preserve_signed_checkpoints() {
     let mut d = ProtocolDecoder::new(Provider::Gemini);
     let events=decode(&mut d,json!({"candidates":[{"content":{"parts":[{"functionCall":{"name":"a","args":{"n":1}}},{"functionCall":{"name":"b","args":{}}}]},"finishReason":"STOP"}]})).unwrap();
-    assert_eq!(events.len(), 2);
-    let ids: Vec<_> = events
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0], StreamEvent::ResponseProgress);
+    let ids: Vec<_> = events[1..]
         .iter()
         .map(|e| {
             if let StreamEvent::ToolCall(c) = e {

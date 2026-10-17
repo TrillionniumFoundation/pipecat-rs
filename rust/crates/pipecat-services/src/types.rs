@@ -73,8 +73,9 @@ pub enum FinishReason {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StreamEvent {
     Started,
-    /// First accepted provider choice or Anthropic content block start/delta,
-    /// including events without visible text or buffered by a response adapter.
+    /// First accepted provider choice, Gemini candidate, or Anthropic content
+    /// block start/delta, including events without visible text or buffered by a
+    /// response adapter.
     ResponseProgress,
     /// Explicit provider thought boundaries; independent channels may overlap.
     ThoughtStart,

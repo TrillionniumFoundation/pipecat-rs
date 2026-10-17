@@ -194,7 +194,10 @@ impl ProtocolDecoder {
                     .or(event.event.as_deref()),
                 Some("content_block_start" | "content_block_delta")
             ),
-            Provider::Gemini => false,
+            Provider::Gemini => value
+                .get("candidates")
+                .and_then(Value::as_array)
+                .is_some_and(|candidates| !candidates.is_empty()),
         };
         if model_progress && !self.response_progress_reported {
             self.response_progress_reported = true;

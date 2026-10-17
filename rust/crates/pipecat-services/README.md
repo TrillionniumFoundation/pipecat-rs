@@ -61,22 +61,29 @@ usage survives explicit cancellation, timeouts, and protocol failure. Dropping
 the receiver intentionally prevents delivery of remaining events.
 
 TTFB measures the first successfully decoded model event, not the first TCP
-byte. The processor's timer starts at `process_completion` entry, including
-request preparation and `ResponseStart` delivery. Plain OpenAI Chat Completions
+byte. Emitting the metric requires `enable_metrics` (disabled by default). The
+processor's timer starts at `process_completion` entry, including request
+preparation and `ResponseStart` delivery. Plain OpenAI Chat Completions
 (including shared Azure/Sarvam and other compatible presets) emits one
 `ResponseProgress` for its first accepted nonempty `choices` array, including
 role-only, empty-delta, and partial-tool packets. Anthropic emits it for its
 first accepted `content_block_start` or `content_block_delta`, including empty
-text, thinking, redacted-thinking, and tool starts. Empty choices, usage-only
-records, pings, and rejected records do not qualify. Progress is committed only
-after all record validation, including aggregate tool-byte limits, succeeds.
+text, thinking, redacted-thinking, and tool starts. Ordinary Gemini
+`streamGenerateContent` emits it for its first accepted nonempty `candidates`
+array, including candidates without parts, empty text, thoughts, tool calls,
+and finish-only candidates. Empty choices or candidates, usage-only records,
+pings, and rejected records do not qualify. Progress is committed only after
+all record validation, including aggregate tool-byte limits, succeeds.
 
 The decoder emits progress once per response; the processor also deduplicates
 TTFB across progress and content events. This is a native adaptation of the
-Python adapters' repeated stop-TTFB calls. Progress precedes content from the
-same record and has no response/history side effects; cancellation under
-backpressure can deliver only a prefix of that record's events. NVIDIA retains
-its existing reasoning-progress path, and Gemini is unchanged.
+Python adapters' repeated stop-TTFB calls. The reference Gemini adapter stops
+TTFB for each nonempty candidate chunk before inspecting parts; the native
+decoder instead requires the whole record to pass validation first.
+Progress precedes content from the same record and has no response/history
+side effects; cancellation under backpressure can deliver only a prefix of that
+record's events. NVIDIA retains its existing reasoning-progress path, and Gemini
+Live is unchanged.
 
 SSE supports LF, CRLF, CR, comments, UTF-8 BOM, multi-line data, and arbitrary
 UTF-8 network boundaries. Incomplete records, invalid UTF-8/JSON, excessive event
