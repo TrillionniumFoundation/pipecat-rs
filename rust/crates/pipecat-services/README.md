@@ -215,6 +215,26 @@ follows the Python settings field (OpenAI `max_tokens`). A given sparse budget
 supersedes the convenience budget. Provider-specific fields can use explicit
 `extra` fields, subject to reserved-field and collision validation.
 
+Ordinary Gemini now applies thinking defaults for exactly three resolved model
+names when `generationConfig.thinkingConfig` is absent:
+
+- `gemini-2.5-flash`: `{"thinkingBudget":0}`
+- `gemini-3.6-flash`: `{"thinkingLevel":"minimal"}`
+- `gemini-3.8-flash`: `{"thinkingLevel":"low"}`
+
+This changes the previous Rust behavior of omitting thinking configuration for
+these models. It is a bounded compatibility port of the pinned Python
+[`_maybe_unset_thinking_budget` helper](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/services/google/llm.py#L517-L542),
+not its broader prefix/substring matching. Other models, aliases, suffixed names,
+image models, and `gemini-3.7-flash` receive no default. Defaults are applied after
+settings and `extra`; any explicit `thinkingConfig` value, including null or an
+empty object, is preserved. A non-object `generationConfig` is also preserved,
+and existing settings/`extra` collision errors are unchanged. Other providers
+and Gemini Live are unaffected. These defaults can affect model behavior;
+`minimal` does not guarantee that thinking is completely disabled. No unchanged
+quality or measured latency/cost improvement is claimed. See the provider's
+[thinking controls](https://ai.google.dev/gemini-api/docs/generate-content/thinking?hl=en).
+
 ## Compatible-provider request presets
 
 `ClientConfig::openai_compatible(OpenAiPresetConfig::new(preset), key)` selects

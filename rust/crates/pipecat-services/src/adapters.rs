@@ -74,6 +74,24 @@ pub fn request_body(
         }
         object.insert(key.clone(), value.clone());
     }
+    if provider == Provider::Gemini {
+        // Apply the pinned source defaults after settings and extra, for exact models only.
+        let thinking = match request.model.as_str() {
+            "gemini-2.5-flash" => Some(json!({"thinkingBudget":0})),
+            "gemini-3.6-flash" => Some(json!({"thinkingLevel":"minimal"})),
+            "gemini-3.8-flash" => Some(json!({"thinkingLevel":"low"})),
+            _ => None,
+        };
+        if let Some(thinking) = thinking {
+            if let Some(config) = object
+                .entry("generationConfig")
+                .or_insert_with(|| json!({}))
+                .as_object_mut()
+            {
+                config.entry("thinkingConfig").or_insert(thinking);
+            }
+        }
+    }
     if provider == Provider::Anthropic && !object.contains_key("thinking") {
         let lower = request.model.to_ascii_lowercase();
         let generation = lower.match_indices("sonnet-").find_map(|(start, _)| {
