@@ -8,6 +8,7 @@ use pipecat_core::{
     ProcessorError, ProcessorHealth, ProcessorReference, ServiceMetadataFrame, TextFrame,
 };
 use std::future::{poll_fn, Future};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use tokio::time::Instant;
@@ -49,6 +50,7 @@ pub struct LlmProcessor {
     client: LlmClient,
     state: Mutex<State>,
     completion_lock: Arc<tokio::sync::Mutex<()>>,
+    should_report_ttfb: Arc<AtomicBool>,
     speculation_gate: crate::speculation::OutputGate,
 }
 #[derive(Clone)]
@@ -74,6 +76,7 @@ impl LlmProcessor {
                 speculation: None,
             }),
             completion_lock: Arc::new(tokio::sync::Mutex::new(())),
+            should_report_ttfb: Arc::new(AtomicBool::new(true)),
             speculation_gate: crate::speculation::OutputGate::new(Default::default()),
         }
     }
@@ -310,6 +313,7 @@ impl LlmProcessor {
             .begin(state.speculation.clone())
             .await?;
         let client = self.client.clone();
+        let should_report_ttfb = self.should_report_ttfb.clone();
         let output = CompletionOutput {
             context: ctx.clone(),
             gate: self.speculation_gate.clone(),
@@ -332,7 +336,14 @@ impl LlmProcessor {
                 if !output.admits_completion() {
                     return Ok(());
                 }
-                process_completion(client, state.request, state.skip_tts, output.clone()).await
+                process_completion(
+                    client,
+                    state.request,
+                    state.skip_tts,
+                    output.clone(),
+                    should_report_ttfb,
+                )
+                .await
             };
             let result = output.guard_completion(completion).await;
             let result = match result {
@@ -673,6 +684,7 @@ async fn process_completion(
     request: CompletionRequest,
     skip_tts: Option<bool>,
     ctx: CompletionOutput,
+    should_report_ttfb: Arc<AtomicBool>,
 ) -> Result<(), ProcessorError> {
     let started = Instant::now();
     let mut first_output_elapsed = None;
@@ -711,6 +723,19 @@ async fn process_completion(
     if !ctx.admits_completion() {
         return Ok(());
     }
+    // Claim only when this request actually starts, after FIFO admission and
+    // the response-start boundary. Disabled or cancelled queued work must not
+    // consume the instance's initial report. Once exhausted, later Start frames
+    // or switching back to every-request reporting do not rearm the collector.
+    let report_timing = ctx.configuration().enable_metrics
+        && should_report_ttfb
+            .compare_exchange(
+                true,
+                !ctx.configuration().report_only_initial_ttfb,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok();
     let mut stream = match client.stream(request) {
         Ok(stream) => stream,
         Err(error) => {
@@ -736,7 +761,7 @@ async fn process_completion(
             )
         {
             first_output_elapsed = Some(elapsed);
-            if ctx.configuration().enable_metrics {
+            if report_timing {
                 ctx.push(
                     Frame::new(FrameData::Metrics(vec![Metric::Ttfb {
                         processor: ctx.name().into(),
@@ -759,8 +784,7 @@ async fn process_completion(
             // measurement never admits or executes a tool. Empty text deltas
             // remain valid answers where the provider emits them.
             answer_reported = true;
-            if let Some(first) = first_output_elapsed.filter(|_| ctx.configuration().enable_metrics)
-            {
+            if let Some(first) = first_output_elapsed.filter(|_| report_timing) {
                 ctx.push(
                     Frame::new(FrameData::Metrics(vec![Metric::Ttfat {
                         processor: ctx.name().into(),
@@ -1426,5 +1450,138 @@ mod source_error_tests {
         worker.end().await.unwrap();
         let (_, report) = worker.collect().await.unwrap();
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+    }
+}
+
+#[cfg(test)]
+mod initial_metric_tests {
+    use super::*;
+    use crate::{ClientConfig, Context, Message, Provider, Role};
+    use pipecat_core::{FlushFrame, Pipeline, PipelineConfig, StartFrame};
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn first_queued_request_cancelled_before_fifo_does_not_consume_initial_timing() {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut config = ClientConfig::new(Provider::OpenAi, "synthetic-key");
+            config.endpoint = format!("http://{}/stream", listener.local_addr().unwrap());
+            config.retry = crate::RetryPolicy::Never;
+            let processor = Arc::new(LlmProcessor::new(
+                LlmClient::new(config).unwrap(),
+                CompletionRequest::new(
+                    "fixture",
+                    Context::new(vec![Message::text(Role::User, "hello")]),
+                ),
+            ));
+            // A private deterministic gate proves the *first* request is queued.
+            // No public test hook, timeout-based scheduling guess or earlier
+            // consumed report can hide an admission-time claim regression.
+            let guard = processor.completion_lock.lock().await;
+            let mut worker = Pipeline::new(vec![processor.clone()])
+                .start(PipelineConfig {
+                    start: StartFrame {
+                        enable_metrics: true,
+                        report_only_initial_ttfb: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            worker
+                .sender()
+                .send(Frame::new(FrameData::LlmRun), Direction::Downstream)
+                .await
+                .unwrap();
+            let barrier = Frame::new(FrameData::Flush(FlushFrame {
+                returning: false,
+                origin: Some("initial-metric-fifo-test".into()),
+            }));
+            let barrier_id = barrier.id;
+            worker.sender().send(barrier, Direction::Downstream).await.unwrap();
+            loop {
+                let output = worker.recv().await.unwrap();
+                assert!(!matches!(output.frame.data, FrameData::LlmResponseStart));
+                if output.frame.id == barrier_id {
+                    break;
+                }
+            }
+            assert!(processor.should_report_ttfb.load(Ordering::Relaxed));
+            let interruption = Frame::new(FrameData::Interruption);
+            let interruption_id = interruption.id;
+            worker.sender().send(interruption, Direction::Downstream).await.unwrap();
+            while worker.recv().await.unwrap().frame.id != interruption_id {}
+            assert!(processor.should_report_ttfb.load(Ordering::Relaxed));
+            drop(guard);
+
+            let peer = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0; 4096];
+                let (header_end, length) = loop {
+                    let n = socket.read(&mut buffer).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buffer[..n]);
+                    assert!(request.len() <= 65536);
+                    if let Some(position) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let end = position + 4;
+                        let header = std::str::from_utf8(&request[..end]).unwrap();
+                        assert!(header.starts_with("POST /stream HTTP/1.1\r\n"));
+                        let length = header.lines().find_map(|line| {
+                            line.to_ascii_lowercase().strip_prefix("content-length:")
+                                .map(|value| value.trim().parse::<usize>().unwrap())
+                        }).unwrap();
+                        assert!(length <= 65536 - end);
+                        break (end, length);
+                    }
+                };
+                while request.len() < header_end + length {
+                    let n = socket.read(&mut buffer).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buffer[..n]);
+                    assert!(request.len() <= 65536);
+                }
+                let body: serde_json::Value = serde_json::from_slice(&request[header_end..header_end + length]).unwrap();
+                assert_eq!(body["messages"][0]["content"], "hello");
+                let response = b"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n\n";
+                let headers = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", response.len());
+                socket.write_all(headers.as_bytes()).await.unwrap();
+                socket.write_all(response).await.unwrap();
+                socket.shutdown().await.unwrap();
+            });
+            worker.sender().send(Frame::new(FrameData::LlmRun), Direction::Downstream).await.unwrap();
+            let (mut ttfb, mut ttfat, mut processing) = (0, 0, 0);
+            let mut answer = String::new();
+            loop {
+                match worker.recv().await.unwrap().frame.data {
+                    FrameData::Metrics(metrics) => {
+                        for metric in metrics {
+                            match metric {
+                                Metric::Ttfb { .. } => ttfb += 1,
+                                Metric::Ttfat { .. } => ttfat += 1,
+                                Metric::Processing { .. } => processing += 1,
+                                _ => {}
+                            }
+                        }
+                    }
+                    FrameData::LlmText(text) => answer.push_str(&text.text),
+                    FrameData::LlmResponseEnd => break,
+                    FrameData::Error(error) => panic!("unexpected error: {}", error.error),
+                    _ => {}
+                }
+            }
+            assert_eq!((ttfb, ttfat, processing), (1, 1, 1));
+            assert_eq!(answer, "answer");
+            assert!(!processor.should_report_ttfb.load(Ordering::Relaxed));
+            peer.await.unwrap();
+            worker.end().await.unwrap();
+            let (_, report) = worker.collect().await.unwrap();
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+        })
+        .await
+        .expect("causal FIFO cancellation test exceeded its bound");
     }
 }

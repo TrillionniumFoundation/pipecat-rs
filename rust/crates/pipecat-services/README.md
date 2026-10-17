@@ -440,5 +440,22 @@ This measures observation by the processor, including prior local queue delay,
 not raw provider network arrival or proven model reasoning time. The event time
 is captured before that event's output awaits so its own TTFB publication does
 not inflate the answer breakdown. Metrics-disabled requests emit neither timing.
-Existing per-inference reporting remains: `report_only_initial_ttfb` is not yet
-implemented by this processor. Realtime audio services are unchanged.
+With `report_only_initial_ttfb`, the first metrics-enabled request that starts
+consumes the processor instance's reporting allowance for both TTFB and TTFAT.
+A started request's failure, cancellation, thought-only response, or tool
+continuation does not restore that allowance. Later requests still emit content,
+usage and processing metrics under their existing settings. Metrics-disabled
+requests, rejected admission, and cancelled work still waiting to start do not
+consume it. The claim occurs after the response-start boundary is pushed and
+admission is rechecked, immediately before constructing the provider stream.
+
+Without initial-only reporting, requests continue reporting until an initial-only
+request exhausts the instance. Start, interruption, end and cancellation do not
+rearm it; switching the setting back to false also does not revive an exhausted
+instance. A new processor has an independent allowance. Out-of-band inference and
+realtime audio services are unchanged.
+
+This implements the reporting switch at the native request-start boundary. It
+does not align all Python providers' parameter-validation failure positions or
+change native cancellation to manufacture a TTFB measurement when no accepted
+output was observed.

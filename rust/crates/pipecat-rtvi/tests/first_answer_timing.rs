@@ -1,6 +1,6 @@
 //! First answer timing through local HTTP/SSE, the real LLM processor, and RTVI.
 //! Gates observe accepted pipeline output, never raw provider arrival timestamps.
-//! These tests qualify every-request timing; initial-only timing is not claimed.
+//! Both every-request and processor-lifetime initial-only timing are qualified.
 use pipecat_core::{
     ChatMessage, ChatRole, Direction, Frame, FrameData, FunctionCall, LlmContinuationBlock,
     LlmContinuationProvider, MessagesFrame, Metric, NativeLlmContinuation,
@@ -26,7 +26,8 @@ use tokio::{
 // Retain every source test in the prior 66-test Gemini and 98-test provider
 // graphs without copying bodies. The 15 HTTP and 22 protocol tests shared by
 // those graphs are loaded once through the provider graph: 127 unique prior
-// tests plus the 11 tests below, for 138 distinct source tests in this target.
+// tests plus the original 11 tests below retain all 138 prior source functions.
+// Initial-only policy tests below extend that graph without removing coverage.
 #[path = "../../pipecat-services/tests/gemini_first_progress.rs"]
 mod gemini_first_progress_regressions;
 #[path = "../../pipecat-services/tests/review_gemini_part_order.rs"]
@@ -243,18 +244,28 @@ async fn join_peer(mut peer: JoinHandle<TestResult<()>>) -> TestResult<()> {
         }
     }
 }
-async fn start(config: ClientConfig, metrics: bool) -> TestResult<(PipelineWorker, MetricsStream)> {
-    let rtvi = Arc::new(RtviObserver::new(Default::default(), None).map_err(|e| e.to_string())?);
-    let (publisher, stream) = metrics_stream(1024).map_err(str::to_owned)?;
+fn processor(config: ClientConfig) -> TestResult<Arc<LlmProcessor>> {
     let request = CompletionRequest::new(
         "gemini-2.5-fixture",
         Context::new(vec![Message::text(Role::User, "hello")]),
     );
+    Ok(Arc::new(
+        LlmProcessor::new(LlmClient::new(config).map_err(|e| e.to_string())?, request)
+            .with_name(NAME),
+    ))
+}
+async fn start(config: ClientConfig, metrics: bool) -> TestResult<(PipelineWorker, MetricsStream)> {
+    start_processor(processor(config)?, metrics, false).await
+}
+async fn start_processor(
+    processor: Arc<LlmProcessor>,
+    metrics: bool,
+    initial_only: bool,
+) -> TestResult<(PipelineWorker, MetricsStream)> {
+    let rtvi = Arc::new(RtviObserver::new(Default::default(), None).map_err(|e| e.to_string())?);
+    let (publisher, stream) = metrics_stream(1024).map_err(str::to_owned)?;
     let worker = Pipeline::new(vec![
-        Arc::new(
-            LlmProcessor::new(LlmClient::new(config).map_err(|e| e.to_string())?, request)
-                .with_name(NAME),
-        ),
+        processor,
         // Shared taps exercise real forwarding/deduplication, not a fabricated
         // wire record. A native metric must still produce exactly one envelope.
         Arc::new(rtvi.tap("rtvi-first")),
@@ -272,6 +283,7 @@ async fn start(config: ClientConfig, metrics: bool) -> TestResult<(PipelineWorke
         start: StartFrame {
             enable_metrics: metrics,
             enable_usage_metrics: true,
+            report_only_initial_ttfb: initial_only,
             ..Default::default()
         },
         shutdown_timeout: WAIT,
@@ -319,6 +331,11 @@ struct Trace {
     ttfat: Vec<Metric>,
     wire_ttfb: Vec<f64>,
     wire_ttfat: Vec<Value>,
+    processing: Vec<f64>,
+    wire_processing: Vec<f64>,
+    usage: Vec<Metric>,
+    wire_usage: Vec<Value>,
+    starts: usize,
     text: String,
     thought: String,
     calls: Vec<FunctionCall>,
@@ -350,11 +367,37 @@ impl Trace {
                             self.ttfat.push(metric.clone());
                             self.order.push("ttfat");
                         }
+                        Metric::Processing { processor, seconds } => {
+                            finite_nonnegative(*seconds)?;
+                            if processor != NAME {
+                                return Err("wrong Processing owner".into());
+                            }
+                            self.processing.push(*seconds);
+                        }
+                        Metric::LlmUsage { processor, .. } => {
+                            if processor != NAME {
+                                return Err("wrong Usage owner".into());
+                            }
+                            self.usage.push(metric.clone());
+                        }
                         _ => {}
                     }
                 }
             }
             FrameData::OutputTransportMessageUrgent(value) if value["type"] == "metrics" => {
+                if let Some(items) = value["data"]["processing"].as_array() {
+                    for item in items {
+                        if item["processor"] != NAME {
+                            return Err("wrong wire Processing owner".into());
+                        }
+                        let seconds = item["value"].as_f64().ok_or("nonnumeric wire Processing")?;
+                        finite_nonnegative(seconds)?;
+                        self.wire_processing.push(seconds);
+                    }
+                }
+                if let Some(items) = value["data"]["tokens"].as_array() {
+                    self.wire_usage.extend(items.iter().cloned());
+                }
                 if let Some(items) = value["data"]["ttfb"].as_array() {
                     for item in items {
                         let seconds = item["value"].as_f64().ok_or("nonnumeric wire TTFB")?;
@@ -402,6 +445,7 @@ impl Trace {
             }
             FrameData::FunctionCallInProgress(_) => self.order.push("tool-execution"),
             FrameData::Error(error) => self.errors.push(error.error.clone()),
+            FrameData::LlmResponseStart => self.starts += 1,
             FrameData::LlmResponseEnd => self.native_ended = true,
             FrameData::OutputTransportMessageUrgent(value)
                 if value["type"] == "bot-llm-stopped" =>
@@ -438,6 +482,14 @@ impl Trace {
 // Cleanup always joins the pipeline owner and peer, even when a gate or an
 // assertion predicate fails. Timeouts fail the test, never stand in for a join.
 async fn finish(worker: &mut PipelineWorker, cancel: bool, trace: &mut Trace) -> TestResult<()> {
+    finish_with_errors(worker, cancel, trace, 0).await
+}
+async fn finish_with_errors(
+    worker: &mut PipelineWorker,
+    cancel: bool,
+    trace: &mut Trace,
+    expected_errors: usize,
+) -> TestResult<()> {
     let mut errors = vec![];
     let control = if cancel {
         worker.cancel("TTFAT fixture cleanup").await
@@ -465,8 +517,11 @@ async fn finish(worker: &mut PipelineWorker, cancel: bool, trace: &mut Trace) ->
     }
     match timeout(WAIT, worker.join()).await {
         Ok(Ok(report)) => {
-            if !report.errors.is_empty() {
-                errors.push(format!("owner errors: {:?}", report.errors));
+            if report.errors.len() != expected_errors {
+                errors.push(format!(
+                    "expected {expected_errors} owner errors: {:?}",
+                    report.errors
+                ));
             }
         }
         Ok(Err(error)) => errors.push(error.to_string()),
@@ -579,19 +634,29 @@ async fn response(
     }
 }
 async fn fixture(scenario: Scenario, repeats: usize) -> Vec<Trace> {
+    fixture_rounds(vec![scenario; repeats], false).await
+}
+async fn fixture_rounds(scenarios: Vec<Scenario>, initial_only: bool) -> Vec<Trace> {
+    let first = scenarios.first().expect("at least one response");
+    assert!(scenarios
+        .iter()
+        .all(|case| case.provider == first.provider && case.metrics == first.metrics));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let config = config(&listener, scenario.provider);
+    let config = config(&listener, first.provider);
+    let metrics = first.metrics;
     let mut gates = vec![];
     let mut receivers = vec![];
-    for _ in 0..repeats {
+    for _ in &scenarios {
         let (thought_tx, thought_rx) = oneshot::channel();
         let (answer_tx, answer_rx) = oneshot::channel();
         gates.push((thought_tx, answer_tx));
         receivers.push((thought_rx, answer_rx));
     }
-    let peer_case = scenario.clone();
+    let peer_cases = scenarios.clone();
     let peer = tokio::spawn(async move {
-        for (round, (thought_gate, answer_gate)) in receivers.into_iter().enumerate() {
+        for (round, (peer_case, (thought_gate, answer_gate))) in
+            peer_cases.into_iter().zip(receivers).enumerate()
+        {
             let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
             let body = read_request(&mut socket).await?;
             if round > 0 && peer_case.tool_continuation {
@@ -613,17 +678,20 @@ async fn fixture(scenario: Scenario, repeats: usize) -> Vec<Trace> {
         }
         Ok(())
     });
-    let (mut worker, mut stream) = match start(config, scenario.metrics).await {
-        Ok(started) => started,
-        Err(error) => {
-            drop(gates);
-            let peer = join_peer(peer).await;
-            panic!("start={error}; peer={peer:?}");
-        }
-    };
+    let (mut worker, mut stream) =
+        match start_processor(processor(config).unwrap(), metrics, initial_only).await {
+            Ok(started) => started,
+            Err(error) => {
+                drop(gates);
+                let peer = join_peer(peer).await;
+                panic!("start={error}; peer={peer:?}");
+            }
+        };
     let mut traces = vec![];
     let outcome = timeout(WAIT, async {
-        for (round, (thought_gate, answer_gate)) in gates.into_iter().enumerate() {
+        for (round, (scenario, (thought_gate, answer_gate))) in
+            scenarios.into_iter().zip(gates).enumerate()
+        {
             let input = if round > 0 && scenario.tool_continuation {
                 tool_continuation(traces.last().ok_or("missing first tool round")?)?
             } else {
@@ -1352,4 +1420,460 @@ async fn real_metrics_observer_accepts_valid_breakdowns_and_rejects_each_invalid
         "forwarded metrics must not be counted twice"
     );
     assert_eq!(stream.stats().dropped, 0);
+}
+
+fn usage_record(provider: Provider) -> Value {
+    match provider {
+        Provider::OpenAi => {
+            json!({"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}})
+        }
+        Provider::Anthropic => {
+            json!({"type":"message_delta","delta":{},"usage":{"input_tokens":2,"output_tokens":3}})
+        }
+        Provider::Gemini => {
+            json!({"candidates":[],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":3,"totalTokenCount":5}})
+        }
+    }
+}
+fn text_case(provider: Provider, text: &str) -> Scenario {
+    let (answer, mut tail) = match provider {
+        Provider::OpenAi => (vec![choice(json!({"content":text}))], vec![]),
+        Provider::Anthropic => (
+            vec![block(0, json!({"type":"text","text":text}))],
+            vec![stop_block(0)],
+        ),
+        Provider::Gemini => (vec![candidate(json!([{"text":text}]))], vec![]),
+    };
+    tail.push(usage_record(provider));
+    Scenario::answer(provider, answer, tail)
+}
+fn assert_suppressed(trace: &Trace) {
+    assert!(
+        trace.ttfb.is_empty()
+            && trace.ttfat.is_empty()
+            && trace.wire_ttfb.is_empty()
+            && trace.wire_ttfat.is_empty(),
+        "initial-only timing escaped its lifetime allowance: {trace:?}"
+    );
+}
+fn assert_finished_accounting(trace: &Trace, metrics: bool) {
+    assert_eq!(trace.starts, 1, "{trace:?}");
+    assert!(trace.native_ended && trace.wire_ended, "{trace:?}");
+    assert_eq!(trace.processing.len(), usize::from(metrics), "{trace:?}");
+    assert_eq!(trace.wire_processing, trace.processing, "{trace:?}");
+    assert_eq!(
+        trace.usage,
+        vec![Metric::LlmUsage {
+            processor: NAME.into(),
+            prompt_tokens: 2,
+            completion_tokens: 3,
+            total_tokens: 5,
+        }],
+        "{trace:?}"
+    );
+    assert_eq!(
+        trace.wire_usage,
+        vec![json!({"prompt_tokens":2,"completion_tokens":3,"total_tokens":5})],
+        "{trace:?}"
+    );
+    assert!(trace.errors.is_empty(), "{trace:?}");
+}
+
+#[tokio::test]
+async fn initial_only_reports_first_request_and_preserves_later_content_processing_and_usage() {
+    for provider in [Provider::OpenAi, Provider::Anthropic, Provider::Gemini] {
+        let first = text_case(provider, "answer");
+        let mut later = first.clone();
+        // A suppressed metric cannot unlock a provider gate. Full terminal
+        // receipt, owner join and the observer drain prove its absence instead.
+        later.gate_answer = false;
+        let traces = fixture_rounds(vec![first, later.clone(), later], true).await;
+        traces[0].assert_answer();
+        for trace in &traces[1..] {
+            assert_suppressed(trace);
+        }
+        for trace in traces {
+            assert_eq!(trace.text, "answer");
+            assert_finished_accounting(&trace, true);
+        }
+    }
+}
+
+#[tokio::test]
+async fn initial_only_thought_only_request_consumes_the_allowance_without_answer_timing() {
+    for provider in [Provider::OpenAi, Provider::Anthropic, Provider::Gemini] {
+        let records = match provider {
+            Provider::OpenAi => vec![choice(json!({"reasoning_content":"plan"}))],
+            Provider::Anthropic => vec![
+                block(
+                    0,
+                    json!({"type":"thinking","thinking":"plan","signature":"signed"}),
+                ),
+                stop_block(0),
+            ],
+            Provider::Gemini => vec![candidate(json!([{"text":"plan","thought":true}]))],
+        };
+        let mut first = Scenario::answer(provider, records, vec![usage_record(provider)]);
+        first.gate_answer = false;
+        let mut later = text_case(provider, "answer");
+        later.gate_answer = false;
+        let traces = fixture_rounds(vec![first, later], true).await;
+        let thought = &traces[0];
+        assert_eq!(thought.ttfb.len(), 1, "{thought:?}");
+        assert_eq!(thought.wire_ttfb, thought.ttfb);
+        assert!(thought.ttfat.is_empty() && thought.wire_ttfat.is_empty());
+        assert_eq!(thought.thought, "plan");
+        assert!(thought.text.is_empty() && thought.calls.is_empty());
+        assert_eq!(
+            thought.checkpoints.len(),
+            usize::from(provider == Provider::Anthropic)
+        );
+        assert_suppressed(&traces[1]);
+        assert_eq!(traces[1].text, "answer");
+        for trace in traces {
+            assert_finished_accounting(&trace, true);
+        }
+    }
+}
+
+#[tokio::test]
+async fn initial_only_partial_tool_times_first_round_and_suppresses_verified_tool_followup() {
+    for provider in [Provider::OpenAi, Provider::Anthropic] {
+        let (answer, mut tail) = match provider {
+            Provider::OpenAi => (
+                vec![choice(
+                    json!({"tool_calls":[{"index":0,"id":"tool-1","type":"function","function":{"name":"weather","arguments":"{\"city\":"}}]}),
+                )],
+                vec![choice(
+                    json!({"tool_calls":[{"index":0,"function":{"arguments":"\"Paris\"}"}}]}),
+                )],
+            ),
+            Provider::Anthropic => (
+                vec![
+                    block(
+                        0,
+                        json!({"type":"tool_use","id":"tool-1","name":"weather","input":{}}),
+                    ),
+                    json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}),
+                ],
+                vec![
+                    json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\"Paris\"}"}}),
+                    stop_block(0),
+                ],
+            ),
+            Provider::Gemini => unreachable!(),
+        };
+        tail.push(usage_record(provider));
+        let first = Scenario::answer(provider, answer, tail);
+        let mut second = text_case(provider, "weather is 18");
+        second.gate_answer = false;
+        second.tool_continuation = true;
+        let traces = fixture_rounds(vec![first, second], true).await;
+        traces[0].assert_answer();
+        assert_eq!(
+            traces[0].calls,
+            vec![FunctionCall {
+                function_name: "weather".into(),
+                tool_call_id: "tool-1".into(),
+                arguments: json!({"city":"Paris"}),
+            }]
+        );
+        let position = |event| {
+            traces[0]
+                .order
+                .iter()
+                .position(|item| *item == event)
+                .unwrap()
+        };
+        assert!(position("wire-ttfat") < position("tool"));
+        assert_suppressed(&traces[1]);
+        assert_eq!(traces[1].text, "weather is 18");
+        assert!(traces[1].calls.is_empty());
+        for trace in traces {
+            assert_finished_accounting(&trace, true);
+        }
+    }
+}
+
+#[tokio::test]
+async fn initial_only_started_http_failure_consumes_allowance_before_any_provider_progress() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = config(&listener, Provider::OpenAi);
+    let peer = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
+        read_request(&mut socket).await?;
+        write(
+            &mut socket,
+            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await?;
+        drop(socket);
+        let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
+        read_request(&mut socket).await?;
+        let body = [
+            wire(&[
+                choice(json!({"content":"recovered"})),
+                usage_record(Provider::OpenAi),
+            ]),
+            terminal(Provider::OpenAi),
+        ]
+        .concat();
+        header(&mut socket, body.len()).await?;
+        write(&mut socket, &body).await
+    });
+    let (mut worker, mut stream) = start_processor(processor(config).unwrap(), true, true)
+        .await
+        .unwrap();
+    let mut failed = Trace::default();
+    let mut recovered = Trace::default();
+    let outcome = timeout(WAIT, async {
+        send(&worker, FrameData::LlmRun).await?;
+        response(&mut worker, &mut failed, None, None).await?;
+        send(&worker, FrameData::LlmRun).await?;
+        response(&mut worker, &mut recovered, None, None).await
+    })
+    .await;
+    let mut cleanup = Trace::default();
+    let owner = finish_with_errors(
+        &mut worker,
+        !matches!(&outcome, Ok(Ok(()))),
+        &mut cleanup,
+        1,
+    )
+    .await;
+    let peer = join_peer(peer).await;
+    assert!(
+        matches!(&outcome, Ok(Ok(()))),
+        "response={outcome:?}; owner={owner:?}; peer={peer:?}"
+    );
+    owner.unwrap();
+    peer.unwrap();
+    assert_suppressed(&failed);
+    assert_eq!(failed.starts, 1);
+    assert!(failed.native_ended && failed.wire_ended);
+    assert_eq!(failed.errors.len(), 1, "{failed:?}");
+    assert!(failed.errors[0].contains("503"), "{failed:?}");
+    assert_eq!(failed.processing.len(), 1, "{failed:?}");
+    assert_eq!(failed.wire_processing, failed.processing);
+    assert!(failed.text.is_empty() && failed.usage.is_empty() && failed.wire_usage.is_empty());
+    assert_suppressed(&recovered);
+    assert_eq!(recovered.text, "recovered");
+    assert_finished_accounting(&recovered, true);
+    assert_suppressed(&cleanup);
+    assert!(observed_ttfat(&mut stream).is_empty());
+}
+
+#[tokio::test]
+async fn initial_only_started_interruption_never_rearms_before_or_after_first_answer() {
+    // Stage zero cancels an accepted HTTP request before any provider progress.
+    // The other stages prove an interruption does not rearm thought/answer work.
+    for stage in 0..3 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let config = config(&listener, Provider::OpenAi);
+        let (accepted_tx, accepted_rx) = oneshot::channel();
+        let (closed_tx, closed_rx) = oneshot::channel();
+        let peer = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            read_request(&mut socket).await?;
+            header(&mut socket, 1_000_000).await?;
+            let records = match stage {
+                0 => vec![],
+                1 => vec![choice(json!({"reasoning_content":"old-plan"}))],
+                _ => vec![choice(json!({"content":"old-answer"}))],
+            };
+            write(&mut socket, &wire(&records)).await?;
+            accepted_tx
+                .send(())
+                .map_err(|_| "owner dropped HTTP acceptance gate")?;
+            closed(&mut socket).await?;
+            closed_tx
+                .send(())
+                .map_err(|_| "owner dropped HTTP close gate")?;
+            let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            read_request(&mut socket).await?;
+            let body = [
+                wire(&[
+                    choice(json!({"content":"new-answer"})),
+                    usage_record(Provider::OpenAi),
+                ]),
+                terminal(Provider::OpenAi),
+            ]
+            .concat();
+            header(&mut socket, body.len()).await?;
+            write(&mut socket, &body).await
+        });
+        let (mut worker, mut stream) = start_processor(processor(config).unwrap(), true, true)
+            .await
+            .unwrap();
+        let mut old = Trace::default();
+        let mut new = Trace::default();
+        let outcome = timeout(WAIT, async {
+            send(&worker, FrameData::LlmRun).await?;
+            accepted_rx
+                .await
+                .map_err(|_| "HTTP request never started")?;
+            loop {
+                let frame = worker
+                    .recv()
+                    .await
+                    .ok_or("EOF before cancellation boundary")?;
+                if old.record(&frame.frame)? {
+                    return Err("old response ended before interruption".into());
+                }
+                if match stage {
+                    0 => old.starts == 1,
+                    1 => !old.thought.is_empty(),
+                    _ => !old.wire_ttfat.is_empty() && !old.text.is_empty(),
+                } {
+                    break;
+                }
+            }
+            send(&worker, FrameData::Interruption).await?;
+            loop {
+                let frame = worker
+                    .recv()
+                    .await
+                    .ok_or("EOF before interruption acknowledgement")?;
+                old.record(&frame.frame)?;
+                if matches!(frame.frame.data, FrameData::Interruption) {
+                    break;
+                }
+            }
+            closed_rx
+                .await
+                .map_err(|_| "peer did not witness cancelled HTTP request")?;
+            send(&worker, FrameData::LlmRun).await?;
+            response(&mut worker, &mut new, None, None).await
+        })
+        .await;
+        let mut cleanup = Trace::default();
+        let owner = finish(&mut worker, !matches!(&outcome, Ok(Ok(()))), &mut cleanup).await;
+        let peer = join_peer(peer).await;
+        assert!(
+            matches!(&outcome, Ok(Ok(()))),
+            "stage={stage}; response={outcome:?}; owner={owner:?}; peer={peer:?}"
+        );
+        owner.unwrap();
+        peer.unwrap();
+        assert_eq!(old.starts, 1);
+        assert_eq!(old.ttfb.len(), usize::from(stage > 0), "{old:?}");
+        assert_eq!(old.wire_ttfb, old.ttfb);
+        assert_eq!(old.ttfat.len(), usize::from(stage == 2), "{old:?}");
+        assert_eq!(
+            old.wire_ttfat,
+            old.ttfat
+                .iter()
+                .map(|metric| breakdown(metric).unwrap())
+                .collect::<Vec<_>>()
+        );
+        assert!(old.processing.is_empty() && old.wire_processing.is_empty());
+        assert!(old.usage.is_empty() && old.wire_usage.is_empty());
+        assert!(
+            !old.native_ended && !old.wire_ended,
+            "cancellation must not synthesize a completion: {old:?}"
+        );
+        assert!(old.errors.is_empty());
+        assert_eq!(old.thought, if stage == 1 { "old-plan" } else { "" });
+        assert_eq!(old.text, if stage == 2 { "old-answer" } else { "" });
+        assert_suppressed(&new);
+        assert_eq!(new.text, "new-answer");
+        assert_finished_accounting(&new, true);
+        assert_suppressed(&cleanup);
+        assert_eq!(observed_ttfat(&mut stream), old.ttfat);
+    }
+}
+
+#[tokio::test]
+async fn initial_only_allowance_survives_end_cancel_and_mode_switches_on_the_same_processor() {
+    // Each tuple is (metrics enabled, initial only, cancel after response,
+    // expected timing). These are new Pipelines sharing one ordinary processor,
+    // not a restart of a closed worker or an unsupported second Start frame.
+    let modes = [
+        (false, true, false, false),
+        (true, false, false, true),
+        (true, false, true, true),
+        (true, true, true, true),
+        (true, false, false, false),
+        (false, false, true, false),
+        (true, true, false, false),
+        // A distinct processor instance retains its own initial allowance.
+        (true, true, false, true),
+    ];
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = config(&listener, Provider::OpenAi);
+    let shared = processor(config.clone()).unwrap();
+    let independent = processor(config).unwrap();
+    assert!(!Arc::ptr_eq(&shared, &independent));
+    let peer = tokio::spawn(async move {
+        for _ in modes {
+            let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            read_request(&mut socket).await?;
+            let body = [
+                wire(&[
+                    choice(json!({"content":"answer"})),
+                    usage_record(Provider::OpenAi),
+                ]),
+                terminal(Provider::OpenAi),
+            ]
+            .concat();
+            header(&mut socket, body.len()).await?;
+            write(&mut socket, &body).await?;
+        }
+        Ok(())
+    });
+    let outcome = async {
+        let mut traces = vec![];
+        for (round, (metrics, initial_only, cancel, _)) in modes.into_iter().enumerate() {
+            let llm = if round == modes.len() - 1 {
+                independent.clone()
+            } else {
+                shared.clone()
+            };
+            let (mut worker, mut stream) = start_processor(llm, metrics, initial_only).await?;
+            let mut trace = Trace::default();
+            let response_outcome = timeout(WAIT, async {
+                send(&worker, FrameData::LlmRun).await?;
+                response(&mut worker, &mut trace, None, None).await
+            })
+            .await;
+            let mut cleanup = Trace::default();
+            let owner = finish(
+                &mut worker,
+                cancel || !matches!(&response_outcome, Ok(Ok(()))),
+                &mut cleanup,
+            )
+            .await;
+            if !matches!(&response_outcome, Ok(Ok(()))) {
+                return Err(format!(
+                    "round={round}; response={response_outcome:?}; owner={owner:?}"
+                ));
+            }
+            owner?;
+            if !cleanup.ttfb.is_empty()
+                || !cleanup.ttfat.is_empty()
+                || !cleanup.wire_ttfb.is_empty()
+                || !cleanup.wire_ttfat.is_empty()
+            {
+                return Err(format!("delayed timing after terminal: {cleanup:?}"));
+            }
+            if observed_ttfat(&mut stream) != trace.ttfat {
+                return Err("observer lost or duplicated initial-only timing".into());
+            }
+            traces.push(trace);
+        }
+        Ok::<_, String>(traces)
+    }
+    .await;
+    let peer = join_peer(peer).await;
+    assert!(outcome.is_ok(), "responses={outcome:?}; peer={peer:?}");
+    peer.unwrap();
+    for (trace, (metrics, _, _, reports)) in outcome.unwrap().into_iter().zip(modes) {
+        if reports {
+            trace.assert_answer();
+        } else {
+            assert_suppressed(&trace);
+        }
+        assert_eq!(trace.text, "answer");
+        assert_finished_accounting(&trace, metrics);
+    }
 }
