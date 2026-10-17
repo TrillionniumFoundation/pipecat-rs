@@ -339,3 +339,8 @@ existing dispatcher lifecycle and lineage regressions. These are source-behavior
 mappings, not a claim of Python callback or
 wire-schema compatibility. OpenTelemetry/Sentry exporters, raw-content loggers,
 external-function adapters and dynamic registration remain outside this slice.
+
+Core `Metric::Ttfat` frames are forwarded by `MetricsObserver` only when all
+three timing components are finite and nonnegative. `MeasureMetric::Ttfat` and
+`ServiceMetrics` retain their existing API and semantics; the repeated TTFB
+component should not be aggregated as an additional measurement.

@@ -158,6 +158,15 @@ impl RtviObserver {
         frame: &Frame,
         observation: Observation<'_>,
     ) -> Result<Vec<Envelope>, ProcessorError> {
+        // A validated checkpoint carries local provider history, not a client
+        // event. Preserve it for its aggregator without attempting the wire
+        // serialization that this native-only frame explicitly forbids.
+        if matches!(frame.data, FrameData::LlmContinuationCheckpoint) {
+            frame
+                .native_llm_continuation()
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
+            return Ok(vec![]);
+        }
         // Source receipts must reach their aggregator before client projection;
         // otherwise projection would silently shed their pending authority.
         // Provisional prompts and unconsumed tools likewise stay local.
@@ -810,6 +819,15 @@ fn metrics_data(metrics: &[Metric], usage: Option<&Value>) -> Map<String, Value>
             Metric::Ttfb { processor, seconds } => {
                 ("ttfb", json!({"processor":processor,"value":seconds}))
             }
+            Metric::Ttfat {
+                processor,
+                ttfat,
+                ttfb,
+                thinking_time,
+            } => (
+                "ttfat",
+                json!({"processor":processor,"ttfat":ttfat,"ttfb":ttfb,"thinking_time":thinking_time}),
+            ),
             Metric::Processing { processor, seconds } => {
                 ("processing", json!({"processor":processor,"value":seconds}))
             }

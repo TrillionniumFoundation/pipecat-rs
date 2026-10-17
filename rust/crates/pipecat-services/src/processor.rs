@@ -675,7 +675,8 @@ async fn process_completion(
     ctx: CompletionOutput,
 ) -> Result<(), ProcessorError> {
     let started = Instant::now();
-    let mut ttfb_reported = false;
+    let mut first_output_elapsed = None;
+    let mut answer_reported = false;
     let mut thinking = false;
     let mut explicit_thinking = false;
     let mut failed = false;
@@ -721,7 +722,11 @@ async fn process_completion(
         }
     };
     while let Some(event) = stream.next().await {
-        if !ttfb_reported
+        // Capture this event before any output await. Publishing TTFB must not
+        // inflate the same event's answer-time breakdown. This is processor
+        // observation time, not a raw network-arrival timestamp.
+        let elapsed = started.elapsed();
+        if first_output_elapsed.is_none()
             && matches!(
                 &event,
                 Ok(StreamEvent::ResponseProgress
@@ -730,12 +735,38 @@ async fn process_completion(
                     | StreamEvent::ToolCall(_))
             )
         {
-            ttfb_reported = true;
+            first_output_elapsed = Some(elapsed);
             if ctx.configuration().enable_metrics {
                 ctx.push(
                     Frame::new(FrameData::Metrics(vec![Metric::Ttfb {
                         processor: ctx.name().into(),
-                        seconds: started.elapsed().as_secs_f64(),
+                        seconds: elapsed.as_secs_f64(),
+                    }])),
+                    Direction::Downstream,
+                )
+                .await?;
+            }
+        }
+        if !answer_reported
+            && matches!(
+                &event,
+                Ok(StreamEvent::TextDelta(_)
+                    | StreamEvent::ToolCallDelta { .. }
+                    | StreamEvent::ToolCall(_))
+            )
+        {
+            // A tool start answers while arguments are still incomplete. This
+            // measurement never admits or executes a tool. Empty text deltas
+            // remain valid answers where the provider emits them.
+            answer_reported = true;
+            if let Some(first) = first_output_elapsed.filter(|_| ctx.configuration().enable_metrics)
+            {
+                ctx.push(
+                    Frame::new(FrameData::Metrics(vec![Metric::Ttfat {
+                        processor: ctx.name().into(),
+                        ttfat: elapsed.as_secs_f64(),
+                        ttfb: first.as_secs_f64(),
+                        thinking_time: elapsed.saturating_sub(first).as_secs_f64(),
                     }])),
                     Direction::Downstream,
                 )

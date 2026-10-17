@@ -4173,6 +4173,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "pipecat-core",
+ "pipecat-observers",
  "pipecat-protocol",
  "pipecat-services",
  "pipecat-text",

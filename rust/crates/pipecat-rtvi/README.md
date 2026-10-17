@@ -154,3 +154,20 @@ schema, fallback, accounting differences and qualification scope.
 Bounded mono PCM16 audio levels can be enabled with `with_audio_levels`.
 See [AUDIO_LEVELS.md](AUDIO_LEVELS.md) for the shared BS.1770 meter, supported
 rates, monotonic reporting, validation bounds and fixed-source differences.
+
+### First answer timing compatibility
+
+Metrics messages can now include `data.ttfat`, an array of objects with
+`processor`, `ttfat`, `ttfb` and `thinking_time` fields. The three numeric fields
+are seconds, not a nested `value`. The repeated TTFB is not a second measurement.
+The core `Metric::Ttfat` enum variant is additive on the wire but requires updates
+to exhaustive Rust matches and older strict serde consumers; this is not an
+unconditional backwards-compatibility guarantee. Existing metric variants and
+RTVI keys retain their representations. Ordinary LLM timing is per inference,
+including a separate tool-result continuation, rather than per user turn.
+
+Native LLM continuation checkpoints have no RTVI projection. The observer validates
+their attached native carrier and leaves the frame untouched for downstream
+aggregators; missing or mismatched carriers still fail. Checkpoints remain
+non-serializable at wire boundaries. This also applies when sharing an observer
+across multiple frame-preserving taps.

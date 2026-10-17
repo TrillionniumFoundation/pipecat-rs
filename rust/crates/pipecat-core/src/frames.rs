@@ -1249,6 +1249,14 @@ pub enum Metric {
         processor: String,
         seconds: f64,
     },
+    /// First answer text or tool-call start for one inference. The repeated
+    /// TTFB is a breakdown component, not another independent observation.
+    Ttfat {
+        processor: String,
+        ttfat: f64,
+        ttfb: f64,
+        thinking_time: f64,
+    },
     Processing {
         processor: String,
         seconds: f64,

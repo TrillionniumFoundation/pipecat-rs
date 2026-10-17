@@ -177,6 +177,14 @@ fn valid_metric(metric: &Metric) -> bool {
         Metric::Ttfb { seconds, .. } | Metric::Processing { seconds, .. } => {
             seconds.is_finite() && *seconds >= 0.0
         }
+        Metric::Ttfat {
+            ttfat,
+            ttfb,
+            thinking_time,
+            ..
+        } => [ttfat, ttfb, thinking_time]
+            .into_iter()
+            .all(|value| value.is_finite() && *value >= 0.0),
         Metric::SttUsage { audio_seconds, .. } => {
             audio_seconds.is_finite() && *audio_seconds >= 0.0
         }

@@ -422,3 +422,23 @@ SSE history, native continuation carriers and the assistant context, then replay
 it unchanged in the next Anthropic request. They produce no thought or speech
 text. See [the redacted-history contract](ANTHROPIC_REDACTED.md) for bounds,
 checkpoint ownership, unsupported destinations and source differences.
+
+### First answer timing
+
+Ordinary `LlmProcessor` completions report `Metric::Ttfat` once per inference,
+when the first accepted text delta (including an empty or whitespace delta from
+providers that emit one) or tool-call start is observed. Partial tool arguments
+end this timing without authorizing or executing the tool; the existing complete
+call validation and admission still apply. Thought-only, usage-only and terminal
+events do not fabricate an answer measurement. A tool continuation is a separate
+inference with its own timing state.
+
+`ttfat`, `ttfb` and `thinking_time` are seconds on the same request timeline;
+`thinking_time` is the interval between first model output and first answer.
+The repeated `ttfb` is a breakdown component, not an additional observation.
+This measures observation by the processor, including prior local queue delay,
+not raw provider network arrival or proven model reasoning time. The event time
+is captured before that event's output awaits so its own TTFB publication does
+not inflate the answer breakdown. Metrics-disabled requests emit neither timing.
+Existing per-inference reporting remains: `report_only_initial_ttfb` is not yet
+implemented by this processor. Realtime audio services are unchanged.
