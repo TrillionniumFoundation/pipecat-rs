@@ -18,6 +18,7 @@ mod empty;
 mod encoded_file;
 mod encoded_image;
 mod tool_history;
+mod tool_progress;
 pub use eager::{EagerEndOfTurn, EagerMatchPolicy, EagerUserTurnConfig};
 mod idle;
 mod realtime;
@@ -317,6 +318,16 @@ impl LLMContextAggregatorPair {
     ) -> Result<RealtimeUserHistoryEndpoint, ProcessorError> {
         self.assistant.validate_history_configuration()?;
         self.user.reserve_history()
+    }
+    /// Bind this actual standard pair to one selected native tool-progress route.
+    /// Binding is opt-in, before either half is used; user-prefix receipts remain
+    /// a separate, tool-free protocol and cannot share this route.
+    pub fn bind_tool_progress(
+        &self,
+        route: pipecat_core::NativeToolProgressRoute,
+    ) -> Result<(), ProcessorError> {
+        self.assistant.validate_history_configuration()?;
+        self.user.bind_tool_progress(route)
     }
     pub fn context(&self) -> SharedContext {
         self.context.clone()

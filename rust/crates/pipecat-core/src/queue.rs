@@ -126,6 +126,11 @@ impl FrameQueue {
         item: DirectedFrame,
         origin_generation: Option<u64>,
     ) -> Result<(), (QueueError, Box<DirectedFrame>)> {
+        // Reject this item before touching interruption epochs, lane state or
+        // queued payloads. Keep the legacy QueueError surface unchanged.
+        if item.frame.validate_selected_tool_authority().is_err() {
+            return Err((QueueError::Closed, Box::new(item)));
+        }
         let mut queues = self.queues.lock().unwrap();
         if queues.closed {
             return Err((QueueError::Closed, Box::new(item)));

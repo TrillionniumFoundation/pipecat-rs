@@ -97,8 +97,9 @@ when an interruption happens during a blocked socket write.
 The standalone client supports PCM, PCMU and PCMA; the frame adapter intentionally
 requires PCM. Plain and lossless text detailed contexts reconcile append-only
 history without recreating server-owned items. Rich multimodal/provider-specific
-contexts, arbitrary replacement and intermediate asynchronous tool continuations
-are explicitly unsupported in the paired frame adapter. Use the standalone
+contexts and arbitrary replacement remain unsupported in the paired frame
+adapter. Intermediate asynchronous tool continuations require the explicit
+selected reporting composition below; they are unsupported on the default path. Use the standalone
 typed client for custom item ownership rather than mixing untracked item actions
 through a processor's sender with its shared-context reconciliation.
 
@@ -173,3 +174,126 @@ carry existing provider cache/audio breakdowns in same-event usage metadata.
 Public low-level mapper output remains unchanged. See
 [USAGE_DETAILS.md](USAGE_DETAILS.md) for the default-output correction, numeric
 validation, nullable/default distinctions, and independent RTVI opt-ins.
+
+
+## Opt-in native tool progress
+
+This feature is off by default. It is a selected native OpenAI Realtime path,
+not a general change to the low-level `Action` API or the existing final-only
+`OpenAiRealtimeToolResultRelay`. Use one shared `NativeToolProgressRoute` with
+all six actual components, in this order, in one pipeline:
+
+1. `OpenAiRealtimeToolProgressGate::new(route.clone())`
+2. The user half of a standard `LLMContextAggregatorPair` in enabled realtime mode
+3. `OpenAiRealtimeProcessor::new(client)?.with_progress_route(route.clone())`
+4. `ToolExecutor::new(...)?.with_progress_route(route.clone())?`
+5. `OpenAiRealtimeToolProgressRelay::new(route.clone())`
+6. The same pair's assistant half, after any output/delivery processors
+
+Call `pair.bind_tool_progress(route.clone())?` before using either half. Each
+component registers its real runtime identity in setup. The provider's Start
+checks ordering, unique roles, shared history and configured budgets before
+connecting, seeding the provider and opening callback admission. Constructing a
+route or copying public frame metadata does not grant reporting authority.
+Missing or incompatible roles fail the selected composition before a callback
+can run. This path does not combine with signed/speculative tool calls or the
+separate tool-free realtime user-prefix receipt protocol.
+
+Register a `pipecat_processors::tools::ReportingTool` through
+`executor.register_reporting(name, ReportingTool::new(callback))?`. The callback
+receives `(FunctionCall, ToolProgressReporter)`, runs in the existing owned tool
+task, and returns the usual final `Result<serde_json::Value, String>`. The original
+`RegisteredTool` struct and `ToolCallback` signature are unchanged; ordinary
+final-only siblings can share the selected executor.
+
+`reporter.report(value, run_llm)` synchronously returns a `ToolProgressReceipt`
+only after that immutable progress event reaches its actual first-hop queue.
+The returned receipt is not a final result or a transport acknowledgment.
+`receipt.await_history().await` waits for the real paired assistant to append
+the canonical history segment; repeated waits see the same fact. Dropping a wait
+does not retract an admitted report. Provider-command admission is recorded
+separately and does not prove a socket write or remote acceptance. A history
+snapshot can overtake a progress frame on the provider's separate queue. In that
+case, the original inference intent waits for those exact provider-queue facts;
+no snapshot or fresh invocation fence is substituted. At most 32 lease intents
+and one global intent are retained, with shared, charged dependency IDs. User
+items and settings still enter their ordinary queue immediately: a history
+commit is not a global ordering guarantee across provider item queues. There is no
+independent Python-style `on_context_updated` callback, per-report task or
+detached follow-on task. History waits and follow-on code consume the callback's
+one original absolute execution deadline.
+
+Progress adds one canonical system-role async-tool context item and leaves the
+call unresolved. The assistant's existing run policy, activity and playback
+gates choose any progress continuation. The provider admits it only with native
+route/call permission and no unresolved interruptible sibling; public action
+flags cannot grant that exception. It retains one active provider response and
+bounded deferred selected continuations, without replaying earlier progress
+items or duplicating the final function-call output. A normal reporting final
+remains separate from progress, even if its JSON value equals the last report.
+
+Selected reporting tools must have `cancel_on_interruption = false`; explicit
+cancellation still stops them. Ordinary interruption preserves admitted history
+facts while invalidating stale inference causes. The first completion, failure,
+timeout or cancellation to freeze the tool lease fixes its terminal choice and
+last admitted ordinal. Both consumers reorder against that watermark before
+accepting the terminal. Cancellation prevents new reports and revokes the
+call's inference permission; it cannot rewrite a final already frozen first or
+turn a genuinely committed history fact into a retraction. Callback effects
+remain unknown once entered and are never automatically retried.
+
+### Limits and shutdown
+
+The selected executor allows at most 16 concurrent slots. Every callback,
+including ordinary siblings, needs a timeout from 1 ms through 300 seconds
+(default 30 seconds). The route bounds active reporting leases at 16, progress
+at 64 events per call and 1024 per session, and pending progress at four events
+per call and 32 per session. Encoded progress JSON is capped at 16 KiB and final
+JSON at 64 KiB. Borrowed iterative guards run before serialization/cloning.
+Terminal capacity is reserved separately (256 KiB per call, 4 MiB aggregate),
+so progress saturation cannot spend the terminal reservation. Canonical history,
+provider ledgers and compact receipt metadata also have finite count/byte bounds;
+these are logical retained-byte limits, not RSS promises. Compact executor
+journal entries keep identity, terminal choice/watermark, effects and first-hop
+admission under the existing 8 MiB budget, without retaining full terminal
+payloads or transport authority.
+
+The ingress gate holds End/EndDetailed. It closes new tool and inference
+admission while already admitted callbacks may report and return within their
+original deadlines. End advances only after actual progress predecessors and
+terminal dispositions at both provider and assistant, not merely after the
+executor journal becomes empty. The default End drain is 35 seconds and must
+cover the largest registered callback timeout plus five seconds.
+
+Set the actual `PipelineConfig.shutdown_timeout` to at least:
+
+`end_drain_timeout + response_timeout + 2 * operation_timeout + close_timeout + 5s`
+
+With default callback and provider settings this is **172 seconds**, so the
+ordinary 30-second pipeline shutdown default is rejected for this composition.
+The provider command limit must also cover 64 KiB messages and its outstanding
+tool capacity must cover the selected executor. Startup validates these limits.
+
+For a prompt selected Stop, call `route.request_stop()?`: it closes report and
+inference admission, cancels actual tool tasks, and has the owned route worker
+forward one Stop, including while End is still held. Once End was forwarded it
+returns `AlreadyEnding` and cannot replace that terminal. A raw
+`PipelineSender` Stop retains its ordinary Normal-lane admission and post-End
+restriction; it does not gain priority over an already queued/held End merely
+because this feature is enabled. Cancel and failure close the route promptly.
+Only a successfully forwarded graceful End uses ordered provider `finish`;
+Stop/Cancel/failure close instead. The selected processor retains the session
+owner so cancellation of the receive task cannot discard the socket actor's join
+handle. Stop preparation and Cancel/failure cleanup reclaim and await that actor;
+ordinary receive completion also awaits it. `selected_session_joined()` is false
+before connection and becomes true only after that actual await, including a
+forced abort followed by an await. It does not distinguish clean shutdown from
+failure or prove remote acceptance. If the pipeline itself forcibly aborts its
+cleanup wait, that interrupted wait does not establish completion. Dropping a
+journal or receipt is not evidence that those tasks joined.
+
+The dedicated `tool_progress` integration target uses real local WebSocket,
+executor, gate, relay and paired-history components, including actual actor joins
+and interruption/terminal-ordering negative controls. This local qualification
+does not establish live provider compatibility. Local admission/history receipts
+do not establish provider acknowledgments or durable exactly-once external effects.

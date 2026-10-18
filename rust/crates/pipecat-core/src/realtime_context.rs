@@ -35,12 +35,16 @@ pub enum RealtimeContextIntent {
 pub struct RealtimeNativeToolSchedulingReason {
     outcome_id: u64,
     cancel_on_interruption: bool,
+    selected_route_id: Option<u64>,
 }
 impl RealtimeNativeToolSchedulingReason {
     pub fn from_outcome(outcome: &crate::NativeToolCallOutcome) -> Self {
         Self {
             outcome_id: outcome.id(),
             cancel_on_interruption: outcome.cancel_on_interruption(),
+            selected_route_id: outcome
+                .progress_terminal()
+                .map(|terminal| terminal.admission().route_id()),
         }
     }
 }
@@ -56,7 +60,7 @@ impl NativeRealtimeContextProducer {
         intent: RealtimeContextIntent,
         run_llm: bool,
     ) -> Result<(), ProcessorError> {
-        self.attach_inner(frame, intent, run_llm, None)
+        self.attach_inner(frame, intent, run_llm, None, Vec::new(), None)
     }
     /// The shared assistant remains the authority for deciding whether a newly
     /// validated native terminal actually creates inference intent.
@@ -70,6 +74,70 @@ impl NativeRealtimeContextProducer {
             RealtimeContextIntent::AssistantContinuation,
             true,
             native_reason,
+            Vec::new(),
+            None,
+        )
+    }
+    /// Selected terminal continuation with its own bounded carrier metadata.
+    /// The compact reason remains Copy and the legacy attachment API is unchanged.
+    pub fn attach_assistant_selected_continuation(
+        &self,
+        frame: &mut Frame,
+        reason: RealtimeNativeToolSchedulingReason,
+        route: &crate::NativeToolProgressRoute,
+    ) -> Result<(), ProcessorError> {
+        if reason.selected_route_id != Some(route.id()) {
+            return Err(ProcessorError::fatal(
+                "selected terminal reason belongs to another route",
+            ));
+        }
+        route.validate_terminal_scheduling_identity(reason.outcome_id)?;
+        self.attach_inner(
+            frame,
+            RealtimeContextIntent::AssistantContinuation,
+            true,
+            Some(reason),
+            Vec::new(),
+            Some(route),
+        )
+    }
+    pub fn attach_assistant_progress_continuation(
+        &self,
+        frame: &mut Frame,
+        reason: RealtimeNativeToolProgressSchedulingReason,
+    ) -> Result<(), ProcessorError> {
+        self.attach_assistant_progress_continuations(frame, vec![reason])
+    }
+    /// One assistant snapshot carries all currently owed alternatives. Each keeps
+    /// its own publication scope; retiring one lease cannot discard another debt.
+    pub fn attach_assistant_progress_continuations(
+        &self,
+        frame: &mut Frame,
+        reasons: Vec<RealtimeNativeToolProgressSchedulingReason>,
+    ) -> Result<(), ProcessorError> {
+        if reasons.is_empty() || reasons.len() > 32 {
+            return Err(ProcessorError::new(
+                "selected progress alternatives must contain 1..=32 entries",
+            ));
+        }
+        for (index, reason) in reasons.iter().enumerate() {
+            if !reason.permission.same_route(&reasons[0].permission)
+                || reasons[..index]
+                    .iter()
+                    .any(|other| other.lease_id == reason.lease_id)
+            {
+                return Err(ProcessorError::new(
+                    "selected progress alternatives conflict",
+                ));
+            }
+        }
+        self.attach_inner(
+            frame,
+            RealtimeContextIntent::AssistantContinuation,
+            true,
+            None,
+            reasons,
+            None,
         )
     }
     fn attach_inner(
@@ -78,10 +146,24 @@ impl NativeRealtimeContextProducer {
         intent: RealtimeContextIntent,
         run_llm: bool,
         native_reason: Option<RealtimeNativeToolSchedulingReason>,
+        progress_reasons: Vec<RealtimeNativeToolProgressSchedulingReason>,
+        selected_route: Option<&crate::NativeToolProgressRoute>,
     ) -> Result<(), ProcessorError> {
-        if frame.native_realtime_context.is_some() || frame.is_realtime_context_update() {
+        if frame.native_realtime_context.is_some()
+            || frame.is_realtime_context_update()
+            || frame.native_tool_progress_context_restricted
+        {
             return Err(ProcessorError::new(
                 "realtime context cause conflicts with existing intent",
+            ));
+        }
+        if native_reason
+            .and_then(|reason| reason.selected_route_id)
+            .is_some()
+            && selected_route.is_none()
+        {
+            return Err(ProcessorError::fatal(
+                "selected terminal context requires its admitted route",
             ));
         }
         if intent == RealtimeContextIntent::AssistantContinuation && !run_llm {
@@ -105,6 +187,53 @@ impl NativeRealtimeContextProducer {
                 return Err(ProcessorError::new("invalid realtime append range"));
             }
         }
+        let selected_context_retained = if progress_reasons.is_empty() && selected_route.is_none() {
+            None
+        } else {
+            frame.require_selected_progress_context_authority()?;
+            Some(selected_context_retention(&frame.data)?)
+        };
+        // The seal's separately allocated identity array is shared by all
+        // cause clones, but must be reserved before that first allocation.
+        let direct_identity_bytes = if selected_context_retained.is_some() {
+            match &frame.data {
+                FrameData::LlmContextDetailed(context) => match &context.context.tools {
+                    crate::ToolSet::Direct(tools) => {
+                        if tools.len() > MAX_REALTIME_CONTEXT_TOOL_IDENTITIES {
+                            return Err(ProcessorError::new(
+                                "selected context direct-tool identity limit",
+                            ));
+                        }
+                        tools
+                            .len()
+                            .checked_mul(std::mem::size_of::<LocalToolFunctionIdentity>())
+                            .ok_or_else(|| {
+                                ProcessorError::new(
+                                    "selected context identity reservation overflow",
+                                )
+                            })?
+                    }
+                    _ => 0,
+                },
+                _ => 0,
+            }
+        } else {
+            0
+        };
+        let progress_metadata = if let Some(route) = selected_route {
+            Some(route.reserve_metadata(4096 + direct_identity_bytes)?)
+        } else {
+            progress_reasons
+                .first()
+                .map(|reason| {
+                    reason.permission.reserve_metadata(
+                        4096 + direct_identity_bytes
+                            + progress_reasons.len()
+                                * std::mem::size_of::<RealtimeNativeToolProgressSchedulingReason>(),
+                    )
+                })
+                .transpose()?
+        };
         let direct_tool_identities = retain_direct_tool_identities(&frame.data)?;
         let digest = fingerprint(&frame.data)?;
         let previous = self
@@ -114,12 +243,16 @@ impl NativeRealtimeContextProducer {
             })
             .map_err(|_| ProcessorError::new("realtime context sequence exhausted"))?;
         frame.interruptible = false;
+        frame.native_tool_progress_context_restricted = selected_context_retained.is_some();
         frame.native_realtime_context = Some(Arc::new(NativeRealtimeContextCause {
             producer: self.0.clone(),
             sequence: previous + 1,
             intent,
             run_llm,
             native_reason,
+            progress_reasons: progress_reasons.into(),
+            _progress_metadata: progress_metadata,
+            selected_context_retained,
             frame_id: frame.id,
             identity: frame.observation_token(),
             digest,
@@ -137,6 +270,9 @@ pub struct NativeRealtimeContextCause {
     intent: RealtimeContextIntent,
     run_llm: bool,
     native_reason: Option<RealtimeNativeToolSchedulingReason>,
+    progress_reasons: Arc<[RealtimeNativeToolProgressSchedulingReason]>,
+    _progress_metadata: Option<crate::NativeToolProgressMetadataCharge>,
+    selected_context_retained: Option<usize>,
     frame_id: u64,
     identity: FrameObservationToken,
     digest: [u8; 32],
@@ -176,6 +312,26 @@ impl NativeRealtimeContextCause {
     pub fn assistant_native_outcome_id(&self) -> Option<u64> {
         self.native_reason.map(|reason| reason.outcome_id)
     }
+    /// Only a true selected terminal outcome can supply this discriminator.
+    pub fn assistant_selected_native_terminal_route_id(&self) -> Option<u64> {
+        self.native_reason
+            .and_then(|reason| reason.selected_route_id)
+    }
+    pub fn assistant_native_progress_reasons(
+        &self,
+    ) -> &[RealtimeNativeToolProgressSchedulingReason] {
+        &self.progress_reasons
+    }
+    /// Compatibility accessor for a single alternative; bundled callers must use
+    /// assistant_native_progress_reasons rather than choosing one globally.
+    pub fn assistant_native_progress_id(&self) -> Option<u64> {
+        self.progress_reasons.last().map(|reason| reason.event_id)
+    }
+    pub fn progress_permission(&self) -> Option<&crate::NativeToolProgressPermission> {
+        self.progress_reasons
+            .last()
+            .map(|reason| &reason.permission)
+    }
     pub(crate) fn schedules_surviving_native_terminal(&self) -> bool {
         self.native_reason
             .is_some_and(|reason| !reason.cancel_on_interruption)
@@ -201,7 +357,15 @@ impl NativeRealtimeContextCause {
     pub fn inference_fence(&self) -> Option<&InvocationFence> {
         self.fence.get()
     }
-    fn validate(&self, frame: &Frame) -> Result<(), ProcessorError> {
+    pub(crate) fn validate(&self, frame: &Frame) -> Result<(), ProcessorError> {
+        if let Some(retained) = self.selected_context_retained {
+            frame.require_selected_progress_context_authority()?;
+            if selected_context_retention(&frame.data)? > retained {
+                return Err(ProcessorError::fatal(
+                    "selected context retained representation changed",
+                ));
+            }
+        }
         if self.frame_id != frame.id
             || self.identity != frame.observation_token()
             || frame.interruptible
@@ -221,6 +385,10 @@ impl Frame {
     ) -> Result<Option<&Arc<NativeRealtimeContextCause>>, ProcessorError> {
         if let Some(cause) = &self.native_realtime_context {
             cause.validate(self)?;
+        } else if self.native_tool_progress_context_restricted {
+            return Err(ProcessorError::fatal(
+                "selected progress context authority was stripped",
+            ));
         }
         Ok(self.native_realtime_context.as_ref())
     }
@@ -237,7 +405,8 @@ impl Frame {
     ) -> Result<(), ProcessorError> {
         if let Some(cause) = self.native_realtime_context_cause()? {
             if cause.fence.get().is_none() {
-                if let Err(attempted) = cause.fence.set(capture()?) {
+                let captured = capture()?;
+                if let Err(attempted) = cause.fence.set(captured) {
                     if !cause
                         .fence
                         .get()
@@ -590,4 +759,241 @@ mod tests {
             0
         );
     }
+}
+
+/// Separate progress sidecar. It never enters terminal-only local resampling.
+#[derive(Debug, Clone)]
+pub struct RealtimeNativeToolProgressSchedulingReason {
+    event_id: u64,
+    lease_id: u64,
+    fence: Arc<InvocationFence>,
+    _metadata: crate::NativeToolProgressMetadataCharge,
+    permission: crate::NativeToolProgressPermission,
+}
+impl RealtimeNativeToolProgressSchedulingReason {
+    pub fn from_progress(progress: &crate::NativeToolProgress) -> Self {
+        Self {
+            event_id: progress.id(),
+            lease_id: progress.lease_id(),
+            fence: progress.shared_publication_fence(),
+            _metadata: progress.publication_metadata_charge(),
+            permission: progress.admission().permission(),
+        }
+    }
+    pub fn event_id(&self) -> u64 {
+        self.event_id
+    }
+    pub fn lease_id(&self) -> u64 {
+        self.lease_id
+    }
+    pub fn publication_fence(&self) -> &InvocationFence {
+        &self.fence
+    }
+    pub fn permission(&self) -> &crate::NativeToolProgressPermission {
+        &self.permission
+    }
+    pub fn is_allowed(&self) -> bool {
+        self.permission.is_allowed() && self.fence.is_current()
+    }
+}
+
+// Selected scheduling snapshots are checked before core control admission can
+// inspect their public variant. Iterative Value checks precede any serialization.
+fn selected_context_retention(data: &FrameData) -> Result<usize, ProcessorError> {
+    struct Budget(usize);
+    impl Budget {
+        fn add(&mut self, bytes: usize) -> Result<(), ProcessorError> {
+            self.0 = self
+                .0
+                .checked_add(bytes)
+                .filter(|bytes| *bytes <= 1024 * 1024)
+                .ok_or_else(|| ProcessorError::new("selected context retained byte limit"))?;
+            Ok(())
+        }
+        fn string(&mut self, value: &String) -> Result<(), ProcessorError> {
+            self.add(value.capacity())
+        }
+        fn optional(&mut self, value: &Option<String>) -> Result<(), ProcessorError> {
+            if let Some(value) = value {
+                self.string(value)?;
+            }
+            Ok(())
+        }
+        fn vector<T>(&mut self, value: &Vec<T>) -> Result<(), ProcessorError> {
+            if value.len() > 4096 {
+                return Err(ProcessorError::new("selected context collection limit"));
+            }
+            self.add(value.capacity().saturating_mul(std::mem::size_of::<T>()))
+        }
+        fn value(&mut self, value: &serde_json::Value) -> Result<(), ProcessorError> {
+            self.add(crate::tool_progress::measured_json_retention(
+                value,
+                1024 * 1024,
+            )?)
+        }
+        fn calls(&mut self, calls: &Vec<crate::FunctionCall>) -> Result<(), ProcessorError> {
+            self.vector(calls)?;
+            for call in calls {
+                self.string(&call.function_name)?;
+                self.string(&call.tool_call_id)?;
+                self.value(&call.arguments)?;
+            }
+            Ok(())
+        }
+        fn definition(&mut self, tool: &crate::ToolDefinition) -> Result<(), ProcessorError> {
+            self.string(&tool.name)?;
+            self.string(&tool.description)?;
+            self.value(&tool.parameters)
+        }
+        fn definitions(
+            &mut self,
+            tools: &Vec<crate::ToolDefinition>,
+        ) -> Result<(), ProcessorError> {
+            self.vector(tools)?;
+            for tool in tools {
+                self.definition(tool)?;
+            }
+            Ok(())
+        }
+        fn choice(&mut self, choice: &Option<crate::ToolChoice>) -> Result<(), ProcessorError> {
+            if let Some(crate::ToolChoice::Function(name)) = choice {
+                self.string(name)?;
+            }
+            Ok(())
+        }
+        fn content(&mut self, content: &crate::MessageContent) -> Result<(), ProcessorError> {
+            match content {
+                crate::MessageContent::Text(text) => self.string(text)?,
+                crate::MessageContent::Parts(parts) => {
+                    self.vector(parts)?;
+                    for part in parts {
+                        use crate::MessagePart::*;
+                        match part {
+                            BedrockReasoning { text, signature }
+                            | GeminiText {
+                                text, signature, ..
+                            }
+                            | Thinking { text, signature } => {
+                                self.string(text)?;
+                                self.optional(signature)?;
+                            }
+                            BedrockRedacted { data } => self.vector(data)?,
+                            GeminiToolMetadata {
+                                tool_call_id,
+                                signature,
+                            } => {
+                                self.string(tool_call_id)?;
+                                self.optional(signature)?;
+                            }
+                            Text { text } | Refusal { text } => self.string(text)?,
+                            Image { url, detail } => {
+                                self.string(url)?;
+                                self.optional(detail)?;
+                            }
+                            Audio { data, format } => {
+                                self.string(data)?;
+                                self.string(format)?;
+                            }
+                            File {
+                                data,
+                                mime_type,
+                                filename,
+                            } => {
+                                self.string(data)?;
+                                self.string(mime_type)?;
+                                self.optional(filename)?;
+                            }
+                            RedactedThinking { data } => self.string(data)?,
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+        fn tools(&mut self, tools: &crate::ToolSet) -> Result<(), ProcessorError> {
+            match tools {
+                crate::ToolSet::NotGiven => (),
+                crate::ToolSet::Functions(tools) => self.definitions(tools)?,
+                crate::ToolSet::Grouped(groups) => {
+                    self.add(groups.len().saturating_mul(96))?;
+                    for (name, tools) in groups {
+                        self.string(name)?;
+                        self.definitions(tools)?;
+                    }
+                }
+                crate::ToolSet::Direct(tools) => {
+                    self.vector(tools)?;
+                    for tool in tools {
+                        self.definition(&tool.schema)?;
+                    }
+                }
+                crate::ToolSet::Schema(schema) => {
+                    self.vector(&schema.standard_tools)?;
+                    for tool in &schema.standard_tools {
+                        match tool {
+                            crate::StandardTool::Function(tool) => self.definition(tool)?,
+                            crate::StandardTool::Direct(tool) => self.definition(&tool.schema)?,
+                        }
+                    }
+                    if let Some(custom) = &schema.custom_tools {
+                        self.add(custom.len().saturating_mul(96))?;
+                        for tools in custom.values() {
+                            self.vector(tools)?;
+                            for tool in tools {
+                                self.add(tool.len().saturating_mul(96))?;
+                                for (key, value) in tool {
+                                    self.string(key)?;
+                                    self.value(value)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+    let mut budget = Budget(0);
+    match data {
+        FrameData::LlmContext(context) => {
+            if context.messages.len() > 1024 {
+                return Err(ProcessorError::new("selected context message limit"));
+            }
+            budget.vector(&context.messages)?;
+            for message in &context.messages {
+                budget.string(&message.content)?;
+                budget.optional(&message.name)?;
+                budget.optional(&message.tool_call_id)?;
+                budget.calls(&message.tool_calls)?;
+            }
+            budget.definitions(&context.tools)?;
+            budget.choice(&context.tool_choice)?;
+        }
+        FrameData::LlmContextDetailed(context) if !context.speculation => {
+            let context = &context.context;
+            if context.messages.len() > 1024 {
+                return Err(ProcessorError::new("selected context message limit"));
+            }
+            budget.vector(&context.messages)?;
+            for message in &context.messages {
+                budget.content(&message.content)?;
+                budget.optional(&message.name)?;
+                budget.optional(&message.tool_call_id)?;
+                budget.calls(&message.tool_calls)?;
+                budget.add(message.extra.len().saturating_mul(96))?;
+                for (key, value) in &message.extra {
+                    budget.string(key)?;
+                    budget.value(value)?;
+                }
+            }
+            budget.tools(&context.tools)?;
+            budget.choice(&context.tool_choice)?;
+        }
+        _ => {
+            return Err(ProcessorError::fatal(
+                "selected progress context payload family changed",
+            ))
+        }
+    }
+    Ok(budget.0)
 }

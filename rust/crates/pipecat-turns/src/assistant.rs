@@ -48,6 +48,8 @@ struct AssistantState {
     completed: crate::tool_history::ToolTombstones,
     interrupted_declarations: crate::tool_history::ToolTombstones,
     native_tools: crate::tool_history::NativeTools,
+    progress: crate::tool_progress::Consumer,
+    progress_committing: bool,
     declared_tools: crate::tool_history::DeclaredTools,
     signed_declarations: crate::tool_history::DeclaredTools,
     provisional_tools: crate::tool_history::ProvisionalTools,
@@ -58,6 +60,14 @@ struct AssistantState {
     run_owed: bool,
     tool_run_owed: bool,
     pending_native_scheduling: Option<pipecat_core::RealtimeNativeToolSchedulingReason>,
+    pending_progress_scheduling: BTreeMap<
+        u64,
+        (
+            u64,
+            pipecat_core::RealtimeNativeToolProgressSchedulingReason,
+            pipecat_core::NativeToolProgressMetadataCharge,
+        ),
+    >,
     cancelled_run_groups: BTreeSet<String>,
     skip_tts: Option<bool>,
     thought: TextBuffer,
@@ -82,6 +92,7 @@ impl AssistantState {
         self.run_owed = false;
         self.tool_run_owed = false;
         self.pending_native_scheduling = None;
+        self.pending_progress_scheduling.clear();
         self.cancelled_run_groups.clear();
     }
 }
@@ -142,6 +153,8 @@ impl LLMAssistantAggregator {
                 completed: Default::default(),
                 interrupted_declarations: Default::default(),
                 native_tools: Default::default(),
+                progress: Default::default(),
+                progress_committing: false,
                 declared_tools: Default::default(),
                 signed_declarations: Default::default(),
                 provisional_tools: Default::default(),
@@ -152,6 +165,7 @@ impl LLMAssistantAggregator {
                 run_owed: false,
                 tool_run_owed: false,
                 pending_native_scheduling: None,
+                pending_progress_scheduling: BTreeMap::new(),
                 cancelled_run_groups: BTreeSet::new(),
                 skip_tts: None,
                 thought: TextBuffer::default(),
@@ -255,7 +269,10 @@ impl LLMAssistantAggregator {
         Ok(self)
     }
     pub(crate) fn validate_history_configuration(&self) -> Result<(), ProcessorError> {
-        if self.automatic_summary || self.lock()?.ended {
+        if self.automatic_summary || {
+            let state = self.lock()?;
+            state.ended || state.active || state.turn_id != 0 || state.signed_history.is_some()
+        } {
             return Err(ProcessorError::new(
                 "history binding excludes automatic summaries and ended assistant aggregators",
             ));
@@ -375,9 +392,9 @@ impl LLMAssistantAggregator {
             if passive || image.run_llm == Some(false) {
                 let mut context = self.context.lock()?;
                 if busy_context_only && !state.aggregation.text.is_empty() {
-                    context.append_native(Message::text(Role::Assistant, state.aggregation.text.trim().to_owned()));
+                    context.append_native(Message::text(Role::Assistant, state.aggregation.text.trim().to_owned()))?;
                 }
-                if let Some(message) = message { context.append_rich([message]); }
+                if let Some(message) = message { context.append_rich([message])?; }
                 if busy_context_only { state.aggregation.take(); }
             } else {
                 let context = self.context.append_with_prepared_frame(
@@ -407,6 +424,8 @@ impl LLMAssistantAggregator {
         readiness: Option<&crate::playback_ready::Processing>,
     ) -> Result<AggregationOutput, ProcessorError> {
         self.realtime
+            .validate_tool_progress(&self.context, Some(&frame))?;
+        self.realtime
             .history_validate_assistant_control(&frame, direction)?;
         self.realtime.mark_used()?;
         // Revalidate before dispatch or any state mutation, even if a caller
@@ -432,8 +451,75 @@ impl LLMAssistantAggregator {
         {
             return Err(ProcessorError::fatal("realtime assistant inference could not be delivered; rebuild the pair and provider session from retained history"));
         }
-        let native_batch = frame.take_native_tool_batch()?;
-        let native_outcome = frame.take_native_tool_outcome()?;
+        // Inspect every carrier before taking any of them: selected stripping
+        // protection is sticky and removing one marker must not make the next
+        // validation mistake this legitimate frame for a forged raw result.
+        let native_batch = frame.native_tool_batch()?.cloned();
+        let progress_admission = frame.native_tool_progress_admission()?.cloned();
+        let progress = frame.native_tool_progress()?.cloned();
+        let mut native_outcome = frame.native_tool_outcome()?.cloned();
+        let selected = self.realtime.tool_progress_route()?;
+        if progress_admission.is_some()
+            || progress.is_some()
+            || native_outcome
+                .as_ref()
+                .is_some_and(|outcome| outcome.progress_terminal().is_some())
+        {
+            let route = selected.as_ref().ok_or_else(|| {
+                ProcessorError::fatal("selected tool authority requires a bound assistant pair")
+            })?;
+            let cause = cause.ok_or_else(|| {
+                ProcessorError::fatal(
+                    "selected tool history requires the actual assistant processor",
+                )
+            })?;
+            if direction != Direction::Downstream {
+                return Err(ProcessorError::fatal(
+                    "selected tool authority must arrive downstream",
+                ));
+            }
+            let admission = progress_admission
+                .as_ref()
+                .or_else(|| progress.as_ref().map(|progress| progress.admission()))
+                .or_else(|| {
+                    native_outcome.as_ref().and_then(|outcome| {
+                        outcome
+                            .progress_terminal()
+                            .map(|terminal| terminal.admission())
+                    })
+                })
+                .expect("selected carrier has admission")
+                .clone();
+            route.validate_admission(cause, &admission)?;
+            // The short history-admission gate linearizes actual mutation
+            // against selected Stop/Cancel/failure. It is independent from the
+            // inference gate: held End and per-tool cancellation still allow
+            // already admitted truthful progress to commit.
+            let committed = route.with_history_admission(|| {
+                if state.ended {
+                    return Ok(());
+                }
+                state.progress.register(&admission, route)?;
+                if let Some(progress) = progress {
+                    self.selected_progress(&mut state, progress, &mut output, cause)
+                } else if let Some(outcome) = native_outcome.take() {
+                    self.selected_terminal(&mut state, frame.data, outcome, &mut output, cause)
+                } else if let Some(admission) = progress_admission {
+                    self.selected_admission(&mut state, admission, &mut output, cause)
+                } else {
+                    Ok(())
+                }
+            });
+            return committed.unwrap_or(Ok(())).map(|()| output);
+        }
+
+        if selected.is_some() && native_outcome.is_some() {
+            return Err(ProcessorError::fatal(
+                "selected tool terminal is missing its admitted lease",
+            ));
+        }
+        frame.take_native_tool_batch()?;
+        frame.take_native_tool_outcome()?;
         if let Some(outcome) = native_outcome {
             if state.ended {
                 return Ok(output);
@@ -444,7 +530,7 @@ impl LLMAssistantAggregator {
                 ));
             }
             return self
-                .native_result(&mut state, &frame.data, outcome, &mut output)
+                .native_result(&mut state, &frame.data, outcome, &mut output, None)
                 .map(|()| output);
         }
         if let FrameData::AssistantImage(image) = &frame.data {
@@ -533,7 +619,7 @@ impl LLMAssistantAggregator {
                     self.context.lock()?.append_native(Message::text(
                         Role::Assistant,
                         state.aggregation.text.trim().to_owned(),
-                    ));
+                    ))?;
                     state.aggregation.take();
                 }
                 return Ok(output);
@@ -553,9 +639,9 @@ impl LLMAssistantAggregator {
                     context.append_native(Message::text(
                         Role::Assistant,
                         state.aggregation.text.trim().to_owned(),
-                    ));
+                    ))?;
                 }
-                context.append_rich([message]);
+                context.append_rich([message])?;
                 if busy_context_only {
                     state.aggregation.take();
                 }
@@ -632,9 +718,9 @@ impl LLMAssistantAggregator {
                     context.append_native(Message::text(
                         Role::Assistant,
                         state.aggregation.text.trim().to_owned(),
-                    ));
+                    ))?;
                 }
-                context.append_rich([message]);
+                context.append_rich([message])?;
                 if busy_context_only {
                     state.aggregation.take();
                 }
@@ -814,7 +900,7 @@ impl LLMAssistantAggregator {
                     _ => frame.metadata.get("skip_tts").and_then(Value::as_bool),
                 };
                 let awaited = std::mem::take(&mut state.awaiting_user_inference);
-                if !state.llm_active && !awaited {
+                if !state.llm_active && !awaited && selected.is_none() {
                     state.clear_runs();
                 }
                 state.llm_active = true;
@@ -996,7 +1082,7 @@ impl LLMAssistantAggregator {
                     .collect();
                 for call in cancel {
                     state.provisional_tools.insert(call.clone(), self.context.lock()?.lineage, true)?;
-                    self.cancel_call(&mut state, &call.tool_call_id)?;
+                    self.cancel_call(&mut state, &call.tool_call_id, None)?;
                 }
                 let declarations: Vec<_> = state
                     .pending
@@ -1043,6 +1129,7 @@ impl LLMAssistantAggregator {
                     output.actions.push(crate::AggregationAction::AssistantStopped(hub.terminal(reason)));
                 }
                 state.native_tools.clear();
+                state.progress = Default::default();
                 state.declared_tools.clear();
                 state.signed_declarations.clear();
                 state.provisional_tools.clear();
@@ -1118,12 +1205,15 @@ impl LLMAssistantAggregator {
                     }
                 }
             }
-            FrameData::FunctionCallInProgress(call) => self.start_call(&mut state, call)?,
+            FrameData::FunctionCallInProgress(call) => {
+                if selected.is_some() { return Err(ProcessorError::fatal("selected tool start requires its real lease admission")); }
+                self.start_call(&mut state, call)?;
+            },
             FrameData::FunctionCallResult(result) => {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
                     return Err(ProcessorError::new("native tool requires its terminal receipt"));
                 }
-                self.result(&mut state, result, None, &mut output)?
+                self.result(&mut state, result, None, &mut output, None)?
             }
             FrameData::FunctionCallResultDetailed(result) => {
                 if state.native_tools.calls.contains_key(&result.tool_call_id) {
@@ -1136,7 +1226,7 @@ impl LLMAssistantAggregator {
                     arguments: result.arguments.clone(), result: result.result.clone(),
                     run_llm: properties.and_then(|properties| properties.run_llm).or(result.run_llm),
                     is_final: properties.is_none_or(|properties| properties.is_final), error: result.error.clone(),
-                }, None, &mut output)?;
+                }, None, &mut output, None)?;
                 if accepted {
                     if let Some(callback) = properties.and_then(|properties| properties.on_context_updated.clone()) {
                         output.actions.push(crate::AggregationAction::ContextUpdated(callback));
@@ -1159,7 +1249,7 @@ impl LLMAssistantAggregator {
                     Self::mark_completed(&mut state, &cancel.tool_call_id);
                     true
                 } else {
-                    self.cancel_call(&mut state, &cancel.tool_call_id)?
+                    self.cancel_call(&mut state, &cancel.tool_call_id, None)?
                 };
                 if existed && cancel.run_llm {
                     if let Some(group) = group.filter(|group| !group.is_empty()) {
@@ -1178,7 +1268,7 @@ impl LLMAssistantAggregator {
             }
             FrameData::LlmMessagesAppend(messages) | FrameData::LlmMessagesUpdate(messages) => {
                 let mut context = self.context.lock()?;
-                context.append_legacy(&messages.messages, matches!(frame.data, FrameData::LlmMessagesUpdate(_)));
+                context.append_legacy(&messages.messages, matches!(frame.data, FrameData::LlmMessagesUpdate(_)))?;
                 drop(context);
                 state.run_owed |= messages.run_llm;
                 self.maybe_run(&mut state, &mut output)?;
@@ -1187,7 +1277,7 @@ impl LLMAssistantAggregator {
                 let mut context = self.context.lock()?;
                 if matches!(frame.data, FrameData::LlmMessagesUpdateDetailed(_)) {
                     context.set_rich(messages.messages.clone());
-                } else { context.append_rich(messages.messages.clone()); }
+                } else { context.append_rich(messages.messages.clone())?; }
                 drop(context);
                 state.run_owed |= messages.run_llm == Some(true);
                 self.maybe_run(&mut state, &mut output)?;
@@ -1268,12 +1358,520 @@ impl LLMAssistantAggregator {
             .native_tools
             .reserve(&calls, context.lineage, Some(batch))
     }
+    fn selected_materialize_batch(
+        &self,
+        state: &mut AssistantState,
+        admission: &pipecat_core::NativeToolProgressAdmission,
+        extra: Option<&ContextMessage>,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let route = self
+            .realtime
+            .tool_progress_route()?
+            .expect("selected route");
+        // Inspect borrowed arguments before cloning policies or serializing a
+        // potentially deep public batch descriptor.
+        for (call, _) in admission.batch().members() {
+            crate::tool_progress::bounded_value(&call.arguments)?;
+        }
+        self.admit_native_batch(state, admission.batch())?;
+        let calls: Vec<_> = admission
+            .batch()
+            .members()
+            .iter()
+            .filter(|(call, _)| {
+                !state
+                    .pending
+                    .get(&call.tool_call_id)
+                    .is_some_and(Option::is_some)
+                    && !state.is_completed(&call.tool_call_id)
+            })
+            .map(|(call, policy)| FunctionCallInProgressFrame {
+                function_name: call.function_name.clone(),
+                tool_call_id: call.tool_call_id.clone(),
+                arguments: call.arguments.clone(),
+                cancel_on_interruption: *policy,
+                group_id: Some(admission.batch().group_id().to_owned()),
+            })
+            .collect();
+        state.pending.check_calls(calls.iter())?;
+        let metadata_bytes = calls.iter().try_fold(0usize, |bytes, call| {
+            bytes
+                .checked_add(
+                    call.tool_call_id.capacity()
+                        + std::mem::size_of::<pipecat_core::NativeToolProgressHistoryCommit>()
+                        + std::mem::size_of::<String>()
+                        + 32,
+                )
+                .ok_or_else(|| ProcessorError::fatal("selected start metadata overflow"))
+        })?;
+        let metadata = if metadata_bytes == 0 {
+            None
+        } else {
+            Some(
+                self.realtime
+                    .tool_progress_route()?
+                    .expect("selected route")
+                    .reserve_metadata(metadata_bytes)?,
+            )
+        };
+        let prepared: Vec<_> = calls
+            .iter()
+            .map(|call| {
+                let declaration = Message::assistant_tool_calls(vec![ToolCall {
+                    id: call.tool_call_id.clone(),
+                    name: call.function_name.clone(),
+                    arguments: call.arguments.clone(),
+                }]);
+                let started = if call.cancel_on_interruption {
+                    tool_message(&call.tool_call_id, "IN_PROGRESS")
+                } else {
+                    async_message(&call.tool_call_id, "started", None)
+                };
+                (declaration, started)
+            })
+            .collect();
+        // AssistantState -> SharedContext remains held across the entire batch
+        // preflight and mutation. A real user append cannot split this commit.
+        let mut context = self.context.lock()?;
+        let mut additions: Vec<_> = prepared
+            .iter()
+            .flat_map(|(declaration, started)| {
+                [
+                    selected_declaration_projection(declaration),
+                    started.clone(),
+                ]
+            })
+            .collect();
+        if let Some(extra) = extra {
+            additions.push(extra.clone());
+        }
+        context.preflight_tool_progress(&additions)?;
+        let mut retained = context
+            .tool_progress_retained_bytes()?
+            .saturating_add(context.tool_progress_growth_bytes(additions.len()));
+        for addition in &additions {
+            retained = retained.saturating_add(crate::tool_progress::bounded_message(addition)?);
+        }
+        for (declaration, _) in &prepared {
+            retained = retained
+                .saturating_add(32)
+                .saturating_add(crate::tool_progress::bounded_native_message(declaration)?)
+                .saturating_add(crate::tool_progress::bounded_message(
+                    &selected_declaration_projection(declaration),
+                )?);
+        }
+        if retained
+            > context
+                .tool_progress
+                .as_ref()
+                .expect("selected history")
+                .max_bytes()
+        {
+            return Err(ProcessorError::fatal(
+                "selected started batch exceeds retained history budget",
+            ));
+        }
+        context.reserve_tool_revisions(calls.len() + usize::from(extra.is_some()))?;
+        if let Some(metadata) = metadata {
+            state.progress.metadata.push(metadata);
+        }
+        for (call, (declaration, started)) in calls.iter().zip(prepared) {
+            let start = context.messages.len();
+            context.append_native(declaration)?;
+            context.messages.push(started);
+            let end = context.messages.len();
+            let revision = context.attribute_tool_progress(start, end, &call.tool_call_id)?;
+            let commit = pipecat_core::NativeToolProgressHistoryCommit::new(
+                revision,
+                start,
+                end,
+                &context.messages,
+            )?;
+            let notification = route.stage_batch_admission_history_committed(
+                ctx,
+                admission,
+                &call.tool_call_id,
+                commit,
+            )?;
+            state
+                .progress
+                .effects
+                .push(crate::tool_progress::Effect::Context(notification));
+            state
+                .progress
+                .starts
+                .insert(call.tool_call_id.clone(), commit);
+            state.declared_tools.remove(&call.tool_call_id);
+            state.interrupted_declarations.remove(&call.tool_call_id);
+            state
+                .pending
+                .insert(call.tool_call_id.clone(), Some(call.clone()))?;
+        }
+        Ok(())
+    }
+    fn selected_admission(
+        &self,
+        state: &mut AssistantState,
+        admission: pipecat_core::NativeToolProgressAdmission,
+        _output: &mut AggregationOutput,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        self.selected_materialize_batch(state, &admission, None, ctx)
+    }
+    fn selected_progress(
+        &self,
+        state: &mut AssistantState,
+        progress: Arc<pipecat_core::NativeToolProgress>,
+        output: &mut AggregationOutput,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let lease_id = progress.lease_id();
+        let ordinal = progress.ordinal();
+        let lease = state
+            .progress
+            .leases
+            .get(&lease_id)
+            .expect("validated progress admission");
+        if let Some((event, _)) = lease.committed.get(&ordinal) {
+            return if *event == progress.id() {
+                Ok(())
+            } else {
+                Err(ProcessorError::fatal(
+                    "conflicting selected progress ordinal",
+                ))
+            };
+        }
+        if lease.terminal_id.is_some() || ordinal <= lease.through || ordinal > 64 {
+            return Err(ProcessorError::fatal(
+                "selected progress is outside its admitted predecessor range",
+            ));
+        }
+        if let Some((_, terminal)) = &lease.terminal {
+            if ordinal
+                > terminal
+                    .progress_terminal()
+                    .expect("selected terminal")
+                    .predecessor_ordinal()
+            {
+                return Err(ProcessorError::fatal(
+                    "progress follows the frozen terminal watermark",
+                ));
+            }
+        }
+        if let Some(old) = lease.pending.get(&ordinal) {
+            return if old.id() == progress.id() {
+                Ok(())
+            } else {
+                Err(ProcessorError::fatal("conflicting queued progress ordinal"))
+            };
+        }
+        if state.progress.staged_records() >= 32 {
+            return Err(ProcessorError::fatal(
+                "selected progress reorder capacity exceeded",
+            ));
+        }
+        let metadata = self
+            .realtime
+            .tool_progress_route()?
+            .expect("selected route")
+            .reserve_metadata(
+                std::mem::size_of::<(u64, (u64, pipecat_core::NativeToolProgressHistoryCommit))>()
+                    + 64,
+            )?;
+        state.progress.metadata.push(metadata);
+        state
+            .progress
+            .leases
+            .get_mut(&lease_id)
+            .expect("registered lease")
+            .pending
+            .insert(ordinal, progress);
+        loop {
+            let lease = state
+                .progress
+                .leases
+                .get_mut(&lease_id)
+                .expect("registered lease");
+            let next = lease
+                .through
+                .checked_add(1)
+                .ok_or_else(|| ProcessorError::fatal("progress ordinal overflow"))?;
+            let Some(progress) = lease.pending.remove(&next) else {
+                break;
+            };
+            let content = if progress.result().is_null() {
+                "COMPLETED".to_owned()
+            } else {
+                progress.result().to_string()
+            };
+            let addition = async_message(
+                &progress.call().tool_call_id,
+                "intermediate",
+                Some(&content),
+            );
+            self.selected_materialize_batch(state, progress.admission(), Some(&addition), ctx)?;
+            let route = self
+                .realtime
+                .tool_progress_route()?
+                .expect("selected route");
+            let (commit, notification) = {
+                let mut context = self.context.lock()?;
+                context.preflight_tool_progress(std::slice::from_ref(&addition))?;
+                context.reserve_tool_revisions(1)?;
+                let start = context.messages.len();
+                context.messages.push(addition);
+                let end = context.messages.len();
+                let revision =
+                    context.attribute_tool_progress(start, end, &progress.call().tool_call_id)?;
+                let commit = pipecat_core::NativeToolProgressHistoryCommit::new(
+                    revision,
+                    start,
+                    end,
+                    &context.messages,
+                )?;
+                let notification = route.stage_history_committed(ctx, &progress, commit)?;
+                (commit, notification)
+            };
+            let lease = state
+                .progress
+                .leases
+                .get_mut(&lease_id)
+                .expect("registered lease");
+            lease.through = next;
+            lease.committed.insert(next, (progress.id(), commit));
+            state
+                .progress
+                .effects
+                .push(crate::tool_progress::Effect::Progress(notification));
+            let run = progress.run_llm().unwrap_or_else(|| {
+                !progress.result().is_null()
+                    && !Self::group_running_except(
+                        state,
+                        Some(progress.batch().group_id()),
+                        Some(&progress.call().tool_call_id),
+                    )
+            });
+            // A stale/cancelled publication remains a fact, but cannot mint a
+            // fresh local epoch just because its callback survives interruption.
+            if run
+                && progress.admission().permission().is_allowed()
+                && progress.publication_fence().is_current()
+            {
+                if state.pending_progress_scheduling.len() >= 32
+                    && !state.pending_progress_scheduling.contains_key(&lease_id)
+                {
+                    return Err(ProcessorError::fatal(
+                        "selected progress inference debt capacity exceeded",
+                    ));
+                }
+                state.pending_progress_scheduling.insert(
+                    lease_id,
+                    (
+                        progress.id(),
+                        pipecat_core::RealtimeNativeToolProgressSchedulingReason::from_progress(
+                            &progress,
+                        ),
+                        route.reserve_metadata(
+                            std::mem::size_of::<
+                                pipecat_core::RealtimeNativeToolProgressSchedulingReason,
+                            >() + 64,
+                        )?,
+                    ),
+                );
+            }
+        }
+        let ready = {
+            let lease = state
+                .progress
+                .leases
+                .get(&lease_id)
+                .expect("registered lease");
+            lease.terminal.as_ref().is_some_and(|(_, outcome)| {
+                outcome
+                    .progress_terminal()
+                    .expect("selected terminal")
+                    .predecessor_ordinal()
+                    == lease.through
+            })
+        };
+        if ready {
+            let (data, outcome) = state
+                .progress
+                .leases
+                .get_mut(&lease_id)
+                .expect("registered lease")
+                .terminal
+                .take()
+                .expect("ready terminal");
+            self.selected_terminal(state, data, outcome, output, ctx)?;
+        } else {
+            self.maybe_run(state, output)?;
+        }
+        Ok(())
+    }
+    fn selected_terminal(
+        &self,
+        state: &mut AssistantState,
+        data: FrameData,
+        outcome: Arc<pipecat_core::NativeToolCallOutcome>,
+        output: &mut AggregationOutput,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let terminal = outcome
+            .progress_terminal()
+            .ok_or_else(|| ProcessorError::fatal("selected outcome has no terminal watermark"))?;
+        let lease_id = terminal.lease_id();
+        let lease = state
+            .progress
+            .leases
+            .get(&lease_id)
+            .expect("validated terminal admission");
+        if let Some(old) = lease.terminal_id {
+            return if old == outcome.id() {
+                Ok(())
+            } else {
+                Err(ProcessorError::fatal("conflicting selected terminal"))
+            };
+        }
+        if terminal.predecessor_ordinal() < lease.through {
+            return Err(ProcessorError::fatal(
+                "terminal precedes committed progress",
+            ));
+        }
+        if let Some((old_data, old)) = &lease.terminal {
+            return if old.id() == outcome.id() && *old_data == data {
+                Ok(())
+            } else {
+                Err(ProcessorError::fatal("conflicting held terminal"))
+            };
+        }
+        if terminal.predecessor_ordinal() > lease.through {
+            if state
+                .progress
+                .leases
+                .values()
+                .filter(|lease| lease.terminal.is_some())
+                .count()
+                >= 16
+            {
+                return Err(ProcessorError::fatal(
+                    "selected pending terminal capacity exceeded",
+                ));
+            }
+            state
+                .progress
+                .leases
+                .get_mut(&lease_id)
+                .expect("registered lease")
+                .terminal = Some((data, outcome));
+            return Ok(());
+        }
+        // Only deferred/asynchronous cancellation adds a history slot. Fast
+        // terminal results may replace their placeholder even at the count cap;
+        // result/cancel_call recheck the exact operation under its mutation lock.
+        let content = match &data {
+            FrameData::FunctionCallResult(result) => {
+                if let Some(error) = &result.error {
+                    json!({"error": error}).to_string()
+                } else if result.result.is_null() {
+                    "COMPLETED".to_owned()
+                } else {
+                    result.result.to_string()
+                }
+            }
+            FrameData::FunctionCallCancel(_) => {
+                "CANCELLED: this tool call was cancelled before it returned a result".to_owned()
+            }
+            _ => {
+                return Err(ProcessorError::fatal(
+                    "selected terminal has nonterminal data",
+                ))
+            }
+        };
+        let extra = async_message(
+            &outcome.call().tool_call_id,
+            if matches!(data, FrameData::FunctionCallCancel(_)) {
+                "cancelled"
+            } else {
+                "final"
+            },
+            Some(&content),
+        );
+        let append_terminal = match &data {
+            FrameData::FunctionCallCancel(_) => !outcome.cancel_on_interruption(),
+            FrameData::FunctionCallResult(_) => {
+                let context = self.context.lock()?;
+                state
+                    .pending
+                    .get(&outcome.call().tool_call_id)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|call| {
+                        context
+                            .tool_progress
+                            .as_ref()
+                            .expect("selected history")
+                            .is_deferred(&context.messages, call)
+                    })
+            }
+            _ => unreachable!("validated terminal"),
+        };
+        self.selected_materialize_batch(
+            state,
+            terminal.admission(),
+            append_terminal.then_some(&extra),
+            ctx,
+        )?;
+        let route = self
+            .realtime
+            .tool_progress_route()?
+            .expect("selected route");
+        state.progress_committing = true;
+        let result = self.native_result(state, &data, outcome.clone(), output, Some((&route, ctx)));
+        state.progress_committing = false;
+        result?;
+        let commit = state
+            .progress
+            .terminal_commits
+            .remove(&outcome.call().tool_call_id)
+            .ok_or_else(|| {
+                ProcessorError::fatal(
+                    "selected terminal mutation did not return its exact commit range",
+                )
+            })?;
+        let lease = state
+            .progress
+            .leases
+            .get_mut(&lease_id)
+            .expect("registered lease");
+        lease.terminal_id = Some(outcome.id());
+        // Compact tombstones retain identity/cursors only. Keeping this Arc
+        // would pin full call/batch/terminal reservations after real settlement.
+        lease.admission = None;
+        let _ = commit; // The proof was staged while the exact mutation lock was held.
+        self.maybe_run(state, output)
+    }
+    fn flush_progress_effects(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        let effects = std::mem::take(&mut self.lock()?.progress.effects);
+        let mut first_error = None;
+        for effect in effects {
+            let result = match effect {
+                crate::tool_progress::Effect::Progress(notification) => notification.notify(),
+                crate::tool_progress::Effect::Context(notification) => notification.notify(),
+            };
+            if let Err(error) = result {
+                first_error.get_or_insert(error);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    }
     fn native_result(
         &self,
         state: &mut AssistantState,
         data: &FrameData,
         outcome: Arc<pipecat_core::NativeToolCallOutcome>,
         output: &mut AggregationOutput,
+        selected: Option<(&pipecat_core::NativeToolProgressRoute, &ProcessorContext)>,
     ) -> Result<(), ProcessorError> {
         let id = &outcome.call().tool_call_id;
         let cancelled = matches!(data, FrameData::FunctionCallCancel(_));
@@ -1522,6 +2120,7 @@ impl LLMAssistantAggregator {
                 result,
                 Some(pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(&outcome)),
                 output,
+                selected.map(|(route, ctx)| (route, outcome.as_ref(), ctx)),
             )?,
             FrameData::FunctionCallCancel(cancel) => {
                 let group = state
@@ -1529,7 +2128,11 @@ impl LLMAssistantAggregator {
                     .get(id)
                     .and_then(Option::as_ref)
                     .and_then(|call| call.group_id.clone());
-                if self.cancel_call(state, id)? {
+                if self.cancel_call(
+                    state,
+                    id,
+                    selected.map(|(route, ctx)| (route, outcome.as_ref(), ctx)),
+                )? {
                     if cancel.run_llm {
                         state.pending_native_scheduling = Some(
                             pipecat_core::RealtimeNativeToolSchedulingReason::from_outcome(
@@ -1598,6 +2201,7 @@ impl LLMAssistantAggregator {
         context_id: &str,
         parts: &[pipecat_core::AggregatedTextFrame],
     ) -> Result<AggregationOutput, ProcessorError> {
+        self.realtime.validate_tool_progress(&self.context, None)?;
         if self.config.text_mode != AssistantTextMode::Spoken {
             return Err(ProcessorError::new(
                 "playback confirmation requires Spoken mode",
@@ -1750,6 +2354,7 @@ impl LLMAssistantAggregator {
     ) -> Result<FrameData, ProcessorError> {
         // Preserve assistant → context lock order. A conflicting replacement must
         // not acknowledge any tool result or authorize a substituted snapshot.
+        self.realtime.validate_tool_progress(&self.context, None)?;
         let mut state = self.lock()?;
         let context = self.context.frame_data_at_lineage(expected)?;
         state.clear_runs();
@@ -1815,7 +2420,7 @@ impl LLMAssistantAggregator {
         }
         state.aggregation.take();
         if !text.is_empty() {
-            context.append_native(Message::text(Role::Assistant, text.clone()));
+            context.append_native(Message::text(Role::Assistant, text.clone()))?;
             if let Some(history) = &mut state.signed_history {
                 let index = context.messages.len() - 1;
                 history.text(index, &context.messages[index], text.clone())?;
@@ -2037,11 +2642,31 @@ impl LLMAssistantAggregator {
                 .collect();
             history.check_messages(context.messages.len(), &additions)?;
         }
+        let additions: Vec<_> = declaration
+            .iter()
+            .map(selected_declaration_projection)
+            .chain(std::iter::once(started.clone()))
+            .collect();
+        context.preflight_tool_progress(&additions)?;
+        context.reserve_tool_revisions(1)?;
         let first_new = context.messages.len();
         if let Some(declaration) = declaration {
-            context.append_native(declaration);
+            context.append_native(declaration)?;
         }
         context.messages.push(started);
+        let end = context.messages.len();
+        if context.tool_progress.is_some() {
+            let revision = context.attribute_tool_progress(first_new, end, &call.tool_call_id)?;
+            state.progress.starts.insert(
+                call.tool_call_id.clone(),
+                pipecat_core::NativeToolProgressHistoryCommit::new(
+                    revision,
+                    first_new,
+                    end,
+                    &context.messages,
+                )?,
+            );
+        }
         if let Some(history) = &mut state.signed_history {
             for index in first_new..context.messages.len() {
                 history.message(index, &context.messages[index])?;
@@ -2059,6 +2684,11 @@ impl LLMAssistantAggregator {
         result: &FunctionCallResultFrame,
         native_reason: Option<pipecat_core::RealtimeNativeToolSchedulingReason>,
         output: &mut AggregationOutput,
+        selected: Option<(
+            &pipecat_core::NativeToolProgressRoute,
+            &pipecat_core::NativeToolCallOutcome,
+            &ProcessorContext,
+        )>,
     ) -> Result<(), ProcessorError> {
         let Some(Some(call)) = state.pending.get(&result.tool_call_id).cloned() else {
             output.events.push(AggregationEvent::ToolResultIgnored {
@@ -2079,6 +2709,11 @@ impl LLMAssistantAggregator {
             result.result.to_string()
         };
         let mut context = self.context.lock()?;
+        if context.tool_progress.is_some() && selected.is_none() {
+            return Err(ProcessorError::fatal(
+                "selected result requires its authentic terminal consumer",
+            ));
+        }
         let first_new = context.messages.len();
         let addition = if !result.is_final {
             Some(async_message(
@@ -2086,7 +2721,10 @@ impl LLMAssistantAggregator {
                 "intermediate",
                 Some(&content),
             ))
-        } else if is_deferred(&context.messages, &call) {
+        } else if context.tool_progress.as_ref().map_or_else(
+            || is_deferred(&context.messages, &call),
+            |history| history.is_deferred(&context.messages, &call),
+        ) {
             Some(async_message(&call.tool_call_id, "final", Some(&content)))
         } else {
             None
@@ -2094,6 +2732,38 @@ impl LLMAssistantAggregator {
         if let (Some(history), Some(addition)) = (&state.signed_history, &addition) {
             history.check_messages(first_new, std::slice::from_ref(addition))?;
         }
+        if let Some(addition) = &addition {
+            context.preflight_tool_progress(std::slice::from_ref(addition))?;
+        } else if context.tool_progress.is_some() {
+            let index = context
+                .messages
+                .iter()
+                .position(|message| {
+                    message.role == ChatRole::Tool
+                        && message.tool_call_id.as_deref() == Some(call.tool_call_id.as_str())
+                })
+                .ok_or_else(|| ProcessorError::fatal("selected placeholder missing"))?;
+            let replacement = tool_message(&call.tool_call_id, &content);
+            context.preflight_tool_replacement(index, &replacement)?;
+        }
+        let selected_range = if context.tool_progress.is_some() && result.is_final {
+            context.reserve_tool_revisions(1)?;
+            let start = if addition.is_some() {
+                first_new
+            } else {
+                context
+                    .messages
+                    .iter()
+                    .position(|message| {
+                        message.role == ChatRole::Tool
+                            && message.tool_call_id.as_deref() == Some(call.tool_call_id.as_str())
+                    })
+                    .ok_or_else(|| ProcessorError::fatal("selected placeholder missing"))?
+            };
+            Some((start, start + 1))
+        } else {
+            None
+        };
         if result.is_final {
             if let Some(addition) = addition {
                 context.messages.push(addition);
@@ -2113,6 +2783,29 @@ impl LLMAssistantAggregator {
                 history.message(index, &context.messages[index])?;
             }
         }
+        if let Some((start, end)) = selected_range {
+            let revision = context.attribute_tool_progress(start, end, &call.tool_call_id)?;
+            let commit = pipecat_core::NativeToolProgressHistoryCommit::new(
+                revision,
+                start,
+                end,
+                &context.messages,
+            )?;
+            let (route, outcome, ctx) = selected.ok_or_else(|| {
+                ProcessorError::fatal("selected terminal mutation has no authentic consumer")
+            })?;
+            let notification = route.stage_terminal_history_committed(ctx, outcome, commit)?;
+            state
+                .progress
+                .effects
+                .push(crate::tool_progress::Effect::Context(notification));
+            state
+                .progress
+                .terminal_commits
+                .insert(call.tool_call_id.clone(), commit);
+        } else {
+            context.record_tool_progress()?;
+        }
         drop(context);
         // Intermediate updates can request a response while their call remains
         // open. Default group coalescing considers only the other siblings.
@@ -2130,13 +2823,55 @@ impl LLMAssistantAggregator {
         }
         self.maybe_run(state, output)
     }
-    fn cancel_call(&self, state: &mut AssistantState, id: &str) -> Result<bool, ProcessorError> {
+    fn cancel_call(
+        &self,
+        state: &mut AssistantState,
+        id: &str,
+        selected: Option<(
+            &pipecat_core::NativeToolProgressRoute,
+            &pipecat_core::NativeToolCallOutcome,
+            &ProcessorContext,
+        )>,
+    ) -> Result<bool, ProcessorError> {
         let Some(Some(call)) = state.pending.get(id).cloned() else {
             return Ok(false);
         };
         let mut context = self.context.lock()?;
+        if context.tool_progress.is_some() && selected.is_none() {
+            return Err(ProcessorError::fatal(
+                "selected cancellation requires its authentic terminal consumer",
+            ));
+        }
         let first_new = context.messages.len();
+        let selected_start = if context.tool_progress.is_some() {
+            context.reserve_tool_revisions(1)?;
+            Some(if call.cancel_on_interruption {
+                context
+                    .messages
+                    .iter()
+                    .position(|message| {
+                        message.role == ChatRole::Tool
+                            && message.tool_call_id.as_deref() == Some(id)
+                    })
+                    .ok_or_else(|| ProcessorError::fatal("selected placeholder missing"))?
+            } else {
+                first_new
+            })
+        } else {
+            None
+        };
         if call.cancel_on_interruption {
+            if context.tool_progress.is_some() {
+                let index = context
+                    .messages
+                    .iter()
+                    .position(|message| {
+                        message.role == ChatRole::Tool
+                            && message.tool_call_id.as_deref() == Some(id)
+                    })
+                    .ok_or_else(|| ProcessorError::fatal("selected placeholder missing"))?;
+                context.preflight_tool_replacement(index, &tool_message(id, "CANCELLED"))?;
+            }
             update_tool_result(&mut context.messages, id, "CANCELLED")?;
         } else {
             let addition = async_message(
@@ -2147,7 +2882,32 @@ impl LLMAssistantAggregator {
             if let Some(history) = &state.signed_history {
                 history.check_messages(first_new, std::slice::from_ref(&addition))?;
             }
+            context.preflight_tool_progress(std::slice::from_ref(&addition))?;
             context.messages.push(addition);
+        }
+        if let Some(start) = selected_start {
+            let end = start + 1;
+            let revision = context.attribute_tool_progress(start, end, id)?;
+            let commit = pipecat_core::NativeToolProgressHistoryCommit::new(
+                revision,
+                start,
+                end,
+                &context.messages,
+            )?;
+            let (route, outcome, ctx) = selected.ok_or_else(|| {
+                ProcessorError::fatal("selected cancellation mutation has no authentic consumer")
+            })?;
+            let notification = route.stage_terminal_history_committed(ctx, outcome, commit)?;
+            state
+                .progress
+                .effects
+                .push(crate::tool_progress::Effect::Context(notification));
+            state
+                .progress
+                .terminal_commits
+                .insert(id.to_owned(), commit);
+        } else {
+            context.record_tool_progress()?;
         }
         if let Some(history) = &mut state.signed_history {
             for index in first_new..context.messages.len() {
@@ -2181,6 +2941,22 @@ impl LLMAssistantAggregator {
         state: &mut AssistantState,
         output: &mut AggregationOutput,
     ) -> Result<(), ProcessorError> {
+        if state.progress_committing {
+            return Ok(());
+        }
+        let selected_route = self.realtime.tool_progress_route()?;
+        if selected_route
+            .as_ref()
+            .is_some_and(|route| !route.inference_allowed())
+        {
+            state.clear_runs();
+            return Ok(());
+        }
+        state
+            .pending_progress_scheduling
+            .retain(|_, (_, reason, _)| {
+                reason.is_allowed() && reason.publication_fence().is_current()
+            });
         if !state.active
             && state.pending_playback.is_empty()
             && state
@@ -2203,7 +2979,9 @@ impl LLMAssistantAggregator {
                 state.tool_run_owed = true;
             }
         }
-        if (state.tool_run_owed || (state.run_owed && !grouped_pending))
+        if (state.tool_run_owed
+            || !state.pending_progress_scheduling.is_empty()
+            || (state.run_owed && !grouped_pending))
             && !state.awaiting_user_inference
             && !state.user_speaking
             && !state.bot_speaking
@@ -2221,10 +2999,35 @@ impl LLMAssistantAggregator {
                 // emission in the same invocation, after all playback/group gates.
                 let result = (|| {
                     let mut frame = Frame::new(self.context.frame_data()?);
-                    self.context_causes.attach_assistant_continuation(
-                        &mut frame,
+                    let attach_native = |frame: &mut Frame| match (
+                        selected_route.as_ref(),
                         state.pending_native_scheduling,
-                    )?;
+                    ) {
+                        (Some(route), Some(reason)) => self
+                            .context_causes
+                            .attach_assistant_selected_continuation(frame, reason, route),
+                        _ => self
+                            .context_causes
+                            .attach_assistant_continuation(frame, state.pending_native_scheduling),
+                    };
+                    if !state.tool_run_owed {
+                        if !state.pending_progress_scheduling.is_empty() {
+                            // Transfer every independent lease debt together.
+                            // A later cancellation of the newest lease cannot
+                            // erase another still-valid publication's intent.
+                            let reasons = state
+                                .pending_progress_scheduling
+                                .values()
+                                .map(|(_, reason, _)| reason.clone())
+                                .collect();
+                            self.context_causes
+                                .attach_assistant_progress_continuations(&mut frame, reasons)?;
+                        } else {
+                            attach_native(&mut frame)?;
+                        }
+                    } else {
+                        attach_native(&mut frame)?;
+                    }
                     output.push(frame, Direction::Upstream);
                     Ok::<(), ProcessorError>(())
                 })();
@@ -2253,6 +3056,14 @@ impl FrameProcessor for LLMAssistantAggregator {
         if self.realtime.history_bound()? {
             self.validate_history_configuration()?;
         }
+        if self.realtime.tool_progress_route()?.is_some() {
+            self.validate_history_configuration()?;
+        }
+        self.realtime.setup_tool_progress(
+            &self.context,
+            pipecat_core::NativeToolProgressRole::Assistant,
+            ctx,
+        )?;
         self.realtime.setup_assistant(ctx)
     }
     async fn process(
@@ -2261,6 +3072,8 @@ impl FrameProcessor for LLMAssistantAggregator {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        self.realtime
+            .validate_tool_progress(&self.context, Some(&frame))?;
         self.realtime
             .history_validate_assistant_control(&frame, direction)?;
         frame.native_user_image_constraint(direction)?;
@@ -2286,13 +3099,21 @@ impl FrameProcessor for LLMAssistantAggregator {
         if restricted_image {
             self.pause_image_test(true).await;
         }
-        let output = self.process_at_inner(
+        let result = self.process_at_inner(
             frame,
             direction,
             self.realtime.origin.elapsed(),
             Some(ctx),
             Some(&readiness),
-        )?;
+        );
+        let dispositions = self.flush_progress_effects(ctx);
+        if result.is_err() || dispositions.is_err() {
+            if let Some(route) = self.realtime.tool_progress_route()? {
+                route.close(pipecat_core::NativeToolProgressFailure::InvalidHistory);
+            }
+        }
+        dispositions?;
+        let output = result?;
         #[cfg(test)]
         if restricted_image {
             self.pause_image_test(false).await;
@@ -2363,6 +3184,9 @@ impl FrameProcessor for LLMAssistantAggregator {
         if let Err(error) = emitted {
             if error.fatal {
                 self.lock()?.context_cause_failed = true;
+                if let Some(route) = self.realtime.tool_progress_route()? {
+                    route.close(pipecat_core::NativeToolProgressFailure::InferenceFailed);
+                }
             }
             return Err(error);
         }
@@ -2373,7 +3197,7 @@ impl FrameProcessor for LLMAssistantAggregator {
         self.cancel_callbacks()
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
-        if self.realtime.history_bound()? {
+        if self.realtime.history_bound()? || self.realtime.tool_progress_route()?.is_some() {
             self.realtime.close()?;
         }
         if let Some(hub) = self.stopped_hub() {
@@ -2388,6 +3212,7 @@ impl FrameProcessor for LLMAssistantAggregator {
             state.turn_cause = None;
             state.ended = true;
             state.native_tools.clear();
+            state.progress = Default::default();
             state.declared_tools.clear();
             state.signed_declarations.clear();
             state.provisional_tools.clear();
@@ -2399,6 +3224,21 @@ impl FrameProcessor for LLMAssistantAggregator {
         }
         self.cancel_callbacks()
     }
+}
+// Only the private native tool-start path uses this projection. It must
+// preflight exactly what ContextState::append_native stores, while keeping the
+// original native declaration's absent content for lossless native snapshots.
+fn selected_declaration_projection(declaration: &Message) -> ContextMessage {
+    let mut projection = pipecat_services::frame_context::to_core_message(declaration);
+    if declaration.role == Role::Assistant
+        && declaration.content.is_none()
+        && !declaration.tool_calls.is_empty()
+        && declaration.tool_call_id.is_none()
+        && declaration.name.is_none()
+    {
+        projection.content = MessageContent::Text(String::new());
+    }
+    projection
 }
 fn update_tool_result(
     messages: &mut [ContextMessage],

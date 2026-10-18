@@ -5,11 +5,13 @@
 mod client;
 mod context;
 mod processor;
+mod progress;
 mod types;
 mod video;
 
 pub use client::*;
 pub use processor::*;
+pub use progress::*;
 pub use types::*;
 
 mod usage_details;

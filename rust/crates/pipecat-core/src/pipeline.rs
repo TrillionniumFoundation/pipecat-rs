@@ -489,6 +489,9 @@ impl PipelineSender {
     /// Wait for input capacity. Cancellation bypasses the normal-input mutex
     /// and remains possible while another producer is backpressured.
     pub async fn send(&self, frame: Frame, direction: Direction) -> Result<(), PipelineError> {
+        frame
+            .validate_selected_tool_authority()
+            .map_err(|error| PipelineError::Execution(error.to_string()))?;
         if frame.data.is_start() {
             return Err(PipelineError::DuplicateStart);
         }
@@ -564,6 +567,9 @@ impl PipelineSender {
         direction: Direction,
         source: &ProcessorContext,
     ) -> Result<(), PipelineError> {
+        frame
+            .validate_selected_tool_authority()
+            .map_err(|error| PipelineError::Execution(error.to_string()))?;
         if frame.data.is_start() {
             return Err(PipelineError::DuplicateStart);
         }
@@ -893,6 +899,7 @@ impl Runtime {
         frame: Frame,
         direction: Direction,
     ) -> Result<(), ProcessorError> {
+        frame.validate_selected_tool_authority()?;
         if frame.interruptible
             && generation.is_some_and(|epoch| self.queues[from].generation() > epoch)
         {
@@ -993,6 +1000,122 @@ impl Runtime {
             }
         }
         result
+    }
+    pub(crate) fn route_tool_progress_unlocked(
+        self: &Arc<Self>,
+        from: usize,
+        frame: Frame,
+        direction: Direction,
+    ) -> crate::NativeToolProgressEnqueue {
+        if let Err(error) = frame.validate_selected_tool_authority() {
+            return crate::NativeToolProgressEnqueue::rejected(
+                self.clone(),
+                frame,
+                direction,
+                error,
+            );
+        }
+        let generation = None;
+        if frame.interruptible
+            || self.state.borrow().is_finished()
+            || (self.lifecycle.sealed.load(Ordering::SeqCst) && !Self::sealed_control(&frame))
+        {
+            return crate::NativeToolProgressEnqueue::rejected(
+                self.clone(),
+                frame,
+                direction,
+                ProcessorError::new("selected route is closed or interruptible"),
+            );
+        }
+        let destination = match direction {
+            Direction::Downstream if from + 1 < self.queues.len() => Some(from + 1),
+            Direction::Upstream if from > 0 => Some(from - 1),
+            _ => None,
+        };
+        let Some(destination_index) = destination else {
+            return crate::NativeToolProgressEnqueue::rejected(
+                self.clone(),
+                frame,
+                direction,
+                ProcessorError::new("selected progress requires an adjacent owned consumer"),
+            );
+        };
+        let push_domains = (self.observers.enabled() || self.lifecycle.idle.is_some())
+            .then(|| frame.observed_runtimes.clone());
+        let idle_activity =
+            self.lifecycle.idle.is_some() && crate::idle::IdleState::selected(&frame.data);
+        let observation = self.observers.enabled().then(|| {
+            (
+                ObservedFrame::capture(&frame),
+                self.observers.clock.now_ns(),
+                self.observers.capture_push(
+                    &frame,
+                    &self.processor_info[from],
+                    self.nodes[from].health.snapshot(),
+                ),
+            )
+        });
+        let is_start =
+            frame.data.is_start() && direction == Direction::Downstream && destination.is_none();
+        let mut dropped = None;
+        let mut failure = None;
+        let result = match self.queues[destination_index]
+            .try_send_unlocked(DirectedFrame::new(frame, direction), generation)
+        {
+            Ok(()) => Ok(()),
+            Err((error, frame)) => {
+                dropped = Some(frame);
+                if error == QueueError::Full {
+                    failure = Some(PipelineError::Backpressure(format!(
+                        "processor {destination_index} selected input lane is full"
+                    )));
+                }
+                Err(ProcessorError::from(error))
+            }
+        };
+        if result.is_ok() {
+            let first_push = push_domains.is_some_and(|domains| {
+                if let Some(idle) = &self.lifecycle.idle {
+                    idle.lock().unwrap().observe_push(
+                        &domains,
+                        idle_activity,
+                        self.observers.id,
+                        self.observers.enabled(),
+                    )
+                } else {
+                    domains
+                        .get_or_init(Default::default)
+                        .lock()
+                        .unwrap()
+                        .insert(self.observers.id)
+                }
+            });
+            if let Some((frame, timestamp_ns, captures)) = observation {
+                self.observers.emit_captured(
+                    PipelineObservation::Push {
+                        source: self.processor_info[from].clone(),
+                        destination: destination.map(|index| self.processor_info[index].clone()),
+                        frame,
+                        direction,
+                        first_push,
+                        timestamp_ns,
+                    },
+                    captures,
+                );
+                if is_start {
+                    self.observers.emit(PipelineObservation::PipelineStarted {
+                        runtime_id: self.id,
+                        timestamp_ns: self.observers.clock.now_ns(),
+                    });
+                }
+            }
+        }
+        crate::NativeToolProgressEnqueue {
+            runtime: self.clone(),
+            error: result.err(),
+            dropped,
+            failure,
+        }
     }
     fn observe_process(&self, index: usize, frame: &Frame, direction: Direction) {
         if !self.observers.enabled() {
@@ -1528,6 +1651,10 @@ async fn system_loop(processor: Arc<dyn FrameProcessor>, ctx: ProcessorContext) 
             return;
         };
         let _system_guard = SystemProcessingGuard(queue.clone());
+        if let Err(error) = item.frame.validate_selected_tool_authority() {
+            report_processor_error(&ctx, error).await;
+            continue;
+        }
         ctx.runtime.record_frame_error(&mut item.frame);
         let is_start = item.frame.data.is_start();
         match &item.frame.data {
@@ -1618,6 +1745,10 @@ async fn normal_loop(processor: Arc<dyn FrameProcessor>, ctx: ProcessorContext) 
         let interruptible = item.frame.interruptible;
         if signal.borrow().epoch > epoch && interruptible {
             ctx.runtime.dropped.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+        if let Err(error) = item.frame.validate_selected_tool_authority() {
+            report_processor_error(&ctx, error).await;
             continue;
         }
         ctx.runtime.record_frame_error(&mut item.frame);

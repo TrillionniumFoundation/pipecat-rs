@@ -99,6 +99,10 @@ pub struct Frame {
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
     native_tool_timeout_projected: bool,
     native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
+    pub(crate) native_tool_progress: Option<Arc<crate::NativeToolProgress>>,
+    pub(crate) native_tool_progress_admission: Option<crate::NativeToolProgressAdmission>,
+    pub(crate) native_tool_progress_restricted: bool,
+    pub(crate) native_tool_progress_context_restricted: bool,
     pub(crate) native_user_image: Option<crate::NativeUserImageConstraint>,
     pub(crate) native_user_image_context: Option<crate::NativeUserImageContext>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
@@ -249,6 +253,10 @@ impl<'de> Deserialize<'de> for Frame {
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
+            native_tool_progress: None,
+            native_tool_progress_admission: None,
+            native_tool_progress_restricted: false,
+            native_tool_progress_context_restricted: false,
             native_user_image: None,
             native_user_image_context: None,
             reported_runtimes,
@@ -272,6 +280,11 @@ impl PartialEq for Frame {
             && self.native_tool_outcome == other.native_tool_outcome
             && self.native_tool_timeout_projected == other.native_tool_timeout_projected
             && self.native_tool_batch == other.native_tool_batch
+            && self.native_tool_progress == other.native_tool_progress
+            && self.native_tool_progress_admission == other.native_tool_progress_admission
+            && self.native_tool_progress_restricted == other.native_tool_progress_restricted
+            && self.native_tool_progress_context_restricted
+                == other.native_tool_progress_context_restricted
             && self.metadata == other.metadata
             && self.transport_source == other.transport_source
             && self.transport_destination == other.transport_destination
@@ -311,6 +324,9 @@ impl Frame {
         Ok(self.native_tool_batch.take())
     }
     pub(crate) fn attach_tool_outcome(&mut self, outcome: Arc<crate::NativeToolCallOutcome>) {
+        if outcome.progress_terminal().is_some() {
+            self.native_tool_progress_restricted = true;
+        }
         self.native_tool_timeout_projected = false;
         self.native_tool_outcome = Some(outcome);
     }
@@ -319,6 +335,9 @@ impl Frame {
         &self,
     ) -> Result<Option<&Arc<crate::NativeToolCallOutcome>>, crate::ProcessorError> {
         if let Some(outcome) = &self.native_tool_outcome {
+            if outcome.progress_terminal().is_some() {
+                self.require_selected_tool_terminal_authority()?;
+            }
             outcome.validate(&self.data, self.native_tool_timeout_projected)?;
         }
         Ok(self.native_tool_outcome.as_ref())
@@ -474,6 +493,13 @@ impl Frame {
     pub fn require_no_native_llm_continuation(
         &self,
     ) -> Result<(), crate::NativeLlmContinuationError> {
+        if self.native_tool_progress_restricted
+            || self.native_tool_progress_context_restricted
+            || self.native_tool_progress.is_some()
+            || self.native_tool_progress_admission.is_some()
+        {
+            return Err(crate::NativeLlmContinuationError::UnconsumedOnWire);
+        }
         if self.native_user_image.is_some() || self.native_user_image_context.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedOnWire);
         }
@@ -501,7 +527,9 @@ impl Frame {
     pub(crate) fn require_no_other_user_image_authority(
         &self,
     ) -> Result<(), crate::ProcessorError> {
-        if self.native_eager_source.is_some()
+        if self.native_tool_progress_restricted
+            || self.native_tool_progress_context_restricted
+            || self.native_eager_source.is_some()
             || self.native_tool_batch.is_some()
             || self.native_tool_outcome.is_some()
             || self.native_speculation.is_some()
@@ -583,6 +611,10 @@ impl Frame {
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
+            native_tool_progress: None,
+            native_tool_progress_admission: None,
+            native_tool_progress_restricted: false,
+            native_tool_progress_context_restricted: false,
             native_user_image: None,
             native_user_image_context: None,
             reported_runtimes,
@@ -1344,6 +1376,137 @@ impl FrameData {
                 | Self::OutputDtmfSequence(_)
                 | Self::OutputDtmfUrgentSequence(_)
         )
+    }
+}
+
+impl Frame {
+    pub(crate) fn require_selected_tool_authority(
+        &self,
+        declaration: bool,
+    ) -> Result<(), crate::ProcessorError> {
+        self.require_selected_tool_headers()?;
+        if self.native_speculation.is_some()
+            || self.native_eager_source.is_some()
+            || self.native_llm_continuation.is_some()
+            || self.native_realtime_context.is_some()
+            || self.native_user_image.is_some()
+            || self.native_user_image_context.is_some()
+            || self.native_tool_outcome.is_some()
+            || (declaration && self.native_tool_progress.is_some())
+            || (!declaration
+                && (self.native_tool_batch.is_some()
+                    || self.native_tool_progress_admission.is_some()))
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected tool frame has conflicting native authority",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Frame {
+    fn require_selected_tool_terminal_authority(&self) -> Result<(), crate::ProcessorError> {
+        self.require_selected_tool_headers()?;
+        if self
+            .native_tool_outcome
+            .as_ref()
+            .is_some_and(|outcome| outcome.id() != self.id)
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected terminal frame identity changed",
+            ));
+        }
+        if self.native_speculation.is_some()
+            || self.native_eager_source.is_some()
+            || self.native_llm_continuation.is_some()
+            || self.native_realtime_context.is_some()
+            || self.native_user_image.is_some()
+            || self.native_user_image_context.is_some()
+            || self.native_tool_progress.is_some()
+            || self.native_tool_progress_admission.is_some()
+            || self.native_tool_batch.is_some()
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected terminal conflicts with other native authority",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Frame {
+    /// Selected process-local provenance is checked before queue/control effects,
+    /// not merely at the eventual processor. Raw legacy frames are unaffected.
+    pub(crate) fn validate_selected_tool_authority(&self) -> Result<(), crate::ProcessorError> {
+        if self.native_tool_progress_context_restricted {
+            self.native_realtime_context_cause()?.ok_or_else(|| {
+                crate::ProcessorError::fatal("selected progress context authority was stripped")
+            })?;
+        }
+        if !self.native_tool_progress_restricted
+            && self.native_tool_progress.is_none()
+            && self.native_tool_progress_admission.is_none()
+            && self
+                .native_tool_outcome
+                .as_ref()
+                .is_none_or(|outcome| outcome.progress_terminal().is_none())
+        {
+            return Ok(());
+        }
+        self.native_tool_progress()?;
+        self.native_tool_progress_admission()?;
+        self.native_tool_outcome()?;
+        if self.native_tool_progress.is_none()
+            && self.native_tool_progress_admission.is_none()
+            && self.native_tool_outcome.is_none()
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected tool authority was stripped before admission",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Frame {
+    fn require_selected_tool_headers(&self) -> Result<(), crate::ProcessorError> {
+        if self.name.capacity() > 256
+            || !self.metadata.is_empty()
+            || self.pts.is_some()
+            || self.transport_source.is_some()
+            || self.transport_destination.is_some()
+            || self.broadcast_sibling_id.is_some()
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected tool frame has noncanonical retained headers",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Frame {
+    pub(crate) fn require_selected_progress_context_authority(
+        &self,
+    ) -> Result<(), crate::ProcessorError> {
+        self.require_selected_tool_headers()?;
+        if self.native_speculation.is_some()
+            || self.native_eager_source.is_some()
+            || self.native_llm_continuation.is_some()
+            || self.native_user_image.is_some()
+            || self.native_user_image_context.is_some()
+            || self.native_tool_batch.is_some()
+            || self.native_tool_outcome.is_some()
+            || self.native_tool_progress.is_some()
+            || self.native_tool_progress_admission.is_some()
+            || self.native_tool_progress_restricted
+        {
+            return Err(crate::ProcessorError::fatal(
+                "selected progress context has conflicting native authority",
+            ));
+        }
+        Ok(())
     }
 }
 

@@ -301,13 +301,20 @@ impl NativeTools {
         };
         entry.terminal = Some((outcome.id(), cancelled));
         self.completed.push_back(id.clone());
-        let bytes = outcome.retained_bytes();
+        // The selected route has compact immutable replay/commit evidence.
+        // Retaining a selected payload receipt here would also pin its separate
+        // terminal reservation after real consumption, starving later leases.
+        let bytes = if outcome.progress_terminal().is_some() {
+            0
+        } else {
+            outcome.retained_bytes()
+        };
         while self.bytes.saturating_add(bytes) > MAX_BYTES {
             if !self.release_receipt() {
                 break;
             }
         }
-        if self.bytes.saturating_add(bytes) <= MAX_BYTES {
+        if outcome.progress_terminal().is_none() && self.bytes.saturating_add(bytes) <= MAX_BYTES {
             let entry = self.calls.get_mut(&id).expect("terminal entry");
             entry.retained = Some(outcome);
             entry.receipt_bytes = bytes;

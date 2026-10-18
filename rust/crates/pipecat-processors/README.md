@@ -127,6 +127,96 @@ callback effects, together with policy and the conservatively repeated whole bat
 Independent consumer mirrors and legacy compatibility metadata have separately
 documented count/encoded-byte limits.
 
+
+### Selected asynchronous reporting tools
+
+`tools::ReportingTool` is a separate opt-in registration. `RegisteredTool` struct
+literals and the original `ToolCallback` signature remain source compatible.
+Select one `NativeToolProgressRoute` with
+`ToolExecutor::with_progress_route(route)?`, then use
+`register_reporting(name, ReportingTool::new(callback))?`. A reporting callback
+receives `(FunctionCall, ToolProgressReporter)` and returns the same final
+`Result<serde_json::Value, String>` as an ordinary callback. Its default timeout
+is 30 seconds and its interruption policy is false; registration rejects an
+interruptible reporting policy or a timeout outside 1 ms through 300 seconds.
+
+The reporter's synchronous `report(value, run_llm: Option<bool>)` returns only
+when that exact immutable event has been admitted to the actual runtime queue.
+The returned `ToolProgressReceipt` is not a terminal outcome and does not free
+the callback slot. `receipt.await_history().await` observes the actual paired
+assistant's canonical history commit; provider-command admission is a distinct
+fact. The callback may await the same receipt repeatedly, or drop a wait and wait
+again. No independent context-updated callback, per-report task or detached
+waiter is created. Follow-on user code runs in the original owned tool task.
+
+The executor captures one absolute deadline immediately after the task receives
+its admitted lease and before polling the callback. Reporting, waiting for
+history and any follow-on code all consume that original budget. Neither an
+intermediate result nor a receipt wait extends it. A reporter retained past final
+return, timeout, explicit cancellation or route failure cannot admit new work
+and does not keep a finished runtime alive.
+
+This API requires the complete selected OpenAI Realtime topology: ingress gate,
+paired user, provider, executor, progress relay and paired assistant, in that
+order and in one runtime. All real components register during setup; provider
+Start validates role uniqueness, shared history, configuration and cleanup
+budgets before opening admission. Constructing a route or a public tool batch
+does not grant a reporting lease. Unsigned non-speculative standard aggregation
+is required; selected signed/speculative calls fail before callback entry.
+Ordinary final-only siblings remain supported inside this composition and are
+included in its finite callback and End-drain validation.
+
+Selected route setup is one-shot. A duplicate executor-limits or role
+registration latches that route as `Failed` / `InvalidProvenance` during setup,
+so provider Start rejects it before connecting. This stricter opt-in composition
+check requires a new route and composition after failure; the failed route
+cannot be reused for a setup retry. Ordinary pipeline startup and setup-error
+severity are unchanged: `Pipeline::start` may return a worker carrying setup
+diagnostics, including the nonfatal duplicate executor-limits error. When
+abandoning that worker, cancel it and await its actual join.
+
+The selected executor permits at most 16 concurrent slots and finite callback
+timeouts for all its registrations. The route independently enforces at most 16
+active reporting leases, 64 reports per lease, 1024 per session, four pending
+reports per lease and 32 per session. Encoded progress JSON is limited to 16 KiB;
+selected terminal JSON is limited to 64 KiB, with borrowed iterative validation
+before serialization or cloning. Each admitted call separately reserves terminal
+capacity; temporary report saturation does not consume it. Full route budgets
+also charge owned encoded representations, canonical history, receipt metadata
+and actual provider ledgers; they are logical retained-byte bounds, not RSS
+bounds. Legacy standalone final-only payload limits are unchanged.
+
+The first final/error/cancellation/timeout to freeze the core lease wins and
+captures the last successfully admitted progress ordinal. The executor releases
+its locks before publishing that immutable terminal, updating the terminal
+journal or cancelling the actual callback task. A later cancellation cannot
+rewrite an already frozen final. Selected journal entries retain compact truthful
+identity, terminal choice, predecessor watermark, effects and first-hop admission
+under the existing 8 MiB journal budget. They retain neither full result/batch
+payloads nor transport authority or a terminal-payload reservation; a completed
+journal entry cannot pin one of the 16 live terminal reservations. Explicit
+cancellation closes reporting and
+revokes progress-derived inference permission, while genuinely admitted earlier
+progress remains eligible for truthful consumer disposition and history receipt.
+Provider and assistant independently wait for the terminal's predecessors.
+
+End uses the selected ingress drain gate. New calls and new selected inference
+stop at the gate, while admitted callbacks may report and finish within their
+original deadlines. End cannot advance merely because this executor's journal
+has no active callbacks; the route also requires actual predecessor and terminal
+dispositions from both consumers. Drain defaults to 35 seconds and must cover
+the largest registered callback timeout plus five seconds. The real pipeline
+shutdown budget must additionally cover the provider's response, operation and
+close timeouts plus teardown reserve; default provider settings require at least
+172 seconds rather than the pipeline's ordinary 30-second default.
+
+The processor-local `tool_progress` test target checks registration/source
+compatibility and real setup rejection. Successful receipts, before-final
+inference, cancellation ordering and lifecycle joins are qualified only by the
+complete Realtime/paired-assistant integration target. No fixture-produced
+history acknowledgment is accepted as that evidence. This is native reporting,
+not Python `on_context_updated` callback-API parity or live-model qualification.
+
 ## DTMF aggregation
 
 `DtmfAggregator::new(DtmfAggregatorConfig { ..Default::default() })` converts

@@ -2,7 +2,10 @@ use crate::types::*;
 use crate::usage_details::UsageDetails;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use futures_util::{Sink, SinkExt, StreamExt};
-use pipecat_core::InvocationFence;
+use pipecat_core::{InvocationFence, NativeToolProgressAdmission, NativeToolProgressPermission};
+#[path = "client_progress.rs"]
+mod progress;
+pub(crate) use progress::{selected_options_bytes, SelectedAlternative};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
@@ -11,7 +14,7 @@ use std::{
     net::IpAddr,
     pin::Pin,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     task::Poll,
@@ -430,6 +433,7 @@ impl RealtimeClient {
             rx: events_rx,
             task: Some(task),
             ended: false,
+            joined: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -441,7 +445,10 @@ struct Control {
     preroll_bytes: Option<usize>,
 }
 struct Command {
-    action: Action,
+    action: Option<Action>,
+    progress_admission: Option<NativeToolProgressAdmission>,
+    selected_permission: Option<NativeToolProgressPermission>,
+    selected_alternatives: Option<Vec<progress::SelectedAlternative>>,
     generation: u64,
     reply: Option<oneshot::Sender<Result<(), RealtimeError>>>,
     inference_fence: Option<InvocationFence>,
@@ -451,11 +458,16 @@ struct Command {
 }
 impl Command {
     fn is_durable(&self) -> bool {
-        self.camera_fence.is_none()
-            && matches!(
-                self.action,
-                Action::ToolResult { .. } | Action::CreateItem { .. } | Action::UpdateSession(_)
-            )
+        self.progress_admission.is_some()
+            || (self.camera_fence.is_none()
+                && matches!(
+                    self.action,
+                    Some(
+                        Action::ToolResult { .. }
+                            | Action::CreateItem { .. }
+                            | Action::UpdateSession(_)
+                    )
+                ))
     }
     fn camera_is_stale(&self, generation: u64, finishing: bool) -> bool {
         self.camera_fence
@@ -498,7 +510,10 @@ impl RealtimeSender {
             .with_current(|| {
                 self.tx
                     .try_send(Command {
-                        action,
+                        action: Some(action),
+                        progress_admission: None,
+                        selected_permission: None,
+                        selected_alternatives: None,
                         generation,
                         reply: None,
                         inference_fence: None,
@@ -549,7 +564,10 @@ impl RealtimeSender {
                 .then(|| inference_fence.clone())
                 .flatten();
             let command = Command {
-                action,
+                action: Some(action),
+                progress_admission: None,
+                selected_permission: None,
+                selected_alternatives: None,
                 generation,
                 reply: None,
                 inference_fence: fence.clone(),
@@ -578,7 +596,10 @@ impl RealtimeSender {
         }
         self.tx
             .try_send(Command {
-                action,
+                action: Some(action),
+                progress_admission: None,
+                selected_permission: None,
+                selected_alternatives: None,
                 generation: self.generation(),
                 reply: None,
                 inference_fence: None,
@@ -615,7 +636,10 @@ impl RealtimeSender {
         let (reply, result) = oneshot::channel();
         self.tx
             .try_send(Command {
-                action,
+                action: Some(action),
+                progress_admission: None,
+                selected_permission: None,
+                selected_alternatives: None,
                 generation: self.generation(),
                 reply: Some(reply),
                 inference_fence: None,
@@ -680,6 +704,7 @@ pub struct RealtimeSession {
     rx: mpsc::Receiver<ReceivedEvent>,
     task: Option<JoinHandle<Result<(), RealtimeError>>>,
     ended: bool,
+    joined: Arc<AtomicBool>,
 }
 impl RealtimeSession {
     pub fn sender(&self) -> RealtimeSender {
@@ -690,19 +715,30 @@ impl RealtimeSession {
             .await
             .map(|result| result.map(|received| received.event))
     }
+    /// Read-only evidence for the selected processor's actual actor join.
+    pub(crate) fn join_observer(&self) -> Arc<AtomicBool> {
+        self.joined.clone()
+    }
     pub(crate) async fn next_received(&mut self) -> Option<Result<ReceivedEvent, RealtimeError>> {
-        if self.ended {
-            return None;
-        }
-        while let Some(received) = self.rx.recv().await {
-            let event = &received.event;
-            if event.event.response_id().is_some() && event.generation != self.sender.generation() {
-                continue;
+        if !self.ended {
+            while let Some(received) = self.rx.recv().await {
+                let event = &received.event;
+                if event.event.response_id().is_some()
+                    && event.generation != self.sender.generation()
+                {
+                    continue;
+                }
+                return Some(Ok(received));
             }
-            return Some(Ok(received));
+            self.ended = true;
         }
-        self.ended = true;
-        match self.task.take()?.await {
+        // Keep the handle in self across this await. An aborted receiver leaves
+        // the selected processor's session owner able to reclaim the real task.
+        // ended=true only suppresses channel reads, never an outstanding join.
+        let result = self.task.as_mut()?.await;
+        self.task.take();
+        self.joined.store(true, Ordering::Release);
+        match result {
             Ok(Ok(())) => None,
             Ok(Err(e)) => Some(Err(e)),
             Err(_) => Some(Err(RealtimeError::Transport)),
@@ -712,23 +748,29 @@ impl RealtimeSession {
         self.sender.close();
         self.rx.close();
         self.ended = true;
-        if let Some(mut task) = self.task.take() {
-            match timeout(
-                self.sender.limits.close_timeout + self.sender.limits.operation_timeout,
-                &mut task,
-            )
-            .await
-            {
-                Ok(result) => result.map_err(|_| RealtimeError::Transport)?,
-                Err(_) => {
-                    task.abort();
-                    let _ = task.await;
-                    Err(RealtimeError::Timeout("close"))
-                }
+        let Some(task) = self.task.as_mut() else {
+            return Ok(());
+        };
+        let result = match timeout(
+            self.sender.limits.close_timeout + self.sender.limits.operation_timeout,
+            &mut *task,
+        )
+        .await
+        {
+            Ok(result) => result
+                .map_err(|_| RealtimeError::Transport)
+                .and_then(|result| result),
+            Err(_) => {
+                task.abort();
+                // Aborting is not joining. This actual await is mandatory and
+                // the handle remains recoverable if this waiter is cancelled.
+                let _ = task.await;
+                Err(RealtimeError::Timeout("close"))
             }
-        } else {
-            Ok(())
-        }
+        };
+        self.task.take();
+        self.joined.store(true, Ordering::Release);
+        result
     }
 }
 impl Drop for RealtimeSession {
@@ -776,6 +818,8 @@ struct Actor {
     continuation_context: Option<String>,
     continuation_generation: u64,
     deferred_response: Option<(ResponseOptions, u64, Option<InvocationFence>)>,
+    selected_debts: Vec<progress::SelectedDebt>,
+    progress_policies: HashMap<String, NativeToolProgressAdmission>,
     settlement_deadline: Option<Instant>,
     discarded_calls: VecDeque<String>,
 }
@@ -813,6 +857,8 @@ impl Actor {
             continuation_context: None,
             continuation_generation: 0,
             deferred_response: None,
+            selected_debts: Vec::new(),
+            progress_policies: HashMap::new(),
             settlement_deadline: None,
             discarded_calls: VecDeque::new(),
         }
@@ -913,14 +959,46 @@ impl Actor {
     async fn write_command(
         &mut self,
         socket: &mut Socket,
-        action: Action,
-        generation: u64,
-        inference_fence: Option<InvocationFence>,
-        camera_fence: Option<InvocationFence>,
+        command: &mut Command,
     ) -> Result<(), RealtimeError> {
+        let action = command.action.take();
+        let generation = command.generation;
+        let inference_fence = command.inference_fence.take();
+        let camera_fence = command.camera_fence.take();
+        let progress_admission = command.progress_admission.take();
+        let selected_permission = command.selected_permission.take();
+        let alternatives = command.selected_alternatives.take();
+        if let Some(admission) = progress_admission {
+            self.admit_progress_policy(admission)?;
+        }
+        let Some(action) = action else {
+            return self.maybe_continue(socket).await;
+        };
+        if let Some(alternatives) = alternatives {
+            let Action::CreateResponse(options) = action else {
+                return Err(RealtimeError::Invalid(
+                    "selected alternatives require response command",
+                ));
+            };
+            for alternative in alternatives {
+                self.defer_selected_response(
+                    alternative.options.unwrap_or_else(|| options.clone()),
+                    generation,
+                    Some(alternative.fence),
+                    alternative.permission,
+                )?;
+            }
+            return self.maybe_selected_continue(socket).await;
+        }
         let Some(fence) = camera_fence else {
             return self
-                .write_action(socket, action, generation, inference_fence)
+                .write_selected_action(
+                    socket,
+                    action,
+                    generation,
+                    inference_fence,
+                    selected_permission,
+                )
                 .await;
         };
         self.write_camera(socket, action, generation, &fence).await
@@ -976,6 +1054,17 @@ impl Actor {
         action: Action,
         generation: u64,
         inference_fence: Option<InvocationFence>,
+    ) -> Result<(), RealtimeError> {
+        self.write_selected_action(socket, action, generation, inference_fence, None)
+            .await
+    }
+    async fn write_selected_action(
+        &mut self,
+        socket: &mut Socket,
+        action: Action,
+        generation: u64,
+        inference_fence: Option<InvocationFence>,
+        selected_permission: Option<NativeToolProgressPermission>,
     ) -> Result<(), RealtimeError> {
         let value = match action {
             Action::Finish => {
@@ -1083,22 +1172,45 @@ impl Actor {
                         "exactly one response modality is required",
                     ));
                 }
-                if self.active.is_some() || self.pending.is_some() || !self.tools.is_empty() {
+                if selected_permission
+                    .as_ref()
+                    .is_some_and(|p| !p.is_allowed())
+                {
+                    return Ok(());
+                }
+                if self.active.is_some()
+                    || self.pending.is_some()
+                    || !self.can_continue_selected(selected_permission.as_ref())
+                {
+                    if let Some(permission) = selected_permission {
+                        self.defer_selected_response(
+                            response,
+                            generation,
+                            inference_fence,
+                            permission,
+                        )?;
+                        return Ok(());
+                    }
                     if self.deferred_response.is_some() {
                         return Err(RealtimeError::ResponseActive);
                     }
                     self.deferred_response = Some((response, generation, inference_fence));
+
                     return Ok(());
                 }
                 if !self
-                    .write_inference(
+                    .write_selected_inference(
                         socket,
                         json!({"type":"response.create", "response":response}),
                         inference_fence.as_ref(),
+                        selected_permission.as_ref(),
                     )
                     .await?
                 {
                     return Ok(());
+                }
+                if selected_permission.is_some() {
+                    self.selected_debts.clear();
                 }
                 self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
                 self.pending = Some(ResponseContext {
@@ -1176,7 +1288,8 @@ impl Actor {
                 )
                 .await?;
                 self.tools.remove(&call_id);
-                if self.tools.is_empty() {
+                self.progress_policies.remove(&call_id);
+                if self.tools.is_empty() || self.all_tools_selected() {
                     self.settlement_deadline = None;
                 }
                 self.completed_tools.push_back(call_id);
@@ -1194,12 +1307,14 @@ impl Actor {
         self.write(socket, value).await
     }
     async fn maybe_continue(&mut self, socket: &mut Socket) -> Result<(), RealtimeError> {
+        self.maybe_selected_continue(socket).await?;
         if (self.continue_response || self.deferred_response.is_some())
             && self.tools.is_empty()
             && self.active.is_none()
             && self.pending.is_none()
         {
             let continuation_context = self.continuation_context.take();
+
             let (options, generation, inference_fence) =
                 self.deferred_response.take().unwrap_or_else(|| {
                     (
@@ -1216,10 +1331,11 @@ impl Actor {
                 return Ok(());
             }
             if !self
-                .write_inference(
+                .write_selected_inference(
                     socket,
                     json!({"type":"response.create", "response":options}),
                     inference_fence.as_ref(),
+                    None,
                 )
                 .await?
             {
@@ -1394,7 +1510,10 @@ impl Actor {
         }
         if self.pipeline_turns {
             self.tools.retain(|_, tool| tool.announced);
-            if !self.tools.is_empty() && self.settlement_deadline.is_none() {
+            if !self.tools.is_empty()
+                && !self.all_tools_selected()
+                && self.settlement_deadline.is_none()
+            {
                 self.settlement_deadline =
                     Some(Instant::now() + self.config.limits.response_timeout);
             }
@@ -1402,6 +1521,7 @@ impl Actor {
             self.tools.clear();
         }
         self.deferred_response = None;
+        self.selected_debts.clear();
         self.continue_response = false;
         self.continuation_context = None;
         Ok(())
@@ -1430,7 +1550,7 @@ impl Actor {
                     if self.pipeline_turns {
                         let admitted = commands.len();
                         for _ in 0..admitted {
-                            let Ok(command) = commands.try_recv() else {
+                            let Ok(mut command) = commands.try_recv() else {
                                 break;
                             };
                             if command.camera_is_stale(self.epoch(), self.finishing) {
@@ -1440,15 +1560,7 @@ impl Actor {
                                 continue;
                             }
                             if command.is_durable() {
-                                let result = self
-                                    .write_command(
-                                        socket,
-                                        command.action,
-                                        command.generation,
-                                        command.inference_fence,
-                                        command.camera_fence,
-                                    )
-                                    .await;
+                                let result = self.write_command(socket, &mut command).await;
                                 if let Some(reply) = command.reply {
                                     let _ = reply.send(result.clone());
                                 }
@@ -1489,13 +1601,13 @@ impl Actor {
                         if self.pipeline_turns && self.ready {
                             let admitted = commands.len();
                             for _ in 0..admitted {
-                                let Ok(command) = commands.try_recv() else { break; };
+                                let Ok(mut command) = commands.try_recv() else { break; };
                                 if command.camera_is_stale(self.epoch(), self.finishing) {
                                     if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); }
                                     continue;
                                 }
                                 if command.is_durable() {
-                                    let result = self.write_command(socket, command.action, command.generation, command.inference_fence, command.camera_fence).await;
+                                    let result = self.write_command(socket, &mut command).await;
                                     if let Some(reply) = command.reply { let _ = reply.send(result.clone()); }
                                     result?;
                                 } else {
@@ -1525,18 +1637,18 @@ impl Actor {
                     }
                 }
                 command = async { match preserved.pop_front() { Some(command) => Some(command), None => commands.recv().await } }, if self.ready => {
-                    let Some(command) = command else { return Ok(()); };
+                    let Some(mut command) = command else { return Ok(()); };
                     if command.camera_is_stale(self.epoch(), self.finishing) {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); }
                         continue;
                     }
-                    let finishing = matches!(command.action, Action::Finish);
+                    let finishing = matches!(command.action, Some(Action::Finish));
                     if !finishing && command.reply.as_ref().is_some_and(|r| r.is_closed()) { continue; }
                     let durable = self.pipeline_turns && command.is_durable();
                     if !finishing && !durable && command.generation != self.epoch() {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); } continue;
                     }
-                    let result = self.write_command(socket, command.action, command.generation, command.inference_fence, command.camera_fence).await;
+                    let result = self.write_command(socket, &mut command).await;
                     let fatal = matches!(result, Err(RealtimeError::Transport | RealtimeError::Closed | RealtimeError::Timeout(_)));
                     let failure = result.clone();
                     let unacknowledged = command.reply.is_none();
@@ -1626,6 +1738,7 @@ impl Actor {
                 self.deadline = None;
                 if self.pipeline_turns
                     && !self.tools.is_empty()
+                    && !self.all_tools_selected()
                     && self.settlement_deadline.is_none()
                 {
                     self.settlement_deadline =
@@ -1761,6 +1874,10 @@ impl Actor {
                             "tool arguments must be a JSON object",
                         ));
                     }
+                    if arguments.len() > self.config.limits.max_message_bytes {
+                        return Err(RealtimeError::TooLarge);
+                    }
+                    tool.arguments.clone_from(arguments);
                     *name = Some(tool.name.clone());
                     tool.announced = true;
                 }
@@ -1778,6 +1895,7 @@ impl Actor {
                 self.deadline = None;
                 if self.pipeline_turns
                     && !self.tools.is_empty()
+                    && !self.all_tools_selected()
                     && self.settlement_deadline.is_none()
                 {
                     self.settlement_deadline =
@@ -2231,5 +2349,73 @@ mod camera_admission_tests {
         assert!(!public.camera_is_stale(1, true));
         assert_eq!(stale, Ok(false));
         assert!(stale_empty);
+    }
+}
+
+#[cfg(test)]
+mod session_join_cancellation_tests {
+    use super::*;
+    use tokio::net::TcpListener;
+
+    async fn connected() -> (RealtimeSession, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let peer = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(socket).await.unwrap();
+            while let Some(message) = socket.next().await {
+                match message {
+                    Ok(Message::Close(_)) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        });
+        let mut config = RealtimeConfig::new("local-join-test");
+        config.endpoint = format!("ws://{address}/v1/realtime");
+        let session = RealtimeClient::new(config)
+            .unwrap()
+            .connect()
+            .await
+            .unwrap();
+        (session, peer)
+    }
+
+    #[tokio::test]
+    async fn cancelled_shutdown_retains_the_same_actual_actor_handle() {
+        let (mut session, peer) = connected().await;
+        let actor = session.task.as_ref().unwrap().id();
+        let joined = session.join_observer();
+        // On this current-thread runtime no actor poll occurs between the
+        // synchronous close request and our first Pending join observation.
+        let mut shutdown = Box::pin(session.shutdown());
+        assert!(futures_util::poll!(&mut shutdown).is_pending());
+        drop(shutdown);
+        assert_eq!(session.task.as_ref().unwrap().id(), actor);
+        assert!(!joined.load(Ordering::Acquire));
+        session.shutdown().await.unwrap();
+        assert!(session.task.is_none());
+        assert!(joined.load(Ordering::Acquire));
+        peer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelled_receive_join_remains_recoverable_after_ended_is_set() {
+        let (mut session, peer) = connected().await;
+        let actor = session.task.as_ref().unwrap().id();
+        let joined = session.join_observer();
+        session.rx.close();
+        let mut receive = Box::pin(session.next_received());
+        assert!(futures_util::poll!(&mut receive).is_pending());
+        drop(receive);
+        assert!(session.ended);
+        assert_eq!(session.task.as_ref().unwrap().id(), actor);
+        let mut retry = Box::pin(session.next_received());
+        assert!(futures_util::poll!(&mut retry).is_pending());
+        drop(retry);
+        assert!(!joined.load(Ordering::Acquire));
+        session.shutdown().await.unwrap();
+        assert!(session.task.is_none());
+        assert!(joined.load(Ordering::Acquire));
+        peer.await.unwrap();
     }
 }

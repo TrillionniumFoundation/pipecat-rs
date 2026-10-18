@@ -31,6 +31,7 @@ pub(crate) struct ContextState {
     originals: BTreeMap<usize, (ContextMessage, Message)>,
     rich: bool,
     pub(crate) lineage: u64,
+    pub(crate) tool_progress: Option<crate::tool_progress::History>,
 }
 impl Deref for ContextState {
     type Target = LlmContextData;
@@ -44,7 +45,98 @@ impl DerefMut for ContextState {
     }
 }
 impl ContextState {
+    pub(crate) fn tool_progress_retained_bytes(&self) -> Result<usize, ProcessorError> {
+        let mut bytes = self
+            .data
+            .messages
+            .capacity()
+            .saturating_mul(std::mem::size_of::<ContextMessage>());
+        for message in &self.messages {
+            bytes = bytes.saturating_add(crate::tool_progress::bounded_message(message)?);
+        }
+        for (projection, original) in self.originals.values() {
+            bytes = bytes
+                .saturating_add(32) // BTreeMap node/pointer overhead per retained original.
+                .saturating_add(crate::tool_progress::bounded_message(projection)?)
+                .saturating_add(crate::tool_progress::bounded_native_message(original)?);
+        }
+        Ok(bytes)
+    }
+    pub(crate) fn tool_progress_growth_bytes(&self, additions: usize) -> usize {
+        let required = self.messages.len().saturating_add(additions);
+        if required <= self.messages.capacity() {
+            0
+        } else {
+            // Vec's amortized reserve can double its allocation. Reserve that
+            // retained capacity before mutation, including direct push paths.
+            required
+                .max(self.messages.capacity().saturating_mul(2))
+                .max(4)
+                .saturating_sub(self.messages.capacity())
+                .saturating_mul(std::mem::size_of::<ContextMessage>())
+        }
+    }
+    pub(crate) fn preflight_tool_progress(
+        &self,
+        additions: &[ContextMessage],
+    ) -> Result<(), ProcessorError> {
+        if let Some(history) = &self.tool_progress {
+            history.validate(self)?;
+            history.check_size(&self.messages, additions)?;
+            history.check_retained(self, additions)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn preflight_tool_replacement(
+        &self,
+        index: usize,
+        replacement: &ContextMessage,
+    ) -> Result<(), ProcessorError> {
+        if let Some(history) = &self.tool_progress {
+            history.validate(self)?;
+            history.check_replacement(&self.messages, index, replacement)?;
+            let old = self
+                .messages
+                .get(index)
+                .ok_or_else(|| ProcessorError::fatal("selected replacement index missing"))?;
+            let retained = self
+                .tool_progress_retained_bytes()?
+                .saturating_sub(crate::tool_progress::bounded_message(old)?)
+                .saturating_add(crate::tool_progress::bounded_message(replacement)?);
+            if retained > history.max_bytes() {
+                return Err(ProcessorError::fatal(
+                    "selected replacement exceeds retained history budget",
+                ));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn reserve_tool_revisions(&self, count: usize) -> Result<(), ProcessorError> {
+        if let Some(history) = &self.tool_progress {
+            history.check_revisions(count)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn record_tool_progress(&mut self) -> Result<(), ProcessorError> {
+        if let Some(history) = &mut self.tool_progress {
+            history.record(&self.data.messages)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn attribute_tool_progress(
+        &mut self,
+        start: usize,
+        end: usize,
+        id: &str,
+    ) -> Result<u64, ProcessorError> {
+        self.record_tool_progress()?;
+        self.tool_progress
+            .as_mut()
+            .ok_or_else(|| ProcessorError::fatal("missing selected tool history"))?
+            .attribute(start, end, id, &self.data.messages)
+    }
     fn frame_data(&self) -> Result<FrameData, ProcessorError> {
+        self.preflight_tool_progress(&[])?;
         self.require_lossless_rich_projection()?;
         if !self.rich && !matches!(&self.tools, ToolSet::Functions(tools) if tools.is_empty()) {
             if let Ok(frame) = self.legacy_frame() {
@@ -96,9 +188,12 @@ impl ContextState {
             originals: BTreeMap::new(),
             rich: false,
             lineage: next_lineage(),
+            tool_progress: None,
         };
         for message in context.messages {
-            state.append_native(message);
+            state
+                .append_native(message)
+                .expect("unbound initial context");
         }
         state
     }
@@ -106,19 +201,80 @@ impl ContextState {
         self.messages.truncate(start);
         self.originals.retain(|index, _| *index < start);
         for message in messages {
-            self.append_native(message);
+            self.append_native(message)
+                .expect("signed history excludes selected tool progress");
         }
     }
-    pub(crate) fn append_native(&mut self, message: Message) {
+    pub(crate) fn append_native(&mut self, message: Message) -> Result<(), ProcessorError> {
+        let native_bytes = if self.tool_progress.is_some() {
+            crate::tool_progress::bounded_native_message(&message)?
+        } else {
+            0
+        };
         let mut projection = frame_context::to_core_message(&message);
         if message.content.is_none() {
             projection.content = MessageContent::Text(String::new());
         }
+        self.preflight_tool_progress(std::slice::from_ref(&projection))?;
+        if let Some(history) = &self.tool_progress {
+            let retained = self
+                .tool_progress_retained_bytes()?
+                .saturating_add(self.tool_progress_growth_bytes(1))
+                .saturating_add(32)
+                .saturating_add(native_bytes)
+                .saturating_add(
+                    crate::tool_progress::bounded_message(&projection)?.saturating_mul(2),
+                );
+            if retained > history.max_bytes() {
+                return Err(ProcessorError::fatal(
+                    "selected native append exceeds retained history budget",
+                ));
+            }
+        }
         self.originals
             .insert(self.messages.len(), (projection.clone(), message));
         self.messages.push(projection);
+        self.record_tool_progress()?;
+        Ok(())
     }
-    pub(crate) fn append_legacy(&mut self, messages: &[ChatMessage], replace: bool) {
+    pub(crate) fn append_legacy(
+        &mut self,
+        messages: &[ChatMessage],
+        replace: bool,
+    ) -> Result<(), ProcessorError> {
+        if self.tool_progress.is_some() && replace {
+            return Err(ProcessorError::fatal(
+                "selected tool history cannot be replaced",
+            ));
+        }
+        if self.tool_progress.is_some() {
+            crate::tool_progress::validate_legacy_messages(messages)?;
+        }
+        let additions: Vec<_> = messages
+            .iter()
+            .map(|message| frame_context::to_core_message(&frame_context::legacy_message(message)))
+            .collect();
+        self.preflight_tool_progress(&additions)?;
+        if let Some(history) = &self.tool_progress {
+            let mut retained = self
+                .tool_progress_retained_bytes()?
+                .saturating_add(self.tool_progress_growth_bytes(additions.len()));
+            for (message, projection) in messages.iter().zip(&additions) {
+                retained = retained
+                    .saturating_add(32)
+                    .saturating_add(
+                        crate::tool_progress::bounded_message(projection)?.saturating_mul(2),
+                    )
+                    .saturating_add(crate::tool_progress::bounded_native_message(
+                        &frame_context::legacy_message(message),
+                    )?);
+            }
+            if retained > history.max_bytes() {
+                return Err(ProcessorError::fatal(
+                    "selected legacy append batch exceeds retained history budget",
+                ));
+            }
+        }
         if replace {
             self.lineage = next_lineage();
             self.messages.clear();
@@ -126,12 +282,20 @@ impl ContextState {
             self.rich = false;
         }
         for message in messages {
-            self.append_native(frame_context::legacy_message(message));
+            self.append_native(frame_context::legacy_message(message))?;
         }
+        Ok(())
     }
-    pub(crate) fn append_rich(&mut self, messages: impl IntoIterator<Item = ContextMessage>) {
+    pub(crate) fn append_rich(
+        &mut self,
+        messages: impl IntoIterator<Item = ContextMessage>,
+    ) -> Result<(), ProcessorError> {
+        let messages: Vec<_> = messages.into_iter().collect();
+        self.preflight_tool_progress(&messages)?;
         self.rich = true;
         self.messages.extend(messages);
+        self.record_tool_progress()?;
+        Ok(())
     }
     pub(crate) fn set_rich(&mut self, messages: Vec<ContextMessage>) {
         self.lineage = next_lineage();
@@ -143,6 +307,11 @@ impl ContextState {
         &mut self,
         transform: &pipecat_core::LocalMessageTransform,
     ) -> Result<(), ProcessorError> {
+        if self.tool_progress.is_some() {
+            return Err(ProcessorError::fatal(
+                "selected tool history cannot be transformed",
+            ));
+        }
         let transformed = transform.apply(self.messages.clone())?;
         let mut retained = BTreeMap::new();
         let mut consumed = vec![false; self.messages.len()];
@@ -308,6 +477,9 @@ impl ContextState {
     }
 }
 impl SharedContext {
+    pub(crate) fn identity(&self) -> usize {
+        Arc::as_ptr(&self.0) as usize
+    }
     pub fn new(context: Context) -> Self {
         Self(Arc::new(Mutex::new(ContextState::new(context))))
     }
@@ -317,6 +489,7 @@ impl SharedContext {
             originals: BTreeMap::new(),
             rich: true,
             lineage: next_lineage(),
+            tool_progress: None,
         })))
     }
     pub fn snapshot(&self) -> Result<Context, ProcessorError> {
@@ -328,7 +501,17 @@ impl SharedContext {
         Ok(state.data.clone())
     }
     pub fn append(&self, message: Message) -> Result<(), ProcessorError> {
-        self.lock()?.append_native(message);
+        let mut state = self.lock()?;
+        if state.tool_progress.is_some()
+            && (message.role == pipecat_services::Role::Tool
+                || !message.tool_calls.is_empty()
+                || message.tool_call_id.is_some())
+        {
+            return Err(ProcessorError::fatal(
+                "ordinary selected appends cannot supply tool ownership",
+            ));
+        }
+        state.append_native(message)?;
         Ok(())
     }
     /// Commit only when the resulting context has a lossless frame projection.
@@ -361,7 +544,7 @@ impl SharedContext {
         }
         state.require_lossless_rich_projection()?;
         let index = state.messages.len();
-        state.append_native(message);
+        state.append_native(message)?;
         let bounded = if expected.is_some() {
             crate::user_history::bounded_context(&state).map(|_| ())
         } else {
@@ -372,24 +555,48 @@ impl SharedContext {
             Err(error) => {
                 state.messages.truncate(index);
                 state.originals.remove(&index);
+                state.record_tool_progress()?;
                 Err(error)
             }
         }
     }
     pub fn append_rich(&self, message: ContextMessage) -> Result<(), ProcessorError> {
-        self.lock()?.append_rich([message]);
+        let mut state = self.lock()?;
+        if state.tool_progress.is_some()
+            && (message.role == ChatRole::Tool
+                || !message.tool_calls.is_empty()
+                || message.tool_call_id.is_some())
+        {
+            return Err(ProcessorError::fatal(
+                "ordinary selected appends cannot supply tool ownership",
+            ));
+        }
+        state.append_rich([message])?;
         Ok(())
     }
     pub fn replace(&self, context: Context) -> Result<(), ProcessorError> {
-        *self.lock()? = ContextState::new(context);
+        let mut state = self.lock()?;
+        if state.tool_progress.is_some() {
+            return Err(ProcessorError::fatal(
+                "selected tool history cannot be replaced",
+            ));
+        }
+        *state = ContextState::new(context);
         Ok(())
     }
     pub fn replace_rich(&self, context: LlmContextData) -> Result<(), ProcessorError> {
-        *self.lock()? = ContextState {
+        let mut state = self.lock()?;
+        if state.tool_progress.is_some() {
+            return Err(ProcessorError::fatal(
+                "selected tool history cannot be replaced",
+            ));
+        }
+        *state = ContextState {
             data: context,
             originals: BTreeMap::new(),
             rich: true,
             lineage: next_lineage(),
+            tool_progress: None,
         };
         Ok(())
     }

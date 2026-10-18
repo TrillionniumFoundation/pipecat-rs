@@ -7,6 +7,9 @@ use pipecat_core::{
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 
+#[path = "context_progress.rs"]
+mod progress;
+pub(crate) use progress::SelectedContext;
 const MAX_MESSAGES: usize = 1024;
 #[derive(Clone)]
 pub(crate) struct HeldContinuation {
@@ -16,6 +19,7 @@ pub(crate) struct HeldContinuation {
 }
 #[derive(Clone, Default)]
 pub(crate) struct ContextState {
+    pub selected: Option<SelectedContext>,
     pub initialized: bool,
     pub history: Vec<ChatMessage>,
     pub observed: bool,
@@ -161,6 +165,7 @@ impl ContextState {
                 &self.calls,
                 &self.results,
                 &self.outcome_revisions,
+                &self.selected,
             ),
             limit,
         )
@@ -224,7 +229,10 @@ impl ContextState {
         }
         let mut actions = vec![];
         if state_only {
-            for (old, message) in self.history.iter().zip(&messages) {
+            for (index, (old, message)) in self.history.iter().zip(&messages).enumerate() {
+                if self.selected.as_ref().is_some_and(|s| s.owned(index)) {
+                    continue;
+                }
                 if old != message
                     && !(old.role == ChatRole::Tool
                         && message.role == ChatRole::Tool
@@ -264,6 +272,9 @@ impl ContextState {
                         ));
                     }
                     actions.extend(message_items(message)?);
+                    continue;
+                }
+                if self.selected.as_ref().is_some_and(|s| s.owned(index)) {
                     continue;
                 }
                 if previous == Some(message) {

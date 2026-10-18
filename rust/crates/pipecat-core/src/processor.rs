@@ -890,6 +890,100 @@ impl FrameProcessor for IdentityProcessor {
     }
 }
 
+/// A weak selected progress publication route. Retained reporters cannot keep a
+/// runtime or its owned tasks alive after executor shutdown.
+pub(crate) struct WeakToolProgressContext {
+    runtime: std::sync::Weak<Runtime>,
+    node: std::sync::Weak<NodeState>,
+    index: usize,
+    name: String,
+    generation: Option<u64>,
+    origins: InvocationFence,
+}
+impl WeakToolProgressContext {
+    pub(crate) fn upgrade(&self) -> Option<ProcessorContext> {
+        let runtime = self.runtime.upgrade()?;
+        let node = self.node.upgrade()?;
+        let origins = self
+            .origins
+            .origins
+            .iter()
+            .skip(1)
+            .map(|(runtime, index, generation)| {
+                Some(ForwardingOrigin {
+                    runtime: runtime.upgrade()?,
+                    index: *index,
+                    generation: (*generation)?,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(ProcessorContext {
+            runtime,
+            node,
+            index: self.index,
+            name: self.name.clone(),
+            generation: self.generation.map(AtomicU64::new),
+            system_frame_id: None,
+            origins,
+        })
+    }
+}
+impl ProcessorContext {
+    pub fn shutdown_timeout(&self) -> std::time::Duration {
+        self.runtime.config.shutdown_timeout
+    }
+    pub(crate) fn downgrade_tool_progress(&self) -> WeakToolProgressContext {
+        WeakToolProgressContext {
+            runtime: Arc::downgrade(&self.runtime),
+            node: Arc::downgrade(&self.node),
+            index: self.index,
+            name: self.name.clone(),
+            generation: self.current_generation(),
+            origins: self
+                .invocation_fence()
+                .expect("selected progress validates origin count"),
+        }
+    }
+    /// Called only inside the canonical admission lock for a new report.
+    pub(crate) fn fresh_tool_progress_fence(&self) -> Result<InvocationFence, ProcessorError> {
+        let mut fence = self.invocation_fence()?;
+        fence.origins[0].2 = Some(self.runtime.queues[self.index].generation());
+        Ok(fence)
+    }
+    /// Synchronous selected lifecycle admission. Its deferred failure and owned
+    /// rejected frame must be finished/dropped only after outer owner locks.
+    pub fn prepare_selected_tool_terminal(
+        &self,
+        mut frame: Frame,
+        direction: Direction,
+    ) -> crate::NativeToolProgressEnqueue {
+        if !matches!(
+            frame.data,
+            FrameData::End(_) | FrameData::EndDetailed(_) | FrameData::Stop
+        ) {
+            return crate::NativeToolProgressEnqueue::rejected(
+                self.runtime.clone(),
+                frame,
+                direction,
+                ProcessorError::new("selected lifecycle admission requires End or Stop"),
+            );
+        }
+        frame.interruptible = false;
+        self.with_admission(&self.runtime, || {
+            self.runtime
+                .route_tool_progress_unlocked(self.index, frame, direction)
+        })
+    }
+    pub fn try_push_selected_tool_terminal(
+        &self,
+        frame: Frame,
+        direction: Direction,
+    ) -> Result<(), ProcessorError> {
+        self.prepare_selected_tool_terminal(frame, direction)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod causal_scope_tests;
 #[cfg(test)]

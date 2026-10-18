@@ -386,6 +386,19 @@ impl LLMUserAggregator {
         }
         state.aggregation.reserve_history(&self.context)
     }
+    pub(crate) fn bind_tool_progress(
+        &self,
+        route: pipecat_core::NativeToolProgressRoute,
+    ) -> Result<(), ProcessorError> {
+        let state = self.lock()?;
+        if state.ended || state.timer_running || state.context_cause_failed || state.eager.is_some()
+        {
+            return Err(ProcessorError::new(
+                "tool progress requires an unused healthy standard user aggregator",
+            ));
+        }
+        state.aggregation.bind_tool_progress(&self.context, route)
+    }
     /// Synchronous state-machine entry point. Effects are returned, not emitted.
     pub fn process_at(
         &self,
@@ -394,6 +407,7 @@ impl LLMUserAggregator {
         now: Duration,
     ) -> Result<AggregationOutput, ProcessorError> {
         let aggregation = self.lock()?.aggregation.clone();
+        aggregation.validate_tool_progress(&self.context, Some(&frame))?;
         let registered_history = aggregation.history_validate_reducer(&frame, direction)?;
         aggregation.mark_used()?;
         if aggregation.history_bound()? {
@@ -922,7 +936,7 @@ impl LLMUserAggregator {
                     }
                     let mut context = self.context.lock()?;
                     let start = context.messages.len();
-                    context.append_native(Message::text(Role::User, text.text.trim()));
+                    context.append_native(Message::text(Role::User, text.text.trim()))?;
                     let end = context.messages.len();
                     let lineage = context.lineage;
                     drop(context);
@@ -954,7 +968,7 @@ impl LLMUserAggregator {
                 context.append_legacy(
                     &messages.messages,
                     matches!(frame.data, FrameData::LlmMessagesUpdate(_)),
-                );
+                )?;
                 let intent = if matches!(frame.data, FrameData::LlmMessagesUpdate(_)) {
                     pipecat_core::RealtimeContextIntent::Replace
                 } else {
@@ -982,7 +996,7 @@ impl LLMUserAggregator {
                 if matches!(frame.data, FrameData::LlmMessagesUpdateDetailed(_)) {
                     context.set_rich(messages.messages.clone());
                 } else {
-                    context.append_rich(messages.messages.clone());
+                    context.append_rich(messages.messages.clone())?;
                 }
                 let intent = if matches!(frame.data, FrameData::LlmMessagesUpdateDetailed(_)) {
                     pipecat_core::RealtimeContextIntent::Replace
@@ -1150,6 +1164,7 @@ impl LLMUserAggregator {
             .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))?;
         let mut output = AggregationOutput::default();
         if !state.ended && !state.timer_disabled {
+            state.aggregation.validate_tool_progress(context, None)?;
             Self::sync_realtime(&mut state, false)?;
             state.now = state.now.max(now);
             state.aggregation.service_history(context, &mut output)?;
@@ -1602,6 +1617,11 @@ impl FrameProcessor for LLMUserAggregator {
             }
             state.aggregation.clone()
         };
+        aggregation.setup_tool_progress(
+            &self.context,
+            pipecat_core::NativeToolProgressRole::User,
+            ctx,
+        )?;
         aggregation.setup_user(ctx)
     }
     async fn process(
@@ -1619,6 +1639,7 @@ impl FrameProcessor for LLMUserAggregator {
                 | FrameData::CancelDetailed(_)
         );
         let aggregation = self.lock()?.aggregation.clone();
+        aggregation.validate_tool_progress(&self.context, Some(&frame))?;
         aggregation.bind_user(ctx)?;
         let processing = aggregation.history_processing(&frame, direction, ctx)?;
         if processing
@@ -1789,7 +1810,9 @@ mod realtime_lineage_tests {
                             }))
                             .unwrap();
                     } else {
-                        context.append_native(Message::text(Role::User, "original append"));
+                        context
+                            .append_native(Message::text(Role::User, "original append"))
+                            .unwrap();
                     }
                     context.lineage
                 };
@@ -1861,7 +1884,9 @@ mod realtime_lineage_tests {
         let mut state = user.lock().unwrap();
         let lineage = {
             let mut context = shared.lock().unwrap();
-            context.append_native(Message::text(Role::User, "explicit"));
+            context
+                .append_native(Message::text(Role::User, "explicit"))
+                .unwrap();
             context.lineage
         };
         shared

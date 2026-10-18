@@ -32,6 +32,7 @@ pub(crate) struct State {
     pub(crate) user_route: Option<ProcessorContext>,
     pub(crate) user_identity: Option<pipecat_core::ObservedProcessor>,
     pub(crate) history: Option<crate::user_history::HistoryState>,
+    tool_progress: Option<(pipecat_core::NativeToolProgressRoute, u64, usize)>,
     used: bool,
     timers_closed: bool,
     closed: bool,
@@ -66,6 +67,7 @@ impl RealtimeState {
                 user_route: None,
                 user_identity: None,
                 history: None,
+                tool_progress: None,
                 used: false,
                 timers_closed: false,
                 closed: false,
@@ -100,6 +102,7 @@ impl RealtimeState {
             || state.used
             || state.closed
             || state.history.is_some()
+            || state.tool_progress.is_some()
             || state.user_identity.is_some()
             || !state.text.text.is_empty()
         {
@@ -118,6 +121,80 @@ impl RealtimeState {
             context: context.clone(),
             gate,
         })
+    }
+    pub(crate) fn bind_tool_progress(
+        &self,
+        context: &SharedContext,
+        route: pipecat_core::NativeToolProgressRoute,
+    ) -> Result<(), ProcessorError> {
+        let mut state = self.lock()?;
+        if self.mode != RealtimeServiceMode::Enabled
+            || !self.paired
+            || self.eager
+            || state.model_wrapper
+            || state.used
+            || state.closed
+            || state.history.is_some()
+            || state.tool_progress.is_some()
+            || state.user_identity.is_some()
+            || !state.text.text.is_empty()
+        {
+            return Err(ProcessorError::new("tool progress requires one unused explicitly Enabled standard unsigned non-eager pair"));
+        }
+        let mut history = context.lock()?;
+        if history.tool_progress.is_some() {
+            return Err(ProcessorError::new(
+                "shared context already has a tool progress binding",
+            ));
+        }
+        let bound = crate::tool_progress::History::new(route.clone(), &history)?;
+        history.tool_progress = Some(bound);
+        state.tool_progress = Some((route, history.lineage, context.identity()));
+        Ok(())
+    }
+    pub(crate) fn tool_progress_route(
+        &self,
+    ) -> Result<Option<pipecat_core::NativeToolProgressRoute>, ProcessorError> {
+        Ok(self
+            .lock()?
+            .tool_progress
+            .as_ref()
+            .map(|(route, _, _)| route.clone()))
+    }
+    pub(crate) fn validate_tool_progress(
+        &self,
+        context: &SharedContext,
+        frame: Option<&Frame>,
+    ) -> Result<(), ProcessorError> {
+        let binding = self.lock()?.tool_progress.clone();
+        if let Some((_route, lineage, identity)) = binding {
+            if let Some(frame) = frame {
+                crate::tool_progress::validate_control(frame)?;
+            }
+            let history = context.lock()?;
+            if history.lineage != lineage
+                || context.identity() != identity
+                || history.tool_progress.is_none()
+            {
+                return Err(ProcessorError::fatal(
+                    "selected tool progress context was replaced",
+                ));
+            }
+            history.preflight_tool_progress(&[])?;
+        }
+        Ok(())
+    }
+    pub(crate) fn setup_tool_progress(
+        &self,
+        context: &SharedContext,
+        role: pipecat_core::NativeToolProgressRole,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        self.validate_tool_progress(context, None)?;
+        if let Some(route) = self.tool_progress_route()? {
+            route.register_role(role, ctx, Some(context.identity()))?;
+        }
+        Ok(())
     }
     pub(crate) fn history_bound(&self) -> Result<bool, ProcessorError> {
         Ok(self.lock()?.history.is_some())

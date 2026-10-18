@@ -178,6 +178,7 @@ struct TerminalResult {
     error: Option<String>,
     run_llm: Option<bool>,
     bytes: usize,
+    selected_retained: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,8 +221,20 @@ pub struct NativeToolCallOutcome {
     run_llm: bool,
     batch: Option<Arc<NativeToolCallBatch>>,
     result: Option<TerminalResult>,
+    progress_terminal: Option<crate::NativeToolProgressTerminal>,
+    journal_only: bool,
+    progress_summary: Option<crate::NativeToolProgressTerminalSummary>,
 }
 impl NativeToolCallOutcome {
+    pub fn progress_journal_summary(&self) -> Option<crate::NativeToolProgressTerminalSummary> {
+        self.progress_summary
+    }
+    pub fn is_journal_projection(&self) -> bool {
+        self.journal_only
+    }
+    pub fn progress_terminal(&self) -> Option<&crate::NativeToolProgressTerminal> {
+        self.progress_terminal.as_ref()
+    }
     /// Immutable identity of the original terminal publication.
     pub fn id(&self) -> u64 {
         self.id
@@ -263,6 +276,50 @@ impl NativeToolCallOutcome {
         data: &FrameData,
         timeout_projection: bool,
     ) -> Result<(), ProcessorError> {
+        if self.journal_only {
+            return Err(ProcessorError::fatal(
+                "compact selected journal is not frame authority",
+            ));
+        }
+        if self.progress_terminal.is_some() {
+            match data {
+                FrameData::FunctionCallCancel(cancel) => {
+                    crate::tool_progress::validate_selected_call_copy(
+                        &cancel.function_name,
+                        &cancel.tool_call_id,
+                        None,
+                        &self.call,
+                    )?;
+                }
+                FrameData::FunctionCallResult(result) => {
+                    crate::tool_progress::validate_selected_call_copy(
+                        &result.function_name,
+                        &result.tool_call_id,
+                        Some(&result.arguments),
+                        &self.call,
+                    )?;
+                    let retained = crate::tool_progress::measured_json_retention(
+                        &result.result,
+                        crate::NativeToolProgressRoute::MAX_TERMINAL_RESULT_BYTES,
+                    )?
+                    .saturating_add(result.error.as_ref().map_or(0, String::capacity));
+                    if self
+                        .result
+                        .as_ref()
+                        .is_none_or(|sealed| retained > sealed.selected_retained)
+                    {
+                        return Err(ProcessorError::fatal(
+                            "selected terminal retained representation changed",
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(ProcessorError::fatal(
+                        "selected terminal payload family changed",
+                    ))
+                }
+            }
+        }
         let matches = match data {
             FrameData::FunctionCallCancel(cancel) => {
                 (self.state == ToolCallTerminalState::Cancelled && cancel.run_llm == self.run_llm
@@ -324,6 +381,7 @@ pub struct ToolOutcomePublisher {
     call: Arc<FunctionCall>,
     cancel_on_interruption: bool,
     batch: Option<Arc<NativeToolCallBatch>>,
+    progress_terminal: Option<crate::NativeToolProgressTerminal>,
 }
 impl ProcessorContext {
     pub fn tool_outcome_publisher(
@@ -343,10 +401,29 @@ impl ProcessorContext {
             call,
             cancel_on_interruption,
             batch: None,
+            progress_terminal: None,
         })
     }
 }
 impl ToolOutcomePublisher {
+    pub fn with_progress_terminal(
+        mut self,
+        terminal: crate::NativeToolProgressTerminal,
+    ) -> Result<Self, ProcessorError> {
+        if terminal.admission().call() != self.call.as_ref()
+            || self
+                .batch
+                .as_ref()
+                .is_none_or(|batch| batch.id() != terminal.admission().batch().id())
+            || self.progress_terminal.is_some()
+        {
+            return Err(ProcessorError::fatal(
+                "selected terminal does not match publisher lease",
+            ));
+        }
+        self.progress_terminal = Some(terminal);
+        Ok(self)
+    }
     pub fn batch(&self) -> Option<&Arc<NativeToolCallBatch>> {
         self.batch.as_ref()
     }
@@ -388,6 +465,23 @@ impl ToolOutcomePublisher {
         effects: ToolCallEffectStatus,
         mut reason: ToolCallEndReason,
     ) -> ToolCallReceipt {
+        if self.progress_terminal.is_some() {
+            let valid = match &result {
+                Ok(value) => crate::tool_progress::validate_json(
+                    value,
+                    crate::NativeToolProgressRoute::MAX_TERMINAL_RESULT_BYTES,
+                ),
+                Err(error) => crate::tool_progress::encoded_size(
+                    error,
+                    crate::NativeToolProgressRoute::MAX_TERMINAL_RESULT_BYTES / 2,
+                )
+                .map(|_| ()),
+            };
+            if valid.is_err() {
+                result = Err("selected native tool result exceeds byte limit".into());
+                reason = ToolCallEndReason::ResultTooLarge;
+            }
+        }
         // Count without an encoded allocation before making the immutable copy.
         let size = match &result {
             Ok(value) => encoded_bytes(value, NativeToolCallBatch::MAX_RETAINED_BYTES),
@@ -424,6 +518,9 @@ impl ToolOutcomePublisher {
         mut reason: ToolCallEndReason,
         mut run_llm: bool,
     ) -> ToolCallReceipt {
+        if self.progress_terminal.is_some() {
+            return self.publish_selected(data, state, effects, reason, run_llm);
+        }
         let ctx = &self.context;
         ctx.with_admission(&ctx.runtime, || {
             let generation = self
@@ -457,11 +554,15 @@ impl ToolOutcomePublisher {
                 effects,
                 run_llm,
                 batch: self.batch.clone(),
+                progress_terminal: None,
+                journal_only: false,
+                progress_summary: None,
                 result: match &frame.data {
                     FrameData::FunctionCallResult(result) => Some(TerminalResult {
                         result: result.result.clone(),
                         error: result.error.clone(),
                         run_llm: result.run_llm,
+                        selected_retained: 0,
                         bytes: encoded_bytes(
                             &(&result.result, &result.error, result.run_llm),
                             usize::MAX,
@@ -500,5 +601,137 @@ impl ToolOutcomePublisher {
             };
             ToolCallReceipt { outcome, admission }
         })
+    }
+}
+
+impl ToolOutcomePublisher {
+    fn publish_selected(
+        self,
+        data: FrameData,
+        state: ToolCallTerminalState,
+        effects: ToolCallEffectStatus,
+        reason: ToolCallEndReason,
+        run_llm: bool,
+    ) -> ToolCallReceipt {
+        let mut frame = Frame::new(data).with_interruptible(false);
+        let outcome = Arc::new(NativeToolCallOutcome {
+            id: frame.id,
+            call: self.call,
+            cancel_on_interruption: self.cancel_on_interruption,
+            state,
+            reason,
+            effects,
+            run_llm,
+            batch: self.batch,
+            progress_summary: self
+                .progress_terminal
+                .as_ref()
+                .map(crate::NativeToolProgressTerminal::summary),
+            progress_terminal: self.progress_terminal,
+            journal_only: false,
+            result: match &frame.data {
+                FrameData::FunctionCallResult(result) => Some(TerminalResult {
+                    result: result.result.clone(),
+                    error: result.error.clone(),
+                    run_llm: result.run_llm,
+                    selected_retained: crate::tool_progress::measured_json_retention(
+                        &result.result,
+                        crate::NativeToolProgressRoute::MAX_TERMINAL_RESULT_BYTES,
+                    )
+                    .unwrap_or(usize::MAX)
+                    .saturating_add(result.error.as_ref().map_or(0, String::capacity)),
+                    bytes: encoded_bytes(
+                        &(&result.result, &result.error, result.run_llm),
+                        usize::MAX,
+                    )
+                    .unwrap_or(usize::MAX),
+                }),
+                _ => None,
+            },
+        });
+        frame.attach_tool_outcome(outcome.clone());
+        // Last owners of frame payload and seal remain outside the admission lock.
+        let retained = frame.clone();
+        let deferred = self.context.with_admission(&self.context.runtime, || {
+            self.context.runtime.route_tool_progress_unlocked(
+                self.context.index,
+                frame,
+                Direction::Downstream,
+            )
+        });
+        let admission = if deferred.accepted() {
+            ToolOutcomeAdmission::Admitted
+        } else if self.context.runtime.is_finished() {
+            ToolOutcomeAdmission::Closed
+        } else {
+            ToolOutcomeAdmission::Undelivered("selected terminal queue rejected".into())
+        };
+        let _ = deferred.finish();
+        drop(retained);
+        ToolCallReceipt { outcome, admission }
+    }
+}
+
+impl ToolCallReceipt {
+    /// Journal-only selected projection. It preserves immutable call identity,
+    /// final choice and publication status, but owns neither result, full batch,
+    /// progress authority nor the terminal payload reservation. It cannot be
+    /// attached or accepted as native frame authority.
+    pub fn compact_selected_journal(&self) -> Self {
+        if self.outcome.progress_terminal.is_none() {
+            return self.clone();
+        }
+        let outcome = &self.outcome;
+        Self {
+            admission: self.admission.clone(),
+            outcome: Arc::new(NativeToolCallOutcome {
+                id: outcome.id,
+                call: outcome.call.clone(),
+                cancel_on_interruption: outcome.cancel_on_interruption,
+                state: outcome.state,
+                reason: outcome.reason,
+                effects: outcome.effects,
+                run_llm: outcome.run_llm,
+                batch: None,
+                result: None,
+                progress_terminal: None,
+                journal_only: true,
+                progress_summary: outcome
+                    .progress_terminal
+                    .as_ref()
+                    .map(crate::NativeToolProgressTerminal::summary),
+            }),
+        }
+    }
+}
+
+impl NativeToolCallBatch {
+    pub(crate) fn validate_progress_bounds(&self) -> Result<(), ProcessorError> {
+        let mut retained = self.group_id.capacity().saturating_add(
+            self.members
+                .capacity()
+                .saturating_mul(std::mem::size_of::<(Arc<FunctionCall>, bool)>()),
+        );
+        for (call, _) in &self.members {
+            crate::NativeToolProgressRoute::validate_call(call)?;
+            retained = retained
+                .checked_add(call.function_name.capacity())
+                .and_then(|bytes| bytes.checked_add(call.tool_call_id.capacity()))
+                .and_then(|bytes| {
+                    crate::tool_progress::measured_json_retention(&call.arguments, 32 * 1024)
+                        .ok()
+                        .and_then(|count| bytes.checked_add(count))
+                })
+                .filter(|bytes| *bytes <= Self::MAX_RETAINED_BYTES)
+                .ok_or_else(|| {
+                    ProcessorError::new("selected shared batch retained capacity exceeded")
+                })?;
+        }
+        if retained > Self::MAX_RETAINED_BYTES {
+            return Err(ProcessorError::new(
+                "selected batch retained capacity exceeded",
+            ));
+        }
+        Ok(())
     }
 }

@@ -4,9 +4,11 @@ use crate::*;
 use pipecat_core::{
     async_trait, AudioRawFrame, Direction, ErrorCategory, ErrorFrame, Frame, FrameData,
     FrameProcessor, FunctionCall, InvocationFence, LlmContextData, LlmServiceMetadataFrame, Metric,
-    NativeRealtimeContextCause, ProcessorContext, ProcessorError, RealtimeContextAdmission,
-    RealtimeContextIntent, ServiceMetadataFrame, Setting, StartFrame, TextFrame, ToolSet,
-    TranscriptionFrame, TtsStartedFrame, TtsStoppedFrame, UserTurnStrategies, UserTurnStrategy,
+    NativeRealtimeContextCause, NativeToolProgressFailure, NativeToolProgressProviderLimits,
+    NativeToolProgressRole, NativeToolProgressRoute, NativeToolProgressRouteState,
+    ProcessorContext, ProcessorError, RealtimeContextAdmission, RealtimeContextIntent,
+    ServiceMetadataFrame, Setting, StartFrame, TextFrame, ToolSet, TranscriptionFrame,
+    TtsStartedFrame, TtsStoppedFrame, UserTurnStrategies, UserTurnStrategy,
 };
 use serde_json::json;
 use std::{
@@ -17,6 +19,12 @@ use std::{
     },
 };
 use tokio::time::Instant;
+#[path = "processor_progress.rs"]
+mod progress_consumer;
+use progress_consumer::ProgressProvider;
+#[path = "processor_deferred.rs"]
+mod progress_deferred;
+use progress_deferred::DeferredProvider;
 struct AudioItem {
     generation: u64,
     bytes: u64,
@@ -40,6 +48,8 @@ struct VideoInput {
 /// does not, so a preceding image may write before Cancel is processed.
 pub struct OpenAiRealtimeProcessor {
     client: RealtimeClient,
+    progress_provider: Mutex<ProgressProvider>,
+    deferred_provider: Mutex<DeferredProvider>,
     sender: Mutex<Option<RealtimeSender>>,
     playback: Arc<Mutex<Option<(u64, PlaybackPosition)>>>,
     audio_items: AudioItems,
@@ -57,6 +67,11 @@ pub struct OpenAiRealtimeProcessor {
     video_paused: AtomicBool,
     start_video_paused: bool,
     video_closed: AtomicBool,
+    progress_route: Option<NativeToolProgressRoute>,
+    progress_start: Mutex<Option<StartFrame>>,
+    progress_output: Mutex<Option<ProcessorContext>>,
+    selected_session: Mutex<Option<Arc<tokio::sync::Mutex<RealtimeSession>>>>,
+    selected_join_observer: Mutex<Option<Arc<AtomicBool>>>,
 }
 impl OpenAiRealtimeProcessor {
     pub fn new(mut client: RealtimeClient) -> Result<Self, RealtimeError> {
@@ -93,6 +108,8 @@ impl OpenAiRealtimeProcessor {
         let context = ContextState::with_instructions(client.config().session.instructions.clone());
         Ok(Self {
             client,
+            progress_provider: Mutex::new(ProgressProvider::default()),
+            deferred_provider: Mutex::new(DeferredProvider::default()),
             sender: Mutex::new(None),
             playback: Arc::new(Mutex::new(None)),
             audio_items: Arc::new(Mutex::new(HashMap::new())),
@@ -110,7 +127,32 @@ impl OpenAiRealtimeProcessor {
             video_paused: AtomicBool::new(false),
             start_video_paused: false,
             video_closed: AtomicBool::new(false),
+            progress_route: None,
+            progress_start: Mutex::new(None),
+            progress_output: Mutex::new(None),
+            selected_session: Mutex::new(None),
+            selected_join_observer: Mutex::new(None),
         })
+    }
+    /// Opt in to one actual same-runtime reporting composition. Role/configuration
+    /// validation happens before the selected Start opens its provider socket.
+    pub fn with_progress_route(mut self, route: NativeToolProgressRoute) -> Self {
+        self.context
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .selected = Some(crate::context::SelectedContext::new(route.clone()));
+        self.progress_route = Some(route);
+        self
+    }
+    fn progress_limits(&self) -> NativeToolProgressProviderLimits {
+        let limits = &self.client.config().limits;
+        NativeToolProgressProviderLimits {
+            response_timeout: limits.response_timeout,
+            operation_timeout: limits.operation_timeout,
+            close_timeout: limits.close_timeout,
+            max_message_bytes: limits.max_message_bytes,
+            max_in_flight: limits.max_outstanding_tools,
+        }
     }
     /// Initial camera pause state. The processor remains single-session.
     pub fn with_video_input_paused(mut self, paused: bool) -> Self {
@@ -404,13 +446,49 @@ impl OpenAiRealtimeProcessor {
         crate::client::bounded_serialized(&update, self.client.config().limits.max_message_bytes)
             .map_err(processor_error)?;
         let mut next = state.clone();
-        // This receipt reason is selected by the assistant's existing scheduling
-        // policy. The adapter does not duplicate null/error/group eligibility.
-        let permission_revision = cause
+        if let Some(selected) = &mut next.selected {
+            selected.prepare(&context.messages)?;
+        }
+        let selected_permission = self
+            .progress_route
             .as_ref()
-            .and_then(|cause| cause.assistant_native_outcome_id())
-            .map(|id| next.outcome_revision(id))
-            .transpose()?;
+            .map(|route| route.inference_permission());
+        let reasons = cause
+            .as_ref()
+            .map_or(&[][..], |cause| cause.assistant_native_progress_reasons());
+        let selected_alternatives = if reasons.is_empty() {
+            None
+        } else {
+            let emission = fence
+                .as_ref()
+                .ok_or_else(|| ProcessorError::fatal("selected context lacks emission scope"))?;
+            let mut alternatives = Vec::with_capacity(reasons.len());
+            for reason in reasons {
+                if reason.is_allowed() {
+                    alternatives.push(crate::client::SelectedAlternative::intersect(
+                        reason.permission().clone(),
+                        emission,
+                        reason.publication_fence(),
+                    )?);
+                }
+            }
+            Some(alternatives)
+        };
+        let run = run
+            && selected_permission.as_ref().is_none_or(|p| p.is_allowed())
+            && selected_alternatives.as_ref().is_none_or(|v| !v.is_empty());
+        let permission_revision = if reasons.is_empty() {
+            cause
+                .as_ref()
+                .and_then(|cause| cause.assistant_native_outcome_id())
+                .map(|id| next.outcome_revision(id))
+                .transpose()?
+        } else {
+            reasons
+                .iter()
+                .filter_map(|reason| next.progress_revision(reason.event_id()).ok())
+                .max()
+        };
         let mut actions = next.snapshot_with_intent(
             messages,
             state_only,
@@ -440,7 +518,7 @@ impl OpenAiRealtimeProcessor {
                         }
                     }
                 }
-                if continuation && next.has_open_calls() {
+                if continuation && next.selected.is_none() && next.has_open_calls() {
                     let result_revision = permission_revision.unwrap_or_else(|| {
                         next.continuation_owed
                             .as_ref()
@@ -454,6 +532,7 @@ impl OpenAiRealtimeProcessor {
                         reevaluation_queued: false,
                     });
                 } else if !continuation
+                    || selected_alternatives.is_some()
                     || next.result_revision > next.continued_revision
                     || actions
                         .iter()
@@ -466,9 +545,20 @@ impl OpenAiRealtimeProcessor {
             }
         }
         if !actions.is_empty() {
-            self.sender()?
-                .try_send_batch_with_fence(actions, fence)
-                .map_err(processor_error)?;
+            if let Some(route) = &self.progress_route {
+                let prerequisites = route.pending_provider_history(&context.messages)?;
+                self.queue_or_defer(
+                    actions,
+                    fence,
+                    selected_permission,
+                    selected_alternatives,
+                    prerequisites,
+                )?;
+            } else {
+                self.sender()?
+                    .try_send_batch_with_fence(actions, fence)
+                    .map_err(processor_error)?;
+            }
         }
         *state = next;
         if let Some(cause) = cause {
@@ -536,6 +626,9 @@ impl OpenAiRealtimeProcessor {
         let fresh = action.is_some();
         if fresh {
             next.record_outcome(outcome.id(), limit)?;
+            if outcome.progress_terminal().is_some() {
+                next.selected_terminal(outcome.id(), limit)?;
+            }
         }
         if let Some(action) = action {
             self.enqueue(action)?;
@@ -573,110 +666,114 @@ impl OpenAiRealtimeProcessor {
             actions.push(Action::CreateResponse(ResponseOptions::default()));
         }
         if !actions.is_empty() {
-            self.sender()?
-                .try_send_batch_with_fence(actions, Some(fence))
-                .map_err(processor_error)?;
+            self.send_inference_batch(actions, Some(fence))?;
         }
         *state = next;
         Ok(())
     }
-    fn close(&self) -> Result<(), ProcessorError> {
-        self.video_closed.store(true, Ordering::SeqCst);
-        self.video.cancel();
-        let sender = {
-            self.sender
-                .lock()
-                .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
-                .take()
-        };
-        if let Some(sender) = sender {
-            sender.close();
-        }
-        self.playback
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?
-            .take();
-        *self
-            .context
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime context lock poisoned"))? =
-            ContextState::default();
-        self.audio_items
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime audio items lock poisoned"))?
-            .clear();
-        self.initial
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime seed lock poisoned"))?
-            .take();
-        *self
-            .admission
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime admission lock poisoned"))? =
-            RealtimeContextAdmission::default();
-        *self
-            .assistant_admission
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime assistant admission lock poisoned"))? =
-            RealtimeContextAdmission::default();
-        Ok(())
-    }
-}
-#[async_trait]
-impl FrameProcessor for OpenAiRealtimeProcessor {
-    fn name(&self) -> &str {
-        "OpenAiRealtimeService"
-    }
-    async fn setup(
+    async fn connect_and_receive(
         &self,
         config: &StartFrame,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        if self.started.swap(true, Ordering::AcqRel) {
-            return Err(ProcessorError::new(
-                "realtime processors are single-session; construct a new processor",
+        // A persistent receive owner has the actual setup lifetime, not the
+        // initial Start invocation's epoch. Individual responses still carry
+        // their original provider generation and inference fences below.
+        let output = if self.progress_route.is_some() {
+            self.progress_output
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime selected output lock poisoned"))?
+                .take()
+                .ok_or_else(|| ProcessorError::fatal("selected receive lacks setup context"))?
+        } else {
+            ctx.clone()
+        };
+        let session = self.client.connect().await.map_err(processor_error)?;
+        let sender = session.sender();
+        let joined = session.join_observer();
+        let session = Arc::new(tokio::sync::Mutex::new(session));
+        if self.progress_route.is_some() {
+            // Publish the recovery owner before any further await, including an
+            // error shutdown or one-shot handoff. Cancel may abort this Start.
+            *self
+                .selected_session
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(session.clone());
+            *self
+                .selected_join_observer
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(joined);
+        }
+        if self
+            .progress_route
+            .as_ref()
+            .is_some_and(NativeToolProgressRoute::is_closed)
+        {
+            let _ = session.lock().await.shutdown().await;
+            return Err(ProcessorError::fatal(
+                "selected route closed during provider connection",
             ));
         }
-        if config.audio_in_sample_rate != 24_000 || config.audio_out_sample_rate != 24_000 {
-            return Err(ProcessorError::new("realtime pipeline requires 24000 Hz input and output; resample upstream/downstream"));
+        let prepare = (|| {
+            *self
+                .sender
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))? =
+                Some(sender.clone());
+            let initial = self
+                .initial
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime seed lock poisoned"))?
+                .take();
+            if let Some(initial) = initial {
+                self.context(&initial, false, false, false, None, None)?;
+            }
+            Ok::<_, ProcessorError>(())
+        })();
+        if let Err(error) = prepare {
+            let _ = session.lock().await.shutdown().await;
+            return Err(error);
         }
-        self.video.reset().await.map_err(processor_error)?;
-        self.video_paused
-            .store(self.start_video_paused, Ordering::SeqCst);
-        self.video_closed.store(false, Ordering::SeqCst);
-        *self
-            .video_input
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime video input lock poisoned"))? =
-            VideoInput::default();
-        let mut session = self.client.connect().await.map_err(processor_error)?;
-        let sender = session.sender();
-        *self
-            .sender
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))? =
-            Some(sender.clone());
-        let initial = self
-            .initial
-            .lock()
-            .map_err(|_| ProcessorError::fatal("realtime seed lock poisoned"))?
-            .take();
-        if let Some(initial) = initial {
-            self.context(&initial, false, false, false, None, None)?;
-        }
-        let output = ctx.clone();
         let user_id = self.user_id.clone();
         let context = self.context.clone();
         let audio_items = self.audio_items.clone();
         let limit = self.client.config().limits.max_message_bytes;
         let ready = self.receive_ready.clone();
         let enable_usage_metrics = config.enable_usage_metrics;
-        ctx.spawn("openai-realtime-receive", false, async move {
-            ready.notified().await;
+        let progress_route = self.progress_route.clone();
+        let (handoff, receive) =
+            tokio::sync::oneshot::channel::<Arc<tokio::sync::Mutex<RealtimeSession>>>();
+        let (owned, ownership) = tokio::sync::oneshot::channel::<()>();
+        let task = ctx.spawn("openai-realtime-receive", false, async move {
+            let Ok(owner) = receive.await else { return Ok(()); };
+            let mut session = owner.lock().await;
+            let _ = owned.send(());
+            let closed = wait_progress_route_closed(progress_route.as_ref());
+            tokio::pin!(closed);
             let mut mapper = RealtimeFrameMapper::new(user_id);
             let mut generation = sender.generation();
             let result = async {
-                while let Some(result) = session.next_received().await {
+                tokio::select! {
+                    biased;
+                    _ = &mut closed => return selected_receive_close_result(progress_route.as_ref()),
+                    _ = ready.notified() => (),
+                }
+                loop {
+                    let result = tokio::select! {
+                        biased;
+                        _ = &mut closed => return selected_receive_close_result(progress_route.as_ref()),
+                        result = session.next_received() => result,
+                    };
+                    let Some(result) = result else {
+                        // Select the EOF meaning now. Later shutdown awaits or
+                        // a concurrent End cannot relabel an unexpected close.
+                        if progress_route.as_ref().is_some_and(|route| matches!(
+                            route.state(), NativeToolProgressRouteState::Open | NativeToolProgressRouteState::Draining
+                        )) {
+                            return Err(ProcessorError::fatal("selected provider ended before route shutdown"));
+                        }
+                        break;
+                    };
                     let received = result.map_err(processor_error)?;
                     let event = received.event;
                     if let Event::Error { error } = &event.event {
@@ -747,6 +844,16 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                         continue;
                     };
                     for mut frame in frames {
+                        if matches!(frame.data, FrameData::FunctionCallsStarted(_))
+                            && progress_route.as_ref().is_some_and(|route| !route.accepts_new_calls())
+                        {
+                            if let Some(route) = &progress_route {
+                                route.close(NativeToolProgressFailure::ProviderRejected);
+                            }
+                            return Err(ProcessorError::fatal(
+                                "provider announced a new selected tool call after admission closed",
+                            ));
+                        }
                         if let FrameData::Metrics(metrics) = &frame.data {
                             if let [Metric::LlmUsage {
                                 prompt_tokens,
@@ -806,11 +913,199 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                 Ok(())
             }
             .await;
-            // Always close the owned socket, including mapping/admission failures.
+            // Join first, then release the recoverable owner before route
+            // revocation or reporting a fatal selected transport failure.
             let shutdown = session.shutdown().await.map_err(processor_error);
-            result.and(shutdown)
-        })?;
+            drop(session);
+            let result = result.and(shutdown);
+            if let Some(route) = &progress_route {
+                if let Err(error) = result {
+                    route.close(NativeToolProgressFailure::ProviderRejected);
+                    return Err(ProcessorError::fatal(error.to_string()));
+                }
+                return Ok(());
+            }
+            result
+        });
+        match task {
+            Ok(_) => {
+                if let Err(session) = handoff.send(session) {
+                    let _ = session.lock().await.shutdown().await;
+                    return Err(ProcessorError::fatal(
+                        "realtime receive owner closed before handoff",
+                    ));
+                }
+                // Ensure graceful End cannot acquire the session before its
+                // receive owner and turn ordered finish into an early close.
+                ownership.await.map_err(|_| {
+                    ProcessorError::fatal("realtime receive owner ended before startup handoff")
+                })
+            }
+            Err(error) => {
+                let _ = session.lock().await.shutdown().await;
+                Err(error)
+            }
+        }
+    }
+    /// Whether the selected connection's actual socket-actor JoinHandle was
+    /// awaited. False before connection. True also covers a forced abort followed
+    /// by its actual join; it does not claim a clean close or remote acceptance.
+    pub fn selected_session_joined(&self) -> bool {
+        self.selected_join_observer
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .as_ref()
+            .is_some_and(|joined| joined.load(Ordering::Acquire))
+    }
+    async fn join_selected_session(&self) -> Result<(), ProcessorError> {
+        let owner = self
+            .selected_session
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        let Some(owner) = owner else {
+            return Ok(());
+        };
+        // No std state lock spans this await. Keep the processor reference until
+        // actual shutdown completes so aborting a waiter cannot detach the actor.
+        let result = owner.lock().await.shutdown().await.map_err(processor_error);
+        self.selected_session
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        result
+    }
+    fn close(&self) -> Result<(), ProcessorError> {
+        self.progress_output
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        *self
+            .deferred_provider
+            .lock()
+            .map_err(|_| ProcessorError::fatal("deferred provider lock poisoned"))? =
+            DeferredProvider::default();
+        *self
+            .progress_provider
+            .lock()
+            .map_err(|_| ProcessorError::fatal("progress consumer lock poisoned"))? =
+            ProgressProvider::default();
+        if let Some(route) = &self.progress_route {
+            route.close(NativeToolProgressFailure::Closed);
+        }
+        self.progress_start
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime selected Start lock poisoned"))?
+            .take();
+        self.video_closed.store(true, Ordering::SeqCst);
+        self.video.cancel();
+        let sender = {
+            self.sender
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))?
+                .take()
+        };
+        if let Some(sender) = sender {
+            sender.close();
+        }
+        self.playback
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?
+            .take();
+        *self
+            .context
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime context lock poisoned"))? =
+            ContextState::default();
+        self.audio_items
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime audio items lock poisoned"))?
+            .clear();
+        self.initial
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime seed lock poisoned"))?
+            .take();
+        *self
+            .admission
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime admission lock poisoned"))? =
+            RealtimeContextAdmission::default();
+        *self
+            .assistant_admission
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime assistant admission lock poisoned"))? =
+            RealtimeContextAdmission::default();
         Ok(())
+    }
+}
+async fn wait_progress_route_closed(route: Option<&NativeToolProgressRoute>) {
+    let Some(route) = route else {
+        std::future::pending::<()>().await;
+        return;
+    };
+    let mut changes = route.subscribe();
+    loop {
+        if route.is_closed() {
+            return;
+        }
+        if changes.changed().await.is_err() {
+            return;
+        }
+    }
+}
+fn selected_receive_close_result(
+    route: Option<&NativeToolProgressRoute>,
+) -> Result<(), ProcessorError> {
+    if route.is_some_and(|route| route.state() == NativeToolProgressRouteState::Failed) {
+        Err(ProcessorError::fatal("selected tool progress route failed"))
+    } else {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl FrameProcessor for OpenAiRealtimeProcessor {
+    fn name(&self) -> &str {
+        "OpenAiRealtimeService"
+    }
+    async fn setup(
+        &self,
+        config: &StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.started.swap(true, Ordering::AcqRel) {
+            return Err(ProcessorError::new(
+                "realtime processors are single-session; construct a new processor",
+            ));
+        }
+        if config.audio_in_sample_rate != 24_000 || config.audio_out_sample_rate != 24_000 {
+            return Err(ProcessorError::new("realtime pipeline requires 24000 Hz input and output; resample upstream/downstream"));
+        }
+        self.video.reset().await.map_err(processor_error)?;
+        self.video_paused
+            .store(self.start_video_paused, Ordering::SeqCst);
+        self.video_closed.store(false, Ordering::SeqCst);
+        *self
+            .video_input
+            .lock()
+            .map_err(|_| ProcessorError::fatal("realtime video input lock poisoned"))? =
+            VideoInput::default();
+        if let Some(route) = &self.progress_route {
+            route.register_role(NativeToolProgressRole::Provider, ctx, None)?;
+            *self
+                .progress_start
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime selected Start lock poisoned"))? =
+                Some(config.clone());
+            *self
+                .progress_output
+                .lock()
+                .map_err(|_| ProcessorError::fatal("realtime selected output lock poisoned"))? =
+                Some(ctx.clone());
+            Ok(())
+        } else {
+            self.connect_and_receive(config, ctx).await
+        }
     }
     async fn process(
         &self,
@@ -818,6 +1113,20 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let Some(selected_frame) =
+            self.consume_progress(frame, direction, ctx)
+                .map_err(|error| {
+                    if let Some(route) = &self.progress_route {
+                        route.close(pipecat_core::NativeToolProgressFailure::ProviderRejected);
+                        ProcessorError::fatal(error.to_string())
+                    } else {
+                        error
+                    }
+                })?
+        else {
+            return Ok(());
+        };
+        frame = selected_frame;
         // Validate before even looking at the state-only marker. A copied or
         // modified sealed frame must never acquire fresh inference authority.
         let cause = frame.take_native_realtime_context_cause()?;
@@ -840,23 +1149,61 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
             frame.data,
             FrameData::Start(_) | FrameData::StartDetailed(_)
         ) {
-            ctx.push(frame, direction).await?;
-            let external = UserTurnStrategy::External {
-                enable_interruptions: true,
-            };
-            ctx.broadcast(Frame::new(FrameData::LlmServiceMetadata(
-                LlmServiceMetadataFrame {
-                    base: ServiceMetadataFrame {
-                        service_name: self.name().into(),
-                        user_turn_strategies: (!self.manual_turns).then(|| UserTurnStrategies {
-                            start: Some(vec![external.clone()]),
-                            stop: Some(vec![external]),
-                        }),
+            if let Some(route) = &self.progress_route {
+                let config = self
+                    .progress_start
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("realtime selected Start lock poisoned"))?
+                    .take()
+                    .ok_or_else(|| {
+                        ProcessorError::fatal("selected provider Start lacks actual setup")
+                    })?;
+                let limits = self.progress_limits();
+                if let Err(error) = route.validate_configuration(ctx, limits) {
+                    self.progress_output
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .take();
+                    route.close(NativeToolProgressFailure::InvalidProvenance);
+                    return Err(error);
+                }
+                if let Err(error) = self.connect_and_receive(&config, ctx).await {
+                    route.close(NativeToolProgressFailure::ProviderRejected);
+                    return Err(error);
+                }
+                if let Err(error) = route.validate_and_open(ctx, limits) {
+                    route.close(NativeToolProgressFailure::InvalidProvenance);
+                    return Err(error);
+                }
+            }
+            let forwarded = async {
+                ctx.push(frame, direction).await?;
+                let external = UserTurnStrategy::External {
+                    enable_interruptions: true,
+                };
+                ctx.broadcast(Frame::new(FrameData::LlmServiceMetadata(
+                    LlmServiceMetadataFrame {
+                        base: ServiceMetadataFrame {
+                            service_name: self.name().into(),
+                            user_turn_strategies: (!self.manual_turns).then(|| {
+                                UserTurnStrategies {
+                                    start: Some(vec![external.clone()]),
+                                    stop: Some(vec![external]),
+                                }
+                            }),
+                        },
+                        is_realtime_service: true,
                     },
-                    is_realtime_service: true,
-                },
-            )))
-            .await?;
+                )))
+                .await
+            }
+            .await;
+            if let Err(error) = forwarded {
+                if let Some(route) = &self.progress_route {
+                    route.close(NativeToolProgressFailure::QueueClosed);
+                }
+                return Err(error);
+            }
             self.receive_ready.notify_one();
             return Ok(());
         }
@@ -905,9 +1252,23 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                     .clear();
             }
             FrameData::LlmContext(context) => {
-                frame
-                    .require_no_native_llm_continuation()
-                    .map_err(|e| ProcessorError::new(e.to_string()))?;
+                if let Some(selected_cause) = cause.as_ref().filter(|cause| {
+                    !cause.assistant_native_progress_reasons().is_empty()
+                        || cause
+                            .assistant_selected_native_terminal_route_id()
+                            .is_some()
+                }) {
+                    self.progress_route
+                        .as_ref()
+                        .ok_or_else(|| {
+                            ProcessorError::fatal("selected context without provider route")
+                        })?
+                        .validate_consumed_progress_context(ctx, &frame, selected_cause)?;
+                } else {
+                    frame
+                        .require_no_native_llm_continuation()
+                        .map_err(|e| ProcessorError::new(e.to_string()))?;
+                }
                 self.context(
                     &context.clone().into(),
                     frame.is_realtime_context_update(),
@@ -919,9 +1280,23 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                 return Ok(());
             }
             FrameData::LlmContextDetailed(context) => {
-                frame
-                    .require_no_native_llm_continuation()
-                    .map_err(|e| ProcessorError::new(e.to_string()))?;
+                if let Some(selected_cause) = cause.as_ref().filter(|cause| {
+                    !cause.assistant_native_progress_reasons().is_empty()
+                        || cause
+                            .assistant_selected_native_terminal_route_id()
+                            .is_some()
+                }) {
+                    self.progress_route
+                        .as_ref()
+                        .ok_or_else(|| {
+                            ProcessorError::fatal("selected context without provider route")
+                        })?
+                        .validate_consumed_progress_context(ctx, &frame, selected_cause)?;
+                } else {
+                    frame
+                        .require_no_native_llm_continuation()
+                        .map_err(|e| ProcessorError::new(e.to_string()))?;
+                }
                 if context.speculation {
                     return Err(ProcessorError::new(
                         "speculative realtime context is unsupported",
@@ -1009,16 +1384,13 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                     }
                     self.enqueue(Action::AppendAudio(audio.audio.clone()))?;
                 }
-                FrameData::UserStoppedSpeaking if self.manual_turns => self
-                    .sender()?
-                    .try_send_batch_with_fence(
-                        vec![
-                            Action::CommitAudio,
-                            Action::CreateResponse(ResponseOptions::default()),
-                        ],
-                        Some(ctx.invocation_fence()?),
-                    )
-                    .map_err(processor_error)?,
+                FrameData::UserStoppedSpeaking if self.manual_turns => self.send_inference_batch(
+                    vec![
+                        Action::CommitAudio,
+                        Action::CreateResponse(ResponseOptions::default()),
+                    ],
+                    Some(ctx.invocation_fence()?),
+                )?,
                 FrameData::InputText(text) => {
                     if !text.append_to_context {
                         return Err(ProcessorError::new(
@@ -1038,19 +1410,15 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                         context_id: Some(format!("pc_turn_{}", frame.id)),
                         ..Default::default()
                     }));
-                    self.sender()?
-                        .try_send_batch_with_fence(actions, Some(ctx.invocation_fence()?))
-                        .map_err(processor_error)?;
+                    self.send_inference_batch(actions, Some(ctx.invocation_fence()?))?;
                     *state = next;
                     return Ok(());
                 }
                 FrameData::LlmRun => {
-                    self.sender()?
-                        .try_send_batch_with_fence(
-                            vec![Action::CreateResponse(ResponseOptions::default())],
-                            Some(ctx.invocation_fence()?),
-                        )
-                        .map_err(processor_error)?;
+                    self.send_inference_batch(
+                        vec![Action::CreateResponse(ResponseOptions::default())],
+                        Some(ctx.invocation_fence()?),
+                    )?;
                     return Ok(());
                 }
                 FrameData::LlmMessagesAppend(messages) | FrameData::LlmMessagesUpdate(messages) => {
@@ -1212,19 +1580,41 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         self.video_closed.store(true, Ordering::SeqCst);
-        // Stop does not run cleanup. A dropped encode waiter still owns its
-        // blocking job here, which must join before this terminal completes.
-        let encoded = self.video.finish().await.map_err(processor_error);
-        if let Ok(sender) = self.sender() {
-            sender.finish().await.map_err(processor_error)?;
+        let graceful = self
+            .progress_route
+            .as_ref()
+            .is_none_or(|route| route.state() == NativeToolProgressRouteState::EndForwarded);
+        if !graceful {
+            if let Ok(sender) = self.sender() {
+                sender.close();
+            }
         }
-        encoded
+        let encoded = self.video.finish().await.map_err(processor_error);
+        let finished = if graceful {
+            match self.sender() {
+                Ok(sender) => sender.finish().await.map_err(processor_error),
+                Err(_) => Ok(()),
+            }
+        } else {
+            Ok(())
+        };
+        if finished.is_err() {
+            if let Ok(sender) = self.sender() {
+                sender.close();
+            }
+        }
+        // Stop skips cleanup. Even encoding/finish errors must not bypass the
+        // actual inner actor join; core subsequently joins the receive wrapper.
+        let joined = self.join_selected_session().await;
+        finished.and(encoded).and(joined)
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
         let closed = self.close();
         let encoded = self.video.finish().await.map_err(processor_error);
-        closed?;
-        encoded
+        // Cancel/Failed abort the receive task before cleanup. Its async mutex
+        // guard drops, while this processor still owns the recoverable session.
+        let joined = self.join_selected_session().await;
+        closed.and(encoded).and(joined)
     }
 }
 
@@ -1263,7 +1653,7 @@ impl FrameProcessor for OpenAiRealtimeToolResultRelay {
         ctx.push(frame, direction).await
     }
 }
-fn project_timeout(frame: &mut Frame) -> Result<(), ProcessorError> {
+pub(crate) fn project_timeout(frame: &mut Frame) -> Result<(), ProcessorError> {
     if matches!(
         frame.data,
         FrameData::FunctionCallResult(_) | FrameData::FunctionCallResultDetailed(_)
