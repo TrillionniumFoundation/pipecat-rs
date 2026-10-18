@@ -80,6 +80,7 @@ struct PendingSegment {
 struct State {
     params: RtviObserverParams,
     llm_usage_details: bool,
+    llm_audio_usage_details: bool,
     audio_levels: Option<crate::audio_levels::AudioLevels>,
     speaking: bool,
     transcription: String,
@@ -113,6 +114,7 @@ impl RtviObserver {
             state: Mutex::new(State {
                 params,
                 llm_usage_details: false,
+                llm_audio_usage_details: false,
                 audio_levels: None,
                 speaking: false,
                 transcription: String::new(),
@@ -129,6 +131,13 @@ impl RtviObserver {
     /// Only an unambiguous metric with exactly matching base counts is enriched.
     pub fn with_llm_usage_details(self, enabled: bool) -> Self {
         self.state.lock().unwrap().llm_usage_details = enabled;
+        self
+    }
+    /// Independently opt in to input, output, and cached-input audio token counts.
+    /// Disabled by default. Counts are provider breakdowns, never added to totals.
+    /// Any invalid selected field suppresses the entire optional extension.
+    pub fn with_llm_audio_usage_details(self, enabled: bool) -> Self {
+        self.state.lock().unwrap().llm_audio_usage_details = enabled;
         self
     }
     /// Enable bounded BS.1770 rolling audio levels without changing legacy params.
@@ -456,10 +465,11 @@ impl RtviObserver {
             FrameData::Metrics(metrics) if state.params.metrics_enabled => {
                 events.push(ServerEvent::Metrics(metrics_data(
                     metrics,
-                    state
-                        .llm_usage_details
+                    (state.llm_usage_details || state.llm_audio_usage_details)
                         .then(|| frame.metadata.get("llm_usage"))
                         .flatten(),
+                    state.llm_usage_details,
+                    state.llm_audio_usage_details,
                 )))
             }
             FrameData::FunctionCallsStarted(calls) => {
@@ -771,11 +781,14 @@ struct LlmUsageDetails {
     cache_read: Option<u64>,
     cache_creation: Option<u64>,
     reasoning: Option<u64>,
+    input_audio: Option<u64>,
+    output_audio: Option<u64>,
+    cache_read_audio: Option<u64>,
 }
 impl LlmUsageDetails {
-    fn parse(value: &Value) -> Option<Self> {
+    fn parse(value: &Value, legacy: bool, audio: bool) -> Option<Self> {
         let object = value.as_object()?;
-        let optional = |key| match object.get(key) {
+        let optional = |key, enabled| match object.get(key).filter(|_| enabled) {
             None | Some(Value::Null) => Some(None),
             Some(value) => value.as_u64().map(Some),
         };
@@ -783,9 +796,12 @@ impl LlmUsageDetails {
             prompt: object.get("prompt_tokens")?.as_u64()?,
             completion: object.get("completion_tokens")?.as_u64()?,
             total: object.get("total_tokens")?.as_u64()?,
-            cache_read: optional("cache_read_input_tokens")?,
-            cache_creation: optional("cache_creation_input_tokens")?,
-            reasoning: optional("reasoning_tokens")?,
+            cache_read: optional("cache_read_input_tokens", legacy)?,
+            cache_creation: optional("cache_creation_input_tokens", legacy)?,
+            reasoning: optional("reasoning_tokens", legacy)?,
+            input_audio: optional("input_audio_tokens", audio)?,
+            output_audio: optional("output_audio_tokens", audio)?,
+            cache_read_audio: optional("cache_read_input_audio_tokens", audio)?,
         })
     }
     fn extend(&self, data: &mut Value, prompt: u64, completion: u64, total: u64) {
@@ -796,6 +812,9 @@ impl LlmUsageDetails {
             ("cache_read_input_tokens", self.cache_read),
             ("cache_creation_input_tokens", self.cache_creation),
             ("reasoning_tokens", self.reasoning),
+            ("input_audio_tokens", self.input_audio),
+            ("output_audio_tokens", self.output_audio),
+            ("cache_read_input_audio_tokens", self.cache_read_audio),
         ] {
             if let Some(value) = value {
                 data[name] = json!(value);
@@ -803,14 +822,19 @@ impl LlmUsageDetails {
         }
     }
 }
-fn metrics_data(metrics: &[Metric], usage: Option<&Value>) -> Map<String, Value> {
+fn metrics_data(
+    metrics: &[Metric],
+    usage: Option<&Value>,
+    legacy: bool,
+    audio: bool,
+) -> Map<String, Value> {
     let details = usage.and_then(|usage| {
         (metrics
             .iter()
             .filter(|m| matches!(m, Metric::LlmUsage { .. }))
             .count()
             == 1)
-            .then(|| LlmUsageDetails::parse(usage))
+            .then(|| LlmUsageDetails::parse(usage, legacy, audio))
             .flatten()
     });
     let mut output = Map::new();

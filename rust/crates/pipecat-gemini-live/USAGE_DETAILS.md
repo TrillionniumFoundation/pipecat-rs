@@ -42,8 +42,9 @@ usage event and its details from runtime frame emission.
 
 The existing `RtviObserver::with_llm_usage_details(true)` can expose the cache and
 reasoning counts through its existing numeric whitelist. Default RTVI output is
-unchanged. Audio and tool-use counts remain frame metadata only; this slice does
-not add RTVI fields, change the core metric shape, or invent cache-creation data.
+unchanged. Audio counts remain metadata-only unless the separate audio opt-in
+below is enabled. Tool-use counts remain metadata-only. Neither option changes
+the core metric shape or invents cache-creation data.
 
 ## Decoding and ownership
 
@@ -104,3 +105,9 @@ first-match and zero behavior, incomplete and consecutive usage, terminal-plus-
 usage ordering, disabled metrics, public API compatibility, private event
 ownership and the existing RTVI whitelist. They do not qualify live-provider
 accounting or billing accuracy.
+
+RTVI may now explicitly expose the three existing audio buckets with
+`RtviObserver::with_llm_audio_usage_details(true)`. This switch is independent of
+the legacy cache/reasoning opt-in and is false by default. Both selected groups
+share atomic validation and exact base-count/unique-metric ownership checks.
+Tool-use buckets stay private; base totals and audio bucket values are not summed.

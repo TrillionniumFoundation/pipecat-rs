@@ -146,7 +146,9 @@ The reference source commit and file hashes are stored with the fixtures.
 `RtviObserver::with_llm_usage_details(true)` can project existing typed Usage
 metadata's cache-read, cache-write and reasoning token fields into the existing
 metrics token item. It is off by default, validates unique/matching base counts,
-and never recalculates totals. See [USAGE_DETAILS.md](USAGE_DETAILS.md) for exact
+and never recalculates totals. `with_llm_audio_usage_details(true)` independently
+selects the three audio breakdown fields; it is also off by default. Any invalid
+selected field falls back to the unchanged base-only record. See [USAGE_DETAILS.md](USAGE_DETAILS.md) for exact
 schema, fallback, accounting differences and qualification scope.
 
 ## Optional rolling audio levels

@@ -256,6 +256,15 @@ async fn execute(
     enabled: bool,
     ownership: Ownership,
 ) -> Vec<Observed> {
+    execute_audio(plans, details, false, enabled, ownership).await
+}
+async fn execute_audio(
+    plans: Vec<Plan>,
+    details: bool,
+    audio: bool,
+    enabled: bool,
+    ownership: Ownership,
+) -> Vec<Observed> {
     let (peer, config) = Peer::open(plans.clone()).await.unwrap();
     let client = match GeminiClient::new(config)
         .and_then(|client| client.with_non_blocking_tools(vec!["lookup".into()]))
@@ -271,7 +280,11 @@ async fn execute(
     let mut failures = vec![];
     for plan in &plans {
         let observer = match RtviObserver::new(Default::default(), None) {
-            Ok(observer) => Arc::new(observer.with_llm_usage_details(details)),
+            Ok(observer) => Arc::new(
+                observer
+                    .with_llm_usage_details(details)
+                    .with_llm_audio_usage_details(audio),
+            ),
             Err(error) => {
                 failures.push(format!("RTVI configuration: {error}"));
                 break;
@@ -859,4 +872,85 @@ async fn public_next_event_and_complete_usage_literal_keep_the_legacy_api() {
     ];
     assert_eq!(usages, expected);
     assert_eq!(serde_json::to_value(&usages[0]).unwrap(), counts(7, 5, 900));
+}
+
+#[tokio::test]
+async fn audio_usage_opt_in_crosses_real_gemini_socket_and_rtvi_pipeline() {
+    for details in [false, true] {
+        for audio in [false, true] {
+            let observed = execute_audio(
+                vec![Plan::normal(vec![packet(full_usage())])],
+                details,
+                audio,
+                true,
+                Ownership::Unchanged,
+            )
+            .await;
+            assert_usage(&observed[0], &[full_metadata()]);
+            let mut expected = base(7, 5, 900);
+            if details {
+                expected["cache_read_input_tokens"] = json!(3);
+                expected["reasoning_tokens"] = json!(2);
+            }
+            if audio {
+                expected["input_audio_tokens"] = json!(4);
+                expected["output_audio_tokens"] = json!(6);
+                expected["cache_read_input_audio_tokens"] = json!(8);
+            }
+            assert_eq!(wire(&observed[0]), vec![json!([expected])]);
+        }
+    }
+}
+#[tokio::test]
+async fn audio_projection_retains_zero_max_missing_and_never_accumulates_packets() {
+    let mut usage = full_usage();
+    usage["promptTokensDetails"] =
+        json!([{"modality":"AUDIO"},{"modality":"AUDIO","tokenCount":42}]);
+    usage["responseTokensDetails"] = json!([{"modality":"AUDIO","tokenCount":0}]);
+    usage["cacheTokensDetails"] = json!([{"modality":"AUDIO","tokenCount":u64::MAX}]);
+    let observed = execute_audio(
+        vec![Plan::normal(vec![packet(usage), packet(counts(1, 2, 3))])],
+        false,
+        true,
+        true,
+        Ownership::Unchanged,
+    )
+    .await;
+    let mut expected = base(7, 5, 900);
+    assert!(expected.get("input_audio_tokens").is_none());
+    expected["output_audio_tokens"] = json!(0);
+    expected["cache_read_input_audio_tokens"] = json!(u64::MAX);
+    assert_eq!(
+        wire(&observed[0]),
+        vec![json!([expected]), json!([base(1, 2, 3)])]
+    );
+}
+#[tokio::test]
+async fn audio_projection_respects_real_usage_disable_and_ownership_rejection() {
+    let observed = execute_audio(
+        vec![Plan::normal(vec![packet(full_usage())])],
+        true,
+        true,
+        false,
+        Ownership::Unchanged,
+    )
+    .await;
+    assert!(wire(&observed[0]).is_empty());
+    assert!(metrics(&observed[0]).is_empty());
+    for ownership in [Ownership::MismatchedBase, Ownership::TwoLlmMetrics] {
+        let observed = execute_audio(
+            vec![Plan::normal(vec![packet(full_usage())])],
+            true,
+            true,
+            true,
+            ownership,
+        )
+        .await;
+        let expected = if matches!(ownership, Ownership::TwoLlmMetrics) {
+            json!([base(7, 5, 900), base(7, 5, 900)])
+        } else {
+            json!([base(7, 5, 900)])
+        };
+        assert_eq!(wire(&observed[0]), vec![expected]);
+    }
 }
