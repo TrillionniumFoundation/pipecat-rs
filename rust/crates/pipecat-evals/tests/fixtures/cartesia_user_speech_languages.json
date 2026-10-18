@@ -1,0 +1,2662 @@
+{
+  "baseline": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "scope": "Original Language enum, resolver, eval configuration language function, Cartesia mapping AST; no SDK or network",
+  "cases": [
+    {
+      "input": "af",
+      "output": "af"
+    },
+    {
+      "input": " af ",
+      "output": "af"
+    },
+    {
+      "input": "af-ZA",
+      "output": "af"
+    },
+    {
+      "input": " af-ZA ",
+      "output": "af"
+    },
+    {
+      "input": "am",
+      "output": "am"
+    },
+    {
+      "input": " am ",
+      "output": "am"
+    },
+    {
+      "input": "am-ET",
+      "output": "am"
+    },
+    {
+      "input": " am-ET ",
+      "output": "am"
+    },
+    {
+      "input": "ar",
+      "output": "ar"
+    },
+    {
+      "input": " ar ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-AE",
+      "output": "ar"
+    },
+    {
+      "input": " ar-AE ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-BH",
+      "output": "ar"
+    },
+    {
+      "input": " ar-BH ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-DZ",
+      "output": "ar"
+    },
+    {
+      "input": " ar-DZ ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-EG",
+      "output": "ar"
+    },
+    {
+      "input": " ar-EG ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-IQ",
+      "output": "ar"
+    },
+    {
+      "input": " ar-IQ ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-JO",
+      "output": "ar"
+    },
+    {
+      "input": " ar-JO ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-KW",
+      "output": "ar"
+    },
+    {
+      "input": " ar-KW ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-LB",
+      "output": "ar"
+    },
+    {
+      "input": " ar-LB ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-LY",
+      "output": "ar"
+    },
+    {
+      "input": " ar-LY ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-MA",
+      "output": "ar"
+    },
+    {
+      "input": " ar-MA ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-OM",
+      "output": "ar"
+    },
+    {
+      "input": " ar-OM ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-QA",
+      "output": "ar"
+    },
+    {
+      "input": " ar-QA ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-SA",
+      "output": "ar"
+    },
+    {
+      "input": " ar-SA ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-SY",
+      "output": "ar"
+    },
+    {
+      "input": " ar-SY ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-TN",
+      "output": "ar"
+    },
+    {
+      "input": " ar-TN ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-XA",
+      "output": "ar"
+    },
+    {
+      "input": " ar-XA ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-YE",
+      "output": "ar"
+    },
+    {
+      "input": " ar-YE ",
+      "output": "ar"
+    },
+    {
+      "input": "ar-001",
+      "output": "ar"
+    },
+    {
+      "input": " ar-001 ",
+      "output": "ar"
+    },
+    {
+      "input": "as",
+      "output": "as"
+    },
+    {
+      "input": " as ",
+      "output": "as"
+    },
+    {
+      "input": "as-IN",
+      "output": "as"
+    },
+    {
+      "input": " as-IN ",
+      "output": "as"
+    },
+    {
+      "input": "ast",
+      "output": "ast"
+    },
+    {
+      "input": " ast ",
+      "output": "ast"
+    },
+    {
+      "input": "az",
+      "output": "az"
+    },
+    {
+      "input": " az ",
+      "output": "az"
+    },
+    {
+      "input": "az-AZ",
+      "output": "az"
+    },
+    {
+      "input": " az-AZ ",
+      "output": "az"
+    },
+    {
+      "input": "ba",
+      "output": "ba"
+    },
+    {
+      "input": " ba ",
+      "output": "ba"
+    },
+    {
+      "input": "be",
+      "output": "be"
+    },
+    {
+      "input": " be ",
+      "output": "be"
+    },
+    {
+      "input": "be-BY",
+      "output": "be"
+    },
+    {
+      "input": " be-BY ",
+      "output": "be"
+    },
+    {
+      "input": "bg",
+      "output": "bg"
+    },
+    {
+      "input": " bg ",
+      "output": "bg"
+    },
+    {
+      "input": "bg-BG",
+      "output": "bg"
+    },
+    {
+      "input": " bg-BG ",
+      "output": "bg"
+    },
+    {
+      "input": "bn",
+      "output": "bn"
+    },
+    {
+      "input": " bn ",
+      "output": "bn"
+    },
+    {
+      "input": "bn-BD",
+      "output": "bn"
+    },
+    {
+      "input": " bn-BD ",
+      "output": "bn"
+    },
+    {
+      "input": "bn-IN",
+      "output": "bn"
+    },
+    {
+      "input": " bn-IN ",
+      "output": "bn"
+    },
+    {
+      "input": "bo",
+      "output": "bo"
+    },
+    {
+      "input": " bo ",
+      "output": "bo"
+    },
+    {
+      "input": "br",
+      "output": "br"
+    },
+    {
+      "input": " br ",
+      "output": "br"
+    },
+    {
+      "input": "brx",
+      "output": "brx"
+    },
+    {
+      "input": " brx ",
+      "output": "brx"
+    },
+    {
+      "input": "brx-IN",
+      "output": "brx"
+    },
+    {
+      "input": " brx-IN ",
+      "output": "brx"
+    },
+    {
+      "input": "bs",
+      "output": "bs"
+    },
+    {
+      "input": " bs ",
+      "output": "bs"
+    },
+    {
+      "input": "bs-BA",
+      "output": "bs"
+    },
+    {
+      "input": " bs-BA ",
+      "output": "bs"
+    },
+    {
+      "input": "ca",
+      "output": "ca"
+    },
+    {
+      "input": " ca ",
+      "output": "ca"
+    },
+    {
+      "input": "ca-ES",
+      "output": "ca"
+    },
+    {
+      "input": " ca-ES ",
+      "output": "ca"
+    },
+    {
+      "input": "ceb",
+      "output": "ceb"
+    },
+    {
+      "input": " ceb ",
+      "output": "ceb"
+    },
+    {
+      "input": "ceb-PH",
+      "output": "ceb"
+    },
+    {
+      "input": " ceb-PH ",
+      "output": "ceb"
+    },
+    {
+      "input": "ckb",
+      "output": "ckb"
+    },
+    {
+      "input": " ckb ",
+      "output": "ckb"
+    },
+    {
+      "input": "ckb-IQ",
+      "output": "ckb"
+    },
+    {
+      "input": " ckb-IQ ",
+      "output": "ckb"
+    },
+    {
+      "input": "ckb-IR",
+      "output": "ckb"
+    },
+    {
+      "input": " ckb-IR ",
+      "output": "ckb"
+    },
+    {
+      "input": "cmn",
+      "output": "cmn"
+    },
+    {
+      "input": " cmn ",
+      "output": "cmn"
+    },
+    {
+      "input": "cmn-CN",
+      "output": "cmn"
+    },
+    {
+      "input": " cmn-CN ",
+      "output": "cmn"
+    },
+    {
+      "input": "cs",
+      "output": "cs"
+    },
+    {
+      "input": " cs ",
+      "output": "cs"
+    },
+    {
+      "input": "cs-CZ",
+      "output": "cs"
+    },
+    {
+      "input": " cs-CZ ",
+      "output": "cs"
+    },
+    {
+      "input": "cy",
+      "output": "cy"
+    },
+    {
+      "input": " cy ",
+      "output": "cy"
+    },
+    {
+      "input": "cy-GB",
+      "output": "cy"
+    },
+    {
+      "input": " cy-GB ",
+      "output": "cy"
+    },
+    {
+      "input": "da",
+      "output": "da"
+    },
+    {
+      "input": " da ",
+      "output": "da"
+    },
+    {
+      "input": "da-DK",
+      "output": "da"
+    },
+    {
+      "input": " da-DK ",
+      "output": "da"
+    },
+    {
+      "input": "de",
+      "output": "de"
+    },
+    {
+      "input": " de ",
+      "output": "de"
+    },
+    {
+      "input": "de-AT",
+      "output": "de"
+    },
+    {
+      "input": " de-AT ",
+      "output": "de"
+    },
+    {
+      "input": "de-BE",
+      "output": "de"
+    },
+    {
+      "input": " de-BE ",
+      "output": "de"
+    },
+    {
+      "input": "de-CH",
+      "output": "de"
+    },
+    {
+      "input": " de-CH ",
+      "output": "de"
+    },
+    {
+      "input": "de-DE",
+      "output": "de"
+    },
+    {
+      "input": " de-DE ",
+      "output": "de"
+    },
+    {
+      "input": "doi",
+      "output": "doi"
+    },
+    {
+      "input": " doi ",
+      "output": "doi"
+    },
+    {
+      "input": "doi-IN",
+      "output": "doi"
+    },
+    {
+      "input": " doi-IN ",
+      "output": "doi"
+    },
+    {
+      "input": "el",
+      "output": "el"
+    },
+    {
+      "input": " el ",
+      "output": "el"
+    },
+    {
+      "input": "el-GR",
+      "output": "el"
+    },
+    {
+      "input": " el-GR ",
+      "output": "el"
+    },
+    {
+      "input": "en",
+      "output": "en"
+    },
+    {
+      "input": " en ",
+      "output": "en"
+    },
+    {
+      "input": "en-AB",
+      "output": "en"
+    },
+    {
+      "input": " en-AB ",
+      "output": "en"
+    },
+    {
+      "input": "en-AU",
+      "output": "en"
+    },
+    {
+      "input": " en-AU ",
+      "output": "en"
+    },
+    {
+      "input": "en-CA",
+      "output": "en"
+    },
+    {
+      "input": " en-CA ",
+      "output": "en"
+    },
+    {
+      "input": "en-GB",
+      "output": "en"
+    },
+    {
+      "input": " en-GB ",
+      "output": "en"
+    },
+    {
+      "input": "en-GH",
+      "output": "en"
+    },
+    {
+      "input": " en-GH ",
+      "output": "en"
+    },
+    {
+      "input": "en-HK",
+      "output": "en"
+    },
+    {
+      "input": " en-HK ",
+      "output": "en"
+    },
+    {
+      "input": "en-IE",
+      "output": "en"
+    },
+    {
+      "input": " en-IE ",
+      "output": "en"
+    },
+    {
+      "input": "en-IN",
+      "output": "en"
+    },
+    {
+      "input": " en-IN ",
+      "output": "en"
+    },
+    {
+      "input": "en-KE",
+      "output": "en"
+    },
+    {
+      "input": " en-KE ",
+      "output": "en"
+    },
+    {
+      "input": "en-NG",
+      "output": "en"
+    },
+    {
+      "input": " en-NG ",
+      "output": "en"
+    },
+    {
+      "input": "en-NZ",
+      "output": "en"
+    },
+    {
+      "input": " en-NZ ",
+      "output": "en"
+    },
+    {
+      "input": "en-PH",
+      "output": "en"
+    },
+    {
+      "input": " en-PH ",
+      "output": "en"
+    },
+    {
+      "input": "en-SG",
+      "output": "en"
+    },
+    {
+      "input": " en-SG ",
+      "output": "en"
+    },
+    {
+      "input": "en-TZ",
+      "output": "en"
+    },
+    {
+      "input": " en-TZ ",
+      "output": "en"
+    },
+    {
+      "input": "en-US",
+      "output": "en"
+    },
+    {
+      "input": " en-US ",
+      "output": "en"
+    },
+    {
+      "input": "en-WL",
+      "output": "en"
+    },
+    {
+      "input": " en-WL ",
+      "output": "en"
+    },
+    {
+      "input": "en-ZA",
+      "output": "en"
+    },
+    {
+      "input": " en-ZA ",
+      "output": "en"
+    },
+    {
+      "input": "eo",
+      "output": "eo"
+    },
+    {
+      "input": " eo ",
+      "output": "eo"
+    },
+    {
+      "input": "es",
+      "output": "es"
+    },
+    {
+      "input": " es ",
+      "output": "es"
+    },
+    {
+      "input": "es-AR",
+      "output": "es"
+    },
+    {
+      "input": " es-AR ",
+      "output": "es"
+    },
+    {
+      "input": "es-BO",
+      "output": "es"
+    },
+    {
+      "input": " es-BO ",
+      "output": "es"
+    },
+    {
+      "input": "es-CL",
+      "output": "es"
+    },
+    {
+      "input": " es-CL ",
+      "output": "es"
+    },
+    {
+      "input": "es-CO",
+      "output": "es"
+    },
+    {
+      "input": " es-CO ",
+      "output": "es"
+    },
+    {
+      "input": "es-CR",
+      "output": "es"
+    },
+    {
+      "input": " es-CR ",
+      "output": "es"
+    },
+    {
+      "input": "es-CU",
+      "output": "es"
+    },
+    {
+      "input": " es-CU ",
+      "output": "es"
+    },
+    {
+      "input": "es-DO",
+      "output": "es"
+    },
+    {
+      "input": " es-DO ",
+      "output": "es"
+    },
+    {
+      "input": "es-EC",
+      "output": "es"
+    },
+    {
+      "input": " es-EC ",
+      "output": "es"
+    },
+    {
+      "input": "es-ES",
+      "output": "es"
+    },
+    {
+      "input": " es-ES ",
+      "output": "es"
+    },
+    {
+      "input": "es-GQ",
+      "output": "es"
+    },
+    {
+      "input": " es-GQ ",
+      "output": "es"
+    },
+    {
+      "input": "es-GT",
+      "output": "es"
+    },
+    {
+      "input": " es-GT ",
+      "output": "es"
+    },
+    {
+      "input": "es-HN",
+      "output": "es"
+    },
+    {
+      "input": " es-HN ",
+      "output": "es"
+    },
+    {
+      "input": "es-MX",
+      "output": "es"
+    },
+    {
+      "input": " es-MX ",
+      "output": "es"
+    },
+    {
+      "input": "es-NI",
+      "output": "es"
+    },
+    {
+      "input": " es-NI ",
+      "output": "es"
+    },
+    {
+      "input": "es-PA",
+      "output": "es"
+    },
+    {
+      "input": " es-PA ",
+      "output": "es"
+    },
+    {
+      "input": "es-PE",
+      "output": "es"
+    },
+    {
+      "input": " es-PE ",
+      "output": "es"
+    },
+    {
+      "input": "es-PR",
+      "output": "es"
+    },
+    {
+      "input": " es-PR ",
+      "output": "es"
+    },
+    {
+      "input": "es-PY",
+      "output": "es"
+    },
+    {
+      "input": " es-PY ",
+      "output": "es"
+    },
+    {
+      "input": "es-SV",
+      "output": "es"
+    },
+    {
+      "input": " es-SV ",
+      "output": "es"
+    },
+    {
+      "input": "es-US",
+      "output": "es"
+    },
+    {
+      "input": " es-US ",
+      "output": "es"
+    },
+    {
+      "input": "es-UY",
+      "output": "es"
+    },
+    {
+      "input": " es-UY ",
+      "output": "es"
+    },
+    {
+      "input": "es-VE",
+      "output": "es"
+    },
+    {
+      "input": " es-VE ",
+      "output": "es"
+    },
+    {
+      "input": "es-419",
+      "output": "es"
+    },
+    {
+      "input": " es-419 ",
+      "output": "es"
+    },
+    {
+      "input": "et",
+      "output": "et"
+    },
+    {
+      "input": " et ",
+      "output": "et"
+    },
+    {
+      "input": "et-EE",
+      "output": "et"
+    },
+    {
+      "input": " et-EE ",
+      "output": "et"
+    },
+    {
+      "input": "eu",
+      "output": "eu"
+    },
+    {
+      "input": " eu ",
+      "output": "eu"
+    },
+    {
+      "input": "eu-ES",
+      "output": "eu"
+    },
+    {
+      "input": " eu-ES ",
+      "output": "eu"
+    },
+    {
+      "input": "fa",
+      "output": "fa"
+    },
+    {
+      "input": " fa ",
+      "output": "fa"
+    },
+    {
+      "input": "fa-AF",
+      "output": "fa"
+    },
+    {
+      "input": " fa-AF ",
+      "output": "fa"
+    },
+    {
+      "input": "fa-IR",
+      "output": "fa"
+    },
+    {
+      "input": " fa-IR ",
+      "output": "fa"
+    },
+    {
+      "input": "ff",
+      "output": "ff"
+    },
+    {
+      "input": " ff ",
+      "output": "ff"
+    },
+    {
+      "input": "fi",
+      "output": "fi"
+    },
+    {
+      "input": " fi ",
+      "output": "fi"
+    },
+    {
+      "input": "fi-FI",
+      "output": "fi"
+    },
+    {
+      "input": " fi-FI ",
+      "output": "fi"
+    },
+    {
+      "input": "fil",
+      "output": "fil"
+    },
+    {
+      "input": " fil ",
+      "output": "fil"
+    },
+    {
+      "input": "fil-PH",
+      "output": "fil"
+    },
+    {
+      "input": " fil-PH ",
+      "output": "fil"
+    },
+    {
+      "input": "fo",
+      "output": "fo"
+    },
+    {
+      "input": " fo ",
+      "output": "fo"
+    },
+    {
+      "input": "fr",
+      "output": "fr"
+    },
+    {
+      "input": " fr ",
+      "output": "fr"
+    },
+    {
+      "input": "fr-BE",
+      "output": "fr"
+    },
+    {
+      "input": " fr-BE ",
+      "output": "fr"
+    },
+    {
+      "input": "fr-CA",
+      "output": "fr"
+    },
+    {
+      "input": " fr-CA ",
+      "output": "fr"
+    },
+    {
+      "input": "fr-CH",
+      "output": "fr"
+    },
+    {
+      "input": " fr-CH ",
+      "output": "fr"
+    },
+    {
+      "input": "fr-FR",
+      "output": "fr"
+    },
+    {
+      "input": " fr-FR ",
+      "output": "fr"
+    },
+    {
+      "input": "ga",
+      "output": "ga"
+    },
+    {
+      "input": " ga ",
+      "output": "ga"
+    },
+    {
+      "input": "ga-IE",
+      "output": "ga"
+    },
+    {
+      "input": " ga-IE ",
+      "output": "ga"
+    },
+    {
+      "input": "gd",
+      "output": "gd"
+    },
+    {
+      "input": " gd ",
+      "output": "gd"
+    },
+    {
+      "input": "gl",
+      "output": "gl"
+    },
+    {
+      "input": " gl ",
+      "output": "gl"
+    },
+    {
+      "input": "gl-ES",
+      "output": "gl"
+    },
+    {
+      "input": " gl-ES ",
+      "output": "gl"
+    },
+    {
+      "input": "gu",
+      "output": "gu"
+    },
+    {
+      "input": " gu ",
+      "output": "gu"
+    },
+    {
+      "input": "gu-IN",
+      "output": "gu"
+    },
+    {
+      "input": " gu-IN ",
+      "output": "gu"
+    },
+    {
+      "input": "ha",
+      "output": "ha"
+    },
+    {
+      "input": " ha ",
+      "output": "ha"
+    },
+    {
+      "input": "haw",
+      "output": "haw"
+    },
+    {
+      "input": " haw ",
+      "output": "haw"
+    },
+    {
+      "input": "he",
+      "output": "he"
+    },
+    {
+      "input": " he ",
+      "output": "he"
+    },
+    {
+      "input": "he-IL",
+      "output": "he"
+    },
+    {
+      "input": " he-IL ",
+      "output": "he"
+    },
+    {
+      "input": "hi",
+      "output": "hi"
+    },
+    {
+      "input": " hi ",
+      "output": "hi"
+    },
+    {
+      "input": "hi-IN",
+      "output": "hi"
+    },
+    {
+      "input": " hi-IN ",
+      "output": "hi"
+    },
+    {
+      "input": "hr",
+      "output": "hr"
+    },
+    {
+      "input": " hr ",
+      "output": "hr"
+    },
+    {
+      "input": "hr-HR",
+      "output": "hr"
+    },
+    {
+      "input": " hr-HR ",
+      "output": "hr"
+    },
+    {
+      "input": "ht",
+      "output": "ht"
+    },
+    {
+      "input": " ht ",
+      "output": "ht"
+    },
+    {
+      "input": "ht-HT",
+      "output": "ht"
+    },
+    {
+      "input": " ht-HT ",
+      "output": "ht"
+    },
+    {
+      "input": "hu",
+      "output": "hu"
+    },
+    {
+      "input": " hu ",
+      "output": "hu"
+    },
+    {
+      "input": "hu-HU",
+      "output": "hu"
+    },
+    {
+      "input": " hu-HU ",
+      "output": "hu"
+    },
+    {
+      "input": "hy",
+      "output": "hy"
+    },
+    {
+      "input": " hy ",
+      "output": "hy"
+    },
+    {
+      "input": "hy-AM",
+      "output": "hy"
+    },
+    {
+      "input": " hy-AM ",
+      "output": "hy"
+    },
+    {
+      "input": "id",
+      "output": "id"
+    },
+    {
+      "input": " id ",
+      "output": "id"
+    },
+    {
+      "input": "id-ID",
+      "output": "id"
+    },
+    {
+      "input": " id-ID ",
+      "output": "id"
+    },
+    {
+      "input": "ig",
+      "output": "ig"
+    },
+    {
+      "input": " ig ",
+      "output": "ig"
+    },
+    {
+      "input": "is",
+      "output": "is"
+    },
+    {
+      "input": " is ",
+      "output": "is"
+    },
+    {
+      "input": "is-IS",
+      "output": "is"
+    },
+    {
+      "input": " is-IS ",
+      "output": "is"
+    },
+    {
+      "input": "it",
+      "output": "it"
+    },
+    {
+      "input": " it ",
+      "output": "it"
+    },
+    {
+      "input": "it-IT",
+      "output": "it"
+    },
+    {
+      "input": " it-IT ",
+      "output": "it"
+    },
+    {
+      "input": "it-CH",
+      "output": "it"
+    },
+    {
+      "input": " it-CH ",
+      "output": "it"
+    },
+    {
+      "input": "iu-Cans",
+      "output": "iu"
+    },
+    {
+      "input": " iu-Cans ",
+      "output": "iu"
+    },
+    {
+      "input": "iu-Cans-CA",
+      "output": "iu"
+    },
+    {
+      "input": " iu-Cans-CA ",
+      "output": "iu"
+    },
+    {
+      "input": "iu-Latn",
+      "output": "iu"
+    },
+    {
+      "input": " iu-Latn ",
+      "output": "iu"
+    },
+    {
+      "input": "iu-Latn-CA",
+      "output": "iu"
+    },
+    {
+      "input": " iu-Latn-CA ",
+      "output": "iu"
+    },
+    {
+      "input": "ja",
+      "output": "ja"
+    },
+    {
+      "input": " ja ",
+      "output": "ja"
+    },
+    {
+      "input": "ja-JP",
+      "output": "ja"
+    },
+    {
+      "input": " ja-JP ",
+      "output": "ja"
+    },
+    {
+      "input": "jv",
+      "output": "jv"
+    },
+    {
+      "input": " jv ",
+      "output": "jv"
+    },
+    {
+      "input": "jv-ID",
+      "output": "jv"
+    },
+    {
+      "input": " jv-ID ",
+      "output": "jv"
+    },
+    {
+      "input": "jv-JV",
+      "output": "jv"
+    },
+    {
+      "input": " jv-JV ",
+      "output": "jv"
+    },
+    {
+      "input": "jw",
+      "output": "jw"
+    },
+    {
+      "input": " jw ",
+      "output": "jw"
+    },
+    {
+      "input": "ka",
+      "output": "ka"
+    },
+    {
+      "input": " ka ",
+      "output": "ka"
+    },
+    {
+      "input": "ka-GE",
+      "output": "ka"
+    },
+    {
+      "input": " ka-GE ",
+      "output": "ka"
+    },
+    {
+      "input": "kea",
+      "output": "kea"
+    },
+    {
+      "input": " kea ",
+      "output": "kea"
+    },
+    {
+      "input": "kab",
+      "output": "kab"
+    },
+    {
+      "input": " kab ",
+      "output": "kab"
+    },
+    {
+      "input": "kab-DZ",
+      "output": "kab"
+    },
+    {
+      "input": " kab-DZ ",
+      "output": "kab"
+    },
+    {
+      "input": "kk",
+      "output": "kk"
+    },
+    {
+      "input": " kk ",
+      "output": "kk"
+    },
+    {
+      "input": "kk-KZ",
+      "output": "kk"
+    },
+    {
+      "input": " kk-KZ ",
+      "output": "kk"
+    },
+    {
+      "input": "km",
+      "output": "km"
+    },
+    {
+      "input": " km ",
+      "output": "km"
+    },
+    {
+      "input": "km-KH",
+      "output": "km"
+    },
+    {
+      "input": " km-KH ",
+      "output": "km"
+    },
+    {
+      "input": "kn",
+      "output": "kn"
+    },
+    {
+      "input": " kn ",
+      "output": "kn"
+    },
+    {
+      "input": "kn-IN",
+      "output": "kn"
+    },
+    {
+      "input": " kn-IN ",
+      "output": "kn"
+    },
+    {
+      "input": "kok",
+      "output": "kok"
+    },
+    {
+      "input": " kok ",
+      "output": "kok"
+    },
+    {
+      "input": "kok-IN",
+      "output": "kok"
+    },
+    {
+      "input": " kok-IN ",
+      "output": "kok"
+    },
+    {
+      "input": "ko",
+      "output": "ko"
+    },
+    {
+      "input": " ko ",
+      "output": "ko"
+    },
+    {
+      "input": "ko-KR",
+      "output": "ko"
+    },
+    {
+      "input": " ko-KR ",
+      "output": "ko"
+    },
+    {
+      "input": "ks",
+      "output": "ks"
+    },
+    {
+      "input": " ks ",
+      "output": "ks"
+    },
+    {
+      "input": "ks-IN",
+      "output": "ks"
+    },
+    {
+      "input": " ks-IN ",
+      "output": "ks"
+    },
+    {
+      "input": "ku",
+      "output": "ku"
+    },
+    {
+      "input": " ku ",
+      "output": "ku"
+    },
+    {
+      "input": "ky",
+      "output": "ky"
+    },
+    {
+      "input": " ky ",
+      "output": "ky"
+    },
+    {
+      "input": "ky-KG",
+      "output": "ky"
+    },
+    {
+      "input": " ky-KG ",
+      "output": "ky"
+    },
+    {
+      "input": "la",
+      "output": "la"
+    },
+    {
+      "input": " la ",
+      "output": "la"
+    },
+    {
+      "input": "la-VA",
+      "output": "la"
+    },
+    {
+      "input": " la-VA ",
+      "output": "la"
+    },
+    {
+      "input": "lb",
+      "output": "lb"
+    },
+    {
+      "input": " lb ",
+      "output": "lb"
+    },
+    {
+      "input": "lb-LU",
+      "output": "lb"
+    },
+    {
+      "input": " lb-LU ",
+      "output": "lb"
+    },
+    {
+      "input": "ln",
+      "output": "ln"
+    },
+    {
+      "input": " ln ",
+      "output": "ln"
+    },
+    {
+      "input": "lo",
+      "output": "lo"
+    },
+    {
+      "input": " lo ",
+      "output": "lo"
+    },
+    {
+      "input": "lo-LA",
+      "output": "lo"
+    },
+    {
+      "input": " lo-LA ",
+      "output": "lo"
+    },
+    {
+      "input": "lt",
+      "output": "lt"
+    },
+    {
+      "input": " lt ",
+      "output": "lt"
+    },
+    {
+      "input": "lt-LT",
+      "output": "lt"
+    },
+    {
+      "input": " lt-LT ",
+      "output": "lt"
+    },
+    {
+      "input": "lg",
+      "output": "lg"
+    },
+    {
+      "input": " lg ",
+      "output": "lg"
+    },
+    {
+      "input": "luo",
+      "output": "luo"
+    },
+    {
+      "input": " luo ",
+      "output": "luo"
+    },
+    {
+      "input": "lv",
+      "output": "lv"
+    },
+    {
+      "input": " lv ",
+      "output": "lv"
+    },
+    {
+      "input": "lv-LV",
+      "output": "lv"
+    },
+    {
+      "input": " lv-LV ",
+      "output": "lv"
+    },
+    {
+      "input": "mg",
+      "output": "mg"
+    },
+    {
+      "input": " mg ",
+      "output": "mg"
+    },
+    {
+      "input": "mg-MG",
+      "output": "mg"
+    },
+    {
+      "input": " mg-MG ",
+      "output": "mg"
+    },
+    {
+      "input": "mi",
+      "output": "mi"
+    },
+    {
+      "input": " mi ",
+      "output": "mi"
+    },
+    {
+      "input": "mk",
+      "output": "mk"
+    },
+    {
+      "input": " mk ",
+      "output": "mk"
+    },
+    {
+      "input": "mk-MK",
+      "output": "mk"
+    },
+    {
+      "input": " mk-MK ",
+      "output": "mk"
+    },
+    {
+      "input": "mai",
+      "output": "mai"
+    },
+    {
+      "input": " mai ",
+      "output": "mai"
+    },
+    {
+      "input": "mai-IN",
+      "output": "mai"
+    },
+    {
+      "input": " mai-IN ",
+      "output": "mai"
+    },
+    {
+      "input": "ml",
+      "output": "ml"
+    },
+    {
+      "input": " ml ",
+      "output": "ml"
+    },
+    {
+      "input": "ml-IN",
+      "output": "ml"
+    },
+    {
+      "input": " ml-IN ",
+      "output": "ml"
+    },
+    {
+      "input": "mn",
+      "output": "mn"
+    },
+    {
+      "input": " mn ",
+      "output": "mn"
+    },
+    {
+      "input": "mn-MN",
+      "output": "mn"
+    },
+    {
+      "input": " mn-MN ",
+      "output": "mn"
+    },
+    {
+      "input": "mni",
+      "output": "mni"
+    },
+    {
+      "input": " mni ",
+      "output": "mni"
+    },
+    {
+      "input": "mni-IN",
+      "output": "mni"
+    },
+    {
+      "input": " mni-IN ",
+      "output": "mni"
+    },
+    {
+      "input": "mr",
+      "output": "mr"
+    },
+    {
+      "input": " mr ",
+      "output": "mr"
+    },
+    {
+      "input": "mr-IN",
+      "output": "mr"
+    },
+    {
+      "input": " mr-IN ",
+      "output": "mr"
+    },
+    {
+      "input": "ms",
+      "output": "ms"
+    },
+    {
+      "input": " ms ",
+      "output": "ms"
+    },
+    {
+      "input": "ms-MY",
+      "output": "ms"
+    },
+    {
+      "input": " ms-MY ",
+      "output": "ms"
+    },
+    {
+      "input": "mt",
+      "output": "mt"
+    },
+    {
+      "input": " mt ",
+      "output": "mt"
+    },
+    {
+      "input": "mt-MT",
+      "output": "mt"
+    },
+    {
+      "input": " mt-MT ",
+      "output": "mt"
+    },
+    {
+      "input": "my",
+      "output": "my"
+    },
+    {
+      "input": " my ",
+      "output": "my"
+    },
+    {
+      "input": "my-MM",
+      "output": "my"
+    },
+    {
+      "input": " my-MM ",
+      "output": "my"
+    },
+    {
+      "input": "mymr",
+      "output": "mymr"
+    },
+    {
+      "input": " mymr ",
+      "output": "mymr"
+    },
+    {
+      "input": "nb",
+      "output": "nb"
+    },
+    {
+      "input": " nb ",
+      "output": "nb"
+    },
+    {
+      "input": "nb-NO",
+      "output": "nb"
+    },
+    {
+      "input": " nb-NO ",
+      "output": "nb"
+    },
+    {
+      "input": "no",
+      "output": "no"
+    },
+    {
+      "input": " no ",
+      "output": "no"
+    },
+    {
+      "input": "nn",
+      "output": "nn"
+    },
+    {
+      "input": " nn ",
+      "output": "nn"
+    },
+    {
+      "input": "nn-NO",
+      "output": "nn"
+    },
+    {
+      "input": " nn-NO ",
+      "output": "nn"
+    },
+    {
+      "input": "ne",
+      "output": "ne"
+    },
+    {
+      "input": " ne ",
+      "output": "ne"
+    },
+    {
+      "input": "ne-IN",
+      "output": "ne"
+    },
+    {
+      "input": " ne-IN ",
+      "output": "ne"
+    },
+    {
+      "input": "ne-NP",
+      "output": "ne"
+    },
+    {
+      "input": " ne-NP ",
+      "output": "ne"
+    },
+    {
+      "input": "nl",
+      "output": "nl"
+    },
+    {
+      "input": " nl ",
+      "output": "nl"
+    },
+    {
+      "input": "nl-BE",
+      "output": "nl"
+    },
+    {
+      "input": " nl-BE ",
+      "output": "nl"
+    },
+    {
+      "input": "nl-NL",
+      "output": "nl"
+    },
+    {
+      "input": " nl-NL ",
+      "output": "nl"
+    },
+    {
+      "input": "nso",
+      "output": "nso"
+    },
+    {
+      "input": " nso ",
+      "output": "nso"
+    },
+    {
+      "input": "ny",
+      "output": "ny"
+    },
+    {
+      "input": " ny ",
+      "output": "ny"
+    },
+    {
+      "input": "oc",
+      "output": "oc"
+    },
+    {
+      "input": " oc ",
+      "output": "oc"
+    },
+    {
+      "input": "or",
+      "output": "or"
+    },
+    {
+      "input": " or ",
+      "output": "or"
+    },
+    {
+      "input": "or-IN",
+      "output": "or"
+    },
+    {
+      "input": " or-IN ",
+      "output": "or"
+    },
+    {
+      "input": "pa",
+      "output": "pa"
+    },
+    {
+      "input": " pa ",
+      "output": "pa"
+    },
+    {
+      "input": "pa-IN",
+      "output": "pa"
+    },
+    {
+      "input": " pa-IN ",
+      "output": "pa"
+    },
+    {
+      "input": "pl",
+      "output": "pl"
+    },
+    {
+      "input": " pl ",
+      "output": "pl"
+    },
+    {
+      "input": "pl-PL",
+      "output": "pl"
+    },
+    {
+      "input": " pl-PL ",
+      "output": "pl"
+    },
+    {
+      "input": "ps",
+      "output": "ps"
+    },
+    {
+      "input": " ps ",
+      "output": "ps"
+    },
+    {
+      "input": "ps-AF",
+      "output": "ps"
+    },
+    {
+      "input": " ps-AF ",
+      "output": "ps"
+    },
+    {
+      "input": "pt",
+      "output": "pt"
+    },
+    {
+      "input": " pt ",
+      "output": "pt"
+    },
+    {
+      "input": "pt-BR",
+      "output": "pt"
+    },
+    {
+      "input": " pt-BR ",
+      "output": "pt"
+    },
+    {
+      "input": "pt-PT",
+      "output": "pt"
+    },
+    {
+      "input": " pt-PT ",
+      "output": "pt"
+    },
+    {
+      "input": "ro",
+      "output": "ro"
+    },
+    {
+      "input": " ro ",
+      "output": "ro"
+    },
+    {
+      "input": "ro-RO",
+      "output": "ro"
+    },
+    {
+      "input": " ro-RO ",
+      "output": "ro"
+    },
+    {
+      "input": "ru",
+      "output": "ru"
+    },
+    {
+      "input": " ru ",
+      "output": "ru"
+    },
+    {
+      "input": "ru-RU",
+      "output": "ru"
+    },
+    {
+      "input": " ru-RU ",
+      "output": "ru"
+    },
+    {
+      "input": "sa",
+      "output": "sa"
+    },
+    {
+      "input": " sa ",
+      "output": "sa"
+    },
+    {
+      "input": "sa-IN",
+      "output": "sa"
+    },
+    {
+      "input": " sa-IN ",
+      "output": "sa"
+    },
+    {
+      "input": "sat",
+      "output": "sat"
+    },
+    {
+      "input": " sat ",
+      "output": "sat"
+    },
+    {
+      "input": "sat-IN",
+      "output": "sat"
+    },
+    {
+      "input": " sat-IN ",
+      "output": "sat"
+    },
+    {
+      "input": "sd",
+      "output": "sd"
+    },
+    {
+      "input": " sd ",
+      "output": "sd"
+    },
+    {
+      "input": "sd-IN",
+      "output": "sd"
+    },
+    {
+      "input": " sd-IN ",
+      "output": "sd"
+    },
+    {
+      "input": "si",
+      "output": "si"
+    },
+    {
+      "input": " si ",
+      "output": "si"
+    },
+    {
+      "input": "si-LK",
+      "output": "si"
+    },
+    {
+      "input": " si-LK ",
+      "output": "si"
+    },
+    {
+      "input": "sk",
+      "output": "sk"
+    },
+    {
+      "input": " sk ",
+      "output": "sk"
+    },
+    {
+      "input": "sk-SK",
+      "output": "sk"
+    },
+    {
+      "input": " sk-SK ",
+      "output": "sk"
+    },
+    {
+      "input": "sl",
+      "output": "sl"
+    },
+    {
+      "input": " sl ",
+      "output": "sl"
+    },
+    {
+      "input": "sl-SI",
+      "output": "sl"
+    },
+    {
+      "input": " sl-SI ",
+      "output": "sl"
+    },
+    {
+      "input": "sn",
+      "output": "sn"
+    },
+    {
+      "input": " sn ",
+      "output": "sn"
+    },
+    {
+      "input": "so",
+      "output": "so"
+    },
+    {
+      "input": " so ",
+      "output": "so"
+    },
+    {
+      "input": "so-SO",
+      "output": "so"
+    },
+    {
+      "input": " so-SO ",
+      "output": "so"
+    },
+    {
+      "input": "sq",
+      "output": "sq"
+    },
+    {
+      "input": " sq ",
+      "output": "sq"
+    },
+    {
+      "input": "sq-AL",
+      "output": "sq"
+    },
+    {
+      "input": " sq-AL ",
+      "output": "sq"
+    },
+    {
+      "input": "sr",
+      "output": "sr"
+    },
+    {
+      "input": " sr ",
+      "output": "sr"
+    },
+    {
+      "input": "sr-RS",
+      "output": "sr"
+    },
+    {
+      "input": " sr-RS ",
+      "output": "sr"
+    },
+    {
+      "input": "sr-Latn",
+      "output": "sr"
+    },
+    {
+      "input": " sr-Latn ",
+      "output": "sr"
+    },
+    {
+      "input": "sr-Latn-RS",
+      "output": "sr"
+    },
+    {
+      "input": " sr-Latn-RS ",
+      "output": "sr"
+    },
+    {
+      "input": "su",
+      "output": "su"
+    },
+    {
+      "input": " su ",
+      "output": "su"
+    },
+    {
+      "input": "su-ID",
+      "output": "su"
+    },
+    {
+      "input": " su-ID ",
+      "output": "su"
+    },
+    {
+      "input": "sv",
+      "output": "sv"
+    },
+    {
+      "input": " sv ",
+      "output": "sv"
+    },
+    {
+      "input": "sv-SE",
+      "output": "sv"
+    },
+    {
+      "input": " sv-SE ",
+      "output": "sv"
+    },
+    {
+      "input": "sw",
+      "output": "sw"
+    },
+    {
+      "input": " sw ",
+      "output": "sw"
+    },
+    {
+      "input": "sw-BI",
+      "output": "sw"
+    },
+    {
+      "input": " sw-BI ",
+      "output": "sw"
+    },
+    {
+      "input": "sw-KE",
+      "output": "sw"
+    },
+    {
+      "input": " sw-KE ",
+      "output": "sw"
+    },
+    {
+      "input": "sw-RW",
+      "output": "sw"
+    },
+    {
+      "input": " sw-RW ",
+      "output": "sw"
+    },
+    {
+      "input": "sw-TZ",
+      "output": "sw"
+    },
+    {
+      "input": " sw-TZ ",
+      "output": "sw"
+    },
+    {
+      "input": "sw-UG",
+      "output": "sw"
+    },
+    {
+      "input": " sw-UG ",
+      "output": "sw"
+    },
+    {
+      "input": "ta",
+      "output": "ta"
+    },
+    {
+      "input": " ta ",
+      "output": "ta"
+    },
+    {
+      "input": "ta-IN",
+      "output": "ta"
+    },
+    {
+      "input": " ta-IN ",
+      "output": "ta"
+    },
+    {
+      "input": "ta-LK",
+      "output": "ta"
+    },
+    {
+      "input": " ta-LK ",
+      "output": "ta"
+    },
+    {
+      "input": "ta-MY",
+      "output": "ta"
+    },
+    {
+      "input": " ta-MY ",
+      "output": "ta"
+    },
+    {
+      "input": "ta-SG",
+      "output": "ta"
+    },
+    {
+      "input": " ta-SG ",
+      "output": "ta"
+    },
+    {
+      "input": "te",
+      "output": "te"
+    },
+    {
+      "input": " te ",
+      "output": "te"
+    },
+    {
+      "input": "te-IN",
+      "output": "te"
+    },
+    {
+      "input": " te-IN ",
+      "output": "te"
+    },
+    {
+      "input": "tg",
+      "output": "tg"
+    },
+    {
+      "input": " tg ",
+      "output": "tg"
+    },
+    {
+      "input": "th",
+      "output": "th"
+    },
+    {
+      "input": " th ",
+      "output": "th"
+    },
+    {
+      "input": "th-TH",
+      "output": "th"
+    },
+    {
+      "input": " th-TH ",
+      "output": "th"
+    },
+    {
+      "input": "tk",
+      "output": "tk"
+    },
+    {
+      "input": " tk ",
+      "output": "tk"
+    },
+    {
+      "input": "tl",
+      "output": "tl"
+    },
+    {
+      "input": " tl ",
+      "output": "tl"
+    },
+    {
+      "input": "tr",
+      "output": "tr"
+    },
+    {
+      "input": " tr ",
+      "output": "tr"
+    },
+    {
+      "input": "tr-TR",
+      "output": "tr"
+    },
+    {
+      "input": " tr-TR ",
+      "output": "tr"
+    },
+    {
+      "input": "tt",
+      "output": "tt"
+    },
+    {
+      "input": " tt ",
+      "output": "tt"
+    },
+    {
+      "input": "ug",
+      "output": "ug"
+    },
+    {
+      "input": " ug ",
+      "output": "ug"
+    },
+    {
+      "input": "uk",
+      "output": "uk"
+    },
+    {
+      "input": " uk ",
+      "output": "uk"
+    },
+    {
+      "input": "uk-UA",
+      "output": "uk"
+    },
+    {
+      "input": " uk-UA ",
+      "output": "uk"
+    },
+    {
+      "input": "umb",
+      "output": "umb"
+    },
+    {
+      "input": " umb ",
+      "output": "umb"
+    },
+    {
+      "input": "ur",
+      "output": "ur"
+    },
+    {
+      "input": " ur ",
+      "output": "ur"
+    },
+    {
+      "input": "ur-IN",
+      "output": "ur"
+    },
+    {
+      "input": " ur-IN ",
+      "output": "ur"
+    },
+    {
+      "input": "ur-PK",
+      "output": "ur"
+    },
+    {
+      "input": " ur-PK ",
+      "output": "ur"
+    },
+    {
+      "input": "uz",
+      "output": "uz"
+    },
+    {
+      "input": " uz ",
+      "output": "uz"
+    },
+    {
+      "input": "uz-UZ",
+      "output": "uz"
+    },
+    {
+      "input": " uz-UZ ",
+      "output": "uz"
+    },
+    {
+      "input": "vi",
+      "output": "vi"
+    },
+    {
+      "input": " vi ",
+      "output": "vi"
+    },
+    {
+      "input": "vi-VN",
+      "output": "vi"
+    },
+    {
+      "input": " vi-VN ",
+      "output": "vi"
+    },
+    {
+      "input": "wo",
+      "output": "wo"
+    },
+    {
+      "input": " wo ",
+      "output": "wo"
+    },
+    {
+      "input": "wuu",
+      "output": "wuu"
+    },
+    {
+      "input": " wuu ",
+      "output": "wuu"
+    },
+    {
+      "input": "wuu-CN",
+      "output": "wuu"
+    },
+    {
+      "input": " wuu-CN ",
+      "output": "wuu"
+    },
+    {
+      "input": "yi",
+      "output": "yi"
+    },
+    {
+      "input": " yi ",
+      "output": "yi"
+    },
+    {
+      "input": "yo",
+      "output": "yo"
+    },
+    {
+      "input": " yo ",
+      "output": "yo"
+    },
+    {
+      "input": "yue",
+      "output": "yue"
+    },
+    {
+      "input": " yue ",
+      "output": "yue"
+    },
+    {
+      "input": "yue-CN",
+      "output": "yue"
+    },
+    {
+      "input": " yue-CN ",
+      "output": "yue"
+    },
+    {
+      "input": "zh",
+      "output": "zh"
+    },
+    {
+      "input": " zh ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-guangxi",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-guangxi ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-henan",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-henan ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-liaoning",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-liaoning ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-shaanxi",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-shaanxi ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-shandong",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-shandong ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-CN-sichuan",
+      "output": "zh"
+    },
+    {
+      "input": " zh-CN-sichuan ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-HK",
+      "output": "zh"
+    },
+    {
+      "input": " zh-HK ",
+      "output": "zh"
+    },
+    {
+      "input": "zh-TW",
+      "output": "zh"
+    },
+    {
+      "input": " zh-TW ",
+      "output": "zh"
+    },
+    {
+      "input": "xh-ZA",
+      "output": "xh"
+    },
+    {
+      "input": " xh-ZA ",
+      "output": "xh"
+    },
+    {
+      "input": "zu",
+      "output": "zu"
+    },
+    {
+      "input": " zu ",
+      "output": "zu"
+    },
+    {
+      "input": "zu-ZA",
+      "output": "zu"
+    },
+    {
+      "input": " zu-ZA ",
+      "output": "zu"
+    },
+    {
+      "input": null,
+      "output": "en"
+    },
+    {
+      "input": "",
+      "output": "en"
+    },
+    {
+      "input": "  ",
+      "output": "en"
+    },
+    {
+      "input": "EN",
+      "error": true
+    },
+    {
+      "input": "en-us",
+      "error": true
+    },
+    {
+      "input": "zh-tw",
+      "error": true
+    },
+    {
+      "input": "not-a-language",
+      "error": true
+    },
+    {
+      "input": 1,
+      "error": true
+    },
+    {
+      "input": {},
+      "error": true
+    },
+    {
+      "input": [],
+      "error": true
+    }
+  ]
+}

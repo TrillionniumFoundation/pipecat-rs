@@ -64,6 +64,25 @@ impl RecordedScenarioFile {
         reference_limit: usize,
         mode: ResponseParseMode,
     ) -> Result<Self, EvalError> {
+        Self::load_with_transform(
+            path,
+            wav_limit,
+            pcm_limit,
+            reference_limit,
+            mode,
+            extract_recordings,
+        )
+    }
+    /// Shared bounded preflight and recording loading; the caller supplies only
+    /// its opt-in scenario normalization, before any media payload is read.
+    pub(crate) fn load_with_transform(
+        path: &Path,
+        wav_limit: usize,
+        pcm_limit: usize,
+        reference_limit: usize,
+        mode: ResponseParseMode,
+        mut transform: impl FnMut(&mut Map<String, Value>) -> Result<Vec<(usize, PathBuf)>, EvalError>,
+    ) -> Result<Self, EvalError> {
         let wav_limit = wav_limit.min(MAX_BUNDLE_WAV_BYTES);
         let pcm_limit = pcm_limit.min(MAX_TOTAL_BYTES);
         let reference_limit = reference_limit.min(MAX_RECORDINGS);
@@ -87,7 +106,7 @@ impl RecordedScenarioFile {
             if expanded_bytes > MAX_EXPANDED_SCENARIO_BYTES {
                 return Err(EvalError::Limit("expanded recorded scenario bytes"));
             }
-            let paths = extract_recordings(raw)?;
+            let paths = transform(raw)?;
             count = count
                 .checked_add(paths.len())
                 .ok_or(EvalError::Limit("recording references"))?;

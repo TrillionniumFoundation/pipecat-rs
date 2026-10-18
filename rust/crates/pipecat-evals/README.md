@@ -597,3 +597,10 @@ concurrent attempts. Simultaneous WAV export is unsupported. See
 [BOT_AUDIO_RESPONSE.md](BOT_AUDIO_RESPONSE.md#explicit-cli-run-configuration) for
 required endpoint, credential-environment and local model/runtime fields, limits,
 privacy implications and the unchanged default text behavior.
+
+### Scripted user speech
+
+The optional `user-speech` feature provides explicit Cartesia HTTP input synthesis,
+recording overrides and a private opt-in cache for direct library/CLI runs. See
+[USER_SPEECH.md](USER_SPEECH.md) for configuration, limits, privacy, cleanup and
+verification boundaries.

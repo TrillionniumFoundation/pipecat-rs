@@ -3,6 +3,10 @@ use crate::bot_audio::{BotAudioLimits, BotAudioRun, Capture};
 #[cfg(feature = "bot-audio-transcription")]
 use crate::bot_transcription::{BotTranscription, BotTranscriptionConfig};
 use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
+#[cfg(feature = "user-speech")]
+use crate::user_speech::{
+    CartesiaUserSpeechSettings, CartesiaUserSpeechVoice, UserSpeechBudget, UserSpeechOwner,
+};
 use crate::{
     events::{EventLimits, EventStream},
     judge::JudgeRequest,
@@ -131,6 +135,10 @@ pub struct EvalSession {
     active_expectation: i64,
     recordings: BTreeMap<usize, RecordedAudio>,
     playback: Option<Playback>,
+    #[cfg(feature = "user-speech")]
+    user_speech: Option<UserSpeechOwner>,
+    #[cfg(feature = "user-speech")]
+    user_speech_budget: Option<UserSpeechBudget>,
     capture: Option<Capture>,
     #[cfg(feature = "bot-audio-transcription")]
     transcription_config: Option<BotTranscriptionConfig>,
@@ -203,6 +211,10 @@ impl EvalSession {
             active_expectation: -1,
             recordings: BTreeMap::new(),
             playback: None,
+            #[cfg(feature = "user-speech")]
+            user_speech: None,
+            #[cfg(feature = "user-speech")]
+            user_speech_budget: None,
             capture: None,
             #[cfg(feature = "bot-audio-transcription")]
             transcription_config: None,
@@ -285,6 +297,48 @@ impl EvalSession {
         self.url = url.into();
         Ok(())
     }
+    /// Synthesize uncovered user turns with explicitly configured Cartesia.
+    /// Recordings always win, in either builder order. Reference text is never
+    /// sent as text. The provider/cache starts only after each turn admission.
+    #[cfg(feature = "user-speech")]
+    pub fn with_cartesia_user_speech(
+        mut self,
+        settings: CartesiaUserSpeechSettings,
+        voice: CartesiaUserSpeechVoice,
+    ) -> Result<Self, EvalError> {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() || self.transcription.is_some() {
+            return Err(EvalError::Unsupported(
+                "user speech combined with bot audio transcription".into(),
+            ));
+        }
+        let mut count = 0usize;
+        for turn in &self.scenario.turns {
+            if let Some(text) = &turn.user {
+                UserSpeechOwner::validate_text(text)?;
+                count += 1;
+            }
+        }
+        if count > 128 {
+            return Err(EvalError::Limit("user speech turns"));
+        }
+        let mut owner = UserSpeechOwner::new(settings, voice);
+        if let Some(budget) = &self.user_speech_budget {
+            owner.with_budget(budget.clone());
+        }
+        self.user_speech = Some(owner);
+        Ok(self)
+    }
+    /// Loader-precharged recordings are frozen so later public builder calls
+    /// cannot replace them with larger clips and evade the shared run budget.
+    #[cfg(feature = "user-speech")]
+    pub(crate) fn with_user_speech_budget(mut self, budget: UserSpeechBudget) -> Self {
+        if let Some(owner) = &mut self.user_speech {
+            owner.with_budget(budget.clone());
+        }
+        self.user_speech_budget = Some(budget);
+        self
+    }
     /// Replace selected user turns with real recorded PCM input. The user text
     /// remains a judge reference and is never sent as text for these turns.
     /// Requires a compatible endpoint, such as EvalBotHost with_raw_audio_input(true).
@@ -293,6 +347,12 @@ impl EvalSession {
         mut self,
         inputs: impl IntoIterator<Item = (usize, RecordedAudio)>,
     ) -> Result<Self, EvalError> {
+        #[cfg(feature = "user-speech")]
+        if self.user_speech_budget.is_some() {
+            return Err(EvalError::Scenario(
+                "preflighted user speech recording plan is immutable".into(),
+            ));
+        }
         let mut recordings = BTreeMap::new();
         let mut total = 0usize;
         for (index, clip) in inputs {
@@ -333,6 +393,12 @@ impl EvalSession {
         limits: BotAudioLimits,
     ) -> Result<BotAudioRun, EvalError> {
         limits.validate()?;
+        #[cfg(feature = "user-speech")]
+        if self.user_speech.is_some() {
+            return Err(EvalError::Unsupported(
+                "user speech combined with bot audio capture".into(),
+            ));
+        }
         #[cfg(feature = "bot-audio-transcription")]
         if self.transcription_config.is_some() {
             return Err(EvalError::Unsupported(
@@ -356,11 +422,26 @@ impl EvalSession {
             self.pending_recognition = None;
         }
         let max_duration = self.options.max_duration;
+        #[cfg(feature = "user-speech")]
+        let prepared = if let Some(owner) = &mut self.user_speech {
+            owner.configure_run(
+                cancel.clone(),
+                started + max_duration,
+                self.recordings
+                    .values()
+                    .map(|clip| clip.pcm_bytes().len())
+                    .sum(),
+            )
+        } else {
+            Ok(())
+        };
+        #[cfg(not(feature = "user-speech"))]
+        let prepared: Result<(), EvalError> = Ok(());
         let outcome = tokio::select! {
             biased;
             _=cancel.cancelled()=>Err(EvalError::Cancelled),
             _=tokio::time::sleep(max_duration)=>Err(EvalError::Timeout("session")),
-            result=self.drive()=>result,
+            result=async { prepared?; self.drive().await }=>result,
         };
         // A classifier can finish synchronously in the same poll that the
         // caller cancels. Fence final publication as well as the select branch.
@@ -378,6 +459,18 @@ impl EvalSession {
             let kind = match &error {
                 EvalError::Cancelled => "cancelled",
                 EvalError::Judge(ClassifierError::Cancelled) => "cancelled",
+                #[cfg(feature = "user-speech")]
+                _ if self
+                    .user_speech
+                    .as_ref()
+                    .and_then(UserSpeechOwner::failure_kind)
+                    .is_some() =>
+                {
+                    self.user_speech
+                        .as_ref()
+                        .and_then(UserSpeechOwner::failure_kind)
+                        .unwrap()
+                }
                 EvalError::Judge(ClassifierError::Deadline) => "judge_timeout",
                 EvalError::Judge(ClassifierError::Limit(_)) => "limit_exceeded",
                 EvalError::Judge(_) => "judge_error",
@@ -438,7 +531,7 @@ impl EvalSession {
         let deadline = Instant::now() + self.options.handshake_timeout;
         loop {
             if self.pump(deadline).await.map_err(|e| {
-                if matches!(e, EvalError::Timeout(_)) {
+                if matches!(e, EvalError::Timeout("event")) {
                     EvalError::Timeout("handshake")
                 } else {
                     e
@@ -459,7 +552,10 @@ impl EvalSession {
             )
             .await?;
         }
-        if !self.recordings.is_empty() {
+        let audio_input = !self.recordings.is_empty();
+        #[cfg(feature = "user-speech")]
+        let audio_input = audio_input || self.user_speech.is_some();
+        if audio_input {
             self.playback = Some(Playback::start(
                 self.socket
                     .as_ref()
@@ -560,7 +656,7 @@ impl EvalSession {
                         break *at + Duration::from_millis(after.delay_ms);
                     }
                     self.pump(deadline).await.map_err(|e| {
-                        if matches!(e, EvalError::Timeout(_)) {
+                        if matches!(e, EvalError::Timeout("event")) {
                             EvalError::Timeout("send_after")
                         } else {
                             e
@@ -577,7 +673,7 @@ impl EvalSession {
             let deadline = Instant::now() + self.options.bot_quiet_timeout;
             while self.stream.bot_speaking {
                 match self.pump(deadline).await {
-                    Err(EvalError::Timeout(_)) => break,
+                    Err(EvalError::Timeout("event")) => break,
                     other => {
                         other?;
                     }
@@ -588,26 +684,37 @@ impl EvalSession {
             }
         }
         let mut audio_completion = None;
+        #[cfg(feature = "user-speech")]
+        let mut speech_anchor = None;
         if let Some(user) = turn.user {
             self.record_pending_reply()?;
             self.turn_boundary()?;
+            #[cfg(feature = "user-speech")]
+            let admitted = Instant::now();
             if let Some(judge) = &mut self.judge {
                 judge.add_user_message(&user)?;
             }
             if let Some(clip) = self.recordings.remove(&index) {
-                audio_completion = Some(
+                audio_completion = Some((
                     self.playback
                         .as_ref()
                         .ok_or_else(|| {
                             EvalError::Scenario("recording playback is not running".into())
                         })?
                         .queue(clip)?,
-                );
+                    Instant::now() + Duration::from_secs(61),
+                ));
             } else {
-                self.send(
-                    "send-text",
-                    json!({"content":user,"options":{"run_immediately":true,"audio_response":self.capture.is_some()}}),
-                ).await?;
+                #[cfg(feature = "user-speech")]
+                if let Some(owner) = &mut self.user_speech {
+                    // Assertion deadlines include cache/HTTP production time.
+                    speech_anchor = Some(admitted);
+                    owner.begin(user, admitted)?;
+                } else {
+                    self.send_user_text(user).await?;
+                }
+                #[cfg(not(feature = "user-speech"))]
+                self.send_user_text(user).await?;
             }
         } else if let Some(dtmf) = turn.dtmf {
             self.record_pending_reply()?;
@@ -622,6 +729,8 @@ impl EvalSession {
             .await?;
         }
         let anchor = Instant::now();
+        #[cfg(feature = "user-speech")]
+        let anchor = speech_anchor.unwrap_or(anchor);
         for (ei, expectation) in turn.expect.into_iter().enumerate() {
             self.active_expectation = ei as i64;
             let deadline = anchor
@@ -660,15 +769,48 @@ impl EvalSession {
             }
         }
         if !(self.scenario.stop_on_failure && !self.result.turns[index].failures.is_empty()) {
-            if let Some(mut completed) = audio_completion {
+            if let Some((mut completed, playback_deadline)) = audio_completion {
                 loop {
                     tokio::select! {
                         biased;
                         result = &mut completed => { result.map_err(|_| EvalError::Scenario("recording ended before playback completion".into()))?; break; }
-                        result = self.pump(Instant::now() + Duration::from_secs(61)) => { result?; }
+                        result = self.pump(self.recorded_playback_deadline(playback_deadline)) => { result?; }
                     }
                 }
             }
+            #[cfg(feature = "user-speech")]
+            while self
+                .user_speech
+                .as_ref()
+                .is_some_and(|owner| !owner.settled())
+            {
+                self.check_user_speech_deadline()?;
+                let deadline = self
+                    .user_speech
+                    .as_ref()
+                    .and_then(UserSpeechOwner::deadline)
+                    .expect("active user speech has a deadline");
+                self.pump(deadline).await?;
+            }
+        }
+        Ok(())
+    }
+    fn recorded_playback_deadline(&self, fixed: Instant) -> Instant {
+        #[cfg(feature = "user-speech")]
+        if self.user_speech.is_some() || self.user_speech_budget.is_some() {
+            return fixed;
+        }
+        // Keep the established recorded-only path's behavior unchanged.
+        let _ = fixed;
+        Instant::now() + Duration::from_secs(61)
+    }
+    async fn send_user_text(&mut self, user: String) -> Result<(), EvalError> {
+        self.send("send-text", json!({"content":user,"options":{"run_immediately":true,"audio_response":self.capture.is_some()}})).await
+    }
+    fn check_user_speech_deadline(&mut self) -> Result<(), EvalError> {
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            owner.check_deadline()?;
         }
         Ok(())
     }
@@ -717,6 +859,7 @@ impl EvalSession {
         let mut no_deadline = None;
         let mut last_decision = None;
         loop {
+            self.check_user_speech_deadline()?;
             if let Some(criterion) = &criterion {
                 for event in check.take_judged_calls() {
                     let request = self.judge.as_mut().expect("validated judge").prepare_call(
@@ -791,7 +934,7 @@ impl EvalSession {
                 continue;
             }
             match self.pump(until).await {
-                Err(EvalError::Timeout(_)) => {}
+                Err(EvalError::Timeout("event")) => {}
                 other => {
                     other?;
                 }
@@ -811,12 +954,13 @@ impl EvalSession {
         });
         tokio::pin!(future);
         loop {
+            self.check_user_speech_deadline()?;
             let verdict = tokio::select! {
                 biased;
                 result = &mut future => Some(result?),
                 packet = self.pump(deadline) => {
                     match packet {
-                        Err(EvalError::Timeout(_)) => return Err(EvalError::Judge(ClassifierError::Deadline)),
+                        Err(EvalError::Timeout("event")) => return Err(EvalError::Judge(ClassifierError::Deadline)),
                         other => { other?; }
                     }
                     None
@@ -826,6 +970,7 @@ impl EvalSession {
                 return Ok(None);
             }
             if let Some(verdict) = verdict {
+                self.check_user_speech_deadline()?;
                 tokio::time::timeout_at(deadline, self.drain_received())
                     .await
                     .map_err(|_| EvalError::Judge(ClassifierError::Deadline))??;
@@ -872,6 +1017,7 @@ impl EvalSession {
         Ok(())
     }
     async fn pump(&mut self, deadline: Instant) -> Result<bool, EvalError> {
+        self.check_user_speech_deadline()?;
         if Instant::now() >= deadline {
             return Err(EvalError::Timeout("event"));
         }
@@ -899,7 +1045,19 @@ impl EvalSession {
             }
             std::future::pending::<String>().await
         };
-        let (recognized, packet) = {
+        #[cfg(feature = "user-speech")]
+        let speech_deadline = self
+            .user_speech
+            .as_ref()
+            .and_then(UserSpeechOwner::deadline);
+        #[cfg(not(feature = "user-speech"))]
+        let speech_deadline: Option<Instant> = None;
+        let wake = speech_deadline.map_or(deadline, |at| at.min(deadline));
+        #[cfg(feature = "user-speech")]
+        let speech_enabled = self.user_speech.is_some();
+        #[cfg(not(feature = "user-speech"))]
+        let speech_enabled = false;
+        let (recognized, packet, speech_progress) = {
             let transcription = async {
                 #[cfg(feature = "bot-audio-transcription")]
                 if let Some(engine) = &mut self.transcription {
@@ -907,16 +1065,49 @@ impl EvalSession {
                 }
                 std::future::pending::<Result<(u64, String), EvalError>>().await
             };
-            tokio::select! {
-                biased;
-                _ = tokio::time::sleep_until(deadline) => return Err(EvalError::Timeout("event")),
-                result = transcription => (Some(result), None),
-                error = audio_error => return Err(EvalError::Scenario(error)),
-                packet = tokio::time::timeout_at(deadline, self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv()) => {
-                    (None, Some(packet.map_err(|_| EvalError::Timeout("event"))?.ok_or(EvalError::Disconnected)?))
+            let speech = async {
+                #[cfg(feature = "user-speech")]
+                if let Some(owner) = &mut self.user_speech {
+                    return owner.progress(self.playback.as_ref()).await;
+                }
+                std::future::pending::<Result<(), EvalError>>().await
+            };
+            if speech_enabled {
+                // One owner step per pump. Fair selection keeps socket/control
+                // and producer live when either side is continuously ready.
+                tokio::select! {
+                    _ = tokio::time::sleep_until(wake) => (None, None, Some(Ok(()))),
+                    result = speech => (None, None, Some(result)),
+                    result = transcription => (Some(result), None, None),
+                    error = audio_error => {
+                        #[cfg(feature = "user-speech")]
+                        if let Some(owner) = &mut self.user_speech { return Err(owner.playback_failed()); }
+                        return Err(EvalError::Scenario(error));
+                    },
+                    packet = self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv() => {
+                        (None, Some(packet.ok_or(EvalError::Disconnected)?), None)
+                    }
+                }
+            } else {
+                // Preserve the original non-speech scheduling priority.
+                tokio::select! { biased;
+                    _ = tokio::time::sleep_until(deadline) => return Err(EvalError::Timeout("event")),
+                    result = transcription => (Some(result), None, None),
+                    error = audio_error => return Err(EvalError::Scenario(error)),
+                    packet = self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv() => {
+                        (None, Some(packet.ok_or(EvalError::Disconnected)?), None)
+                    }
                 }
             }
         };
+        self.check_user_speech_deadline()?;
+        if let Some(progress) = speech_progress {
+            progress?;
+            if Instant::now() >= deadline {
+                return Err(EvalError::Timeout("event"));
+            }
+            return Ok(self.phase == "handshake" && self.bot_ready_received);
+        }
         if let Some(result) = recognized {
             let recognition = result?;
             #[cfg(feature = "bot-audio-transcription")]
@@ -1015,7 +1206,14 @@ impl EvalSession {
         Ok(false)
     }
     async fn drain_received(&mut self) -> Result<(), EvalError> {
+        #[cfg(feature = "user-speech")]
+        let mut drained = 0usize;
         loop {
+            self.check_user_speech_deadline()?;
+            #[cfg(feature = "user-speech")]
+            if self.user_speech.is_some() && drained > 0 && drained.is_multiple_of(32) {
+                tokio::task::yield_now().await;
+            }
             match tokio::time::timeout(
                 Duration::ZERO,
                 self.socket.as_mut().ok_or(EvalError::Disconnected)?.recv(),
@@ -1024,6 +1222,10 @@ impl EvalSession {
             {
                 Ok(Some(packet)) => {
                     self.ingest(packet)?;
+                    #[cfg(feature = "user-speech")]
+                    {
+                        drained += 1;
+                    }
                 }
                 Ok(None) => return Err(EvalError::Disconnected),
                 Err(_) => return Ok(()),
@@ -1033,7 +1235,7 @@ impl EvalSession {
     async fn pump_until(&mut self, target: Instant) -> Result<(), EvalError> {
         while Instant::now() < target {
             match self.pump(target).await {
-                Err(EvalError::Timeout(_)) => break,
+                Err(EvalError::Timeout("event")) => break,
                 other => {
                     other?;
                 }
@@ -1042,6 +1244,10 @@ impl EvalSession {
         Ok(())
     }
     pub(crate) async fn shutdown(&mut self) {
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            owner.cancel_work();
+        }
         #[cfg(feature = "bot-audio-transcription")]
         {
             self.pending_recognition = None;
@@ -1070,6 +1276,19 @@ impl EvalSession {
             }
         }
         self.playback.take();
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            if let Err(error) = owner.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "user_speech_cleanup".into(),
+                    reason: error.to_string(),
+                    kind: "user_speech_cleanup_error".into(),
+                });
+            }
+            self.result.debug_log.extend(owner.take_cache_diagnostics());
+        }
         if self.socket.is_none() {
             return;
         }
@@ -1410,5 +1629,69 @@ mod recognition_ownership_tests {
         assert!(session.stream.events_seen.is_empty());
         assert!(session.socket.is_none());
         assert!(session.transcription.is_none());
+    }
+}
+
+#[cfg(all(test, feature = "user-speech"))]
+mod speech_builder_tests {
+    use super::*;
+    use crate::{ScenarioFile, UserSpeechCachePolicy};
+    use pipecat_speech::SpeechConfig;
+
+    fn session() -> EvalSession {
+        let scenario = ScenarioFile::from_value(
+            json!({"name":"speech budget", "turns":[{"user":"reference"}]}),
+        )
+        .unwrap()
+        .scenarios
+        .remove(0);
+        EvalSession::new(scenario, "ws://127.0.0.1:1", SessionOptions::default()).unwrap()
+    }
+    fn settings() -> CartesiaUserSpeechSettings {
+        let mut config = SpeechConfig::cartesia("synthetic-test-key");
+        config.base_url = "http://127.0.0.1:1".into();
+        CartesiaUserSpeechSettings::new(config, UserSpeechCachePolicy::Disabled).unwrap()
+    }
+    fn voice() -> CartesiaUserSpeechVoice {
+        CartesiaUserSpeechVoice::new("voice", None, None).unwrap()
+    }
+    #[test]
+    fn recorded_overrides_survive_both_public_builder_orders() {
+        let clip = RecordedAudio::from_pcm16(&[1, 0, 2, 0]).unwrap();
+        let first = session()
+            .with_recorded_audio_inputs([(0, clip.clone())])
+            .unwrap()
+            .with_cartesia_user_speech(settings(), voice())
+            .unwrap();
+        let second = session()
+            .with_cartesia_user_speech(settings(), voice())
+            .unwrap()
+            .with_recorded_audio_inputs([(0, clip)])
+            .unwrap();
+        assert_eq!(
+            first.recordings[&0].pcm_bytes(),
+            second.recordings[&0].pcm_bytes()
+        );
+        assert!(first.user_speech.is_some() && second.user_speech.is_some());
+    }
+    #[test]
+    fn loader_precharged_plan_is_frozen_even_without_a_speech_owner() {
+        let clip = RecordedAudio::from_pcm16(&[1, 0]).unwrap();
+        let loaded = session()
+            .with_recorded_audio_inputs([(0, clip.clone())])
+            .unwrap()
+            .with_user_speech_budget(UserSpeechBudget::new(2).unwrap());
+        assert!(loaded.user_speech.is_none());
+        assert!(loaded
+            .with_recorded_audio_inputs([(0, clip.clone())])
+            .is_err());
+        let replaced = session()
+            .with_recorded_audio_inputs([(0, clip.clone())])
+            .unwrap()
+            .with_user_speech_budget(UserSpeechBudget::new(2).unwrap())
+            .with_cartesia_user_speech(settings(), voice())
+            .unwrap();
+        assert!(replaced.user_speech_budget.is_some());
+        assert!(replaced.with_recorded_audio_inputs([(0, clip)]).is_err());
     }
 }

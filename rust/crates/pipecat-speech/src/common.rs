@@ -23,7 +23,6 @@ impl HttpClient {
     pub fn new(config: SpeechConfig) -> Result<Self, SpeechError> {
         Self::with_direct_policy(config, false)
     }
-    #[cfg(any(feature = "speechmatics", feature = "speechify", feature = "minimax"))]
     pub fn direct(config: SpeechConfig) -> Result<Self, SpeechError> {
         Self::with_direct_policy(config, true)
     }
@@ -151,11 +150,16 @@ impl HttpClient {
         rate: u32,
         encoding: RawEncoding,
         content_types: &'static [&'static str],
-        empty_response_is_source_audio: bool,
+        cartesia_response: bool,
     ) -> SpeechStream {
         let limit = self.config.max_audio_bytes;
         self.spawn(move |tx, observed| async move {
             let response = send(request).await?;
+            // CartesiaHttpTTSService rejects every status other than 200 before
+            // reading audio. Other providers retain their existing 2xx policy.
+            if cartesia_response && response.status() != reqwest::StatusCode::OK {
+                return Err(SpeechError::Http(response.status().as_u16()));
+            }
             check_content_type(&response, content_types, Some((rate, 1)))?;
             let source_success = response.status() == reqwest::StatusCode::OK;
             let mut stream = response.bytes_stream();
@@ -172,9 +176,7 @@ impl HttpClient {
             let result = decoder.finish();
             // Cartesia's source adapter emits its whole-response audio frame
             // only after an HTTP 200 body has been read in full.
-            if source_success
-                && empty_response_is_source_audio
-                && matches!(result, Err(SpeechError::EmptyAudio))
+            if source_success && cartesia_response && matches!(result, Err(SpeechError::EmptyAudio))
             {
                 observed.store(true, Ordering::Release);
             }

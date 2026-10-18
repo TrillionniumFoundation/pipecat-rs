@@ -170,10 +170,25 @@ async fn cartesia_non200_empty_response_is_not_source_audio_evidence() {
     let frames = utterance(&mut worker).await;
     assert_no_audio(&frames);
     let errors = errors(&frames);
-    assert_eq!(errors.len(), 1);
-    assert!(errors[0].error.contains("no audio"));
+    // Cartesia now rejects non-200 status before decoding; the independent
+    // zero-audio watchdog must still observe no source audio and trip once.
+    assert_eq!(errors.len(), 2);
+    assert_eq!(
+        errors
+            .iter()
+            .filter(|error| error.error == "HTTP 204")
+            .count(),
+        1
+    );
+    assert_eq!(
+        errors
+            .iter()
+            .filter(|error| error.error.contains("no audio"))
+            .count(),
+        1
+    );
     assert!(!worker.processor_health(0).unwrap().is_usable());
     worker.end().await.unwrap();
-    bounded(worker.collect()).await.unwrap();
+    assert_eq!(bounded(worker.collect()).await.unwrap().1.total_errors, 2);
     bounded(server).await.unwrap();
 }

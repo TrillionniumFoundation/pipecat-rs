@@ -136,6 +136,7 @@ pub struct SpeechChunk {
 pub type SpeechStream = ResponseStream<SpeechChunk>;
 /// Bounded stream with a terminal error, explicit cancellation and cancel-on-drop.
 /// Cancellation discards buffered output; reaching EOF does not acknowledge playout.
+/// Use [`Self::cancel_and_join`] to await task destruction; dropping only aborts it.
 pub struct ResponseStream<T> {
     rx: mpsc::Receiver<T>,
     cancel: CancellationToken,
@@ -153,8 +154,7 @@ impl<T> ResponseStream<T> {
         }
         tokio::select! { biased;
             _ = self.cancel.cancelled() => {
-                self.rx.close(); while self.rx.try_recv().is_ok() {}
-                self.task.abort(); self.ended = true;
+                let _ = self.abort_and_join().await;
                 return Some(Err(SpeechError::Cancelled));
             }
             chunk = self.rx.recv() => if let Some(chunk) = chunk { return Some(Ok(chunk)); }
@@ -170,10 +170,293 @@ impl<T> ResponseStream<T> {
     pub fn cancel(&self) {
         self.cancel.cancel()
     }
+
+    /// Discard buffered output, cancel the request, and await its owned task.
+    ///
+    /// Expected cancellation is successful cleanup. A previously unreported
+    /// provider or task failure is returned once; already joined streams return
+    /// success. Cancelling this waiting future retains the task so a later call
+    /// can resume the join. Task destruction may itself take time, so this does
+    /// not impose a separate cleanup deadline.
+    pub async fn cancel_and_join(&mut self) -> Result<(), SpeechError> {
+        if self.ended {
+            return Ok(());
+        }
+        self.cancel.cancel();
+        self.abort_and_join().await
+    }
+
+    async fn abort_and_join(&mut self) -> Result<(), SpeechError> {
+        self.rx.close();
+        while self.rx.try_recv().is_ok() {}
+        self.task.abort();
+        let result = (&mut self.task).await;
+        self.ended = true;
+        // A sender holding a permit can finish its send after receiver.close().
+        // Joining first ensures no producer can refill the drained queue.
+        while self.rx.try_recv().is_ok() {}
+        match result {
+            Ok(Ok(())) | Ok(Err(SpeechError::Cancelled)) => Ok(()),
+            Ok(Err(error)) => Err(error),
+            Err(error) if error.is_cancelled() => Ok(()),
+            Err(_) => Err(SpeechError::Transport),
+        }
+    }
 }
 impl<T> Drop for ResponseStream<T> {
     fn drop(&mut self) {
         self.cancel.cancel();
         self.task.abort();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::poll;
+    use std::sync::mpsc as blocking;
+    use tokio::sync::oneshot;
+
+    const WAIT: Duration = Duration::from_secs(5);
+
+    struct DestructionGuard {
+        started: Option<oneshot::Sender<()>>,
+        release: blocking::Receiver<()>,
+        destroyed: Arc<AtomicBool>,
+    }
+    impl Drop for DestructionGuard {
+        fn drop(&mut self) {
+            let _ = self.started.take().unwrap().send(());
+            // The test uses a multi-thread runtime. Dropping its release sender
+            // also releases this wait if an assertion fails.
+            let _ = self.release.recv();
+            self.destroyed.store(true, Ordering::Release);
+        }
+    }
+    struct GatedStream {
+        stream: ResponseStream<u8>,
+        dropping: oneshot::Receiver<()>,
+        release: blocking::Sender<()>,
+        destroyed: Arc<AtomicBool>,
+    }
+    async fn gated_stream(buffered: bool, finish: bool) -> GatedStream {
+        let (tx, rx) = mpsc::channel(2);
+        let (started, dropping) = oneshot::channel();
+        let (release, release_rx) = blocking::channel();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let destroyed = Arc::new(AtomicBool::new(false));
+        let guard = DestructionGuard {
+            started: Some(started),
+            release: release_rx,
+            destroyed: destroyed.clone(),
+        };
+        let task = tokio::spawn(async move {
+            let _guard = guard;
+            if buffered {
+                tx.send(7).await.unwrap();
+            }
+            ready_tx.send(()).unwrap();
+            if !finish {
+                std::future::pending::<()>().await;
+            }
+            drop(tx);
+            Ok(())
+        });
+        ready_rx.await.unwrap();
+        GatedStream {
+            stream: ResponseStream {
+                rx,
+                cancel: CancellationToken::new(),
+                task,
+                ended: false,
+                source_audio: Arc::new(AtomicBool::new(false)),
+            },
+            dropping,
+            release,
+            destroyed,
+        }
+    }
+    async fn finished_stream(result: Result<(), SpeechError>) -> ResponseStream<u8> {
+        let (tx, rx) = mpsc::channel(1);
+        let task = tokio::spawn(async move {
+            drop(tx);
+            result
+        });
+        while !task.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        ResponseStream {
+            rx,
+            cancel: CancellationToken::new(),
+            task,
+            ended: false,
+            source_audio: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancelled_join_wait_retains_task_and_discards_buffered_output() {
+        let GatedStream {
+            mut stream,
+            dropping,
+            release,
+            destroyed,
+        } = gated_stream(true, false).await;
+        let mut first = Box::pin(stream.cancel_and_join());
+        assert!(poll!(first.as_mut()).is_pending());
+        tokio::time::timeout(WAIT, dropping).await.unwrap().unwrap();
+        assert!(!destroyed.load(Ordering::Acquire));
+        assert!(poll!(first.as_mut()).is_pending());
+        drop(first);
+        assert!(!stream.ended);
+        assert!(!stream.task.is_finished());
+        assert!(stream.rx.try_recv().is_err());
+
+        let mut resumed = Box::pin(stream.cancel_and_join());
+        assert!(poll!(resumed.as_mut()).is_pending());
+        release.send(()).unwrap();
+        tokio::time::timeout(WAIT, resumed).await.unwrap().unwrap();
+        assert!(destroyed.load(Ordering::Acquire));
+        assert!(stream.ended);
+        assert!(stream.task.is_finished());
+        stream.cancel_and_join().await.unwrap();
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn next_cancellation_waits_for_destruction_and_resumes_after_dropped_wait() {
+        let GatedStream {
+            mut stream,
+            dropping,
+            release,
+            destroyed,
+        } = gated_stream(true, false).await;
+        stream.cancel();
+        let mut first = Box::pin(stream.next());
+        assert!(poll!(first.as_mut()).is_pending());
+        tokio::time::timeout(WAIT, dropping).await.unwrap().unwrap();
+        assert!(!destroyed.load(Ordering::Acquire));
+        assert!(poll!(first.as_mut()).is_pending());
+        drop(first);
+        assert!(!stream.ended);
+        assert!(!stream.task.is_finished());
+        release.send(()).unwrap();
+        assert!(matches!(
+            tokio::time::timeout(WAIT, stream.next()).await.unwrap(),
+            Some(Err(SpeechError::Cancelled))
+        ));
+        assert!(destroyed.load(Ordering::Acquire));
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn normal_eof_join_is_resumable_and_keeps_successful_output() {
+        let GatedStream {
+            mut stream,
+            dropping,
+            release,
+            destroyed,
+        } = gated_stream(true, true).await;
+        tokio::time::timeout(WAIT, dropping).await.unwrap().unwrap();
+        assert_eq!(stream.next().await.unwrap().unwrap(), 7);
+        let mut first = Box::pin(stream.next());
+        assert!(poll!(first.as_mut()).is_pending());
+        drop(first);
+        assert!(!stream.ended);
+        assert!(!destroyed.load(Ordering::Acquire));
+        assert!(!stream.task.is_finished());
+        release.send(()).unwrap();
+        assert!(tokio::time::timeout(WAIT, stream.next())
+            .await
+            .unwrap()
+            .is_none());
+        assert!(destroyed.load(Ordering::Acquire));
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn drop_only_aborts_without_waiting_for_destruction() {
+        let GatedStream {
+            stream,
+            dropping,
+            release,
+            destroyed,
+        } = gated_stream(false, false).await;
+        drop(stream);
+        tokio::time::timeout(WAIT, dropping).await.unwrap().unwrap();
+        assert!(!destroyed.load(Ordering::Acquire));
+        release.send(()).unwrap();
+        tokio::time::timeout(WAIT, async {
+            while !destroyed.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancel_and_join_reports_unobserved_failure_only_once() {
+        let mut stream = finished_stream(Err(SpeechError::Http(503))).await;
+        assert!(matches!(
+            stream.cancel_and_join().await,
+            Err(SpeechError::Http(503))
+        ));
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn cancel_and_join_reports_task_panic_only_once() {
+        let (tx, rx) = mpsc::channel::<u8>(1);
+        let task = tokio::spawn(async move {
+            drop(tx);
+            panic!("synthetic task failure");
+        });
+        while !task.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        let mut stream = ResponseStream {
+            rx,
+            cancel: CancellationToken::new(),
+            task,
+            ended: false,
+            source_audio: Arc::new(AtomicBool::new(false)),
+        };
+        assert!(matches!(
+            stream.cancel_and_join().await,
+            Err(SpeechError::Transport)
+        ));
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn joined_failure_and_expected_cancellation_are_cleanup_success() {
+        let mut stream = finished_stream(Err(SpeechError::Timeout)).await;
+        assert!(matches!(
+            stream.next().await,
+            Some(Err(SpeechError::Timeout))
+        ));
+        stream.cancel_and_join().await.unwrap();
+        let mut stream = finished_stream(Err(SpeechError::Cancelled)).await;
+        stream.cancel_and_join().await.unwrap();
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn next_preserves_cancelled_result_over_preexisting_provider_failure() {
+        let mut stream = finished_stream(Err(SpeechError::Http(503))).await;
+        stream.cancel();
+        assert!(matches!(
+            stream.next().await,
+            Some(Err(SpeechError::Cancelled))
+        ));
+        stream.cancel_and_join().await.unwrap();
+        assert!(stream.next().await.is_none());
     }
 }

@@ -20,7 +20,19 @@ pub mod matcher;
 pub mod process;
 mod recorded_audio;
 mod recorded_scenario;
+#[cfg(feature = "user-speech")]
+mod user_speech;
+#[cfg(feature = "user-speech")]
+mod user_speech_cache;
+#[cfg(feature = "user-speech")]
+mod user_speech_scenario;
 pub use recorded_scenario::RecordedScenarioFile;
+#[cfg(feature = "user-speech")]
+pub use user_speech::{CartesiaUserSpeechSettings, CartesiaUserSpeechVoice};
+#[cfg(feature = "user-speech")]
+pub use user_speech_cache::UserSpeechCachePolicy;
+#[cfg(feature = "user-speech")]
+pub use user_speech_scenario::UserSpeechScenarioFile;
 pub mod release;
 pub use recorded_audio::RecordedAudio;
 pub mod scenario;

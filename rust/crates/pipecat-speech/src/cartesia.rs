@@ -70,6 +70,13 @@ impl CartesiaHttpClient {
             http: HttpClient::new(config)?,
         })
     }
+    /// Construct an HTTP/1-only client without environment proxies or transport
+    /// retries. Redirects remain disabled, as with [`Self::new`].
+    pub fn new_direct(config: SpeechConfig) -> Result<Self, SpeechError> {
+        Ok(Self {
+            http: HttpClient::direct(config)?,
+        })
+    }
     pub fn synthesize(
         &self,
         request: CartesiaSynthesisRequest,
