@@ -1,0 +1,390 @@
+{
+  "source_blob_sha": "0c11d0bea727ba14775a4d5487d46f991af24b98",
+  "source_sha256": "c23a4915f5f0a9f63aac31b15c4047f57c3fdd06520c8b2cf322a638f509769d",
+  "executed_ast_lines": [
+    [
+      741,
+      753
+    ],
+    [
+      755,
+      755
+    ]
+  ],
+  "scope": "Exact source arithmetic and candidate admission, not SDK/native parsing or full service lifecycle.",
+  "cases": [
+    {
+      "id": "explicit_null_retains",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {
+            "usageMetadata": null,
+            "candidates": null
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "missing_metadata_retains",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {
+            "candidates": []
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "empty_object_replaces_zero",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {
+            "usageMetadata": {}
+          },
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "partial_object_replaces",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 2
+            }
+          },
+          "usage": {
+            "prompt_tokens": 2,
+            "completion_tokens": 0,
+            "total_tokens": 2,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "nullable_candidates_admitted",
+      "trace": [
+        {
+          "record": {
+            "candidates": null,
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "all_zero_replaces",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 173
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 0,
+              "candidatesTokenCount": 0,
+              "totalTokenCount": 0,
+              "toolUsePromptTokenCount": 0,
+              "thoughtsTokenCount": 0,
+              "cachedContentTokenCount": 0
+            }
+          },
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "provider_total_differs",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 999
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "provider_total_zero",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 0
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "provider_total_max",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 40,
+              "toolUsePromptTokenCount": 3,
+              "candidatesTokenCount": 10,
+              "thoughtsTokenCount": 120,
+              "cachedContentTokenCount": 15,
+              "totalTokenCount": 18446744073709551615
+            }
+          },
+          "usage": {
+            "prompt_tokens": 43,
+            "completion_tokens": 130,
+            "total_tokens": 173,
+            "cache_read_input_tokens": 15,
+            "reasoning_tokens": 120
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "provider_total_only",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "totalTokenCount": 999
+            }
+          },
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "no_reported_snapshot",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": null
+          },
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        },
+        {
+          "record": {},
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    },
+    {
+      "id": "unbounded_python_sum",
+      "trace": [
+        {
+          "record": {
+            "usageMetadata": {
+              "promptTokenCount": 18446744073709551615,
+              "toolUsePromptTokenCount": 1,
+              "candidatesTokenCount": 2,
+              "thoughtsTokenCount": 3
+            }
+          },
+          "usage": {
+            "prompt_tokens": 18446744073709551616,
+            "completion_tokens": 5,
+            "total_tokens": 18446744073709551621,
+            "cache_read_input_tokens": 0,
+            "reasoning_tokens": 3
+          },
+          "skip_candidate_output": true
+        }
+      ]
+    }
+  ]
+}

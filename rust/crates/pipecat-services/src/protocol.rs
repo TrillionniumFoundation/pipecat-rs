@@ -799,10 +799,13 @@ impl ProtocolDecoder {
         Ok(())
     }
     fn gemini(&mut self, value: &Value) -> Result<Vec<StreamEvent>, ServiceError> {
-        if value.get("candidates").is_some_and(|c| !c.is_array()) {
+        if value
+            .get("candidates")
+            .is_some_and(|c| !c.is_null() && !c.is_array())
+        {
             return Err(ServiceError::Protocol("invalid Gemini candidates".into()));
         }
-        if let Some(usage) = value.get("usageMetadata") {
+        if let Some(usage) = value.get("usageMetadata").filter(|usage| !usage.is_null()) {
             let prompt = count(usage, "promptTokenCount")
                 .saturating_add(count(usage, "toolUsePromptTokenCount"));
             let reasoning = usage.get("thoughtsTokenCount").and_then(Value::as_u64);

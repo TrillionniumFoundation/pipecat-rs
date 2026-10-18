@@ -160,6 +160,9 @@ Usage follows the Python regression contracts: OpenAI snapshots are not summed;
 Anthropic cache input counts are included in prompt totals; Gemini thoughts
 count as output and tool-use prompt tokens count as input. Cache and reasoning
 counts remain optional instead of inventing measured zeros.
+See [GEMINI_USAGE.md](GEMINI_USAGE.md) for nullable streaming envelopes, full
+snapshot replacement, provider-total priority, and the explicit Python
+always-sum compatibility boundary.
 
 Anthropic `message_start` and `message_delta` usage fields are cumulative
 snapshots. Each reported `input_tokens`, `output_tokens`,

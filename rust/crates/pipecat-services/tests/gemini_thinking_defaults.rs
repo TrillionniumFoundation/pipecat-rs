@@ -14,6 +14,12 @@ use pipecat_services::{adapters::request_body, *};
 use serde_json::{json, Value};
 use tokio::{io::AsyncWriteExt, net::TcpListener, time::timeout};
 
+async fn eof(socket: &mut tokio::net::TcpStream) -> http::Check<()> {
+    socket
+        .write_all(b"0\r\n\r\n")
+        .await
+        .map_err(|e| e.to_string())
+}
 fn defaults() -> [(&'static str, Value); 3] {
     [
         ("gemini-2.5-flash", json!({"thinkingBudget": 0})),
@@ -250,7 +256,7 @@ async fn resolved_defaults_and_overrides_reach_http_without_mutating_snapshots()
                 ],
             )
             .await?;
-            http::eof(&mut socket).await?;
+            eof(&mut socket).await?;
             socket.shutdown().await.map_err(|e| e.to_string())?;
         }
         Ok(bodies)

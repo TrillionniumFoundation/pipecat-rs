@@ -91,12 +91,6 @@ pub(crate) async fn chunk(socket: &mut TcpStream, records: &[Value]) -> Check<()
     socket.write_all(&bytes).await.map_err(|e| e.to_string())?;
     socket.write_all(b"\r\n").await.map_err(|e| e.to_string())
 }
-pub(crate) async fn eof(socket: &mut TcpStream) -> Check<()> {
-    socket
-        .write_all(b"0\r\n\r\n")
-        .await
-        .map_err(|e| e.to_string())
-}
 pub(crate) async fn closed(socket: &mut TcpStream) -> Check<()> {
     let mut byte = [0];
     match socket.read(&mut byte).await {
