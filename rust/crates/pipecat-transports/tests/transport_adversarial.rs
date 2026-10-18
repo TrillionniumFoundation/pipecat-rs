@@ -567,3 +567,56 @@ async fn peer_close_interrupts_a_blocked_pong_flush() {
     .await
     .unwrap();
 }
+
+#[tokio::test]
+async fn cancelled_graceful_wait_escalates_and_joins_same_blocked_socket_owner() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (release, hold) = tokio::sync::oneshot::channel();
+        let peer = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let websocket = tokio_tungstenite::accept_async(socket).await.unwrap();
+            let _ = hold.await;
+            drop(websocket);
+        });
+        let config = SessionConfig {
+            queue_capacity: 1,
+            max_message_bytes: 32 * 1024 * 1024,
+            write_timeout: Duration::from_secs(30),
+            ..Default::default()
+        };
+        let mut session = WebSocketSession::connect(&format!("ws://{addr}"), config)
+            .await
+            .unwrap();
+        let sender = session.sender();
+        let payload = Bytes::from(vec![1u8; 16 * 1024 * 1024]);
+        sender.send(Packet::Binary(payload.clone())).await.unwrap();
+        sender.send(Packet::Binary(payload.clone())).await.unwrap();
+        let third = sender.send(Packet::Binary(payload));
+        tokio::pin!(third);
+        let blocked = tokio::time::timeout(Duration::from_millis(50), &mut third)
+            .await
+            .is_err();
+        let timed_out = tokio::time::timeout(Duration::from_millis(50), session.finish_and_join())
+            .await
+            .is_err();
+        let joined = session.cancel_and_join().await;
+        let late = sender.send(Packet::Text("late".into())).await;
+        let third_result = third.await;
+        let repeated = session.finish_and_join().await;
+        let _ = release.send(());
+        peer.await.unwrap();
+        assert!(blocked);
+        assert!(timed_out, "the graceful wait must retain its held task");
+        assert!(
+            joined.is_ok(),
+            "cancellation must actually await the same owner"
+        );
+        assert!(repeated.is_ok());
+        assert!(matches!(late, Err(TransportError::Closed)));
+        assert!(matches!(third_result, Err(TransportError::Closed)));
+    })
+    .await
+    .unwrap();
+}

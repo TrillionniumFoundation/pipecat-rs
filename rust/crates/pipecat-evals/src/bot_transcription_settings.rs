@@ -58,6 +58,18 @@ struct TestLoaders {
     attempt: Box<dyn Fn() -> Result<BotTranscriptionConfig, EvalError> + Send + Sync>,
 }
 impl BotTranscriptionSettings {
+    /// The joint finite profile uses Silero plus speech-timeout aggregation.
+    /// Reject the optional graph before entering any owned native loader.
+    #[cfg(feature = "user-speech")]
+    pub(crate) fn validate_audio_to_audio(&self) -> Result<(), EvalError> {
+        if self.smart_turn_model.is_some() {
+            return Err(EvalError::Unsupported(
+                "audio-to-audio scenarios do not support Smart Turn".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Read at most 32 KiB from a trusted-local regular JSON file (Unix).
     /// Relative model/runtime paths use the canonical configuration target's directory.
     /// Only the explicitly named credential environment variable is read.
@@ -384,5 +396,31 @@ fn checked_asset(path: &Path, limit: u64) -> Result<PathBuf, EvalError> {
         Err(EvalError::Unsupported(
             "bot transcription file configuration requires Unix regular-file semantics".into(),
         ))
+    }
+}
+
+#[cfg(all(test, feature = "user-speech"))]
+mod combined_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn combined_smart_turn_rejection_precedes_any_native_entry() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let calls = attempts.clone();
+        let mut settings = BotTranscriptionSettings::for_native_loader_test(
+            || unreachable!(),
+            move || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Err(EvalError::Scenario("synthetic native entry".into()))
+            },
+        );
+        assert!(settings.validate_audio_to_audio().is_ok());
+        settings.smart_turn_model = Some(PathBuf::from("never-open-smart-turn.onnx"));
+        assert!(matches!(
+            settings.validate_audio_to_audio(),
+            Err(EvalError::Unsupported(message)) if message.contains("Smart Turn")
+        ));
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
     }
 }

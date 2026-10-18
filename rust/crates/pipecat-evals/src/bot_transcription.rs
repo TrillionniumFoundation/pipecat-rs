@@ -134,6 +134,25 @@ impl BotTranscriptionConfig {
         self.max_transcript_bytes = bytes;
         self
     }
+    #[cfg(feature = "user-speech")]
+    pub(crate) fn validate_audio_to_audio(&self) -> Result<(), EvalError> {
+        self.validate()?;
+        if self.smart_turn.is_some() {
+            return Err(EvalError::Unsupported(
+                "audio-to-audio Smart Turn endpointing".into(),
+            ));
+        }
+        if self.max_total_pcm_bytes > 8 * 1024 * 1024
+            || self.max_buffered_pcm_bytes > 256 * 1024
+            || self.max_pending_segments > 4
+            || self.max_transcript_bytes > 64 * 1024
+        {
+            return Err(EvalError::Scenario(
+                "audio-to-audio transcription bounds exceed the finite profile".into(),
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn validate(&self) -> Result<(), EvalError> {
         if let Some(analyzer) = &self.smart_turn {
             validate_smart_turn(analyzer)?;
@@ -363,6 +382,31 @@ pub(crate) struct BotTranscription {
     idle_notified: bool,
 }
 impl BotTranscription {
+    #[cfg(all(test, feature = "user-speech"))]
+    pub(crate) fn lifecycle_test_engine(
+        busy: bool,
+        stopped: Option<mpsc::Sender<()>>,
+        release: Option<Receiver<()>>,
+        exited: Arc<AtomicBool>,
+    ) -> Self {
+        let (mut engine, output, input) = tests::test_engine();
+        engine.shared.activity.lock().unwrap().tail_unsettled = busy;
+        let shared = engine.shared.clone();
+        engine.worker = Some(thread::spawn(move || {
+            while !shared.stop.load(Ordering::Acquire) {
+                thread::park_timeout(TICK);
+            }
+            if let Some(stopped) = stopped {
+                let _ = stopped.send(());
+            }
+            if let Some(release) = release {
+                let _ = release.recv();
+            }
+            drop((output, input));
+            exited.store(true, Ordering::Release);
+        }));
+        engine
+    }
     pub(crate) fn new(config: BotTranscriptionConfig) -> Result<Self, EvalError> {
         config.validate()?;
         let shared = Arc::new(Shared {
@@ -953,6 +997,25 @@ impl BotTranscription {
     /// cancellation is cooperative and neither native join has a wall-time
     /// bound. A 40 ms audio batch bounds VAD input, not inference wall time.
     pub(crate) fn finish(&mut self) -> Result<(), EvalError> {
+        self.request_stop();
+        if let Some(worker) = self.worker.take() {
+            if worker.join().is_err() {
+                self.shared
+                    .fail(Failure::State("bot audio VAD thread panicked"));
+            }
+        }
+        // Destroying the analyzer joins its retained predictor owner.
+        self.endpoint = None;
+        self.finished = true;
+        if let Some(error) = self.shared.failure() {
+            Err(error.error())
+        } else {
+            Ok(())
+        }
+    }
+    /// Signal every producer and close admission without joining a native
+    /// worker. The session stops its playback/socket before calling `finish`.
+    pub(crate) fn request_stop(&mut self) {
         self.shared.stop.store(true, Ordering::Release);
         self.inflight = None;
         if let Some(endpoint) = &mut self.endpoint {
@@ -964,22 +1027,6 @@ impl BotTranscription {
         self.commands = None;
         self.events.close();
         self.wake();
-        if let Some(worker) = self.worker.take() {
-            if worker.join().is_err() {
-                self.shared
-                    .fail(Failure::State("bot audio VAD thread panicked"));
-            }
-        }
-        // Drop joins the analyzer's actual inference worker after audio feeding
-        // has stopped. Async cleanup can move its join to a cancellable task;
-        // this owner deliberately retains the synchronous completion boundary.
-        self.endpoint = None;
-        self.finished = true;
-        if let Some(error) = self.shared.failure() {
-            Err(error.error())
-        } else {
-            Ok(())
-        }
     }
 }
 impl Drop for BotTranscription {
@@ -2019,7 +2066,7 @@ mod tests {
         assert_eq!(shared.activity.lock().unwrap().output_events, 1);
     }
 
-    fn test_engine() -> (
+    pub(super) fn test_engine() -> (
         BotTranscription,
         async_mpsc::Sender<ThreadEvent>,
         Receiver<AudioCommand>,
@@ -2304,5 +2351,45 @@ mod tests {
         assert_eq!(engine.next().await.unwrap(), (0, String::new()));
         assert!(engine.idle_notified);
         engine.finish().unwrap();
+    }
+
+    #[tokio::test]
+    async fn request_stop_signals_http_and_native_before_a_gated_actual_join() {
+        let (mut engine, _output, _input) = test_engine();
+        let (entered, observed) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        let exited = Arc::new(AtomicBool::new(false));
+        let worker_exited = exited.clone();
+        let shared = engine.shared.clone();
+        engine.worker = Some(thread::spawn(move || {
+            while !shared.stop.load(Ordering::Acquire) {
+                thread::park_timeout(TICK);
+            }
+            entered.send(()).unwrap();
+            held.recv().unwrap();
+            worker_exited.store(true, Ordering::Release);
+        }));
+        let cancel = CancellationToken::new();
+        engine.inflight = Some(InFlight {
+            epoch: 0,
+            cancel: cancel.clone(),
+            future: Box::pin(std::future::pending()),
+        });
+        engine.request_stop();
+        engine.request_stop();
+        let observed_stop = observed.recv_timeout(Duration::from_secs(2));
+        let retained = engine.worker.is_some();
+        let cancelled = cancel.is_cancelled();
+        let rejected = engine.ingest(vec![0, 0], SAMPLE_RATE, 0);
+        let early_exit = exited.load(Ordering::Acquire);
+        release.send(()).unwrap();
+        let joined = engine.finish();
+        assert!(observed_stop.is_ok());
+        assert!(retained && cancelled);
+        assert!(matches!(rejected, Err(EvalError::Cancelled)));
+        assert!(!early_exit);
+        assert!(joined.is_ok());
+        assert!(engine.worker.is_none());
+        assert!(exited.load(Ordering::Acquire));
     }
 }

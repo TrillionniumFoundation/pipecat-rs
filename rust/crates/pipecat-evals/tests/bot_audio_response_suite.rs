@@ -1001,7 +1001,7 @@ async fn cli_invalid_second_scenario_or_classifier_rejects_before_all_children()
             error.contains(if recorded {
                 "file I/O"
             } else {
-                "not classifier judgments"
+                "eval assertions require judge.eval configuration or EvalSession::with_judge"
             }),
             "{error}"
         );
@@ -1215,7 +1215,7 @@ async fn public_spoken_plan_mutations_are_revalidated_before_any_child_or_model(
     http.checked(0);
     assert!(b.started().is_empty());
     assert!(
-        matches!(&errors[0], Some(EvalError::Unsupported(message)) if message.contains("not classifier judgments"))
+        matches!(&errors[0], Some(EvalError::Scenario(message)) if message == "eval assertions require judge.eval configuration or EvalSession::with_judge")
     );
     assert!(
         matches!(&errors[1], Some(EvalError::Scenario(message)) if message.contains("exactly one recording"))

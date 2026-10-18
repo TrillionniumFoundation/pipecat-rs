@@ -1364,7 +1364,7 @@ async fn cli_source_recording_scenario_limit_and_flags_preflight_is_atomic() {
         (
             second_bad,
             invalid_native.clone(),
-            "not classifier judgments",
+            "eval assertions require judge.eval configuration or EvalSession::with_judge",
         ),
         (
             seventeen,

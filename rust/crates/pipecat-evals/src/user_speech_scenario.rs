@@ -16,23 +16,7 @@ pub struct UserSpeechScenarioFile {
 }
 impl UserSpeechScenarioFile {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        let mut voices = Vec::new();
-        let mut user_turns = 0usize;
-        let file = RecordedScenarioFile::load_with_transform(
-            path.as_ref(),
-            16 * 1024 * 1024,
-            MAX_TOTAL_BYTES,
-            128,
-            ResponseParseMode::Text,
-            |raw| {
-                if voices.len() >= 16 {
-                    return Err(EvalError::Limit("user speech scenarios"));
-                }
-                let (voice, recordings) = normalize(raw, &mut user_turns)?;
-                voices.push(voice);
-                Ok(recordings)
-            },
-        )?;
+        let (file, voices) = load_speech_plan(path.as_ref(), ResponseParseMode::Text, false)?;
         Ok(Self { file, voices })
     }
     pub fn name(&self) -> &str {
@@ -77,6 +61,47 @@ impl UserSpeechScenarioFile {
             })
             .collect()
     }
+}
+
+/// Share source normalization without changing the standalone text-response
+/// alias. The combined caller selects AudioResponse before parsing any turn.
+pub(crate) fn load_speech_plan(
+    path: &Path,
+    mode: ResponseParseMode,
+    combined: bool,
+) -> Result<(RecordedScenarioFile, Vec<Option<CartesiaUserSpeechVoice>>), EvalError> {
+    let mut voices = Vec::new();
+    let mut user_turns = 0usize;
+    let file = RecordedScenarioFile::load_with_transform(
+        path,
+        16 * 1024 * 1024,
+        MAX_TOTAL_BYTES,
+        128,
+        mode,
+        |raw| {
+            if voices.len() >= 16 {
+                return Err(EvalError::Limit("user speech scenarios"));
+            }
+            if combined
+                && raw
+                    .get("turns")
+                    .and_then(Value::as_array)
+                    .is_some_and(|turns| {
+                        turns
+                            .iter()
+                            .any(|turn| turn.get("dtmf").is_some_and(|value| !value.is_null()))
+                    })
+            {
+                return Err(EvalError::Unsupported(
+                    "audio-to-audio scenarios do not support DTMF".into(),
+                ));
+            }
+            let (voice, recordings) = normalize(raw, &mut user_turns)?;
+            voices.push(voice);
+            Ok(recordings)
+        },
+    )?;
+    Ok((file, voices))
 }
 fn invalid(message: &str) -> EvalError {
     EvalError::Scenario(message.into())

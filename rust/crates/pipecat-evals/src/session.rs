@@ -87,6 +87,32 @@ impl Default for SessionOptions {
     }
 }
 impl SessionOptions {
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    pub(crate) fn validate_audio_to_audio(&self) -> Result<(), EvalError> {
+        self.validate()?;
+        let defaults = Self::default();
+        if self.transport.queue_capacity > defaults.transport.queue_capacity
+            || self.transport.max_message_bytes > defaults.transport.max_message_bytes
+            || self.max_wire_messages > defaults.max_wire_messages
+            || self.max_wire_bytes > defaults.max_wire_bytes
+            || self.event_limits.max_events > defaults.event_limits.max_events
+            || self.event_limits.max_event_bytes > defaults.event_limits.max_event_bytes
+            || self.event_limits.max_text_bytes > defaults.event_limits.max_text_bytes
+            || self.handshake_timeout > defaults.handshake_timeout
+            || self.default_timeout > defaults.default_timeout
+            || self.send_after_timeout > defaults.send_after_timeout
+            || self.bot_quiet_timeout > defaults.bot_quiet_timeout
+            || self.max_duration > defaults.max_duration
+            || self.transport.connect_timeout > defaults.transport.connect_timeout
+            || self.transport.write_timeout > defaults.transport.write_timeout
+            || self.transport.close_timeout > defaults.transport.close_timeout
+        {
+            return Err(EvalError::Scenario(
+                "audio-to-audio options exceed the finite profile".into(),
+            ));
+        }
+        Ok(())
+    }
     fn validate(&self) -> Result<(), EvalError> {
         let durations = [
             self.handshake_timeout,
@@ -116,6 +142,31 @@ impl SessionOptions {
         Ok(())
     }
 }
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+struct AudioToAudioState {
+    run: Option<(Cancellation, Instant)>,
+    admission_open: bool,
+    stop_bot_attempted: bool,
+}
+
+enum RecordedCompletion {
+    Ordinary(tokio::sync::oneshot::Receiver<()>),
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    Timed(tokio::sync::oneshot::Receiver<Instant>),
+}
+impl RecordedCompletion {
+    async fn receive(&mut self) -> Result<Option<Instant>, tokio::sync::oneshot::error::RecvError> {
+        match self {
+            Self::Ordinary(done) => {
+                done.await?;
+                Ok(None)
+            }
+            #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+            Self::Timed(done) => done.await.map(Some),
+        }
+    }
+}
+
 pub struct EvalSession {
     scenario: ScriptScenario,
     url: String,
@@ -134,6 +185,12 @@ pub struct EvalSession {
     judge: Option<EvalJudge>,
     active_expectation: i64,
     recordings: BTreeMap<usize, RecordedAudio>,
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    audio_to_audio: Option<AudioToAudioState>,
+    #[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
+    fence_receiver: Option<tokio::sync::mpsc::Receiver<Packet>>,
+    #[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
+    fence_rounds: usize,
     #[cfg(feature = "user-images")]
     user_images: Option<BTreeMap<usize, crate::EncodedUserImage>>,
     #[cfg(feature = "user-images")]
@@ -218,6 +275,12 @@ impl EvalSession {
             judge,
             active_expectation: -1,
             recordings: BTreeMap::new(),
+            #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+            audio_to_audio: None,
+            #[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
+            fence_receiver: None,
+            #[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
+            fence_rounds: 0,
             #[cfg(feature = "user-images")]
             user_images: None,
             #[cfg(feature = "user-images")]
@@ -293,6 +356,125 @@ impl EvalSession {
         session.capture = Some(Capture::new(BotAudioLimits::default()));
         session.transcription_config = Some(config);
         Ok(session)
+    }
+    /// Validate the frozen joint plan before any model is entered. This builds
+    /// only ordinary metadata and an optional configured judge client.
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    pub(crate) fn validate_audio_to_audio_plan(
+        scenario: &ScriptScenario,
+        url: &str,
+        options: &SessionOptions,
+        clips: &[(usize, RecordedAudio)],
+    ) -> Result<(), EvalError> {
+        options.validate_audio_to_audio()?;
+        if scenario.needs_images() || scenario.turns.iter().any(|turn| turn.dtmf.is_some()) {
+            return Err(EvalError::Unsupported(
+                "audio-to-audio images or DTMF".into(),
+            ));
+        }
+        let mut spoken = 0usize;
+        for turn in &scenario.turns {
+            if let Some(text) = &turn.user {
+                UserSpeechOwner::validate_text(text)?;
+                spoken += 1;
+            }
+        }
+        if spoken > 128 {
+            return Err(EvalError::Limit("user speech turns"));
+        }
+        let validated = scenario.audio_response_validation_copy()?;
+        connect_url(url, &validated)?;
+        if scenario.needs_judge() {
+            validated
+                .judge
+                .as_ref()
+                .and_then(|settings| settings.eval.as_ref())
+                .ok_or_else(|| {
+                    EvalError::Scenario(
+                        "audio eval assertions require judge.eval configuration".into(),
+                    )
+                })?
+                .build()?;
+        }
+        validate_recording_inputs(scenario, clips.iter().cloned())?;
+        Ok(())
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    pub(crate) fn from_audio_to_audio_plan(
+        scenario: ScriptScenario,
+        url: &str,
+        options: SessionOptions,
+        transcription: BotTranscriptionConfig,
+        speech: Option<(CartesiaUserSpeechSettings, CartesiaUserSpeechVoice)>,
+        clips: Vec<(usize, RecordedAudio)>,
+        budget: UserSpeechBudget,
+    ) -> Result<Self, EvalError> {
+        Self::validate_audio_to_audio_plan(&scenario, url, &options, &clips)?;
+        transcription.validate_audio_to_audio()?;
+        if speech.is_none()
+            && scenario.turns.iter().enumerate().any(|(index, turn)| {
+                turn.user.is_some() && !clips.iter().any(|(recorded, _)| *recorded == index)
+            })
+        {
+            return Err(EvalError::Scenario(
+                "audio-to-audio input coverage is incomplete".into(),
+            ));
+        }
+        let mut session = Self::with_bot_transcription(scenario, url, options, transcription)?
+            .with_recorded_audio_inputs(clips)?;
+        if let Some((settings, voice)) = speech {
+            session.user_speech = Some(UserSpeechOwner::new(settings, voice));
+        }
+        session = session.with_user_speech_budget(budget);
+        session.audio_to_audio = Some(AudioToAudioState {
+            run: None,
+            admission_open: true,
+            stop_bot_attempted: false,
+        });
+        Ok(session)
+    }
+    fn is_audio_to_audio(&self) -> bool {
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        return self.audio_to_audio.is_some();
+        #[cfg(not(all(feature = "user-speech", feature = "bot-audio-transcription")))]
+        false
+    }
+    /// Check the original caller and run limits without creating a new timer.
+    fn check_audio_to_audio_run(&mut self) -> Result<(), EvalError> {
+        self.check_user_speech_deadline()?;
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if let Some(state) = &self.audio_to_audio {
+            if !state.admission_open {
+                return Err(EvalError::Cancelled);
+            }
+            if let Some((cancel, session_deadline)) = &state.run {
+                if cancel.is_cancelled() {
+                    return Err(EvalError::Cancelled);
+                }
+                if Instant::now() >= *session_deadline {
+                    return Err(EvalError::Timeout("session"));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn check_audio_to_audio_deadline(&mut self, deadline: Instant) -> Result<(), EvalError> {
+        self.check_audio_to_audio_run()?;
+        if Instant::now() >= deadline {
+            return Err(EvalError::Timeout("event"));
+        }
+        Ok(())
+    }
+    fn audio_to_audio_deadline(&self, deadline: Instant) -> Instant {
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if let Some((_, session_deadline)) = self
+            .audio_to_audio
+            .as_ref()
+            .and_then(|state| state.run.as_ref())
+        {
+            return deadline.min(*session_deadline);
+        }
+        deadline
     }
     fn enable_bot_audio_url(&mut self) -> Result<(), EvalError> {
         let mut url = url::Url::parse(&self.url)
@@ -381,28 +563,7 @@ impl EvalSession {
                 "preflighted user speech recording plan is immutable".into(),
             ));
         }
-        let mut recordings = BTreeMap::new();
-        let mut total = 0usize;
-        for (index, clip) in inputs {
-            let turn =
-                self.scenario.turns.get(index).ok_or_else(|| {
-                    EvalError::Scenario("recording turn index out of range".into())
-                })?;
-            if turn.user.as_ref().is_none_or(|text| text.trim().is_empty()) || turn.dtmf.is_some() {
-                return Err(EvalError::Scenario(
-                    "recording needs a nonempty user reference and no DTMF".into(),
-                ));
-            }
-            total = total
-                .checked_add(clip.pcm_bytes().len())
-                .ok_or(EvalError::Limit("recording bytes"))?;
-            if total > MAX_TOTAL_BYTES || recordings.len() >= 128 {
-                return Err(EvalError::Limit("recording inputs"));
-            }
-            if recordings.insert(index, clip).is_some() {
-                return Err(EvalError::Scenario("duplicate recording turn index".into()));
-            }
-        }
+        let recordings = validate_recording_inputs(&self.scenario, inputs)?;
         self.recordings = recordings;
         Ok(self)
     }
@@ -496,6 +657,10 @@ impl EvalSession {
             self.pending_recognition = None;
         }
         let max_duration = self.options.max_duration;
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if let Some(state) = &mut self.audio_to_audio {
+            state.run = Some((cancel.clone(), started + max_duration));
+        }
         #[cfg(feature = "user-speech")]
         let prepared = if let Some(owner) = &mut self.user_speech {
             owner.configure_run(
@@ -553,6 +718,11 @@ impl EvalSession {
                 _ if self.phase == "connect" => "connect_failed",
                 EvalError::Timeout("handshake") => "handshake_timeout",
                 EvalError::Timeout("send_after") => "send_after_timeout",
+                EvalError::Timeout(
+                    "bot transcription HTTP"
+                    | "bot transcription settlement"
+                    | "final bot transcription settlement",
+                ) if self.is_audio_to_audio() => "bot_transcription_timeout",
                 EvalError::Timeout(_) => "timeout",
                 _ => "error",
             };
@@ -671,10 +841,50 @@ impl EvalSession {
                 break;
             }
         }
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if self.is_audio_to_audio() && self.result.failures.is_empty() {
+            self.settle_audio_to_audio_prefix().await?;
+        }
         self.active_turn = -1;
         self.active_expectation = -1;
         self.active_turn_started = None;
         Ok(())
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    async fn settle_audio_to_audio_prefix(&mut self) -> Result<(), EvalError> {
+        let deadline =
+            self.audio_to_audio_deadline(Instant::now() + self.options.bot_quiet_timeout);
+        if let Some(engine) = &mut self.transcription {
+            engine.request_idle_notification();
+        }
+        loop {
+            let settled = async {
+                self.drain_received_before(deadline).await?;
+                self.check_audio_to_audio_deadline(deadline)?;
+                self.publish_pending_recognition()?;
+                if self
+                    .transcription
+                    .as_ref()
+                    .is_some_and(BotTranscription::is_idle)
+                {
+                    // No await between Empty, epoch publication, idle proof and
+                    // closing this successful locally admitted prefix.
+                    self.check_audio_to_audio_deadline(deadline)?;
+                    return Ok(true);
+                }
+                self.pump(deadline).await?;
+                Ok(false)
+            }
+            .await;
+            match settled {
+                Ok(true) => return Ok(()),
+                Ok(false) => {}
+                Err(EvalError::Timeout("event")) => {
+                    return Err(EvalError::Timeout("final bot transcription settlement"))
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
     fn turn_boundary(&mut self) -> Result<(), EvalError> {
         self.stream.turn_boundary();
@@ -692,7 +902,9 @@ impl EvalSession {
         self.matcher.reset_turn();
         // Drain the bounded transport admission queue before the send boundary so
         // already received output cannot satisfy a subsequent user turn.
-        self.drain_received().await?;
+        let fence_deadline =
+            self.audio_to_audio_deadline(Instant::now() + self.options.bot_quiet_timeout);
+        self.drain_received_before(fence_deadline).await?;
         #[cfg(feature = "bot-audio-transcription")]
         self.publish_pending_recognition()?;
         #[cfg(feature = "bot-audio-transcription")]
@@ -773,19 +985,26 @@ impl EvalSession {
             self.turn_boundary()?;
             #[cfg(feature = "user-speech")]
             let admitted = Instant::now();
+            #[cfg(feature = "user-speech")]
+            if self.is_audio_to_audio() {
+                speech_anchor = Some(admitted);
+            }
             if let Some(judge) = &mut self.judge {
                 judge.add_user_message(&user)?;
             }
             if let Some(clip) = self.recordings.remove(&index) {
-                audio_completion = Some((
-                    self.playback
-                        .as_ref()
-                        .ok_or_else(|| {
-                            EvalError::Scenario("recording playback is not running".into())
-                        })?
-                        .queue(clip)?,
-                    Instant::now() + Duration::from_secs(61),
-                ));
+                let playback = self.playback.as_ref().ok_or_else(|| {
+                    EvalError::Scenario("recording playback is not running".into())
+                })?;
+                #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+                let completion = if self.is_audio_to_audio() {
+                    RecordedCompletion::Timed(playback.queue_timed(clip)?)
+                } else {
+                    RecordedCompletion::Ordinary(playback.queue(clip)?)
+                };
+                #[cfg(not(all(feature = "user-speech", feature = "bot-audio-transcription")))]
+                let completion = RecordedCompletion::Ordinary(playback.queue(clip)?);
+                audio_completion = Some((completion, Instant::now() + Duration::from_secs(61)));
             } else {
                 #[cfg(feature = "user-speech")]
                 if let Some(owner) = &mut self.user_speech {
@@ -851,14 +1070,9 @@ impl EvalSession {
             }
         }
         if !(self.scenario.stop_on_failure && !self.result.turns[index].failures.is_empty()) {
-            if let Some((mut completed, playback_deadline)) = audio_completion {
-                loop {
-                    tokio::select! {
-                        biased;
-                        result = &mut completed => { result.map_err(|_| EvalError::Scenario("recording ended before playback completion".into()))?; break; }
-                        result = self.pump(self.recorded_playback_deadline(playback_deadline)) => { result?; }
-                    }
-                }
+            if let Some((completed, playback_deadline)) = audio_completion {
+                self.settle_recorded_input(completed, playback_deadline)
+                    .await?;
             }
             #[cfg(feature = "user-speech")]
             while self
@@ -877,7 +1091,41 @@ impl EvalSession {
         }
         Ok(())
     }
+    async fn settle_recorded_input(
+        &mut self,
+        mut completed: RecordedCompletion,
+        playback_deadline: Instant,
+    ) -> Result<(), EvalError> {
+        loop {
+            if self.is_audio_to_audio() {
+                self.check_audio_to_audio_run()?;
+            }
+            tokio::select! {
+                biased;
+                result = completed.receive() => {
+                    let receipt = result.map_err(|_| EvalError::Scenario("recording ended before playback completion".into()))?;
+                    if self.is_audio_to_audio() {
+                        self.check_audio_to_audio_run()?;
+                        if receipt.is_none_or(|at| at >= playback_deadline) {
+                            return Err(EvalError::Timeout("recording playback"));
+                        }
+                    }
+                    return Ok(());
+                }
+                result = self.pump(self.recorded_playback_deadline(playback_deadline)) => {
+                    result.map_err(|error| {
+                        if self.is_audio_to_audio() && matches!(error, EvalError::Timeout("event")) {
+                            EvalError::Timeout("recording playback")
+                        } else { error }
+                    })?;
+                }
+            }
+        }
+    }
     fn recorded_playback_deadline(&self, fixed: Instant) -> Instant {
+        if self.is_audio_to_audio() {
+            return self.audio_to_audio_deadline(fixed);
+        }
         #[cfg(feature = "user-speech")]
         if self.user_speech.is_some() || self.user_speech_budget.is_some() {
             return fixed;
@@ -1053,9 +1301,17 @@ impl EvalSession {
             }
             if let Some(verdict) = verdict {
                 self.check_user_speech_deadline()?;
-                tokio::time::timeout_at(deadline, self.drain_received())
+                tokio::time::timeout_at(deadline, self.drain_received_before(deadline))
                     .await
-                    .map_err(|_| EvalError::Judge(ClassifierError::Deadline))??;
+                    .map_err(|_| EvalError::Judge(ClassifierError::Deadline))?
+                    .map_err(|error| {
+                        if self.is_audio_to_audio() && matches!(error, EvalError::Timeout("event"))
+                        {
+                            EvalError::Judge(ClassifierError::Deadline)
+                        } else {
+                            error
+                        }
+                    })?;
                 #[cfg(feature = "bot-audio-transcription")]
                 self.publish_pending_recognition()?;
                 if Instant::now() >= deadline {
@@ -1143,6 +1399,9 @@ impl EvalSession {
         Ok(())
     }
     async fn pump(&mut self, deadline: Instant) -> Result<bool, EvalError> {
+        if self.is_audio_to_audio() {
+            self.check_audio_to_audio_deadline(deadline)?;
+        }
         self.check_user_speech_deadline()?;
         if Instant::now() >= deadline {
             return Err(EvalError::Timeout("event"));
@@ -1154,7 +1413,7 @@ impl EvalSession {
         }
         #[cfg(feature = "bot-audio-transcription")]
         if self.pending_recognition.is_some() {
-            self.drain_recognition().await?;
+            self.drain_recognition(deadline).await?;
             return Ok(self.phase == "handshake" && self.bot_ready_received);
         }
         let mut health = self.playback.as_ref().map(Playback::health);
@@ -1180,7 +1439,7 @@ impl EvalSession {
         let speech_deadline: Option<Instant> = None;
         let wake = speech_deadline.map_or(deadline, |at| at.min(deadline));
         #[cfg(feature = "user-speech")]
-        let speech_enabled = self.user_speech.is_some();
+        let speech_enabled = self.user_speech.is_some() || self.is_audio_to_audio();
         #[cfg(not(feature = "user-speech"))]
         let speech_enabled = false;
         let (recognized, packet, speech_progress) = {
@@ -1241,7 +1500,7 @@ impl EvalSession {
                 // Own the popped result before the first await: classifier
                 // completion may cancel this pump while the fence is pending.
                 self.pending_recognition = Some(recognition);
-                self.drain_recognition().await?;
+                self.drain_recognition(deadline).await?;
             }
             #[cfg(not(feature = "bot-audio-transcription"))]
             let _ = recognition;
@@ -1250,7 +1509,7 @@ impl EvalSession {
         self.ingest(packet.expect("pump selects either recognition or transport"))
     }
     #[cfg(feature = "bot-audio-transcription")]
-    async fn drain_recognition(&mut self) -> Result<(), EvalError> {
+    async fn drain_recognition(&mut self, deadline: Instant) -> Result<(), EvalError> {
         #[cfg(test)]
         {
             if let Some(gate) = &mut self.recognition_drain_gate {
@@ -1263,7 +1522,10 @@ impl EvalSession {
         }
         // Fence admitted interruption packets before publication. This cannot
         // authenticate untagged remote PCM that arrives after a new epoch.
-        self.drain_received().await?;
+        self.drain_received_before(deadline).await?;
+        if self.is_audio_to_audio() {
+            self.check_audio_to_audio_deadline(deadline)?;
+        }
         self.publish_pending_recognition()
     }
     #[cfg(feature = "bot-audio-transcription")]
@@ -1331,6 +1593,72 @@ impl EvalSession {
         }
         Ok(false)
     }
+    async fn drain_received_before(&mut self, deadline: Instant) -> Result<(), EvalError> {
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if self.is_audio_to_audio() {
+            return self.drain_audio_to_audio(deadline).await;
+        }
+        let _ = deadline;
+        self.drain_received().await
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    fn try_received(&mut self) -> Result<Packet, tokio::sync::mpsc::error::TryRecvError> {
+        #[cfg(test)]
+        if let Some(receiver) = &mut self.fence_receiver {
+            return receiver.try_recv();
+        }
+        self.socket
+            .as_mut()
+            .ok_or(tokio::sync::mpsc::error::TryRecvError::Disconnected)?
+            .try_recv()
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    async fn drain_audio_to_audio(&mut self, deadline: Instant) -> Result<(), EvalError> {
+        const MAX_PACKETS: usize = 256;
+        const ROUND_PACKETS: usize = 32;
+        for count in 0..=MAX_PACKETS {
+            self.check_audio_to_audio_deadline(deadline)?;
+            if count > 0 && count.is_multiple_of(ROUND_PACKETS) {
+                // Explicitly poll once. Pending is not completion, and all
+                // popped producer resources remain in their existing owner.
+                if let Some(owner) = &mut self.user_speech {
+                    use std::{future::Future, task::Poll};
+                    let progress = owner.progress(self.playback.as_ref());
+                    tokio::pin!(progress);
+                    if let Poll::Ready(result) =
+                        std::future::poll_fn(|cx| Poll::Ready(progress.as_mut().poll(cx))).await
+                    {
+                        result?;
+                    }
+                }
+                #[cfg(test)]
+                {
+                    self.fence_rounds += 1;
+                }
+                tokio::task::yield_now().await;
+                self.check_audio_to_audio_deadline(deadline)?;
+            }
+            match self.try_received() {
+                Ok(packet) => {
+                    // The saturation probe must use ordinary wire/PCM/event
+                    // accounting before it can terminate this fence.
+                    self.ingest(packet)?;
+                    self.check_audio_to_audio_deadline(deadline)?;
+                    if count == MAX_PACKETS {
+                        return Err(EvalError::Limit("audio-to-audio receive drain"));
+                    }
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                    self.check_audio_to_audio_deadline(deadline)?;
+                    return Ok(());
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    return Err(EvalError::Disconnected)
+                }
+            }
+        }
+        unreachable!("the accounted saturation probe always terminates")
+    }
     async fn drain_received(&mut self) -> Result<(), EvalError> {
         #[cfg(feature = "user-speech")]
         let mut drained = 0usize;
@@ -1369,7 +1697,115 @@ impl EvalSession {
         }
         Ok(())
     }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    async fn shutdown_audio_to_audio(&mut self) {
+        // Phase A has no await or native join. Revoke every producer before a
+        // held model/cache call can delay any owner's stop signal.
+        self.audio_to_audio.as_mut().unwrap().admission_open = false;
+        self.pending_recognition = None;
+        if let Some(owner) = &mut self.user_speech {
+            owner.cancel_work();
+        }
+        if let Some(playback) = &self.playback {
+            playback.request_stop();
+        }
+        if let Some(engine) = &mut self.transcription {
+            engine.request_stop();
+        }
+        // This is the last possible application send. A cancelled cleanup wait
+        // may resume after borrowed socket shutdown took its sender.
+        let state = self.audio_to_audio.as_mut().unwrap();
+        let send_stop = self.options.stop_bot && !state.stop_bot_attempted && self.socket.is_some();
+        state.stop_bot_attempted = true;
+        if send_stop {
+            if let Err(error) = self.send_control(serializer::EVAL_CANCEL, json!({})).await {
+                self.result
+                    .debug_log
+                    .push(format!("eval-cancel could not be sent: {error}"));
+            }
+        }
+        // Phase B keeps every owner in its field across cancellable awaits.
+        if let Some(playback) = &mut self.playback {
+            if let Err(error) = playback.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "recording".into(),
+                    reason: error.to_string(),
+                    kind: "audio_cleanup_error".into(),
+                });
+            }
+        }
+        self.playback.take();
+        if let Some(socket) = &mut self.socket {
+            match tokio::time::timeout(
+                self.options.transport.close_timeout + self.options.transport.write_timeout,
+                socket.finish_and_join(),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "transport_cleanup".into(),
+                    reason: format!("transport cleanup: {error}"),
+                    kind: "transport_cleanup_error".into(),
+                }),
+                Err(_) => {
+                    self.result.fail(AssertionFailure {
+                        turn_index: self.active_turn,
+                        expectation_index: -1,
+                        event_name: "transport_cleanup".into(),
+                        reason:
+                            "transport graceful cleanup exceeded deadline; cancelling and joining"
+                                .into(),
+                        kind: "transport_cleanup_error".into(),
+                    });
+                    if let Err(error) = socket.cancel_and_join().await {
+                        self.result.fail(AssertionFailure {
+                            turn_index: self.active_turn,
+                            expectation_index: -1,
+                            event_name: "transport_cleanup".into(),
+                            reason: format!("transport cancellation cleanup: {error}"),
+                            kind: "transport_cleanup_error".into(),
+                        });
+                    }
+                }
+            }
+        }
+        self.socket.take();
+        if let Some(owner) = &mut self.user_speech {
+            if let Err(error) = owner.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "user_speech_cleanup".into(),
+                    reason: error.to_string(),
+                    kind: "user_speech_cleanup_error".into(),
+                });
+            }
+            self.result.debug_log.extend(owner.take_cache_diagnostics());
+        }
+        if let Some(engine) = &mut self.transcription {
+            if let Err(error) = engine.finish() {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "response".into(),
+                    reason: error.to_string(),
+                    kind: "audio_cleanup_error".into(),
+                });
+            }
+        }
+        self.transcription.take();
+    }
     pub(crate) async fn shutdown(&mut self) {
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if self.is_audio_to_audio() {
+            self.shutdown_audio_to_audio().await;
+            return;
+        }
         #[cfg(feature = "user-speech")]
         if let Some(owner) = &mut self.user_speech {
             owner.cancel_work();
@@ -1447,6 +1883,35 @@ impl EvalSession {
         }
     }
 }
+fn validate_recording_inputs(
+    scenario: &ScriptScenario,
+    inputs: impl IntoIterator<Item = (usize, RecordedAudio)>,
+) -> Result<BTreeMap<usize, RecordedAudio>, EvalError> {
+    let mut recordings = BTreeMap::new();
+    let mut total = 0usize;
+    for (index, clip) in inputs {
+        let turn = scenario
+            .turns
+            .get(index)
+            .ok_or_else(|| EvalError::Scenario("recording turn index out of range".into()))?;
+        if turn.user.as_ref().is_none_or(|text| text.trim().is_empty()) || turn.dtmf.is_some() {
+            return Err(EvalError::Scenario(
+                "recording needs a nonempty user reference and no DTMF".into(),
+            ));
+        }
+        total = total
+            .checked_add(clip.pcm_bytes().len())
+            .ok_or(EvalError::Limit("recording bytes"))?;
+        if total > MAX_TOTAL_BYTES || recordings.len() >= 128 {
+            return Err(EvalError::Limit("recording inputs"));
+        }
+        if recordings.insert(index, clip).is_some() {
+            return Err(EvalError::Scenario("duplicate recording turn index".into()));
+        }
+    }
+    Ok(recordings)
+}
+
 fn judge_no() -> MatchOutcome {
     MatchOutcome::Failed {
         kind: "judge_no".into(),
@@ -1565,7 +2030,7 @@ mod recognition_ownership_tests {
         .unwrap()
     }
 
-    async fn socket_pair() -> (WebSocketSession, WebSocketSession) {
+    pub(super) async fn socket_pair() -> (WebSocketSession, WebSocketSession) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://{}", listener.local_addr().unwrap());
         let config = SessionConfig {
@@ -1819,5 +2284,423 @@ mod speech_builder_tests {
             .unwrap();
         assert!(replaced.user_speech_budget.is_some());
         assert!(replaced.with_recorded_audio_inputs([(0, clip)]).is_err());
+    }
+}
+
+#[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
+mod audio_to_audio_lifecycle_tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use tokio::sync::{mpsc, oneshot};
+
+    const WAIT: Duration = Duration::from_secs(2);
+
+    fn session() -> EvalSession {
+        let scenario =
+            crate::ScenarioFile::from_value(json!({"name":"joint lifecycle", "turns":[]}))
+                .unwrap()
+                .scenarios
+                .remove(0);
+        let mut session =
+            EvalSession::new(scenario, "ws://127.0.0.1:1", SessionOptions::default()).unwrap();
+        session.audio_to_audio = Some(AudioToAudioState {
+            run: Some((Cancellation::new(), Instant::now() + WAIT)),
+            admission_open: true,
+            stop_bot_attempted: false,
+        });
+        session.phase = "turn";
+        session
+    }
+    fn queue(
+        session: &mut EvalSession,
+        packets: impl IntoIterator<Item = Packet>,
+    ) -> mpsc::Sender<Packet> {
+        let (tx, rx) = mpsc::channel(512);
+        for packet in packets {
+            tx.try_send(packet).unwrap();
+        }
+        session.fence_receiver = Some(rx);
+        tx
+    }
+    fn ignored() -> Packet {
+        Packet::Text("ignored but accounted".into())
+    }
+    fn interruption() -> Packet {
+        Packet::Text(json!({"label":"rtvi-ai","type":"bot-interrupted","data":{}}).to_string())
+    }
+
+    #[tokio::test]
+    async fn exact_fence_bounds_preserve_recognition_and_account_saturation_probe() {
+        for count in [31usize, 32, 33, 255, 256, 257] {
+            let mut session = session();
+            let _tx = queue(&mut session, (0..count).map(|_| ignored()));
+            session.pending_recognition = Some((0, "spoken truth".into()));
+            let result = session.drain_recognition(Instant::now() + WAIT).await;
+            assert_eq!(session.wire_messages, count);
+            assert_eq!(session.fence_rounds, count.min(256) / 32);
+            if count <= 256 {
+                assert!(result.is_ok());
+                assert!(session.pending_recognition.is_none());
+                assert_eq!(session.stream.events_seen.len(), 1);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(EvalError::Limit("audio-to-audio receive drain"))
+                ));
+                assert!(session.pending_recognition.is_some());
+                assert!(session.stream.events_seen.is_empty());
+            }
+        }
+    }
+    #[tokio::test]
+    async fn last_permitted_interruption_fences_stale_recognition() {
+        let mut session = session();
+        let _tx = queue(
+            &mut session,
+            (0..255).map(|_| ignored()).chain([interruption()]),
+        );
+        session.pending_recognition = Some((0, "stale".into()));
+        session
+            .drain_recognition(Instant::now() + WAIT)
+            .await
+            .unwrap();
+        assert_eq!(session.wire_messages, 256);
+        assert!(session.pending_recognition.is_none());
+        assert!(session
+            .stream
+            .events_seen
+            .iter()
+            .all(|event| event["type"] != "response"));
+    }
+    #[tokio::test]
+    async fn round_yield_admits_new_interruption_before_empty_fence() {
+        let mut session = session();
+        let tx = queue(&mut session, (0..32).map(|_| ignored()));
+        session.pending_recognition = Some((0, "stale".into()));
+        let producer = tokio::spawn(async move {
+            tx.send(interruption()).await.unwrap();
+            tx
+        });
+        let result = session.drain_recognition(Instant::now() + WAIT).await;
+        let _tx = producer.await.unwrap();
+        assert!(result.is_ok());
+        assert_eq!(session.wire_messages, 33);
+        assert!(session
+            .stream
+            .events_seen
+            .iter()
+            .all(|event| event["type"] != "response"));
+    }
+    #[tokio::test]
+    async fn disconnected_or_cancelled_fence_never_publishes() {
+        let mut disconnected = session();
+        drop(queue(&mut disconnected, [ignored()]));
+        disconnected.pending_recognition = Some((0, "retained".into()));
+        assert!(matches!(
+            disconnected.drain_recognition(Instant::now() + WAIT).await,
+            Err(EvalError::Disconnected)
+        ));
+        assert!(disconnected.pending_recognition.is_some());
+        assert!(disconnected.stream.events_seen.is_empty());
+
+        let mut cancelled = session();
+        let _tx = queue(&mut cancelled, (0..256).map(|_| ignored()));
+        cancelled.pending_recognition = Some((0, "retained".into()));
+        let cancel = cancelled
+            .audio_to_audio
+            .as_ref()
+            .unwrap()
+            .run
+            .as_ref()
+            .unwrap()
+            .0
+            .clone();
+        let worker = tokio::spawn(async move {
+            cancel.cancel();
+        });
+        let result = cancelled.drain_recognition(Instant::now() + WAIT).await;
+        worker.await.unwrap();
+        assert!(matches!(result, Err(EvalError::Cancelled)));
+        assert_eq!(cancelled.wire_messages, 32);
+        assert!(cancelled.pending_recognition.is_some());
+        assert!(cancelled.stream.events_seen.is_empty());
+    }
+    #[tokio::test]
+    async fn expired_caller_fence_and_probe_ingestion_error_keep_primary_error() {
+        let mut expired = session();
+        let _tx = queue(&mut expired, [ignored()]);
+        expired.pending_recognition = Some((0, "retained".into()));
+        assert!(matches!(
+            expired.drain_recognition(Instant::now()).await,
+            Err(EvalError::Timeout("event"))
+        ));
+        assert_eq!(expired.wire_messages, 0);
+        assert!(expired.pending_recognition.is_some());
+
+        let mut capped = session();
+        capped.options.max_wire_messages = 256;
+        let _tx = queue(&mut capped, (0..257).map(|_| ignored()));
+        capped.pending_recognition = Some((0, "retained".into()));
+        assert!(matches!(
+            capped.drain_recognition(Instant::now() + WAIT).await,
+            Err(EvalError::Limit("wire message traffic"))
+        ));
+        assert_eq!(capped.wire_messages, 257);
+        assert!(capped.pending_recognition.is_some());
+    }
+    #[tokio::test]
+    async fn all_wav_playback_uses_actual_completion_time_and_fixed_deadline() {
+        let mut session = session();
+        assert!(session.user_speech.is_none());
+        let fixed = Instant::now() - Duration::from_millis(2);
+        assert_eq!(session.recorded_playback_deadline(fixed), fixed);
+        let (tx, rx) = oneshot::channel();
+        tx.send(fixed - Duration::from_millis(1)).unwrap();
+        assert!(
+            session
+                .settle_recorded_input(RecordedCompletion::Timed(rx), fixed)
+                .await
+                .is_ok(),
+            "a timely actual admission remains timely when observed late"
+        );
+        let (tx, rx) = oneshot::channel();
+        tx.send(fixed + Duration::from_millis(1)).unwrap();
+        assert!(matches!(
+            session
+                .settle_recorded_input(RecordedCompletion::Timed(rx), fixed)
+                .await,
+            Err(EvalError::Timeout("recording playback"))
+        ));
+        let (_tx, rx) = oneshot::channel();
+        assert!(matches!(
+            session
+                .settle_recorded_input(RecordedCompletion::Timed(rx), fixed)
+                .await,
+            Err(EvalError::Timeout("recording playback"))
+        ));
+    }
+    #[tokio::test]
+    async fn final_prefix_requires_local_idle_and_retained_publication() {
+        let mut session = session();
+        let _tx = queue(&mut session, []);
+        let exited = Arc::new(AtomicBool::new(false));
+        session.transcription = Some(BotTranscription::lifecycle_test_engine(
+            false,
+            None,
+            None,
+            exited.clone(),
+        ));
+        session.pending_recognition = Some((0, "final actual recognition".into()));
+        let result = session.settle_audio_to_audio_prefix().await;
+        session.shutdown().await;
+        assert!(result.is_ok());
+        assert!(session.pending_recognition.is_none());
+        assert_eq!(
+            session.stream.events_seen[0]["text"],
+            "final actual recognition"
+        );
+        assert!(session.transcription.is_none());
+        assert!(exited.load(Ordering::Acquire));
+    }
+    #[tokio::test]
+    async fn final_prefix_busy_timeout_is_fixed_and_native_owner_is_joined() {
+        let mut session = session();
+        let (client, mut peer) = super::recognition_ownership_tests::socket_pair().await;
+        session.socket = Some(client);
+        let _tx = queue(&mut session, []);
+        session.options.bot_quiet_timeout = Duration::from_millis(30);
+        let exited = Arc::new(AtomicBool::new(false));
+        session.transcription = Some(BotTranscription::lifecycle_test_engine(
+            true,
+            None,
+            None,
+            exited.clone(),
+        ));
+        let result = session.settle_audio_to_audio_prefix().await;
+        let (_, peer_joined) = tokio::join!(session.shutdown(), peer.cancel_and_join());
+        assert!(peer_joined.is_ok());
+        assert!(matches!(
+            result,
+            Err(EvalError::Timeout("final bot transcription settlement"))
+        ));
+        assert!(exited.load(Ordering::Acquire));
+        assert!(session.transcription.is_none() && session.socket.is_none());
+    }
+    #[tokio::test]
+    async fn joint_stop_reaches_native_before_socket_and_playback_join_precede_native_wait() {
+        let mut session = session();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        let config = SessionConfig {
+            connect_timeout: WAIT,
+            write_timeout: Duration::from_millis(250),
+            close_timeout: Duration::from_millis(250),
+            ..Default::default()
+        };
+        let peer_config = config.clone();
+        let (peer_closed_tx, peer_closed_rx) = std::sync::mpsc::channel();
+        // The actual peer and its socket actor are created on an independent
+        // runtime. Merely moving a peer created on this current-thread runtime
+        // would leave its actor unable to poll during the native join below.
+        let peer_thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener)
+                    .map_err(|error| error.to_string())?;
+                let (stream, _) = tokio::time::timeout(WAIT, listener.accept())
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .map_err(|error| error.to_string())?;
+                let mut peer = WebSocketSession::accept(stream, peer_config)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let eof_observed =
+                    tokio::time::timeout(WAIT, async { while peer.recv().await.is_some() {} })
+                        .await
+                        .is_ok();
+                let joined = peer.finish_and_join().await;
+                if eof_observed && joined.is_ok() {
+                    let _ = peer_closed_tx.send(());
+                }
+                Ok::<_, String>((eof_observed, joined))
+            })
+        });
+        let client = match WebSocketSession::connect(&url, config).await {
+            Ok(client) => client,
+            Err(error) => {
+                let peer_outcome = peer_thread.join();
+                panic!("client setup failed: {error}; joined peer: {peer_outcome:?}");
+            }
+        };
+        session.playback = Some(Playback::start(client.sender(), &session.options));
+        session.socket = Some(client);
+        let (stopped_tx, stopped_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let exited = Arc::new(AtomicBool::new(false));
+        session.transcription = Some(BotTranscription::lifecycle_test_engine(
+            false,
+            Some(stopped_tx),
+            Some(release_rx),
+            exited.clone(),
+        ));
+        // The independent observer always releases the native gate, including
+        // failure. A successful notice proves actual peer-owner retirement
+        // before release; its observation time is not the local socket join's
+        // linearization point.
+        let observer = std::thread::spawn(move || {
+            let stopped = stopped_rx.recv_timeout(WAIT).is_ok();
+            let peer_joined = peer_closed_rx.recv_timeout(WAIT).is_ok();
+            let _ = release_tx.send(());
+            (stopped, peer_joined)
+        });
+        session.shutdown().await;
+        let peer_outcome = peer_thread.join();
+        let observer_outcome = observer.join();
+        let (stop_observed, peer_joined_before_native_release) = observer_outcome.unwrap();
+        let (eof_observed, peer_joined) = peer_outcome.unwrap().unwrap();
+        assert!(
+            stop_observed && peer_joined_before_native_release,
+            "stop observed: {stop_observed}; peer joined before native release: {peer_joined_before_native_release}; peer EOF: {eof_observed}; peer result: {peer_joined:?}"
+        );
+        assert!(eof_observed);
+        assert!(peer_joined.is_ok(), "peer join: {peer_joined:?}");
+        assert!(exited.load(Ordering::Acquire));
+        assert!(
+            session.playback.is_none()
+                && session.socket.is_none()
+                && session.transcription.is_none()
+        );
+    }
+    #[tokio::test]
+    async fn actual_transport_cleanup_error_appends_without_replacing_primary_failure() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        let accept = async {
+            let (stream, _) = listener.accept().await.unwrap();
+            WebSocketSession::accept(stream, SessionConfig::default())
+                .await
+                .unwrap()
+        };
+        let connect = WebSocketSession::connect(
+            &url,
+            SessionConfig {
+                max_message_bytes: 4,
+                ..Default::default()
+            },
+        );
+        let (client, mut peer) = tokio::join!(connect, accept);
+        let mut session = session();
+        session.socket = Some(client.unwrap());
+        peer.sender()
+            .send(Packet::Text("12345".into()))
+            .await
+            .unwrap();
+        let disconnected =
+            tokio::time::timeout(WAIT, session.socket.as_mut().unwrap().recv()).await;
+        // Observe the peer actor's natural terminal result before signalling
+        // cancellation, so cancellation cannot race an abnormal remote EOF.
+        // A failed/expired barrier still proceeds through both actual joins.
+        let peer_disconnected = tokio::time::timeout(WAIT, peer.recv()).await;
+        session.result.fail(AssertionFailure {
+            turn_index: -1,
+            expectation_index: -1,
+            event_name: "original".into(),
+            reason: "primary failure".into(),
+            kind: "original_error".into(),
+        });
+        let (_, peer_joined) = tokio::join!(session.shutdown(), peer.cancel_and_join());
+        // Rejecting the oversized frame closes the client transport without a
+        // graceful Close exchange. Assert the observed exact peer protocol
+        // error rather than accepting arbitrary WebSocket failures.
+        assert!(
+            matches!(
+                &peer_joined,
+                Err(pipecat_transports::TransportError::WebSocket(inner))
+                    if format!("{inner:?}") == "Protocol(ResetWithoutClosingHandshake)"
+            ),
+            "peer join: {peer_joined:?}; peer terminal receive: {peer_disconnected:?}; selected failures: {:?}",
+            session.result.failures
+        );
+        assert!(matches!(disconnected, Ok(None)));
+        assert!(matches!(peer_disconnected, Ok(None)));
+        assert!(session.socket.is_none());
+        assert_eq!(session.result.failures.len(), 2);
+        assert_eq!(session.result.failures[0].kind, "original_error");
+        assert_eq!(session.result.failures[0].reason, "primary failure");
+        assert_eq!(session.result.failures[1].kind, "transport_cleanup_error");
+        assert_eq!(
+            session.result.failures[1].reason,
+            "transport cleanup: WebSocket: Space limit exceeded: Message too long: 5 > 4"
+        );
+    }
+
+    #[test]
+    fn combined_options_reject_expansion_without_changing_ordinary_options() {
+        assert!(SessionOptions::default().validate_audio_to_audio().is_ok());
+        let expansions: [fn(&mut SessionOptions); 10] = [
+            |options| options.transport.queue_capacity += 1,
+            |options| options.transport.max_message_bytes += 1,
+            |options| options.max_wire_messages += 1,
+            |options| options.max_wire_bytes += 1,
+            |options| options.event_limits.max_events += 1,
+            |options| options.event_limits.max_event_bytes += 1,
+            |options| options.event_limits.max_text_bytes += 1,
+            |options| options.max_duration += Duration::from_secs(1),
+            |options| options.bot_quiet_timeout += Duration::from_secs(1),
+            |options| options.transport.close_timeout += Duration::from_secs(1),
+        ];
+        for expand in expansions {
+            let mut options = SessionOptions::default();
+            expand(&mut options);
+            assert!(options.validate().is_ok());
+            assert!(options.validate_audio_to_audio().is_err());
+        }
     }
 }

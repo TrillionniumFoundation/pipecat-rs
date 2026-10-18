@@ -51,8 +51,26 @@ impl RecordedAudio {
     }
 }
 
+enum Completion {
+    Ordinary(oneshot::Sender<()>),
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    Timed(oneshot::Sender<Instant>),
+}
+impl Completion {
+    fn send(self) {
+        match self {
+            Self::Ordinary(done) => {
+                let _ = done.send(());
+            }
+            #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+            Self::Timed(done) => {
+                let _ = done.send(Instant::now());
+            }
+        }
+    }
+}
 pub(crate) struct Playback {
-    commands: mpsc::Sender<(RecordedAudio, oneshot::Sender<()>)>,
+    commands: mpsc::Sender<(RecordedAudio, Completion)>,
     stop: Cancellation,
     health: watch::Receiver<Option<String>>,
     task: Option<JoinHandle<Result<(), EvalError>>>,
@@ -92,34 +110,55 @@ impl Playback {
     }
     pub fn queue(&self, clip: RecordedAudio) -> Result<oneshot::Receiver<()>, EvalError> {
         let (tx, rx) = oneshot::channel();
-        self.commands
-            .try_send((clip, tx))
-            .map_err(|_| EvalError::Limit("recording playback queue"))?;
+        self.queue_completion(clip, Completion::Ordinary(tx))?;
         Ok(rx)
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    pub(crate) fn queue_timed(
+        &self,
+        clip: RecordedAudio,
+    ) -> Result<oneshot::Receiver<Instant>, EvalError> {
+        let (tx, rx) = oneshot::channel();
+        self.queue_completion(clip, Completion::Timed(tx))?;
+        Ok(rx)
+    }
+    fn queue_completion(
+        &self,
+        clip: RecordedAudio,
+        completion: Completion,
+    ) -> Result<(), EvalError> {
+        if self.stop.is_cancelled() {
+            return Err(EvalError::Cancelled);
+        }
+        self.commands
+            .try_send((clip, completion))
+            .map_err(|_| EvalError::Limit("recording playback queue"))
     }
     pub fn health(&self) -> watch::Receiver<Option<String>> {
         self.health.clone()
     }
-    pub async fn finish(&mut self) -> Result<(), EvalError> {
+    /// Revoke clip admission and signal pacing before any other owner's join.
+    pub(crate) fn request_stop(&self) {
         self.stop.cancel();
+    }
+    pub async fn finish(&mut self) -> Result<(), EvalError> {
+        self.request_stop();
         // Borrow the handle across await. Cancellation cannot detach this owner.
         let result = match self.task.as_mut() {
-            Some(task) => task
-                .await
-                .map_err(|e| EvalError::Scenario(format!("recording task: {e}")))?,
+            Some(task) => task.await,
             None => return Ok(()),
         };
         self.task.take();
-        result
+        result.map_err(|e| EvalError::Scenario(format!("recording task: {e}")))?
     }
 }
 
 async fn stream(
     sender: SessionSender,
-    mut commands: mpsc::Receiver<(RecordedAudio, oneshot::Sender<()>)>,
+    mut commands: mpsc::Receiver<(RecordedAudio, Completion)>,
     options: &SessionOptions,
 ) -> Result<(), EvalError> {
-    let mut current: Option<(RecordedAudio, usize, oneshot::Sender<()>)> = None;
+    let mut current: Option<(RecordedAudio, usize, Completion)> = None;
     let mut next = Instant::now();
     let mut count = 0usize;
     let mut bytes = 0usize;
@@ -163,8 +202,76 @@ async fn stream(
             .is_some_and(|(clip, offset, _)| *offset == clip.pcm.len())
         {
             if let Some((_, _, done)) = current.take() {
-                let _ = done.send(());
+                done.send();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn stop_revokes_admission_and_cancelled_finish_retains_actual_join() {
+        let (commands, _input) = mpsc::channel(1);
+        let (_health_tx, health) = watch::channel(None);
+        let stop = Cancellation::new();
+        let task_stop = stop.clone();
+        let (entered, mut observed) = oneshot::channel();
+        let (release, held) = oneshot::channel();
+        let (retired, retired_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            task_stop.cancelled().await;
+            let _ = entered.send(());
+            let _ = held.await;
+            let _ = retired.send(());
+            Ok(())
+        });
+        let mut playback = Playback {
+            commands,
+            stop,
+            health,
+            task: Some(task),
+        };
+        playback.request_stop();
+        playback.request_stop();
+        let rejected = playback.queue(RecordedAudio::from_pcm16(&[0, 0]).unwrap());
+        {
+            let finish = playback.finish();
+            tokio::pin!(finish);
+            tokio::select! {
+                biased;
+                result = &mut finish => panic!("held playback retired early: {result:?}"),
+                result = &mut observed => result.unwrap(),
+            }
+        }
+        let retained = playback.task.is_some();
+        release.send(()).unwrap();
+        let joined = playback.finish().await;
+        retired_rx.await.unwrap();
+        let retired = playback.task.is_none();
+        playback.finish().await.unwrap();
+        assert!(matches!(rejected, Err(EvalError::Cancelled)));
+        assert!(retained && retired);
+        assert!(joined.is_ok());
+    }
+
+    #[tokio::test]
+    async fn failed_task_is_retired_before_repeated_finish() {
+        let (commands, _input) = mpsc::channel(1);
+        let (_health_tx, health) = watch::channel(None);
+        let mut playback = Playback {
+            commands,
+            stop: Cancellation::new(),
+            health,
+            task: Some(tokio::spawn(async {
+                Err(EvalError::Timeout("recording send"))
+            })),
+        };
+        let first = playback.finish().await;
+        assert!(playback.task.is_none());
+        assert!(matches!(first, Err(EvalError::Timeout("recording send"))));
+        playback.finish().await.unwrap();
     }
 }

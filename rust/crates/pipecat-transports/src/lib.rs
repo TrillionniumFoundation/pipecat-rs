@@ -336,11 +336,28 @@ impl WebSocketSession {
     pub fn sender(&self) -> SessionSender {
         self.sender
             .as_ref()
-            .expect("sender present before consuming shutdown")
+            .expect("sender present before shutdown begins")
             .clone()
     }
     pub async fn recv(&mut self) -> Option<Packet> {
         self.incoming.recv().await
+    }
+    /// Receive without polling the runtime. Only `Empty` proves that no packet
+    /// is currently admitted; `Disconnected` remains a distinct terminal state.
+    pub fn try_recv(&mut self) -> Result<Packet, mpsc::error::TryRecvError> {
+        self.incoming.try_recv()
+    }
+    /// Close admission and join the socket task, retaining its handle if this
+    /// wait is cancelled. This is terminal: do not call `sender()` after the
+    /// first poll. A later `cancel_and_join` can escalate a pending finish.
+    pub async fn finish_and_join(&mut self) -> Result<(), TransportError> {
+        self.shutdown_owned(true).await
+    }
+    /// Cancel and actually join the retained socket task. Cancelling this wait
+    /// preserves ownership for a later call; dropping the session only aborts.
+    /// Repeated shutdown after retirement succeeds without joining twice.
+    pub async fn cancel_and_join(&mut self) -> Result<(), TransportError> {
+        self.shutdown_owned(false).await
     }
     pub async fn cancel(mut self) -> Result<(), TransportError> {
         self.shutdown_owned(false).await
@@ -687,7 +704,7 @@ mod borrowed_shutdown_tests {
             task: Some(task),
         };
         {
-            let shutdown = session.shutdown_owned(false);
+            let shutdown = session.finish_and_join();
             tokio::pin!(shutdown);
             tokio::time::timeout(Duration::from_secs(1), async {
                 tokio::select! {
@@ -704,10 +721,24 @@ mod borrowed_shutdown_tests {
             .task
             .as_ref()
             .is_some_and(|task| !task.is_finished()));
-        assert_eq!(*observed.borrow(), 2);
+        assert_eq!(*observed.borrow(), 1);
         assert!(session.sender.is_none());
+        {
+            let shutdown = session.cancel_and_join();
+            tokio::pin!(shutdown);
+            tokio::select! {
+                biased;
+                result = &mut shutdown => panic!("held owner joined early: {result:?}"),
+                changed = observed.changed() => changed.unwrap(),
+            }
+        }
+        assert_eq!(*observed.borrow(), 2);
+        assert!(
+            session.task.is_some(),
+            "cancelled wait retains the same handle"
+        );
         let result = tokio::time::timeout(Duration::from_secs(1), async {
-            tokio::join!(session.shutdown_owned(true), async {
+            tokio::join!(session.finish_and_join(), async {
                 tokio::task::yield_now().await;
                 assert_eq!(*observed.borrow(), 2, "finish cannot downgrade cancel");
                 release.send(()).unwrap();
@@ -718,7 +749,82 @@ mod borrowed_shutdown_tests {
         result.0.unwrap();
         retired_rx.await.unwrap();
         assert!(session.task.is_none());
-        session.shutdown_owned(false).await.unwrap();
-        session.shutdown_owned(true).await.unwrap();
+        session.cancel_and_join().await.unwrap();
+        session.finish_and_join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn synchronous_receive_distinguishes_empty_and_disconnected_under_cooperative_exhaustion()
+    {
+        use std::{future::Future, task::Poll};
+        let (out_tx, _out_rx) = mpsc::channel(1);
+        let (in_tx, in_rx) = mpsc::channel(1);
+        let (cancel, _observed) = watch::channel(0u8);
+        let mut session = WebSocketSession {
+            sender: Some(SessionSender {
+                tx: out_tx,
+                max: 64,
+            }),
+            incoming: in_rx,
+            cancel,
+            task: Some(tokio::spawn(async { Ok(()) })),
+        };
+        assert_eq!(session.try_recv(), Err(mpsc::error::TryRecvError::Empty));
+        let interruption = Packet::Text("bot-interrupted".into());
+        in_tx.try_send(interruption.clone()).unwrap();
+        let (exhausted, async_pending, received) = std::future::poll_fn(|cx| {
+            let mut exhausted = false;
+            for _ in 0..1024 {
+                let consume = tokio::task::consume_budget();
+                tokio::pin!(consume);
+                if consume.as_mut().poll(cx).is_pending() {
+                    exhausted = true;
+                    break;
+                }
+            }
+            let async_pending = {
+                let receive = session.recv();
+                tokio::pin!(receive);
+                receive.as_mut().poll(cx).is_pending()
+            };
+            Poll::Ready((exhausted, async_pending, session.try_recv()))
+        })
+        .await;
+        let empty = session.try_recv();
+        drop(in_tx);
+        let disconnected = session.try_recv();
+        session.cancel_and_join().await.unwrap();
+        assert!(session.task.is_none());
+        assert!(exhausted);
+        assert!(async_pending, "async Pending is not an Empty receipt");
+        assert_eq!(received, Ok(interruption));
+        assert_eq!(empty, Err(mpsc::error::TryRecvError::Empty));
+        assert_eq!(disconnected, Err(mpsc::error::TryRecvError::Disconnected));
+    }
+
+    #[tokio::test]
+    async fn borrowed_shutdown_records_task_error_before_idempotent_repeat() {
+        let (out_tx, _out_rx) = mpsc::channel(1);
+        let (_in_tx, in_rx) = mpsc::channel(1);
+        let (cancel, _observed) = watch::channel(0u8);
+        let mut session = WebSocketSession {
+            sender: Some(SessionSender {
+                tx: out_tx,
+                max: 64,
+            }),
+            incoming: in_rx,
+            cancel,
+            task: Some(tokio::spawn(async {
+                Err(TransportError::Timeout("write"))
+            })),
+        };
+        let first = session.finish_and_join().await;
+        assert!(
+            session.task.is_none(),
+            "the error was observed after an actual await"
+        );
+        assert!(matches!(first, Err(TransportError::Timeout("write"))));
+        session.cancel_and_join().await.unwrap();
+        session.finish_and_join().await.unwrap();
     }
 }

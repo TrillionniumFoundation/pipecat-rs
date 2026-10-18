@@ -605,6 +605,18 @@ recording overrides and a private opt-in cache for direct library/CLI runs. See
 [USER_SPEECH.md](USER_SPEECH.md) for configuration, limits, privacy, cleanup and
 verification boundaries.
 
+### Joint scripted audio-to-audio runs
+
+With both `user-speech` and `bot-audio-transcription`, use
+`run SCENARIOS URL --user-speech TTS.json --bot-audio-response STT.json` or the
+immutable `AudioToAudioScenarioFile` library plan. This explicit route combines
+Cartesia/cache/WAV input with received bot PCM, local Silero and HTTP STT while
+preserving spoken `response` independently of `llm_response`. All scenarios and
+models are prepared before connecting; all-WAV plans still use the joint fixed
+deadlines and cleanup policy. See [AUDIO_TO_AUDIO.md](AUDIO_TO_AUDIO.md) for the
+finite direct-run scope, bounds, privacy, cancellation exit codes and evidence
+limits. Standalone constructors and defaults remain unchanged.
+
 ## Explicit plain-request user images
 
 The `user-images` feature adds trusted-local image scenario sidecars and the

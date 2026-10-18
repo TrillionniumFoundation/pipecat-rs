@@ -104,7 +104,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json]".into()));
     }
     if user_images
         && (user_speech.is_some()
@@ -122,10 +122,10 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             "--user-images requires the user-images build feature".into(),
         ));
     }
-    if user_speech.is_some()
-        && (recorded || bot_audio_response.is_some() || bot_audio_wav.is_some())
-    {
-        return Err(pipecat_evals::EvalError::Scenario("--user-speech cannot combine with --recorded-audio, --bot-audio-response or --bot-audio-wav".into()));
+    if user_speech.is_some() && (recorded || bot_audio_wav.is_some()) {
+        return Err(pipecat_evals::EvalError::Scenario(
+            "--user-speech cannot combine with --recorded-audio or --bot-audio-wav".into(),
+        ));
     }
     #[cfg(not(feature = "user-speech"))]
     if user_speech.is_some() {
@@ -144,86 +144,6 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             "--bot-audio-response requires the bot-audio-transcription build feature".into(),
         ));
     }
-    // Parse settings and ordinary scenarios up front. Audio-response preparation
-    // validates every scenario before loading models, under the signal owner.
-    let manifest = if suite {
-        #[cfg(feature = "bot-audio-transcription")]
-        let audio_manifest = bot_audio_response
-            .map(|config| {
-                ReleaseManifest::load_audio_response(
-                    &args[1],
-                    pipecat_evals::BotTranscriptionSettings::load(config)?,
-                    recorded,
-                )
-            })
-            .transpose()?;
-        #[cfg(not(feature = "bot-audio-transcription"))]
-        let audio_manifest: Option<ReleaseManifest> = None;
-        Some(match audio_manifest {
-            Some(manifest) => manifest,
-            None if recorded => ReleaseManifest::load_recorded(&args[1])?,
-            None => ReleaseManifest::load(&args[1])?,
-        })
-    } else {
-        None
-    };
-    #[cfg(feature = "bot-audio-transcription")]
-    let audio_settings = if single {
-        bot_audio_response
-            .map(pipecat_evals::BotTranscriptionSettings::load)
-            .transpose()?
-    } else {
-        None
-    };
-    let mut sessions = Vec::new();
-    if single {
-        let options = SessionOptions {
-            stop_bot,
-            ..Default::default()
-        };
-        #[cfg(feature = "user-images")]
-        if user_images {
-            let file = pipecat_evals::UserImageScenarioFile::load(&args[1])?;
-            if options.stop_bot && file.len() > 1 {
-                return Err(pipecat_evals::EvalError::Scenario(
-                    "--stop-bot with several scenarios needs independent endpoints".into(),
-                ));
-            }
-            sessions = file.into_sessions(&args[2], options.clone())?;
-        }
-        #[cfg(feature = "user-speech")]
-        if let Some(runtime) = user_speech {
-            let file = pipecat_evals::UserSpeechScenarioFile::load(&args[1])?;
-            if options.stop_bot && file.len() > 1 {
-                return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
-            }
-            let settings = pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?;
-            sessions = file.into_sessions(&args[2], options.clone(), settings)?;
-        }
-        if !user_images && user_speech.is_none() && bot_audio_response.is_none() && recorded {
-            let file = RecordedScenarioFile::load(&args[1])?;
-            if options.stop_bot && file.len() > 1 {
-                return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
-            }
-            sessions = file.into_sessions(&args[2], options)?;
-        } else if !user_images && user_speech.is_none() && bot_audio_response.is_none() {
-            let file = ScenarioFile::load(&args[1])?;
-            if options.stop_bot && file.scenarios.len() > 1 {
-                return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use run_suite".into()));
-            }
-            sessions = file
-                .scenarios
-                .into_iter()
-                .map(|scenario| EvalSession::new(scenario, &args[2], options.clone()))
-                .collect::<Result<Vec<_>, _>>()?;
-        }
-    }
-    if bot_audio_wav.is_some() && sessions.len() != 1 {
-        return Err(pipecat_evals::EvalError::Scenario(
-            "--bot-audio-wav requires exactly one scenario".into(),
-        ));
-    }
-    let mut wav_output = bot_audio_wav.map(wav_output::Output::prepare).transpose()?;
     let cancel = Cancellation::new();
     let signal_cancel = cancel.clone();
     let signal = tokio::spawn(async move {
@@ -232,21 +152,130 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         }
     });
     let result = async {
-        #[cfg(feature = "bot-audio-transcription")]
-        if let Some(settings) = audio_settings {
-            sessions = settings
-                .into_sessions_with_cancellation(
-                    &args[1],
-                    &args[2],
-                    SessionOptions {
-                        stop_bot,
-                        ..Default::default()
-                    },
-                    recorded,
-                    cancel.clone(),
-                )
-                .await?;
+        // Selection is exclusive: the joint AudioResponse plan is constructed
+        // once, before either standalone branch, and can never be overwritten.
+        // The signal owner is already installed for owned model preparation.
+        let manifest = if suite {
+            #[cfg(feature = "bot-audio-transcription")]
+            let audio_manifest = bot_audio_response
+                .map(|config| {
+                    ReleaseManifest::load_audio_response(
+                        &args[1],
+                        pipecat_evals::BotTranscriptionSettings::load(config)?,
+                        recorded,
+                    )
+                })
+                .transpose()?;
+            #[cfg(not(feature = "bot-audio-transcription"))]
+            let audio_manifest: Option<ReleaseManifest> = None;
+            Some(match audio_manifest {
+                Some(manifest) => manifest,
+                None if recorded => ReleaseManifest::load_recorded(&args[1])?,
+                None => ReleaseManifest::load(&args[1])?,
+            })
+        } else {
+            None
+        };
+        let sessions = if single {
+            let options = SessionOptions {
+                stop_bot,
+                ..Default::default()
+            };
+            if let (Some(runtime), Some(response)) = (user_speech, bot_audio_response) {
+                #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+                {
+                    let speech = pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?;
+                    let transcription = pipecat_evals::BotTranscriptionSettings::load(response)?;
+                    pipecat_evals::AudioToAudioScenarioFile::load(&args[1])?
+                        .into_sessions_with_cancellation(
+                            &args[2], options, speech, transcription, cancel.clone(),
+                        )
+                        .await?
+                }
+                #[cfg(not(all(feature = "user-speech", feature = "bot-audio-transcription")))]
+                {
+                    let _ = (runtime, response);
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "audio-to-audio requires user-speech and bot-audio-transcription build features".into(),
+                    ));
+                }
+            } else if let Some(response) = bot_audio_response {
+                #[cfg(feature = "bot-audio-transcription")]
+                {
+                    pipecat_evals::BotTranscriptionSettings::load(response)?
+                        .into_sessions_with_cancellation(
+                            &args[1], &args[2], options, recorded, cancel.clone(),
+                        )
+                        .await?
+                }
+                #[cfg(not(feature = "bot-audio-transcription"))]
+                {
+                    let _ = response;
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "--bot-audio-response requires the bot-audio-transcription build feature".into(),
+                    ));
+                }
+            } else if let Some(runtime) = user_speech {
+                #[cfg(feature = "user-speech")]
+                {
+                    let file = pipecat_evals::UserSpeechScenarioFile::load(&args[1])?;
+                    if options.stop_bot && file.len() > 1 {
+                        return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
+                    }
+                    file.into_sessions(
+                        &args[2], options,
+                        pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?,
+                    )?
+                }
+                #[cfg(not(feature = "user-speech"))]
+                {
+                    let _ = runtime;
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "--user-speech requires the user-speech build feature".into(),
+                    ));
+                }
+            } else if user_images {
+                #[cfg(feature = "user-images")]
+                {
+                    let file = pipecat_evals::UserImageScenarioFile::load(&args[1])?;
+                    if options.stop_bot && file.len() > 1 {
+                        return Err(pipecat_evals::EvalError::Scenario(
+                            "--stop-bot with several scenarios needs independent endpoints".into(),
+                        ));
+                    }
+                    file.into_sessions(&args[2], options)?
+                }
+                #[cfg(not(feature = "user-images"))]
+                {
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "--user-images requires the user-images build feature".into(),
+                    ));
+                }
+            } else if recorded {
+                let file = RecordedScenarioFile::load(&args[1])?;
+                if options.stop_bot && file.len() > 1 {
+                    return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
+                }
+                file.into_sessions(&args[2], options)?
+            } else {
+                let file = ScenarioFile::load(&args[1])?;
+                if options.stop_bot && file.scenarios.len() > 1 {
+                    return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use run_suite".into()));
+                }
+                file.scenarios
+                    .into_iter()
+                    .map(|scenario| EvalSession::new(scenario, &args[2], options.clone()))
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+        } else {
+            Vec::new()
+        };
+        if bot_audio_wav.is_some() && sessions.len() != 1 {
+            return Err(pipecat_evals::EvalError::Scenario(
+                "--bot-audio-wav requires exactly one scenario".into(),
+            ));
         }
+        let mut wav_output = bot_audio_wav.map(wav_output::Output::prepare).transpose()?;
         if let Some(manifest) = manifest {
             let result = run_release(
                 manifest,

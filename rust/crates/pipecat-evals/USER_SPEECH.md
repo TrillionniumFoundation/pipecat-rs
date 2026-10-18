@@ -98,11 +98,15 @@ is rejected, so the shared precharged invocation budget cannot be bypassed.
   bounded before client construction, not only after collection. Actual recorded
   and synthesized bytes share the 15,360,000-byte invocation budget.
 
-The direct command rejects combinations with `--recorded-audio`,
-`--bot-audio-response`, or `--bot-audio-wav`. `suite`, release manifests, Kokoro,
-arbitrary Python factories, other providers/codecs, new bot-transcription
-combinations, and physical playback are outside this feature. DTMF requires a
-compatible endpoint; the current native EvalBotHost does not implement it.
+The direct command rejects combinations with `--recorded-audio` or
+`--bot-audio-wav`. With both audio features, adding `--bot-audio-response` selects
+the separate immutable [audio-to-audio plan](AUDIO_TO_AUDIO.md), preserving
+spoken `response` and using joint completion/cleanup. This does not relax the
+ordinary `with_cartesia_user_speech` builder's transcription refusal or change
+this standalone loader's text-response alias. `suite`, release manifests,
+Kokoro, arbitrary Python factories, other providers/codecs and physical playback
+remain outside this feature. DTMF requires a compatible endpoint; the current
+native EvalBotHost does not implement it, and the joint audio profile rejects it.
 
 ## Timing, completion, and cancellation
 

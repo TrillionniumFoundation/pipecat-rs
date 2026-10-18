@@ -1,5 +1,9 @@
 //! Native, bounded RTVI scripted behavioral evaluations. No Python runtime or fallback.
 #![forbid(unsafe_code)]
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+mod audio_to_audio_scenario;
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+pub use audio_to_audio_scenario::AudioToAudioScenarioFile;
 mod bot_audio;
 #[cfg(feature = "bot-audio-transcription")]
 mod bot_transcription;
