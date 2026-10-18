@@ -203,3 +203,83 @@ unimplemented sibling adapter; neither service is a generic OpenAI alias.
 Source-tree distribution retains the patched JPEG path dependency. Crates.io
 publishing of `pipecat-images` is disabled until a packaging route can preserve
 its synchronous codec contract; silently substituting upstream is not qualified.
+
+## Explicit offline RGB owner
+
+`OfflineRgbDecoder` exposes the existing bounded PNG/JPEG decoder without a
+provider client, credentials, HTTP, or a new codec. It starts exactly one native
+worker only when explicitly constructed. Existing provider constructors, public
+settings, and decoding behavior remain unchanged. Merely constructing
+`OfflineRgbDecodeLimits`, or using its synchronous preflight methods, starts no
+thread.
+
+```rust,no_run
+use pipecat_images::{OfflineRgbDecodeLimits, OfflineRgbDecoder};
+# async fn example(encoded_png: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
+let limits = OfflineRgbDecodeLimits::default();
+let dimensions = limits.inspect_encoded_image(&encoded_png, "image/png")?;
+let decoder = OfflineRgbDecoder::new(limits)?;
+let job = decoder.submit(encoded_png)?;
+let rgb = job.await?;
+assert_eq!(rgb.size, dimensions);
+assert_eq!(rgb.format.as_deref(), Some("RGB"));
+decoder.shutdown().await?;
+assert!(decoder.status().joined);
+# Ok(()) }
+```
+
+The opt-in defaults are also hard ceilings: 64 KiB encoded length **and Vec
+capacity**, 1,024 per dimension, 262,144 pixels / 786,432 RGB bytes, 32 MiB
+conservative codec scratch, two total native jobs, one pending lane slot, and a
+five-second decode deadline including queue wait. Limits can only be lowered.
+`submit` is immediate bounded admission; a full pending lane returns
+`Backpressure`, even if its worker has not yet taken the first queued item.
+`inspect_encoded_image(bytes, mime)` returns dimensions and
+`validate_encoded_image(bytes, mime)` returns unit. Both require exact
+`image/png` or `image/jpeg` matching the magic and perform the existing bounded
+container/dimension preflight without pixel decoding. Success does not certify
+CRC, compressed payload, or complete codec validity. Actual decoding still
+performs those checks. Neither method reads files or fetches URLs.
+
+A submitted `OfflineRgbDecodeJob` is an owned Tokio future, already admitted even
+before its first poll. `job.cancel()` or dropping it signals cancellation;
+request-future cancellation/timeout does **not** release native admission while
+the worker still owns input/scratch. The native job drops its buffers before its
+private permit. `submit_retained(bytes, Arc<dyn Send + Sync>)` additionally retains
+a caller-owned accounting/snapshot anchor in both native work and the returned
+future. Thus cancelling a host request cannot free a host storage slot while
+native work still uses it. Callers must retain that same anchor in downstream
+image carriers when they need queued/forwarded-image storage to remain charged.
+The caller bounds its anchor allocations. An anchor must not retain the decoder
+owner itself or have a destructor that waits for this worker; such caller-created
+ownership cycles/blocking destructors are outside the supported contract.
+Native `max_jobs` does not bound
+arbitrarily many completed results retained by an application; the eval host's
+separate carrier lease is responsible for that lifetime bound.
+
+`close()` atomically closes admission and signals current native jobs; it makes
+no claim of completed cleanup. `status().outstanding_jobs` counts actual native
+ownership, not futures still awaited. `shutdown().await` closes/cancels and
+actually joins once; repeated calls are idempotent. Its five-second configurable
+cooperative diagnostic returns `Timeout` if the native thread has not exited,
+while retaining the handle and cancellation registry in the same owner.
+Dropping a shutdown future also retains that ownership, so another call resumes
+joining. `status().joined` becomes true only after the actual join. There is no
+`spawn_blocking`, detached join helper, fake hard deadline, or native-thread kill.
+Final owner Drop cancels then synchronously joins, and can block until an in-flight
+bounded codec operation reaches a cancellation check. Callers should explicitly
+await shutdown rather than using Drop as an asynchronous timeout guarantee.
+
+Static PNG palette/grayscale/alpha expansion and JPEG RGB normalization have the
+same supported subset and color behavior as provider decoding. Alpha is discarded
+without background compositing; high-bit-depth conversion, color profiles, CMYK,
+and lossy JPEG are not universal Pillow pixel-equivalence claims. The new offline
+API does not itself establish an eval transport, image-request/history ownership,
+or function-calling video support.
+
+`tests/offline_rgb.rs` covers public API RGB output, the existing synthetic gray
+JPEG, PNG palette/grayscale/alpha, strict MIME, malformed/truncated/trailing/APNG,
+header dimensions, and allocation-capacity rejection. Deterministic owner tests
+hold native work across unpolled-future drop, queued/active cancellation, deadline,
+shutdown-wait cancellation, diagnostic timeout, and last-owner Drop, then verify
+actual permit release and joined cleanup.

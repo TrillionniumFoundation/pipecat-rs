@@ -99,6 +99,8 @@ pub struct Frame {
     native_tool_outcome: Option<Arc<crate::NativeToolCallOutcome>>,
     native_tool_timeout_projected: bool,
     native_tool_batch: Option<Arc<crate::NativeToolCallBatch>>,
+    pub(crate) native_user_image: Option<crate::NativeUserImageConstraint>,
+    pub(crate) native_user_image_context: Option<crate::NativeUserImageContext>,
     pub(crate) reported_runtimes: Option<Arc<Mutex<BTreeSet<u64>>>>,
     pub(crate) observed_runtimes: crate::observer::ObservedRuntimes,
     pub(crate) interruption_epoch: Option<Arc<AtomicU64>>,
@@ -247,6 +249,8 @@ impl<'de> Deserialize<'de> for Frame {
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
+            native_user_image: None,
+            native_user_image_context: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,
@@ -470,6 +474,9 @@ impl Frame {
     pub fn require_no_native_llm_continuation(
         &self,
     ) -> Result<(), crate::NativeLlmContinuationError> {
+        if self.native_user_image.is_some() || self.native_user_image_context.is_some() {
+            return Err(crate::NativeLlmContinuationError::UnconsumedOnWire);
+        }
         if self.native_eager_source.is_some() {
             return Err(crate::NativeLlmContinuationError::UnconsumedEagerSource);
         }
@@ -490,6 +497,23 @@ impl Frame {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn require_no_other_user_image_authority(
+        &self,
+    ) -> Result<(), crate::ProcessorError> {
+        if self.native_eager_source.is_some()
+            || self.native_tool_batch.is_some()
+            || self.native_tool_outcome.is_some()
+            || self.native_speculation.is_some()
+            || self.native_llm_continuation.is_some()
+            || self.native_realtime_context.is_some()
+            || (self.native_user_image.is_some() && self.native_user_image_context.is_some())
+        {
+            return Err(crate::ProcessorError::new(
+                "native user image conflicts with another local authority",
+            ));
+        }
+        Ok(())
     }
     /// Set nanoseconds on the current pipeline's shared observer timeline.
     /// Clone/duplicate retain this local marker; all wire encoders must reject
@@ -559,6 +583,8 @@ impl Frame {
             native_tool_outcome: None,
             native_tool_timeout_projected: false,
             native_tool_batch: None,
+            native_user_image: None,
+            native_user_image_context: None,
             reported_runtimes,
             observed_runtimes: Default::default(),
             interruption_epoch,
@@ -616,6 +642,16 @@ impl Frame {
         frame.reported_runtimes = self.reported_runtimes.as_ref().map(|_| Default::default());
         frame.observed_runtimes = Default::default();
         frame.broadcast_sibling_id = None;
+        // A legitimate duplicate can change its public identity, but it must
+        // not launder an already-tampered source frame into a fresh valid one.
+        if self
+            .native_user_image_constraint(Direction::Downstream)
+            .is_ok()
+        {
+            if let Some(image) = &mut frame.native_user_image {
+                image.duplicate_identity(frame.id, &frame.name);
+            }
+        }
         frame.interruption_epoch =
             matches!(frame.data, FrameData::Interruption).then(|| Arc::new(AtomicU64::new(0)));
         frame

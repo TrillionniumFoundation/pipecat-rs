@@ -59,11 +59,13 @@ impl Seek for Input<'_> {
     }
 }
 struct Job {
-    _permit: Arc<tokio::sync::OwnedSemaphorePermit>,
-    max_output_bytes: usize,
     bytes: Vec<u8>,
     control: DecodeControl,
     result: tokio::sync::oneshot::Sender<Result<ImageRawFrame>>,
+    max_output_bytes: usize,
+    // Drop storage before releasing either decoder admission or caller accounting.
+    _permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+    _retained: Option<Arc<dyn Send + Sync>>,
 }
 /// One owned native thread per client, bounded by the client's admitted jobs.
 /// Last-owner drop closes the lane and joins it; no detached blocking tasks.
@@ -73,7 +75,21 @@ pub(crate) struct DecoderWorker {
 }
 impl DecoderWorker {
     pub fn new(limits: ImageGenerationLimits) -> Result<Self> {
-        let (sender, receiver) = mpsc::sync_channel::<Job>(limits.max_pending);
+        let capacity = limits.max_pending;
+        Self::with_queue_capacity(limits, capacity)
+    }
+    pub(crate) fn with_queue_capacity(
+        limits: ImageGenerationLimits,
+        capacity: usize,
+    ) -> Result<Self> {
+        Self::build(limits, capacity, |_: &DecodeControl| {})
+    }
+    fn build(
+        limits: ImageGenerationLimits,
+        capacity: usize,
+        before_decode: impl Fn(&DecodeControl) + Send + 'static,
+    ) -> Result<Self> {
+        let (sender, receiver) = mpsc::sync_channel::<Job>(capacity);
         let thread = thread::Builder::new()
             .name("pipecat-image-decoder".into())
             .spawn(move || {
@@ -81,6 +97,7 @@ impl DecoderWorker {
                     if job.result.is_closed() {
                         continue;
                     }
+                    before_decode(&job.control);
                     let mut job_limits = limits.clone();
                     job_limits.max_pixels = job_limits.max_pixels.min(job.max_output_bytes / 3);
                     let result = decode(&job.bytes, &job_limits, &job.control);
@@ -110,12 +127,34 @@ impl DecoderWorker {
         permit: Arc<tokio::sync::OwnedSemaphorePermit>,
         max_output_bytes: usize,
     ) -> Result<ImageRawFrame> {
+        self.submit_shared(bytes, control, permit, max_output_bytes)?
+            .await
+            .map_err(|_| ImageError::Closed)?
+    }
+    pub(crate) fn submit_shared(
+        &self,
+        bytes: Vec<u8>,
+        control: DecodeControl,
+        permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+        max_output_bytes: usize,
+    ) -> Result<tokio::sync::oneshot::Receiver<Result<ImageRawFrame>>> {
+        self.submit_retained(bytes, control, permit, max_output_bytes, None)
+    }
+    pub(crate) fn submit_retained(
+        &self,
+        bytes: Vec<u8>,
+        control: DecodeControl,
+        permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+        max_output_bytes: usize,
+        retained: Option<Arc<dyn Send + Sync>>,
+    ) -> Result<tokio::sync::oneshot::Receiver<Result<ImageRawFrame>>> {
         let (result, receive) = tokio::sync::oneshot::channel();
         self.sender
             .as_ref()
             .ok_or(ImageError::Closed)?
             .try_send(Job {
                 _permit: permit,
+                _retained: retained,
                 max_output_bytes,
                 bytes,
                 control,
@@ -125,15 +164,34 @@ impl DecoderWorker {
                 mpsc::TrySendError::Full(_) => ImageError::Backpressure,
                 mpsc::TrySendError::Disconnected(_) => ImageError::Closed,
             })?;
-        receive.await.map_err(|_| ImageError::Closed)?
+        Ok(receive)
+    }
+    pub(crate) fn close(&mut self) {
+        self.sender.take();
+    }
+    pub(crate) fn is_finished(&self) -> bool {
+        self.thread
+            .as_ref()
+            .is_none_or(thread::JoinHandle::is_finished)
+    }
+    pub(crate) fn join(&mut self) -> Result<()> {
+        self.close();
+        if let Some(thread) = self.thread.take() {
+            thread.join().map_err(|_| ImageError::Closed)?;
+        }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn with_test_hook(
+        limits: ImageGenerationLimits,
+        hook: impl Fn(&DecodeControl) + Send + 'static,
+    ) -> Result<Self> {
+        Self::build(limits, 1, hook)
     }
 }
 impl Drop for DecoderWorker {
     fn drop(&mut self) {
-        self.sender.take();
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        let _ = self.join();
     }
 }
 fn decode(
@@ -159,12 +217,32 @@ fn decode(
     control.check()?;
     result
 }
-fn png_decode(
+/// Container/dimension checks only; codec decoding still validates CRCs and payloads.
+pub(crate) fn inspect_encoded(
     bytes: &[u8],
-    input: Input<'_>,
     limits: &ImageGenerationLimits,
     control: &DecodeControl,
-) -> Result<ImageRawFrame> {
+) -> Result<(u32, u32)> {
+    control.check()?;
+    if bytes.len() > limits.max_encoded_image_bytes {
+        return Err(ImageError::TooLarge);
+    }
+    let dimensions = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        let (width, height, _) = png_preflight(bytes, limits, control)?;
+        (width, height)
+    } else if bytes.starts_with(&[0xff, 0xd8]) {
+        jpeg_preflight(bytes, limits, control)?.0
+    } else {
+        return Err(ImageError::Decode);
+    };
+    control.check()?;
+    Ok(dimensions)
+}
+fn png_preflight(
+    bytes: &[u8],
+    limits: &ImageGenerationLimits,
+    control: &DecodeControl,
+) -> Result<(u32, u32, usize)> {
     // Validate dimensions before the decoder can reserve image-dependent storage.
     if bytes.len() < 33
         || &bytes[12..16] != b"IHDR"
@@ -207,61 +285,13 @@ fn png_decode(
     if !ended {
         return Err(ImageError::Decode);
     }
-    let mut decoder = png::Decoder::new_with_limits(
-        input,
-        png::Limits {
-            bytes: limits.max_decode_bytes,
-        },
-    );
-    decoder.set_ignore_text_chunk(true);
-    decoder.set_ignore_iccp_chunk(true);
-    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-    let mut reader = decoder.read_info().map_err(|_| ImageError::Decode)?;
-    let size = reader.output_buffer_size().ok_or(ImageError::TooLarge)?;
-    if size > pixels.checked_mul(4).ok_or(ImageError::TooLarge)? {
-        return Err(ImageError::TooLarge);
-    }
-    let mut decoded = vec![0; size];
-    let info = reader
-        .next_frame(&mut decoded)
-        .map_err(|_| ImageError::Decode)?;
-    reader.finish().map_err(|_| ImageError::Decode)?;
-    if info.width != width || info.height != height || info.bit_depth != png::BitDepth::Eight {
-        return Err(ImageError::Decode);
-    }
-    let mut rgb = Vec::with_capacity(pixels * 3);
-    let stride = match info.color_type {
-        png::ColorType::Rgb => 3,
-        png::ColorType::Rgba => 4,
-        png::ColorType::Grayscale => 1,
-        png::ColorType::GrayscaleAlpha => 2,
-        _ => return Err(ImageError::Decode),
-    };
-    if info.buffer_size() != pixels * stride {
-        return Err(ImageError::Decode);
-    }
-    for row in decoded[..info.buffer_size()].chunks(width as usize * stride) {
-        control.check()?;
-        for pixel in row.chunks_exact(stride) {
-            if stride < 3 {
-                rgb.extend_from_slice(&[pixel[0]; 3]);
-            } else {
-                rgb.extend_from_slice(&pixel[..3]);
-            }
-        }
-    }
-    Ok(ImageRawFrame {
-        image: rgb,
-        size: (width, height),
-        format: Some("RGB".into()),
-    })
+    Ok((width, height, pixels))
 }
-fn jpeg_decode(
+fn jpeg_preflight(
     bytes: &[u8],
-    input: Input<'_>,
     limits: &ImageGenerationLimits,
     control: &DecodeControl,
-) -> Result<ImageRawFrame> {
+) -> Result<((u32, u32), usize)> {
     // Reject exotic/lossless coding before decoder allocation and bound sampling.
     let mut offset = 2;
     let mut dimensions = None;
@@ -355,6 +385,71 @@ fn jpeg_decode(
     }
     let dimensions = dimensions.ok_or(ImageError::Decode)?;
     let pixels = limits.pixels(dimensions.0, dimensions.1, 64)?;
+    Ok((dimensions, pixels))
+}
+fn png_decode(
+    bytes: &[u8],
+    input: Input<'_>,
+    limits: &ImageGenerationLimits,
+    control: &DecodeControl,
+) -> Result<ImageRawFrame> {
+    let (width, height, pixels) = png_preflight(bytes, limits, control)?;
+    let mut decoder = png::Decoder::new_with_limits(
+        input,
+        png::Limits {
+            bytes: limits.max_decode_bytes,
+        },
+    );
+    decoder.set_ignore_text_chunk(true);
+    decoder.set_ignore_iccp_chunk(true);
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().map_err(|_| ImageError::Decode)?;
+    let size = reader.output_buffer_size().ok_or(ImageError::TooLarge)?;
+    if size > pixels.checked_mul(4).ok_or(ImageError::TooLarge)? {
+        return Err(ImageError::TooLarge);
+    }
+    let mut decoded = vec![0; size];
+    let info = reader
+        .next_frame(&mut decoded)
+        .map_err(|_| ImageError::Decode)?;
+    reader.finish().map_err(|_| ImageError::Decode)?;
+    if info.width != width || info.height != height || info.bit_depth != png::BitDepth::Eight {
+        return Err(ImageError::Decode);
+    }
+    let mut rgb = Vec::with_capacity(pixels * 3);
+    let stride = match info.color_type {
+        png::ColorType::Rgb => 3,
+        png::ColorType::Rgba => 4,
+        png::ColorType::Grayscale => 1,
+        png::ColorType::GrayscaleAlpha => 2,
+        _ => return Err(ImageError::Decode),
+    };
+    if info.buffer_size() != pixels * stride {
+        return Err(ImageError::Decode);
+    }
+    for row in decoded[..info.buffer_size()].chunks(width as usize * stride) {
+        control.check()?;
+        for pixel in row.chunks_exact(stride) {
+            if stride < 3 {
+                rgb.extend_from_slice(&[pixel[0]; 3]);
+            } else {
+                rgb.extend_from_slice(&pixel[..3]);
+            }
+        }
+    }
+    Ok(ImageRawFrame {
+        image: rgb,
+        size: (width, height),
+        format: Some("RGB".into()),
+    })
+}
+fn jpeg_decode(
+    bytes: &[u8],
+    input: Input<'_>,
+    limits: &ImageGenerationLimits,
+    control: &DecodeControl,
+) -> Result<ImageRawFrame> {
+    let (dimensions, pixels) = jpeg_preflight(bytes, limits, control)?;
     let mut decoder = jpeg_decoder::Decoder::new(input);
     decoder.set_max_decoding_buffer_size(limits.max_decode_bytes);
     decoder.read_info().map_err(|_| ImageError::Decode)?;
@@ -502,6 +597,7 @@ mod shared_sequence_tests {
         let cancel = CancellationToken::new();
         let job = Job {
             _permit: permit.clone(),
+            _retained: None,
             bytes: vec![0],
             max_output_bytes: 3,
             control: DecodeControl {

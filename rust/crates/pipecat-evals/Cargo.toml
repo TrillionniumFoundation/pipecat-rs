@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
+user-images = ["dep:pipecat-images"]
 # Explicit Cartesia scripted user audio; does not activate ONNX/VAD.
 user-speech = ["dep:pipecat-speech", "dep:sha2", "dep:rustix"]
 # Explicit real-time PCM -> Silero -> HTTP STT response evaluation.
@@ -40,6 +41,7 @@ path = "examples/native_text_bot.rs"
 required-features = ["native-bot-example"]
 
 [dependencies]
+pipecat-images = { path = "../pipecat-images", optional = true }
 pipecat-speech = { path = "../pipecat-speech", optional = true }
 pipecat-vad = { path = "../pipecat-vad", optional = true }
 pipecat-audio = { path = "../pipecat-audio" }
@@ -71,3 +73,13 @@ workspace = true
 [[test]]
 name = "bot_audio_response_suite"
 required-features = ["bot-audio-transcription"]
+
+[[bin]]
+name = "eval-image-fixture"
+path = "tests/support/image_bot.rs"
+required-features = ["user-images", "native-bot-example"]
+
+[dev-dependencies]
+png = "=0.18.1"
+jpeg-encoder = { version = "=0.6.1", default-features = false, features = ["std"] }
+jpeg-decoder = { version = "=0.3.2", path = "../../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }

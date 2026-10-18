@@ -11,6 +11,7 @@ mod llm_continuation;
 mod realtime_context;
 mod speculation;
 mod tool_outcome;
+mod user_image_constraint;
 pub use frame_contract::{FrameContract, FRAME_CONTRACTS, RTVI_FRAME_CONTRACTS};
 pub mod frames;
 pub mod observer;
@@ -31,5 +32,6 @@ pub use queue::{FrameQueue, QueueError};
 pub use realtime_context::*;
 pub use speculation::*;
 pub use tool_outcome::*;
+pub use user_image_constraint::*;
 
 pub use idle::{IdleTimeoutAction, WorkerIdleConfig, WorkerIdleMonitor, WorkerIdleSnapshot};

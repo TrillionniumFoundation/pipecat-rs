@@ -306,7 +306,7 @@ fn retain_direct_tool_identities(
     }
     Ok(Box::default())
 }
-fn fingerprint(data: &FrameData) -> Result<[u8; 32], ProcessorError> {
+pub(crate) fn fingerprint(data: &FrameData) -> Result<[u8; 32], ProcessorError> {
     struct BoundedDigest {
         digest: Sha256,
         remaining: usize,

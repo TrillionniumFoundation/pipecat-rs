@@ -52,6 +52,8 @@ pub struct LlmProcessor {
     completion_lock: Arc<tokio::sync::Mutex<()>>,
     should_report_ttfb: Arc<AtomicBool>,
     speculation_gate: crate::speculation::OutputGate,
+    #[cfg(test)]
+    image_start_pause: Mutex<Option<Arc<ImageStartPause>>>,
 }
 #[derive(Clone)]
 struct State {
@@ -78,6 +80,8 @@ impl LlmProcessor {
             completion_lock: Arc::new(tokio::sync::Mutex::new(())),
             should_report_ttfb: Arc::new(AtomicBool::new(true)),
             speculation_gate: crate::speculation::OutputGate::new(Default::default()),
+            #[cfg(test)]
+            image_start_pause: Mutex::new(None),
         }
     }
     /// Current bounded retention, for diagnostics without exposing generated text.
@@ -303,7 +307,12 @@ impl LlmProcessor {
             Consumption::Consumed
         })
     }
-    async fn launch(&self, state: State, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+    async fn launch(
+        &self,
+        state: State,
+        ctx: &ProcessorContext,
+        image_context: Option<pipecat_core::NativeUserImageContext>,
+    ) -> Result<(), ProcessorError> {
         if let Some(capability) = &state.speculation {
             if !capability.bind_admission(ctx.clone(), ctx.health().generation()) {
                 return Ok(());
@@ -318,6 +327,9 @@ impl LlmProcessor {
             context: ctx.clone(),
             gate: self.speculation_gate.clone(),
             speculation: state.speculation.clone(),
+            image_context,
+            #[cfg(test)]
+            image_start_pause: self.image_start_pause.lock().unwrap().clone(),
             health_generation: ctx.health().generation(),
         };
         let mut guard = Box::pin(self.completion_lock.clone().lock_owned());
@@ -334,6 +346,12 @@ impl LlmProcessor {
                 };
                 // A source can retire while this completion waits in the FIFO.
                 if !output.admits_completion() {
+                    return Ok(());
+                }
+                // Claim once after FIFO, before any response boundary. Source
+                // closure winning here emits neither Start nor HTTP; subsequent
+                // source-close checks guard response-start waits and every poll.
+                if !output.try_admit_image_inference()? {
                     return Ok(());
                 }
                 process_completion(
@@ -442,6 +460,15 @@ impl FrameProcessor for LlmProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        // Validate before all early dispatch, including mutated frame variants.
+        frame.native_user_image_constraint(direction)?;
+        let image_context = frame.native_user_image_context(direction)?.cloned();
+        if image_context
+            .as_ref()
+            .is_some_and(|image| !image.is_current())
+        {
+            return Ok(());
+        }
         if frame.data.is_start() {
             ctx.push(frame, direction).await?;
             return self.metadata(ctx).await;
@@ -504,7 +531,7 @@ impl FrameProcessor for LlmProcessor {
             return self.speculation_gate.control(frame, direction, ctx).await;
         }
         match self.consume(&frame) {
-            Ok(Consumption::Run(state)) => self.launch(*state, ctx).await?,
+            Ok(Consumption::Run(state)) => self.launch(*state, ctx, image_context).await?,
             Ok(Consumption::Forward) => {
                 self.speculation_gate
                     .push(frame, direction, ctx, None)
@@ -585,6 +612,11 @@ struct CompletionOutput {
     context: ProcessorContext,
     gate: crate::speculation::OutputGate,
     speculation: Option<pipecat_core::NativeSpeculation>,
+    // Only this invocation retains the marker. Never store it in reusable State:
+    // a later ordinary LlmRun is a distinct, explicitly requested inference.
+    image_context: Option<pipecat_core::NativeUserImageContext>,
+    #[cfg(test)]
+    image_start_pause: Option<Arc<ImageStartPause>>,
     health_generation: pipecat_core::ProcessorHealthGeneration,
 }
 impl CompletionOutput {
@@ -592,6 +624,27 @@ impl CompletionOutput {
     where
         F: Future<Output = Result<(), ProcessorError>>,
     {
+        if let Some(image) = &self.image_context {
+            let mut closed = image.watch_closed();
+            tokio::pin!(completion);
+            let guarded = poll_fn(|cx| {
+                if !self.admits_completion() {
+                    return Poll::Ready(Ok(()));
+                }
+                completion.as_mut().poll(cx)
+            });
+            tokio::pin!(guarded);
+            loop {
+                if !self.admits_completion() {
+                    return Ok(());
+                }
+                tokio::select! {
+                    biased;
+                    _ = closed.changed() => {},
+                    result = &mut guarded => return result,
+                }
+            }
+        }
         let Some(capability) = &self.speculation else {
             return completion.await;
         };
@@ -621,6 +674,13 @@ impl CompletionOutput {
     }
 
     fn admits_completion(&self) -> bool {
+        if self.image_context.as_ref().is_some_and(|image| {
+            !self.context.is_current()
+                || self.context.health().generation() != self.health_generation
+                || !image.is_current()
+        }) {
+            return false;
+        }
         let Some(capability) = &self.speculation else {
             return true;
         };
@@ -633,6 +693,12 @@ impl CompletionOutput {
         }
         true
     }
+    fn try_admit_image_inference(&self) -> Result<bool, ProcessorError> {
+        match &self.image_context {
+            Some(image) => image.try_admit_inference(&self.context.invocation_fence()?),
+            None => Ok(true),
+        }
+    }
     fn configuration(&self) -> &pipecat_core::StartFrame {
         self.context.configuration()
     }
@@ -643,11 +709,25 @@ impl CompletionOutput {
         if !self.admits_completion() {
             return Ok(());
         }
+        #[cfg(test)]
+        if self.image_context.is_some() && matches!(frame.data, FrameData::LlmResponseStart) {
+            if let Some(pause) = &self.image_start_pause {
+                pause.entered.notify_one();
+                pause.release.notified().await;
+            }
+        }
         self.gate
             .push(frame, direction, &self.context, self.speculation.as_ref())
             .await
     }
     async fn push_error(&self, error: ErrorFrame) -> Result<(), ProcessorError> {
+        if self
+            .image_context
+            .as_ref()
+            .is_some_and(|image| !image.is_current())
+        {
+            return Ok(());
+        }
         // Failure reporting can follow this completion's own cancellation.
         // It must still reject retired sources without hiding current errors.
         if self
@@ -663,6 +743,9 @@ impl CompletionOutput {
             .map(|_| ())
     }
     async fn admit_tool_intent(&self) -> Result<bool, ProcessorError> {
+        if self.image_context.is_some() && !self.admits_completion() {
+            return Ok(false);
+        }
         let Some(capability) = &self.speculation else {
             return Ok(true);
         };
@@ -1213,6 +1296,8 @@ mod source_error_tests {
                     context: context.clone(),
                     gate: crate::speculation::OutputGate::new(Default::default()),
                     speculation: Some(capability.clone()),
+                    image_context: None,
+                    image_start_pause: None,
                     health_generation: context.health().generation(),
                 };
                 capability.cancel();
@@ -1394,6 +1479,8 @@ mod source_error_tests {
                     context: context.clone(),
                     gate: crate::speculation::OutputGate::new(Default::default()),
                     speculation: Some(capability),
+                    image_context: None,
+                    image_start_pause: None,
                     health_generation: context.health().generation(),
                 };
                 return output
@@ -1585,3 +1672,12 @@ mod initial_metric_tests {
         .expect("causal FIFO cancellation test exceeded its bound");
     }
 }
+
+#[cfg(test)]
+struct ImageStartPause {
+    entered: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+}
+#[cfg(test)]
+#[path = "processor_image_constraint_tests.rs"]
+mod image_constraint_tests;

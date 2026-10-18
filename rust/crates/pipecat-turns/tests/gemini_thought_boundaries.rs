@@ -20,16 +20,24 @@ use pipecat_processors::tools::{RegisteredTool, ToolExecutor};
 use pipecat_services::{LlmClient, LlmProcessor};
 use pipecat_turns::{LLMAssistantAggregator, SharedContext};
 use raw::{
-    candidate, chunk, closed, config, eof, header, join_peer, read_request, request, stopped,
-    Check, WAIT,
+    candidate, chunk, closed, config, header, join_peer, read_request, request, stopped, Check,
+    WAIT,
 };
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use tokio::{
+    io::AsyncWriteExt,
     net::TcpListener,
     sync::{mpsc, oneshot},
     time::timeout,
 };
+
+async fn eof(socket: &mut tokio::net::TcpStream) -> Check<()> {
+    socket
+        .write_all(b"0\r\n\r\n")
+        .await
+        .map_err(|e| e.to_string())
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Receipt {

@@ -6,6 +6,7 @@ mod budget;
 mod client;
 mod decode;
 mod gemini;
+mod offline;
 mod processor;
 mod security;
 mod settings;
@@ -15,6 +16,9 @@ pub use client::{GeneratedImage, OpenAiImageClient};
 pub use gemini::{
     GeminiImageClient, GeminiImageConfig, GeminiImageGenProcessor, GeminiImageGeneration,
     GeminiImageLimits, GeminiImageSettings, GeminiImageSettingsDelta, GEMINI_SOURCE_DEFAULT_MODEL,
+};
+pub use offline::{
+    OfflineRgbDecodeJob, OfflineRgbDecodeLimits, OfflineRgbDecoder, OfflineRgbDecoderStatus,
 };
 pub use pipecat_services::CancellationToken;
 pub use processor::ImageGenProcessor;

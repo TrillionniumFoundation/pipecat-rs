@@ -98,6 +98,8 @@ pub struct LLMAssistantAggregator {
     playback_readiness: crate::playback_ready::PlaybackReadiness,
     realtime: Arc<crate::realtime::RealtimeState>,
     context_causes: pipecat_core::NativeRealtimeContextProducer,
+    #[cfg(test)]
+    image_test_pause: Mutex<Option<Arc<ImageTestPause>>>,
 }
 impl LLMAssistantAggregator {
     pub fn new(context: SharedContext, config: AssistantAggregatorConfig) -> Self {
@@ -118,6 +120,8 @@ impl LLMAssistantAggregator {
             callback_tasks: Arc::new(Mutex::new(BTreeMap::new())),
             playback_readiness: Default::default(),
             context_causes: Default::default(),
+            #[cfg(test)]
+            image_test_pause: Mutex::new(None),
             state: Mutex::new(AssistantState {
                 active: false,
                 turn_started_at: None,
@@ -303,6 +307,85 @@ impl LLMAssistantAggregator {
     ) -> Result<AggregationOutput, ProcessorError> {
         self.process_at_inner(frame, direction, now, None, None)
     }
+    /// The only new commit gate is this synchronous standard-consumer path.
+    /// Lock order: runtime admission gates (canonical order), source-open,
+    /// request consumption, assistant state, shared context. Conversion and
+    /// emission happen outside these gates; no callbacks or runtime reentry.
+    fn process_restricted_image(
+        &self,
+        frame: &Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<AggregationOutput, ProcessorError> {
+        let constraint = frame
+            .native_user_image_constraint(direction)?
+            .ok_or_else(|| ProcessorError::new("missing user image constraint"))?;
+        let FrameData::UserImage(image) = &frame.data else {
+            unreachable!("validated image constraint")
+        };
+        let passive = image.append_to_context != Some(true);
+        // JPEG encoding and user-message projection never hold runtime gates.
+        let (message, native_message) = if passive {
+            (None, None)
+        } else {
+            let message = crate::encoded_image::user_message(image)?;
+            if image.run_llm == Some(false) {
+                (Some(message), None)
+            } else {
+                let native = pipecat_services::frame_context::message(&message)
+                    .map_err(|error| ProcessorError::new(error.to_string()))?;
+                // Drop the rich projection here, before taking admission: only
+                // the final native message retains its encoded JPEG URL.
+                (None, Some(native))
+            }
+        };
+        let invocation = constraint.intersect_invocation(&ctx.invocation_fence()?)?;
+        invocation.with_current(|| {
+            let Some(commit) = constraint.begin_commit()? else { return Ok(AggregationOutput::default()); };
+            let mut state = self.lock()?;
+            let mut output = AggregationOutput::default();
+            if state.ended { return Ok(output); }
+            if state.context_cause_failed {
+                return Err(ProcessorError::fatal("assistant inference could not be delivered; rebuild from retained history"));
+            }
+            if self.realtime.enabled()? || state.signed_history.is_some() {
+                return Err(ProcessorError::new("encoded user image context is unsupported during realtime or signed continuation"));
+            }
+            let busy_context_only = (passive || image.run_llm == Some(false))
+                && self.config.text_mode == AssistantTextMode::Text && state.active && state.llm_active;
+            if (!busy_context_only && (state.active || state.llm_active || !state.aggregation.text.is_empty()))
+                || !state.thought.text.is_empty() || state.thought_append || state.user_speaking
+                || state.bot_speaking || state.awaiting_user_inference || !state.pending_playback.is_empty()
+                || !state.pending.is_empty() || state.run_owed || state.tool_run_owed {
+                return Err(ProcessorError::new("encoded user image context requires an idle assistant without pending text, playback, tools or inference"));
+            }
+            if !passive && state.seen.contains(frame.id) { return Ok(output); }
+            if passive || image.run_llm == Some(false) {
+                let mut context = self.context.lock()?;
+                if busy_context_only && !state.aggregation.text.is_empty() {
+                    context.append_native(Message::text(Role::Assistant, state.aggregation.text.trim().to_owned()));
+                }
+                if let Some(message) = message { context.append_rich([message]); }
+                if busy_context_only { state.aggregation.take(); }
+            } else {
+                let context = self.context.append_with_prepared_frame(
+                    native_message.expect("inferencing image"),
+                    |data| {
+                        let mut context = Frame::new(data);
+                        commit.prepare_context(&mut context, &invocation)?;
+                        Ok(context)
+                    },
+                )?;
+                output.push(context, Direction::Upstream);
+            }
+            if !passive { state.seen.insert(frame.id); }
+            // No fallible work remains between history/replay and consume-once.
+            // Passive marked images consume the request too, while old unmarked
+            // passive images preserve their existing repeated-prefix behavior.
+            commit.complete();
+            Ok(output)
+        }).unwrap_or_else(|| Ok(AggregationOutput::default()))
+    }
     fn process_at_inner(
         &self,
         mut frame: Frame,
@@ -311,6 +394,15 @@ impl LLMAssistantAggregator {
         cause: Option<&ProcessorContext>,
         readiness: Option<&crate::playback_ready::Processing>,
     ) -> Result<AggregationOutput, ProcessorError> {
+        // Revalidate before dispatch or any state mutation, even if a caller
+        // replaced a constrained image with another public FrameData variant.
+        if frame.native_user_image_constraint(direction)?.is_some() {
+            let cause = cause.ok_or_else(|| {
+                ProcessorError::new("restricted user images require the real assistant invocation")
+            })?;
+            return self.process_restricted_image(&frame, direction, cause);
+        }
+        frame.native_user_image_context(direction)?;
         let mut state = self.lock()?;
         let mut output = AggregationOutput::default();
         if state.context_cause_failed
@@ -2144,6 +2236,10 @@ impl FrameProcessor for LLMAssistantAggregator {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        frame.native_user_image_constraint(direction)?;
+        #[cfg(test)]
+        let restricted_image = frame.native_user_image_constraint(direction)?.is_some();
+        frame.native_user_image_context(direction)?;
         let terminal = matches!(
             frame.data,
             FrameData::End(_)
@@ -2159,6 +2255,10 @@ impl FrameProcessor for LLMAssistantAggregator {
             self.playback_readiness.invalidate(false);
         }
         self.realtime.validate_assistant(ctx, &frame.data)?;
+        #[cfg(test)]
+        if restricted_image {
+            self.pause_image_test(true).await;
+        }
         let output = self.process_at_inner(
             frame,
             direction,
@@ -2166,6 +2266,10 @@ impl FrameProcessor for LLMAssistantAggregator {
             Some(ctx),
             Some(&readiness),
         )?;
+        #[cfg(test)]
+        if restricted_image {
+            self.pause_image_test(false).await;
+        }
         let emitted: Result<(), ProcessorError> = async {
             if terminal {
                 self.cancel_callbacks()?;
@@ -2426,3 +2530,23 @@ mod realtime_continuation_tests {
         );
     }
 }
+
+#[cfg(test)]
+struct ImageTestPause {
+    before_commit: bool,
+    entered: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+}
+#[cfg(test)]
+impl LLMAssistantAggregator {
+    async fn pause_image_test(&self, before_commit: bool) {
+        let pause = self.image_test_pause.lock().unwrap().clone();
+        if let Some(pause) = pause.filter(|pause| pause.before_commit == before_commit) {
+            pause.entered.notify_one();
+            pause.release.notified().await;
+        }
+    }
+}
+#[cfg(test)]
+#[path = "assistant_image_constraint_tests.rs"]
+mod image_constraint_tests;

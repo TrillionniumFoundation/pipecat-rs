@@ -69,3 +69,12 @@ pub enum EvalError {
     #[error("bot disconnected before evaluation completed")]
     Disconnected,
 }
+
+#[cfg(feature = "user-images")]
+mod user_image_input;
+#[cfg(feature = "user-images")]
+mod user_images;
+#[cfg(feature = "user-images")]
+pub use user_image_input::ImageInputLimits;
+#[cfg(feature = "user-images")]
+pub use user_images::{EncodedUserImage, UserImageScenarioFile};

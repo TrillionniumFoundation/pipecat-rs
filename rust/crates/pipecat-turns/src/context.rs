@@ -333,11 +333,20 @@ impl SharedContext {
     }
     /// Commit only when the resulting context has a lossless frame projection.
     pub(crate) fn append_with_frame(&self, message: Message) -> Result<FrameData, ProcessorError> {
+        self.append_with_prepared_frame(message, Ok)
+    }
+    /// A private synchronous preparation step participates in the same rollback
+    /// as context projection. It must not route, await, or invoke user code.
+    pub(crate) fn append_with_prepared_frame<T>(
+        &self,
+        message: Message,
+        prepare: impl FnOnce(FrameData) -> Result<T, ProcessorError>,
+    ) -> Result<T, ProcessorError> {
         let mut state = self.lock()?;
         state.require_lossless_rich_projection()?;
         let index = state.messages.len();
         state.append_native(message);
-        match state.frame_data() {
+        match state.frame_data().and_then(prepare) {
             Ok(frame) => Ok(frame),
             Err(error) => {
                 state.messages.truncate(index);

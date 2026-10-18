@@ -180,6 +180,13 @@ impl AggregationOutput {
         for action in self.actions {
             match action {
                 AggregationAction::Push(frame) => {
+                    if let Some(image_context) =
+                        frame.frame.native_user_image_context(frame.direction)?
+                    {
+                        let fence = image_context.invocation_fence().clone();
+                        ctx.try_push_with_invocation_fence(frame.frame, frame.direction, &fence)?;
+                        continue;
+                    }
                     let native_context = frame.frame.native_realtime_context_cause()?.is_some();
                     let emitted = if native_context {
                         ctx.try_push_realtime_context(frame.frame, frame.direction)

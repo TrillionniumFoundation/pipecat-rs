@@ -124,3 +124,26 @@ The source returns original Pillow modes; this adapter does not claim mode
 preservation. Its historical API version is a fixed reference, not a current
 Azure availability guarantee. No Python runtime, provider SDK or live service
 is used by the native implementation or these deterministic tests.
+
+## Offline RGB owner for the opt-in eval input route
+
+`offline.rs` exposes the shared native `decode.rs` PNG/JPEG implementation through
+an explicit one-worker owner. It introduces no provider or codec dependency.
+The bounded container/dimension preflight is factored from the same decoder,
+not a separate permissive parser. Native defaults are 64 KiB encoded/capacity,
+1,024 dimensions, 262,144 pixels, 32 MiB scratch, one active plus one pending
+job, and five-second decode/cooperative-shutdown diagnostics.
+
+The motivating fixed source is
+[`src/pipecat/evals/transport.py`](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/evals/transport.py),
+whose request path snapshots encoded bytes before asynchronous RGB conversion.
+This crate supplies only native decoding/ownership, not request identity,
+registration replacement semantics, context commitment, or tool callbacks.
+Its stricter MIME/header policy, finite limits, cancel-on-drop jobs, caller lease
+retention, and explicit actual join are intentional native safety differences.
+
+`tests/offline_rgb.rs` exercises the public subset with synthetic images, including
+the same tiny JPEG already used by `tests/azure_http.rs`; no new personal image or
+live provider fixture is involved. `offline.rs` unit tests independently hold
+native work to distinguish finished/cancelled request futures from real job exit
+and resumable joined shutdown. Existing provider/decoder tests remain applicable.

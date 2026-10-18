@@ -762,7 +762,7 @@ pub async fn run_release_with_budget(
             let Some(settings) = &job.audio_response else {
                 continue;
             };
-            if !preflighted.insert(Arc::as_ptr(settings)) {
+            if !preflighted.insert(Arc::as_ptr(settings).addr()) {
                 continue;
             }
             if settings

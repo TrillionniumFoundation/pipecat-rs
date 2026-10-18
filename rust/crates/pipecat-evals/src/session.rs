@@ -134,6 +134,14 @@ pub struct EvalSession {
     judge: Option<EvalJudge>,
     active_expectation: i64,
     recordings: BTreeMap<usize, RecordedAudio>,
+    #[cfg(feature = "user-images")]
+    user_images: Option<BTreeMap<usize, crate::EncodedUserImage>>,
+    #[cfg(feature = "user-images")]
+    images_frozen: bool,
+    #[cfg(feature = "user-images")]
+    image_wire_bytes: usize,
+    #[cfg(feature = "user-images")]
+    image_wire_messages: usize,
     playback: Option<Playback>,
     #[cfg(feature = "user-speech")]
     user_speech: Option<UserSpeechOwner>,
@@ -210,6 +218,14 @@ impl EvalSession {
             judge,
             active_expectation: -1,
             recordings: BTreeMap::new(),
+            #[cfg(feature = "user-images")]
+            user_images: None,
+            #[cfg(feature = "user-images")]
+            images_frozen: false,
+            #[cfg(feature = "user-images")]
+            image_wire_bytes: 0,
+            #[cfg(feature = "user-images")]
+            image_wire_messages: 0,
             playback: None,
             #[cfg(feature = "user-speech")]
             user_speech: None,
@@ -306,6 +322,12 @@ impl EvalSession {
         settings: CartesiaUserSpeechSettings,
         voice: CartesiaUserSpeechVoice,
     ) -> Result<Self, EvalError> {
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with user speech".into(),
+            ));
+        }
         #[cfg(feature = "bot-audio-transcription")]
         if self.transcription_config.is_some() || self.transcription.is_some() {
             return Err(EvalError::Unsupported(
@@ -347,6 +369,12 @@ impl EvalSession {
         mut self,
         inputs: impl IntoIterator<Item = (usize, RecordedAudio)>,
     ) -> Result<Self, EvalError> {
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with recorded input".into(),
+            ));
+        }
         #[cfg(feature = "user-speech")]
         if self.user_speech_budget.is_some() {
             return Err(EvalError::Scenario(
@@ -378,6 +406,46 @@ impl EvalSession {
         self.recordings = recordings;
         Ok(self)
     }
+    /// Explicit passive registration sidecars; text-only image route, validated before connection.
+    #[cfg(feature = "user-images")]
+    pub fn with_user_images(
+        mut self,
+        inputs: impl IntoIterator<Item = (usize, crate::EncodedUserImage)>,
+    ) -> Result<Self, EvalError> {
+        if self.images_frozen {
+            return Err(EvalError::Scenario(
+                "preflighted image plan is immutable".into(),
+            ));
+        }
+        if !self.recordings.is_empty() || self.capture.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with audio input/output".into(),
+            ));
+        }
+        #[cfg(feature = "user-speech")]
+        if self.user_speech.is_some() || self.user_speech_budget.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with user speech".into(),
+            ));
+        }
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with bot transcription".into(),
+            ));
+        }
+        self.user_images = Some(crate::user_images::validate_inputs(
+            &self.scenario,
+            &self.options,
+            inputs,
+        )?);
+        Ok(self)
+    }
+    #[cfg(feature = "user-images")]
+    pub(crate) fn freeze_user_images(mut self) -> Self {
+        self.images_frozen = true;
+        self
+    }
     /// Dropping this future also drops its transport owner; no reader task is detached.
     pub async fn run(mut self, cancel: Cancellation) -> ScriptResult {
         self.run_inner(cancel).await;
@@ -392,6 +460,12 @@ impl EvalSession {
         cancel: Cancellation,
         limits: BotAudioLimits,
     ) -> Result<BotAudioRun, EvalError> {
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with bot audio capture".into(),
+            ));
+        }
         limits.validate()?;
         #[cfg(feature = "user-speech")]
         if self.user_speech.is_some() {
@@ -682,6 +756,14 @@ impl EvalSession {
             if turn.user.is_none() && turn.dtmf.is_none() && index > 0 {
                 self.turn_boundary()?;
             }
+        }
+        #[cfg(feature = "user-images")]
+        if let Some(image) = self
+            .user_images
+            .as_mut()
+            .and_then(|images| images.remove(&index))
+        {
+            self.send_user_image(image).await?;
         }
         let mut audio_completion = None;
         #[cfg(feature = "user-speech")]
@@ -990,6 +1072,50 @@ impl EvalSession {
                     .map(Some);
             }
         }
+    }
+    #[cfg(feature = "user-images")]
+    async fn send_user_image(&mut self, image: crate::EncodedUserImage) -> Result<(), EvalError> {
+        use base64::Engine;
+        let bound = image.wire_bound()?;
+        let planned = self
+            .image_wire_bytes
+            .checked_add(bound)
+            .ok_or(EvalError::Limit("outgoing image bytes"))?;
+        if bound > self.options.transport.max_message_bytes
+            || planned > self.options.max_wire_bytes
+            || self.image_wire_messages >= self.options.max_wire_messages
+        {
+            return Err(EvalError::Limit("outgoing image wire budget"));
+        }
+        let id = self
+            .next_id
+            .checked_add(1)
+            .ok_or(EvalError::Limit("message identities"))?;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(image.bytes());
+        let wire = serializer::control(
+            id,
+            serializer::EVAL_IMAGE,
+            serde_json::json!({"image":encoded,"format":image.format()}),
+        )
+        .encode()?;
+        if wire.len() > bound {
+            return Err(EvalError::Limit("outgoing image envelope"));
+        }
+        self.next_id = id;
+        self.image_wire_bytes += wire.len();
+        self.image_wire_messages += 1;
+        let sender = self
+            .socket
+            .as_ref()
+            .ok_or(EvalError::Disconnected)?
+            .sender();
+        tokio::time::timeout(
+            self.options.transport.write_timeout,
+            sender.send(Packet::Text(wire)),
+        )
+        .await
+        .map_err(|_| EvalError::Timeout("send image"))??;
+        Ok(())
     }
     async fn send(&mut self, kind: &str, data: Value) -> Result<(), EvalError> {
         self.next_id += 1;

@@ -28,6 +28,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     let mut bot_audio_wav = None;
     let mut bot_audio_response = None;
     let mut user_speech = None;
+    let mut user_images = false;
     if suite {
         let mut flags = args[2..].iter();
         while let Some(flag) = flags.next() {
@@ -56,6 +57,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         let mut flags = args[3..].iter();
         while let Some(flag) = flags.next() {
             match flag.as_str() {
+                "--user-images" if !user_images => user_images = true,
                 "--user-speech" if user_speech.is_none() => {
                     let path = flags
                         .next()
@@ -102,7 +104,23 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --user-speech RUNTIME.json]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json]".into()));
+    }
+    if user_images
+        && (user_speech.is_some()
+            || recorded
+            || bot_audio_response.is_some()
+            || bot_audio_wav.is_some())
+    {
+        return Err(pipecat_evals::EvalError::Unsupported(
+            "--user-images cannot combine with audio modes".into(),
+        ));
+    }
+    #[cfg(not(feature = "user-images"))]
+    if user_images {
+        return Err(pipecat_evals::EvalError::Unsupported(
+            "--user-images requires the user-images build feature".into(),
+        ));
     }
     if user_speech.is_some()
         && (recorded || bot_audio_response.is_some() || bot_audio_wav.is_some())
@@ -163,6 +181,16 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             stop_bot,
             ..Default::default()
         };
+        #[cfg(feature = "user-images")]
+        if user_images {
+            let file = pipecat_evals::UserImageScenarioFile::load(&args[1])?;
+            if options.stop_bot && file.len() > 1 {
+                return Err(pipecat_evals::EvalError::Scenario(
+                    "--stop-bot with several scenarios needs independent endpoints".into(),
+                ));
+            }
+            sessions = file.into_sessions(&args[2], options.clone())?;
+        }
         #[cfg(feature = "user-speech")]
         if let Some(runtime) = user_speech {
             let file = pipecat_evals::UserSpeechScenarioFile::load(&args[1])?;
@@ -172,13 +200,13 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             let settings = pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?;
             sessions = file.into_sessions(&args[2], options.clone(), settings)?;
         }
-        if user_speech.is_none() && bot_audio_response.is_none() && recorded {
+        if !user_images && user_speech.is_none() && bot_audio_response.is_none() && recorded {
             let file = RecordedScenarioFile::load(&args[1])?;
             if options.stop_bot && file.len() > 1 {
                 return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
             }
             sessions = file.into_sessions(&args[2], options)?;
-        } else if user_speech.is_none() && bot_audio_response.is_none() {
+        } else if !user_images && user_speech.is_none() && bot_audio_response.is_none() {
             let file = ScenarioFile::load(&args[1])?;
             if options.stop_bot && file.scenarios.len() > 1 {
                 return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use run_suite".into()));

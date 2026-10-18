@@ -4,6 +4,8 @@
 //! Each connection owns a fresh factory result. Factories must not detach work;
 //! slow processing belongs in the pipeline's bounded task manager.
 use crate::serializer::{decode_control, EvalControl, ObserverConfig, ReportLevel};
+#[cfg(feature = "user-images")]
+use crate::user_image_input::{ImageInputLimits, UserImageInput};
 use crate::Cancellation;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pipecat_core::*;
@@ -209,6 +211,8 @@ pub struct EvalBotHost {
     config: EvalBotHostConfig,
     raw_audio_input: bool,
     audio_output: bool,
+    #[cfg(feature = "user-images")]
+    user_images: Option<ImageInputLimits>,
 }
 impl EvalBotHost {
     pub async fn bind(
@@ -232,6 +236,8 @@ impl EvalBotHost {
             config,
             raw_audio_input: false,
             audio_output: false,
+            #[cfg(feature = "user-images")]
+            user_images: None,
         })
     }
     /// Accept single RTVI `raw-audio` messages containing 16 kHz mono PCM16.
@@ -246,6 +252,16 @@ impl EvalBotHost {
     pub fn with_audio_output(mut self, enabled: bool) -> Self {
         self.audio_output = enabled;
         self
+    }
+
+    /// Enable bounded, passive PNG/JPEG registrations and actual upstream
+    /// plain UserImageRequest responses. No worker is created until a session
+    /// starts; ordinary hosts do not create image workers.
+    #[cfg(feature = "user-images")]
+    pub fn with_user_images(mut self, limits: ImageInputLimits) -> Result<Self, BotHostError> {
+        limits.validate()?;
+        self.user_images = Some(limits);
+        Ok(self)
     }
 
     pub fn local_addr(&self) -> Result<SocketAddr, BotHostError> {
@@ -377,6 +393,10 @@ impl EvalBotHost {
             capabilities.insert("text_only".into(), false.into());
             capabilities.insert("audio_output".into(), true.into());
         }
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            capabilities.insert("user_image_input".into(), true.into());
+        }
         let rtvi = Arc::new(RtviProcessor::new(RtviConfig {
             command_capacity: config.transport.queue_capacity.max(2),
             event_capacity: config.event_capacity,
@@ -399,11 +419,26 @@ impl EvalBotHost {
             Some(handle.clone()),
         )?);
         let (events_tx, mut events) = mpsc::channel(config.event_capacity);
+        #[cfg(feature = "user-images")]
+        let images = match self
+            .user_images
+            .clone()
+            .map(UserImageInput::new)
+            .transpose()
+        {
+            Ok(images) => images.map(Arc::new),
+            Err(error) => {
+                close_socket(socket, config).await?;
+                return Err(error);
+            }
+        };
         let budget = Arc::new(Budget {
             counts: Mutex::new((0, 0)),
             output_open: AtomicBool::new(true),
             config: config.clone(),
             context: plan.context.clone(),
+            #[cfg(feature = "user-images")]
+            images: images.clone(),
         });
         if let Err(error) = budget.context() {
             close_socket(socket, config).await?;
@@ -411,6 +446,10 @@ impl EvalBotHost {
         }
         let owners = Arc::new(ProcessorOwners::default());
         let mut processors: Vec<Arc<dyn FrameProcessor>> = vec![rtvi];
+        #[cfg(feature = "user-images")]
+        if let Some(images) = &images {
+            processors.push(images.clone());
+        }
         for processor in plan.processors {
             processors.push(Arc::new(Boundary {
                 inner: processor,
@@ -490,20 +529,63 @@ impl EvalBotHost {
         budget.output_open.store(false, Ordering::SeqCst);
         events.close();
         let graceful = matches!(&result, Ok(EvalBotExit::Ended));
-        let (cleanup, transport_cleanup) = tokio::join!(drain_worker(&mut worker, config), async {
-            if graceful {
-                tokio::time::timeout(config.shutdown_timeout, socket.finish())
-                    .await
-                    .map_err(|_| BotHostError::Timeout("graceful socket drain"))??;
-            } else {
-                close_socket(socket, config).await?;
+        #[cfg(feature = "user-images")]
+        let pre_cancel_requested = images.is_some() && !worker.has_finished();
+        #[cfg(not(feature = "user-images"))]
+        let pre_cancel_requested = false;
+        // Admit pipeline cancellation before closing the image source.
+        // Keep every cleanup owner even if cancellation admission itself fails.
+        let image_cancel_result = if pre_cancel_requested {
+            match tokio::time::timeout(
+                config.shutdown_timeout,
+                worker.cancel("eval image session closed"),
+            )
+            .await
+            {
+                Ok(Ok(())) | Ok(Err(PipelineError::Closed)) => Ok(()),
+                Ok(Err(error)) => Err(BotHostError::Pipeline(error)),
+                Err(_) => Err(BotHostError::Timeout(
+                    "image pipeline cancellation admission",
+                )),
+            }
+        } else {
+            Ok(())
+        };
+        #[cfg(feature = "user-images")]
+        if let Some(images) = &images {
+            images.close();
+        }
+        let image_cleanup = async {
+            #[cfg(feature = "user-images")]
+            if let Some(images) = &images {
+                images.shutdown_joined().await?;
             }
             Ok::<(), BotHostError>(())
-        });
+        };
+        let (cleanup, transport_cleanup, image_cleanup) = tokio::join!(
+            drain_worker(
+                &mut worker,
+                config,
+                pre_cancel_requested && image_cancel_result.is_ok()
+            ),
+            async {
+                if graceful {
+                    tokio::time::timeout(config.shutdown_timeout, socket.finish())
+                        .await
+                        .map_err(|_| BotHostError::Timeout("graceful socket drain"))??;
+                } else {
+                    close_socket(socket, config).await?;
+                }
+                Ok::<(), BotHostError>(())
+            },
+            image_cleanup
+        );
         drop(worker);
         owners.wait_empty(config.shutdown_timeout).await?;
         cleanup?;
         transport_cleanup?;
+        image_cleanup?;
+        image_cancel_result?;
         result
     }
     #[allow(clippy::too_many_arguments)]
@@ -588,7 +670,19 @@ impl EvalBotHost {
                     validate_envelope(text.as_bytes(), config.transport.max_message_bytes)?;
                     match decode_control(text.as_bytes(), config.transport.max_message_bytes)? {
                         EvalControl::Cancel => return Ok(EvalBotExit::EvalCancel),
-                        EvalControl::Image { .. } => return Err(BotHostError::Invalid("eval images are unsupported by the text host".into())),
+                        EvalControl::Image { bytes, format } => {
+                            #[cfg(feature = "user-images")]
+                            if let Some(images) = &budget.images {
+                                if !ready { return Err(BotHostError::Invalid("eval images require client readiness".into())); }
+                                // Passive atomic replacement in this socket reader. It neither
+                                // closes context/config admission nor launches any inference.
+                                images.register_wire(bytes, &format)?;
+                                continue;
+                            }
+                            #[cfg(not(feature = "user-images"))]
+                            let _ = (bytes, format);
+                            return Err(BotHostError::Invalid("eval images are unsupported by the text host".into()));
+                        }
                         EvalControl::Context(messages) => {
                             if !ready || input_admitted { return Err(BotHostError::Invalid("context must precede the first input or introduction".into())); }
                             seed_context(&budget.context, messages, config)?;
@@ -688,9 +782,10 @@ async fn during_startup<T>(
 async fn drain_worker(
     worker: &mut PipelineWorker,
     config: &EvalBotHostConfig,
+    cancel_admitted: bool,
 ) -> Result<(), BotHostError> {
     tokio::time::timeout(config.shutdown_timeout, async {
-        if !worker.has_finished() {
+        if !worker.has_finished() && !cancel_admitted {
             if let Err(error) = worker.cancel("eval session closed").await {
                 if error != PipelineError::Closed {
                     return Err(error.into());
@@ -789,6 +884,8 @@ struct Budget {
     counts: Mutex<(usize, usize)>,
     config: EvalBotHostConfig,
     context: SharedContext,
+    #[cfg(feature = "user-images")]
+    images: Option<Arc<UserImageInput>>,
 }
 impl Budget {
     fn context(&self) -> Result<(), BotHostError> {
@@ -805,8 +902,20 @@ impl Budget {
             return Ok(());
         }
         let limit = self.config.transport.max_message_bytes;
+        #[cfg(feature = "user-images")]
+        let native_media = self
+            .images
+            .as_ref()
+            .map(|images| images.media_bytes(frame))
+            .transpose()?
+            .flatten();
+        #[cfg(not(feature = "user-images"))]
+        let native_media: Option<usize> = None;
         // Local flush authority is forwarded intact, never encoded or recreated.
         let measured = (|| -> Result<usize, BotHostError> {
+            if let Some(bytes) = native_media {
+                return Ok(bytes);
+            }
             let payload_bytes = match &frame.data {
                 FrameData::FlushDetailed(flush) => {
                     measure(&(&flush.origin, flush.returning), limit)?.saturating_add(64)
@@ -835,7 +944,7 @@ impl Budget {
                     .native_tool_outcome()?
                     .map_or(0, |outcome| outcome.retained_bytes()),
             );
-        if bytes > limit {
+        if native_media.is_none() && bytes > limit {
             return Err(ProcessorError::fatal(
                 "eval frame envelope byte limit exceeded",
             ));
@@ -884,6 +993,16 @@ impl FrameProcessor for Boundary {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        #[cfg(feature = "user-images")]
+        if let Some(images) = &self.budget.images {
+            if !images.validate_frame(&frame, direction)? {
+                return Ok(());
+            }
+        } else if frame.native_user_image_constraint(direction)?.is_some()
+            || frame.native_user_image_context(direction)?.is_some()
+        {
+            return Err(ProcessorError::fatal("eval image input is not enabled"));
+        }
         self.budget.admit(&frame)?;
         let terminal = frame.is_terminal();
         // Keep original invocation authority live until already admitted events
@@ -912,7 +1031,16 @@ impl FrameProcessor for Boundary {
         let observed = self
             .observer
             .as_ref()
-            .filter(|_| !terminal && !matches!(frame.data, FrameData::FlushDetailed(_)))
+            .filter(|_| {
+                !terminal
+                    && !matches!(
+                        frame.data,
+                        FrameData::FlushDetailed(_)
+                            | FrameData::UserImage(_)
+                            | FrameData::InputImage(_)
+                            | FrameData::OutputImage(_)
+                    )
+            })
             .map(|_| {
                 let mut observed = frame.clone();
                 if let FrameData::FunctionCallResultDetailed(result) = &mut observed.data {
@@ -1196,6 +1324,8 @@ mod tests {
             output_open: AtomicBool::new(true),
             config: config.clone(),
             context: SharedContext::default(),
+            #[cfg(feature = "user-images")]
+            images: None,
         });
         let observer = Arc::new(RtviObserver::new(RtviObserverParams::default(), None).unwrap());
         let owners = Arc::new(ProcessorOwners::default());
@@ -1241,5 +1371,84 @@ mod tests {
         drop(worker);
         drop(receiver);
         owners.wait_empty(Duration::from_secs(1)).await.unwrap();
+    }
+    #[cfg(feature = "user-images")]
+    #[tokio::test]
+    async fn requested_rgb_has_independent_native_budget_without_expanding_wire_json() {
+        let images = Arc::new(UserImageInput::new(ImageInputLimits::default()).unwrap());
+        let mut encoded = Vec::new();
+        {
+            let mut png = png::Encoder::new(&mut encoded, 512, 512);
+            png.set_color(png::ColorType::Rgb);
+            png.set_depth(png::BitDepth::Eight);
+            png.write_header()
+                .unwrap()
+                .write_image_data(&[255u8, 0, 17].repeat(512 * 512))
+                .unwrap();
+        }
+        images
+            .register(encoded.into_boxed_slice().into_vec(), "image/png")
+            .unwrap();
+        let mut worker = Pipeline::new(vec![images.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        worker
+            .sender()
+            .send(
+                Frame::new(FrameData::UserImageRequest(UserImageRequestFrame {
+                    user_id: "user".into(),
+                    text: Some("what is shown".into()),
+                    append_to_context: Some(true),
+                    video_source: None,
+                    function_name: None,
+                    tool_call_id: None,
+                    result_callback: None,
+                })),
+                Direction::Upstream,
+            )
+            .await
+            .unwrap();
+        let frame = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                let output = worker.recv().await.unwrap();
+                if matches!(output.frame.data, FrameData::UserImage(_)) {
+                    break output.frame;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let config = EvalBotHostConfig::default();
+        assert!(measure(&frame.data, config.transport.max_message_bytes).is_err());
+        let budget = Budget {
+            output_open: AtomicBool::new(true),
+            counts: Mutex::new((0, 0)),
+            config: config.clone(),
+            context: SharedContext::default(),
+            images: Some(images.clone()),
+        };
+        budget.admit(&frame).unwrap();
+        assert!(budget.counts.lock().unwrap().1 >= 512 * 512 * 3);
+        let oversized_json = Frame::new(FrameData::LlmText(TextFrame::new(
+            "x".repeat(config.transport.max_message_bytes),
+        )));
+        assert!(budget.admit(&oversized_json).is_err());
+        let strict = Budget {
+            output_open: AtomicBool::new(true),
+            counts: Mutex::new((0, 0)),
+            config: EvalBotHostConfig {
+                max_processed_bytes: 512 * 512 * 3 - 1,
+                ..config
+            },
+            context: SharedContext::default(),
+            images: Some(images.clone()),
+        };
+        assert!(strict.admit(&frame).is_err());
+        drop(frame);
+        worker.cancel("test complete").await.unwrap();
+        while worker.recv().await.is_some() {}
+        let _ = worker.join().await;
+        images.shutdown_joined().await.unwrap();
     }
 }

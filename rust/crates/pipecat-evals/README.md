@@ -604,3 +604,12 @@ The optional `user-speech` feature provides explicit Cartesia HTTP input synthes
 recording overrides and a private opt-in cache for direct library/CLI runs. See
 [USER_SPEECH.md](USER_SPEECH.md) for configuration, limits, privacy, cleanup and
 verification boundaries.
+
+## Explicit plain-request user images
+
+The `user-images` feature adds trusted-local image scenario sidecars and the
+`--user-images` direct-run option. A separately opted-in EvalBotHost serves
+bounded PNG/JPEG assets as RGB only in response to actual plain image requests.
+The standard assistant/vision pipeline remains responsible for history and
+inference. See [USER_IMAGES.md](USER_IMAGES.md) for lifecycle, resource bounds,
+source differences and unsupported tool/audio/suite combinations.
