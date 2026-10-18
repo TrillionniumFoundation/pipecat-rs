@@ -210,6 +210,8 @@ async fn playback_receipt_validates_item_epoch_and_exact_truncation() {
     older.audio_end_ms = 39;
     assert!(processor.acknowledge_playback(older).is_err());
     inject(&worker, FrameData::Interruption).await;
+    // Manual preroll clears the server buffer before cancel/truncate.
+    assert_eq!(peer.command().await["type"], "input_audio_buffer.clear");
     assert_eq!(peer.command().await["type"], "response.cancel");
     let truncate = peer.command().await;
     assert_eq!(truncate["type"], "conversation.item.truncate");

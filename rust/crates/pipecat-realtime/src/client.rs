@@ -1,4 +1,5 @@
 use crate::types::*;
+use crate::usage_details::UsageDetails;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use futures_util::{Sink, SinkExt, StreamExt};
 use pipecat_core::InvocationFence;
@@ -670,9 +671,13 @@ impl RealtimeSender {
         .await
     }
 }
+pub(crate) struct ReceivedEvent {
+    pub event: RealtimeEvent,
+    pub usage_details: Option<UsageDetails>,
+}
 pub struct RealtimeSession {
     sender: RealtimeSender,
-    rx: mpsc::Receiver<RealtimeEvent>,
+    rx: mpsc::Receiver<ReceivedEvent>,
     task: Option<JoinHandle<Result<(), RealtimeError>>>,
     ended: bool,
 }
@@ -681,14 +686,20 @@ impl RealtimeSession {
         self.sender.clone()
     }
     pub async fn next_event(&mut self) -> Option<Result<RealtimeEvent, RealtimeError>> {
+        self.next_received()
+            .await
+            .map(|result| result.map(|received| received.event))
+    }
+    pub(crate) async fn next_received(&mut self) -> Option<Result<ReceivedEvent, RealtimeError>> {
         if self.ended {
             return None;
         }
-        while let Some(event) = self.rx.recv().await {
+        while let Some(received) = self.rx.recv().await {
+            let event = &received.event;
             if event.event.response_id().is_some() && event.generation != self.sender.generation() {
                 continue;
             }
-            return Some(Ok(event));
+            return Some(Ok(received));
         }
         self.ended = true;
         match self.task.take()?.await {
@@ -747,7 +758,7 @@ struct Actor {
     config: RealtimeConfig,
     generation: Arc<AtomicU64>,
     emission_gate: Arc<Mutex<()>>,
-    tx: mpsc::Sender<RealtimeEvent>,
+    tx: mpsc::Sender<ReceivedEvent>,
     session_id: Option<String>,
     conversation_id: Option<String>,
     sequence: u64,
@@ -773,7 +784,7 @@ impl Actor {
         config: RealtimeConfig,
         generation: Arc<AtomicU64>,
         emission_gate: Arc<Mutex<()>>,
-        tx: mpsc::Sender<RealtimeEvent>,
+        tx: mpsc::Sender<ReceivedEvent>,
     ) -> Self {
         let ready_deadline = Instant::now() + config.limits.connect_timeout;
         Self {
@@ -1503,7 +1514,8 @@ impl Actor {
                     match item {
                         Some(Ok(Message::Text(text))) => {
                             let wire: WireEvent = serde_json::from_str(&text).map_err(|_| RealtimeError::Protocol("invalid typed event"))?;
-                            self.event(socket, wire).await?;
+                            let usage_details = UsageDetails::parse(&text, &wire.event)?;
+                            self.event_with_usage(socket, wire, usage_details).await?;
                         }
                         Some(Ok(Message::Ping(p))) => { timeout(self.config.limits.operation_timeout, socket.send(Message::Pong(p))).await.map_err(|_| RealtimeError::Timeout("pong"))?.map_err(transport)?; }
                         Some(Ok(Message::Pong(_))) => {}
@@ -1534,7 +1546,12 @@ impl Actor {
             }
         }
     }
-    async fn event(&mut self, socket: &mut Socket, wire: WireEvent) -> Result<(), RealtimeError> {
+    async fn event_with_usage(
+        &mut self,
+        socket: &mut Socket,
+        wire: WireEvent,
+        usage_details: Option<UsageDetails>,
+    ) -> Result<(), RealtimeError> {
         let mut event = wire.event;
         // Classify before generic create-error recovery. Only the nested
         // error.event_id names a client request; wire.event_id names a server event.
@@ -1779,13 +1796,16 @@ impl Actor {
             .or_else(|| self.config.context_id.clone());
         redact_event(&mut event, &self.config.api_key);
         self.tx
-            .try_send(RealtimeEvent {
-                event_id: wire.event_id,
-                session_id: self.session_id.clone(),
-                conversation_id: self.conversation_id.clone(),
-                context_id,
-                generation,
-                event,
+            .try_send(ReceivedEvent {
+                usage_details,
+                event: RealtimeEvent {
+                    event_id: wire.event_id,
+                    session_id: self.session_id.clone(),
+                    conversation_id: self.conversation_id.clone(),
+                    context_id,
+                    generation,
+                    event,
+                },
             })
             .map_err(|e| match e {
                 mpsc::error::TrySendError::Full(_) => RealtimeError::Backpressure,

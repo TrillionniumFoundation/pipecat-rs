@@ -4126,6 +4126,7 @@ dependencies = [
  "jpeg-encoder",
  "pipecat-core",
  "pipecat-processors",
+ "pipecat-rtvi",
  "pipecat-services",
  "pipecat-turns",
  "serde",

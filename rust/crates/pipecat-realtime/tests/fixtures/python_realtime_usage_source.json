@@ -1,0 +1,201 @@
+{
+  "revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_blobs": {
+    "python-realtime-llm.py": "5e859077a8ee44057adb6d1902709e44e04885cd",
+    "python-realtime-events.py": "e0da4ad730c4c1d4d6a5a93342929c451ef4bde9",
+    "python-metrics.py": "4ac9d0cb55aaccf76a88f8c0f80e1545eae92acb"
+  },
+  "scope": "Original four Pydantic class ASTs and first five original response.done handler statements through start_llm_usage_metrics; excludes later response lifecycle and SDK/network. Native intentionally rejects top-level scalar null and permissive Python integer coercion.",
+  "cases": [
+    {
+      "id": "empty_detail_objects",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {},
+        "output_token_details": {}
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 0,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0
+      }
+    },
+    {
+      "id": "distinct_buckets",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens": 3,
+          "audio_tokens": 4,
+          "cached_tokens_details": {
+            "audio_tokens": 2
+          }
+        },
+        "output_token_details": {
+          "audio_tokens": 6
+        }
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 3,
+        "input_audio_tokens": 4,
+        "output_audio_tokens": 6,
+        "cache_read_input_audio_tokens": 2
+      }
+    },
+    {
+      "id": "nested_null",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens_details": null
+        },
+        "output_token_details": {}
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 0,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0
+      }
+    },
+    {
+      "id": "nested_empty",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens_details": {}
+        },
+        "output_token_details": {}
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 0,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0,
+        "cache_read_input_audio_tokens": 0
+      }
+    },
+    {
+      "id": "nested_audio_null",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens_details": {
+            "audio_tokens": null
+          }
+        },
+        "output_token_details": {}
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 0,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0
+      }
+    },
+    {
+      "id": "all_explicit_zero",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens_details": {
+            "audio_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "audio_tokens": 0
+        }
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 0,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 0,
+        "cache_read_input_audio_tokens": 0
+      }
+    },
+    {
+      "id": "maximum_and_nonadditive",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens": 18446744073709551615,
+          "audio_tokens": 18446744073709551615,
+          "cached_tokens_details": {
+            "audio_tokens": 18446744073709551615
+          }
+        },
+        "output_token_details": {
+          "audio_tokens": 18446744073709551615
+        }
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 18446744073709551615,
+        "input_audio_tokens": 18446744073709551615,
+        "output_audio_tokens": 18446744073709551615,
+        "cache_read_input_audio_tokens": 18446744073709551615
+      }
+    },
+    {
+      "id": "ignored_unknowns",
+      "input": {
+        "input_tokens": 7,
+        "output_tokens": 5,
+        "total_tokens": 900,
+        "input_token_details": {
+          "cached_tokens": 8,
+          "unknown": "not metadata",
+          "cached_tokens_details": {
+            "audio_tokens": 9,
+            "private": "not metadata"
+          }
+        },
+        "output_token_details": {
+          "audio_tokens": 10
+        }
+      },
+      "expected": {
+        "prompt_tokens": 7,
+        "completion_tokens": 5,
+        "total_tokens": 900,
+        "cache_read_input_tokens": 8,
+        "input_audio_tokens": 0,
+        "output_audio_tokens": 10,
+        "cache_read_input_audio_tokens": 9
+      }
+    }
+  ]
+}

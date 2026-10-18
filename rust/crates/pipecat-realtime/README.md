@@ -165,3 +165,11 @@ pipeline lifecycle. Live provider compatibility has not been verified.
 
 This crate does not implement Anthropic, Gemini Live, xAI/Grok Realtime, Azure
 Realtime, or Inworld Realtime, and does not claim parity for those services.
+
+## Token usage details
+
+The pipeline honors `StartFrame.enable_usage_metrics` (default false), and may
+carry existing provider cache/audio breakdowns in same-event usage metadata.
+Public low-level mapper output remains unchanged. See
+[USAGE_DETAILS.md](USAGE_DETAILS.md) for the default-output correction, numeric
+validation, nullable/default distinctions, and independent RTVI opt-ins.

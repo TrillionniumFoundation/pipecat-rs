@@ -11,3 +11,5 @@ mod video;
 pub use client::*;
 pub use processor::*;
 pub use types::*;
+
+mod usage_details;

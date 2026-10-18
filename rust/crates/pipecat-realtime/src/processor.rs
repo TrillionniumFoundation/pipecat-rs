@@ -670,13 +670,15 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         let audio_items = self.audio_items.clone();
         let limit = self.client.config().limits.max_message_bytes;
         let ready = self.receive_ready.clone();
+        let enable_usage_metrics = config.enable_usage_metrics;
         ctx.spawn("openai-realtime-receive", false, async move {
             ready.notified().await;
             let mut mapper = RealtimeFrameMapper::new(user_id);
             let mut generation = sender.generation();
             let result = async {
-                while let Some(result) = session.next_event().await {
-                    let event = result.map_err(processor_error)?;
+                while let Some(result) = session.next_received().await {
+                    let received = result.map_err(processor_error)?;
+                    let event = received.event;
                     if let Event::Error { error } = &event.event {
                         return Err(ProcessorError::fatal(format!(
                             "realtime provider rejected session state: {}",
@@ -744,7 +746,29 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
                     let Some(frames) = observed else {
                         continue;
                     };
-                    for frame in frames {
+                    for mut frame in frames {
+                        if let FrameData::Metrics(metrics) = &frame.data {
+                            if let [Metric::LlmUsage {
+                                prompt_tokens,
+                                completion_tokens,
+                                total_tokens,
+                                ..
+                            }] = metrics.as_slice()
+                            {
+                                if !enable_usage_metrics {
+                                    continue;
+                                }
+                                if let Some(details) = received.usage_details {
+                                    if let Some(value) = details.metadata(
+                                        *prompt_tokens,
+                                        *completion_tokens,
+                                        *total_tokens,
+                                    ) {
+                                        frame.metadata.insert("llm_usage".into(), value);
+                                    }
+                                }
+                            }
+                        }
                         if let FrameData::Error(error) = frame.data {
                             output.push_error(error).await?;
                             continue;
