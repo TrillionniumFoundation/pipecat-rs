@@ -1,0 +1,594 @@
+{
+  "revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_blobs": {
+    "xai_realtime_llm.py": "10e839021d5c95f346884657769580f280b1bc1c",
+    "frame_processor.py": "975c7ad3f4441a0049cca681c0d0076a4afa1e8e",
+    "frame_processor_metrics.py": "6237aa533602085e0c7aa8a0a4ae9f515d756c0c",
+    "xai_realtime_events.py": "3a872d7639ce31ed8de8a44d394f79fae1e9762b",
+    "python-metrics.py": "4ac9d0cb55aaccf76a88f8c0f80e1545eae92acb"
+  },
+  "source_sha256": {
+    "xai_realtime_llm.py": "57212275b193de188f976c9559240addf5872fd5f9f0e9da9620c3139fe84eac",
+    "frame_processor.py": "9d40141eef4badb211d7318c989f3ca17e3bd41909704cd6811c1c982672556f",
+    "frame_processor_metrics.py": "9e324f66c1fe3a3840384e8d5bc2a99108c35ec39e47d247ad00cda7afa2fbd0",
+    "xai_realtime_events.py": "6c55f1d681315038668917deed07d946c78f6b2aff47d61fa4a4cf379a827f27",
+    "python-metrics.py": "e9a662930b5c3b00f8f075e8235d56ea1e3b611af957860d96a83dc28a84007a"
+  },
+  "pydantic_version": "2.13.4",
+  "setup_defaults_from_original_ast": {
+    "enable_metrics": false,
+    "enable_usage_metrics": false
+  },
+  "scope": "Original Usage and LLMTokenUsage class ASTs, original Grok usage assignment and following conditional, original can_generate_metrics, original FrameProcessor usage_metrics_enabled property and start_llm_usage_metrics method. Original setup booleans read by AST literal evaluation. Collector and push are captures. Full handler, event/service setup lifecycle, SDK/network, Python application imports, and real FrameProcessorMetrics are not executed.",
+  "original_ranges": {
+    "xai_realtime_llm.py": [
+      [
+        336,
+        342
+      ],
+      [
+        1090,
+        1097
+      ]
+    ],
+    "xai_realtime_events.py": [
+      [
+        883,
+        896
+      ]
+    ],
+    "frame_processor.py": [
+      [
+        106,
+        108
+      ],
+      [
+        420,
+        427
+      ],
+      [
+        584,
+        593
+      ]
+    ],
+    "python-metrics.py": [
+      [
+        109,
+        153
+      ]
+    ]
+  },
+  "cases": [
+    {
+      "id": "default_disabled",
+      "setup": {},
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "latency_false_usage_false",
+      "setup": {
+        "enable_metrics": false,
+        "enable_usage_metrics": false
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "latency_false_usage_true",
+      "setup": {
+        "enable_metrics": false,
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "latency_true_usage_false",
+      "setup": {
+        "enable_metrics": true,
+        "enable_usage_metrics": false
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "latency_true_usage_true",
+      "setup": {
+        "enable_metrics": true,
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "not_setup",
+      "setup": null,
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "top_positive_wins",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99
+        },
+        "response": {
+          "usage": {
+            "input_tokens": 80,
+            "output_tokens": 9,
+            "total_tokens": 111
+          }
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "top_absent_nested_fallback",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "response": {
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 5,
+            "total_tokens": 99
+          }
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "top_null_nested_fallback",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": null,
+        "response": {
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 5,
+            "total_tokens": 99
+          }
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "top_empty_shadows_nested",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {},
+        "response": {
+          "usage": {
+            "input_tokens": 80,
+            "output_tokens": 9,
+            "total_tokens": 111
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "nested_empty",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "response": {
+          "usage": {}
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "top_missing_total_shadows_nested",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7
+        },
+        "response": {
+          "usage": {
+            "input_tokens": 80,
+            "output_tokens": 9,
+            "total_tokens": 111
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "nested_missing_total",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "response": {
+          "usage": {
+            "input_tokens": 7
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "top_null_total_shadows_nested",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "total_tokens": null
+        },
+        "response": {
+          "usage": {
+            "input_tokens": 80,
+            "output_tokens": 9,
+            "total_tokens": 111
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "nested_null_total",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "response": {
+          "usage": {
+            "total_tokens": null
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "top_zero_total_shadows_nested",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "total_tokens": 0
+        },
+        "response": {
+          "usage": {
+            "input_tokens": 80,
+            "output_tokens": 9,
+            "total_tokens": 111
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "nested_zero_total",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "response": {
+          "usage": {
+            "total_tokens": 0
+          }
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "both_absent",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {},
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "both_null",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": null,
+        "response": {
+          "usage": null
+        }
+      },
+      "expected": [],
+      "actual": [],
+      "passed": true
+    },
+    {
+      "id": "missing_input_output",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "total_tokens": 99
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "null_input_output",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": null,
+          "output_tokens": null,
+          "total_tokens": 99
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "explicit_zero_input_output",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 99
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "maximum_u64_counters",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 18446744073709551615,
+          "output_tokens": 18446744073709551615,
+          "total_tokens": 18446744073709551615
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 18446744073709551615,
+          "completion_tokens": 18446744073709551615,
+          "total_tokens": 18446744073709551615
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 18446744073709551615,
+          "completion_tokens": 18446744073709551615,
+          "total_tokens": 18446744073709551615
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "rich_details_ignored",
+      "setup": {
+        "enable_usage_metrics": true
+      },
+      "event": {
+        "usage": {
+          "input_tokens": 7,
+          "output_tokens": 5,
+          "total_tokens": 99,
+          "input_token_details": {
+            "audio_tokens": 11,
+            "cached_tokens": 13
+          },
+          "output_token_details": {
+            "audio_tokens": 17
+          },
+          "reasoning_tokens": 19
+        }
+      },
+      "expected": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "actual": [
+        {
+          "prompt_tokens": 7,
+          "completion_tokens": 5,
+          "total_tokens": 99
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

@@ -3793,6 +3793,7 @@ dependencies = [
  "pipecat-core",
  "pipecat-media-transport",
  "pipecat-processors",
+ "pipecat-rtvi",
  "pipecat-services",
  "pipecat-turns",
  "serde",

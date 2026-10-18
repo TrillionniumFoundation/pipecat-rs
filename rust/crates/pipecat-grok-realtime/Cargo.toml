@@ -20,6 +20,7 @@ url = "2"
 pipecat-audio = { path = "../pipecat-audio" }
 pipecat-media-transport = { path = "../pipecat-media-transport" }
 pipecat-processors = { path = "../pipecat-processors" }
+pipecat-rtvi = { path = "../pipecat-rtvi" }
 pipecat-services = { path = "../pipecat-services" }
 pipecat-turns = { path = "../pipecat-turns" }
 

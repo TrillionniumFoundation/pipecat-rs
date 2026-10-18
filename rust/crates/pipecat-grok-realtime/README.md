@@ -257,3 +257,10 @@ in to `with_legacy_context_requests()`, which treats unsealed upstream requests
 as caller-owned and cannot preserve their original assistant scope through
 delayed delivery. This opt-in does not weaken validation of a present native
 cause and is independent of legacy raw-tool-result settlement.
+
+## Usage metrics
+
+Pipeline token usage requires `StartFrame.enable_usage_metrics` (default false)
+and a nonzero provider total. This corrects earlier unconditional emission;
+the low-level mapper remains unchanged. See [USAGE_METRICS.md](USAGE_METRICS.md)
+for exact source precedence, zero/null behavior, and base-only RTVI output.

@@ -594,6 +594,7 @@ impl FrameProcessor for GrokRealtimeProcessor {
         let conversation = self.conversation.clone();
         let output_rate = self.output_rate;
         let manual_turns = self.manual_turns;
+        let enable_usage_metrics = config.enable_usage_metrics;
         let health = self.health.clone();
         let mut health_changes = health.watch();
         ctx.spawn("grok-realtime-receive", false, async move {
@@ -665,6 +666,15 @@ impl FrameProcessor for GrokRealtimeProcessor {
                         && event.generation != sender.generation()
                     {
                         break;
+                    }
+                    // Usage admission is separate from the public raw mapper.
+                    // Provider zero totals are not usage observations.
+                    if let FrameData::Metrics(metrics) = &frame.data {
+                        if let [Metric::LlmUsage { total_tokens, .. }] = metrics.as_slice() {
+                            if !enable_usage_metrics || *total_tokens == 0 {
+                                continue;
+                            }
+                        }
                     }
                     if matches!(frame.data, FrameData::Error(_)) {
                         if let FrameData::Error(error) = frame.data {
