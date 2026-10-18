@@ -93,6 +93,7 @@ pub struct LLMAssistantAggregator {
     session_id: u64,
     stopped: StoppedOwner,
     summarizer: crate::LLMContextSummarizer,
+    automatic_summary: bool,
     state: Mutex<AssistantState>,
     callback_tasks: Arc<Mutex<BTreeMap<u64, ProcessorContext>>>,
     playback_readiness: crate::playback_ready::PlaybackReadiness,
@@ -104,6 +105,7 @@ pub struct LLMAssistantAggregator {
 impl LLMAssistantAggregator {
     pub fn new(context: SharedContext, config: AssistantAggregatorConfig) -> Self {
         Self {
+            automatic_summary: false,
             summarizer: crate::LLMContextSummarizer::new(context.clone(), Default::default())
                 .expect("valid default summary configuration"),
             context,
@@ -247,8 +249,18 @@ impl LLMAssistantAggregator {
         mut self,
         config: crate::ContextSummarizationConfig,
     ) -> Result<Self, ProcessorError> {
+        let automatic_summary = config.auto_trigger;
         self.summarizer.configure(config)?;
+        self.automatic_summary = automatic_summary;
         Ok(self)
+    }
+    pub(crate) fn validate_history_configuration(&self) -> Result<(), ProcessorError> {
+        if self.automatic_summary || self.lock()?.ended {
+            return Err(ProcessorError::new(
+                "history binding excludes automatic summaries and ended assistant aggregators",
+            ));
+        }
+        Ok(())
     }
     /// Use a separate real native LLM instead of upstream request/result frames.
     pub fn with_summary_llm(mut self, llm: crate::SummaryLlm) -> Self {
@@ -394,6 +406,9 @@ impl LLMAssistantAggregator {
         cause: Option<&ProcessorContext>,
         readiness: Option<&crate::playback_ready::Processing>,
     ) -> Result<AggregationOutput, ProcessorError> {
+        self.realtime
+            .history_validate_assistant_control(&frame, direction)?;
+        self.realtime.mark_used()?;
         // Revalidate before dispatch or any state mutation, even if a caller
         // replaced a constrained image with another public FrameData variant.
         if frame.native_user_image_constraint(direction)?.is_some() {
@@ -2230,12 +2245,24 @@ impl FrameProcessor for LLMAssistantAggregator {
     fn name(&self) -> &str {
         "LLMAssistantAggregator"
     }
+    async fn setup(
+        &self,
+        _config: &pipecat_core::StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.realtime.history_bound()? {
+            self.validate_history_configuration()?;
+        }
+        self.realtime.setup_assistant(ctx)
+    }
     async fn process(
         &self,
         frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        self.realtime
+            .history_validate_assistant_control(&frame, direction)?;
         frame.native_user_image_constraint(direction)?;
         #[cfg(test)]
         let restricted_image = frame.native_user_image_constraint(direction)?.is_some();
@@ -2346,6 +2373,9 @@ impl FrameProcessor for LLMAssistantAggregator {
         self.cancel_callbacks()
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        if self.realtime.history_bound()? {
+            self.realtime.close()?;
+        }
         if let Some(hub) = self.stopped_hub() {
             hub.close(crate::AssistantStoppedClose::Cleanup);
         }

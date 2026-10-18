@@ -339,6 +339,16 @@ pub(crate) enum InteractionStatus {
     InProgress,
     Idle,
 }
+/// Receive-local provenance, shared by every event originating in a packet.
+/// Only normalized actual input text/language is retained, never raw JSON,
+/// audio, or an explicit interim hypothesis. This is not a provider identity.
+#[cfg(feature = "paired-history")]
+#[derive(Debug)]
+pub(crate) struct InputPacket {
+    pub sequence: u64,
+    pub received_input_watermark: u64,
+    pub actual_input: Option<Transcript>,
+}
 pub(crate) struct Parsed {
     pub interaction_status: Option<InteractionStatus>,
     pub resumption: Option<ResumptionUpdate>,
@@ -346,6 +356,10 @@ pub(crate) struct Parsed {
     pub events: Vec<Event>,
     pub usage_details: Option<UsageDetails>,
     pub cancellations: Vec<String>,
+    #[cfg(feature = "paired-history")]
+    pub actual_input: Option<Transcript>,
+    #[cfg(feature = "paired-history")]
+    pub has_tool_fields: bool,
 }
 pub(crate) fn parse(
     bytes: &[u8],
@@ -388,6 +402,9 @@ pub(crate) fn parse_with_thinking(
     if object.is_empty() {
         return Err(GeminiError::Protocol("empty server envelope"));
     }
+    #[cfg(feature = "paired-history")]
+    let has_tool_fields =
+        object.contains_key("toolCall") || object.contains_key("toolCallCancellation");
     if object.get("setupComplete").is_some_and(|v| !v.is_object()) {
         return Err(GeminiError::Protocol("setupComplete must be an object"));
     }
@@ -451,6 +468,8 @@ pub(crate) fn parse_with_thinking(
     let mut generation_complete = false;
     let mut turn_complete = false;
     let mut interaction_status = None;
+    #[cfg(feature = "paired-history")]
+    let mut actual_input = None;
     if let Some(content) = packet.server_content {
         interaction_status = match content.interaction_status.as_deref() {
             Some("IN_PROGRESS") if thinking => Some(InteractionStatus::InProgress),
@@ -514,6 +533,10 @@ pub(crate) fn parse_with_thinking(
             });
         }
         if let Some(transcript) = content.input_transcription.filter(|t| !t.text.is_empty()) {
+            #[cfg(feature = "paired-history")]
+            {
+                actual_input = Some(transcript.clone());
+            }
             events.push(Event::InputTranscription {
                 transcript,
                 is_final: config.mode == SessionMode::Transcription,
@@ -582,6 +605,10 @@ pub(crate) fn parse_with_thinking(
         events,
         usage_details,
         cancellations,
+        #[cfg(feature = "paired-history")]
+        actual_input,
+        #[cfg(feature = "paired-history")]
+        has_tool_fields,
     })
 }
 

@@ -33,6 +33,8 @@ pub struct GeminiLiveProcessor {
     video: crate::video::VideoEncoder,
     video_paused: AtomicBool,
     start_video_paused: bool,
+    #[cfg(feature = "paired-history")]
+    history: Option<Arc<crate::history::SelectedHistory>>,
 }
 #[derive(Default)]
 struct InputState {
@@ -68,7 +70,82 @@ impl GeminiLiveProcessor {
             video: Default::default(),
             video_paused: AtomicBool::new(false),
             start_video_paused: false,
+            #[cfg(feature = "paired-history")]
+            history: None,
         }
+    }
+    #[cfg(feature = "paired-history")]
+    pub(crate) fn with_selected_history(
+        mut self,
+        history: Arc<crate::history::SelectedHistory>,
+    ) -> Self {
+        self.history = Some(history);
+        self
+    }
+
+    #[cfg(feature = "paired-history")]
+    async fn start_selected_history(
+        &self,
+        history: &Arc<crate::history::SelectedHistory>,
+        config: &StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        // This validates the exact successful gate/user/service/assistant
+        // setup identities and initial context before any provider connection.
+        let initial_seed = history.begin_service_start(ctx)?;
+        let mut session = self
+            .client
+            .connect_paired_history()
+            .await
+            .map_err(processor_error)?;
+        // The shared startup gate linearizes cancellation against this short
+        // synchronous publication/seed admission. The closure does not await
+        // or enter history state; provider I/O stays in the session worker.
+        let admitted = history.admit_initial_seed(|| {
+            *self
+                .sender
+                .lock()
+                .map_err(|_| ProcessorError::fatal("Gemini state lock poisoned"))? =
+                Some(session.sender());
+            if let Some(seed) = initial_seed.filter(|seed| !seed.messages.is_empty()) {
+                // This is the constructor-selected initial seed, not a live
+                // context frame or a local user-history feedback notification.
+                self.seed_context(&seed, Origin::default())?;
+            }
+            Ok::<(), ProcessorError>(())
+        });
+        if let Err(error) = admitted {
+            // The receiver has not taken ownership yet: settle the actual
+            // local handle before returning the selected startup failure.
+            match tokio::time::timeout(
+                self.client.config().limits.finish_timeout,
+                session.cancel_and_join(),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(join_error)) => {
+                    return Err(ProcessorError::fatal(format!(
+                        "{}; Gemini startup worker join failed: {}",
+                        error.message, join_error
+                    )));
+                }
+                Err(_) => {
+                    return Err(ProcessorError::fatal(format!(
+                        "{}; Gemini startup worker forced abort after join timeout",
+                        error.message
+                    )));
+                }
+            }
+            return Err(error);
+        }
+        history
+            .start_receive(
+                session,
+                self.user_id.clone().unwrap_or_default(),
+                config.enable_usage_metrics,
+            )
+            .await
     }
     /// Fixed transcription label, including an explicitly empty string.
     /// Without an override, dedicated STT follows the latest valid downstream
@@ -94,7 +171,10 @@ impl GeminiLiveProcessor {
     ) -> Result<(), ProcessorError> {
         if self.client.config().mode == SessionMode::Transcription
             && !self.audio_passthrough
-            && matches!(frame.data, FrameData::InputAudio(_) | FrameData::UserAudio(_))
+            && matches!(
+                frame.data,
+                FrameData::InputAudio(_) | FrameData::UserAudio(_)
+            )
         {
             return Ok(());
         }
@@ -374,6 +454,67 @@ impl GeminiLiveProcessor {
         Ok(())
     }
 }
+/// Apply the selected route's live-input exclusions in either direction, after
+/// authentic local feedback/marker identities have had their narrow handling.
+/// The mandatory ingress uses the same check before the user can mutate state.
+#[cfg(feature = "paired-history")]
+pub(crate) fn reject_selected_live_frame(frame: &Frame) -> Result<(), ProcessorError> {
+    frame
+        .require_no_native_llm_continuation()
+        .map_err(|error| ProcessorError::fatal(error.to_string()))?;
+    if matches!(
+        frame.data,
+        FrameData::InputText(_)
+            | FrameData::LlmRun
+            | FrameData::LlmContext(_)
+            | FrameData::LlmContextDetailed(_)
+            | FrameData::LlmMessagesAppend(_)
+            | FrameData::LlmMessagesUpdate(_)
+            | FrameData::LlmMessagesAppendDetailed(_)
+            | FrameData::LlmMessagesUpdateDetailed(_)
+            | FrameData::LlmMessagesTransform(_)
+            | FrameData::LlmSetTools(_)
+            | FrameData::LlmSetToolChoice(_)
+            | FrameData::LlmContextSummaryRequest(_)
+            | FrameData::LlmContextSummaryResult(_)
+            | FrameData::LlmSummarizeContext(_)
+            | FrameData::LlmContinuationCheckpoint
+            | FrameData::FunctionCallsStarted(_)
+            | FrameData::FunctionCallsStartedDetailed(_)
+            | FrameData::FunctionCallInProgress(_)
+            | FrameData::FunctionCallResult(_)
+            | FrameData::FunctionCallResultDetailed(_)
+            | FrameData::FunctionCallCancel(_)
+            | FrameData::ExternalFunctionCallsStarted(_)
+            | FrameData::ExternalFunctionCallInProgress(_)
+            | FrameData::ExternalFunctionCallResult(_)
+            | FrameData::ExternalFunctionCallCancel(_)
+            | FrameData::InputImage(_)
+            | FrameData::UserImage(_)
+            | FrameData::AssistantImage(_)
+            | FrameData::UserImageRequest(_)
+            | FrameData::InputFile(_)
+            | FrameData::UserFile(_)
+            | FrameData::UserFileDetailed(_)
+            | FrameData::Transcription(_)
+            | FrameData::TranscriptionDetailed(_)
+            | FrameData::InterimTranscription(_)
+            | FrameData::InterimTranscriptionDetailed(_)
+            | FrameData::EagerTranscription(_)
+            | FrameData::EagerTranscriptionDetailed(_)
+            | FrameData::Translation(_)
+            | FrameData::TranslationDetailed(_)
+            | FrameData::LlmUpdateSettings(_)
+            | FrameData::SttUpdateSettings(_)
+            | FrameData::ServiceUpdateSettings(_)
+    ) {
+        return Err(ProcessorError::fatal(
+            "paired history rejects live text/history edits, tools, image/file input and foreign transcription",
+        ));
+    }
+    Ok(())
+}
+
 fn text_turn(message: &ChatMessage) -> Result<TextTurn, ProcessorError> {
     if !message.tool_calls.is_empty() || message.tool_call_id.is_some() || message.name.is_some() {
         return Err(processor_error(GeminiError::Unsupported(
@@ -436,123 +577,66 @@ fn tool_result(
         response,
     }]))
 }
-#[async_trait]
-impl FrameProcessor for GeminiLiveProcessor {
-    fn name(&self) -> &str {
-        "GeminiLiveProcessor"
-    }
-    async fn setup(
-        &self,
-        config: &StartFrame,
-        ctx: &ProcessorContext,
-    ) -> Result<(), ProcessorError> {
-        if config.audio_in_sample_rate != self.client.config().input_sample_rate
-            || (self.client.config().session.modality == Modality::Audio
-                && config.audio_out_sample_rate != 24_000)
-        {
-            return Err(processor_error(GeminiError::Invalid(
-                "pipeline sample rates differ from Gemini config (output must be 24000 Hz)",
-            )));
-        }
-        *self
-            .state
-            .lock()
-            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))? = InputState {
-            preroll_bytes: self.preroll_bytes,
-            ..Default::default()
-        };
-        self.audio_paused
-            .store(self.start_audio_paused, Ordering::SeqCst);
-        self.video.reset().await.map_err(processor_error)?;
-        self.video_paused
-            .store(self.start_video_paused, Ordering::SeqCst);
-        let mut session = self.client.connect().await.map_err(processor_error)?;
-        let sender = session.sender();
-        *self
-            .sender
-            .lock()
-            .map_err(|_| ProcessorError::fatal("Gemini state lock poisoned"))? =
-            Some(sender.clone());
-        let output = ctx.clone();
-        let user_id = self.user_id.clone().unwrap_or_default();
-        let mode = self.client.config().mode;
-        let stt_user_id = if mode == SessionMode::Transcription && self.user_id.is_none() {
-            Some(
-                self.state
-                    .lock()
-                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
-                    .stt_user_id
-                    .clone(),
-            )
-        } else {
-            None
-        };
-        let emit_metrics = config.enable_usage_metrics;
-        ctx.spawn("gemini-live-receive", false, async move {
-            let mut mapper = GeminiFrameMapper::new(mode, user_id);
-            let mut generation = sender.generation();
-            while let Some(result) = session.next_event_with_details().await {
-                let received = match result {
-                    Ok(received) => received,
-                    Err(error) => {
-                        output.push_error(error_frame(error)).await?;
-                        break;
-                    }
-                };
-                let event = received.event;
-                if generation != sender.generation() {
-                    mapper.reset();
-                    generation = sender.generation();
-                }
-                if matches!(event.event, Event::Interrupted) {
-                    mapper.reset();
-                    output.broadcast_interruption().await?;
-                    continue;
-                }
-                if matches!(event.event, Event::Usage(_)) && !emit_metrics {
-                    continue;
-                }
-                let is_output = event.event.is_output();
-                if matches!(event.event, Event::InputTranscription { .. }) {
-                    if let Some(user_id) = &stt_user_id {
-                        // A service-level label at receipt, not per-audio attribution.
-                        mapper.user_id = user_id
-                            .lock()
-                            .map_err(|_| ProcessorError::fatal("Gemini STT label lock poisoned"))?
-                            .clone();
-                    }
-                }
-                for mut frame in mapper.frames(&event) {
-                    if let Some(details) = &received.usage_details {
-                        attach_usage_details(&mut frame, details);
-                    }
-                    if let FrameData::Error(error) = &frame.data {
-                        output.push_error(error.clone()).await?;
-                    } else if is_output {
-                        if let Some(result) = sender
-                            .while_current(
-                                event.generation,
-                                output.push(frame, Direction::Downstream),
-                            )
-                            .await
-                        {
-                            result?;
-                        }
-                    } else {
-                        output.push(frame, Direction::Downstream).await?;
-                    }
-                }
-            }
-            session.shutdown().await.map_err(processor_error)
-        })?;
-        Ok(())
-    }
-    async fn process(
+impl GeminiLiveProcessor {
+    async fn process_frame(
         &self,
         frame: Frame,
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        #[cfg(feature = "paired-history")]
+        if let Some(history) = &self.history {
+            // Exact known native identities are validated before inspecting
+            // variants. Authentic feedback and the one End input fence are
+            // consumed here; neither can seed another provider request.
+            if history.inspect_service_frame(&frame, direction)? {
+                return Ok(());
+            }
+            reject_selected_live_frame(&frame)?;
+            let start = match &frame.data {
+                FrameData::Start(config) => Some(config),
+                FrameData::StartDetailed(config) => Some(&config.configuration),
+                _ => None,
+            };
+            if let Some(config) = start {
+                if direction != Direction::Downstream {
+                    return Err(ProcessorError::fatal(
+                        "paired history Start must be downstream",
+                    ));
+                }
+                self.start_selected_history(history, config, ctx).await?;
+                return self.forward_original(frame, direction, ctx).await;
+            }
+            if frame.data.is_cancel()
+                || matches!(
+                    frame.data,
+                    FrameData::End(_) | FrameData::EndDetailed(_) | FrameData::Stop
+                )
+            {
+                // The earlier mandatory gate has already settled the shared
+                // owner. A direct bypass must not claim a cooperative join.
+                history.prepare_service_end().await?;
+                return self.forward_original(frame, direction, ctx).await;
+            }
+            if history.service_input_closed() {
+                match &frame.data {
+                    FrameData::InputAudio(_)
+                    | FrameData::UserAudio(_)
+                    | FrameData::SpeechControlParams(_) => {
+                        return Err(ProcessorError::fatal(
+                            "paired history application input is closed",
+                        ));
+                    }
+                    FrameData::UserStartedSpeaking | FrameData::UserStoppedSpeaking => {
+                        // A timer effect may have been extracted before the
+                        // user's marker quiescence and delivered afterwards.
+                        // Preserve local observation, never late provider VAD.
+                        return self.forward_original(frame, direction, ctx).await;
+                    }
+                    _ => {}
+                }
+            }
+        }
         if self.client.config().mode == SessionMode::Transcription {
             if frame.data.is_start() {
                 ctx.push(frame, direction).await?;
@@ -596,10 +680,12 @@ impl FrameProcessor for GeminiLiveProcessor {
                 FrameData::InputAudio(audio)
                 | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
                     let suppress_audio = match self.client.config().mode {
-                        SessionMode::Transcription => self.state
-                            .lock()
-                            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
-                            .stt_muted,
+                        SessionMode::Transcription => {
+                            self.state
+                                .lock()
+                                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
+                                .stt_muted
+                        }
                         // The load is the pause admission boundary. A setter does
                         // not retract frames that already observed an unpaused state.
                         SessionMode::Conversation => self.audio_paused.load(Ordering::SeqCst),
@@ -622,46 +708,46 @@ impl FrameProcessor for GeminiLiveProcessor {
                     if audio.audio.len() > self.client.config().limits.max_audio_bytes {
                         return Err(processor_error(GeminiError::TooLarge));
                     }
-                    let dynamic_stt_user_id = self.client.config().mode == SessionMode::Transcription
+                    let dynamic_stt_user_id = self.client.config().mode
+                        == SessionMode::Transcription
                         && self.user_id.is_none();
-                    let admit_audio = || {
-                        if dynamic_stt_user_id {
-                            let state = self
-                                .state
-                                .lock()
-                                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
-                            *state.stt_user_id.lock().map_err(|_| {
-                                ProcessorError::fatal("Gemini STT label lock poisoned")
-                            })? = match &frame.data {
-                                FrameData::UserAudio(user_audio) => user_audio.user_id.clone(),
-                                _ => String::new(),
-                            };
-                        }
-                        // Valid empty input still updates the observed label. A later
-                        // enqueue error does not roll it back or authorize a flush.
-                        if !audio.audio.is_empty() {
-                            let mut state = self
-                                .state
-                                .lock()
-                                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
-                            if manual && !state.activity {
-                                // Evict before extending, so a large input never enlarges the ring.
-                                let slice = &audio.audio
-                                    [audio.audio.len().saturating_sub(state.preroll_bytes)..];
-                                while state.preroll.len() + slice.len() > state.preroll_bytes {
-                                    state.preroll.pop_front();
-                                }
-                                state.preroll.extend(slice);
-                            } else {
-                                let mut origin = origin;
-                                if audio.context_id.is_some() {
-                                    origin.context_id = audio.context_id.clone();
-                                }
-                                self.enqueue(Action::Audio(audio.audio.clone()), origin)?;
+                    let admit_audio =
+                        || {
+                            if dynamic_stt_user_id {
+                                let state = self.state.lock().map_err(|_| {
+                                    ProcessorError::fatal("Gemini input lock poisoned")
+                                })?;
+                                *state.stt_user_id.lock().map_err(|_| {
+                                    ProcessorError::fatal("Gemini STT label lock poisoned")
+                                })? = match &frame.data {
+                                    FrameData::UserAudio(user_audio) => user_audio.user_id.clone(),
+                                    _ => String::new(),
+                                };
                             }
-                        }
-                        Ok::<(), ProcessorError>(())
-                    };
+                            // Valid empty input still updates the observed label. A later
+                            // enqueue error does not roll it back or authorize a flush.
+                            if !audio.audio.is_empty() {
+                                let mut state = self.state.lock().map_err(|_| {
+                                    ProcessorError::fatal("Gemini input lock poisoned")
+                                })?;
+                                if manual && !state.activity {
+                                    // Evict before extending, so a large input never enlarges the ring.
+                                    let slice = &audio.audio
+                                        [audio.audio.len().saturating_sub(state.preroll_bytes)..];
+                                    while state.preroll.len() + slice.len() > state.preroll_bytes {
+                                        state.preroll.pop_front();
+                                    }
+                                    state.preroll.extend(slice);
+                                } else {
+                                    let mut origin = origin;
+                                    if audio.context_id.is_some() {
+                                        origin.context_id = audio.context_id.clone();
+                                    }
+                                    self.enqueue(Action::Audio(audio.audio.clone()), origin)?;
+                                }
+                            }
+                            Ok::<(), ProcessorError>(())
+                        };
                     if dynamic_stt_user_id {
                         ctx.invocation_fence()?
                             .with_current(admit_audio)
@@ -817,7 +903,158 @@ impl FrameProcessor for GeminiLiveProcessor {
         }
         self.forward_original(frame, direction, ctx).await
     }
+}
+#[async_trait]
+impl FrameProcessor for GeminiLiveProcessor {
+    fn name(&self) -> &str {
+        "GeminiLiveProcessor"
+    }
+    async fn setup(
+        &self,
+        config: &StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if config.audio_in_sample_rate != self.client.config().input_sample_rate
+            || (self.client.config().session.modality == Modality::Audio
+                && config.audio_out_sample_rate != 24_000)
+        {
+            return Err(processor_error(GeminiError::Invalid(
+                "pipeline sample rates differ from Gemini config (output must be 24000 Hz)",
+            )));
+        }
+        *self
+            .state
+            .lock()
+            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))? = InputState {
+            preroll_bytes: self.preroll_bytes,
+            ..Default::default()
+        };
+        self.audio_paused
+            .store(self.start_audio_paused, Ordering::SeqCst);
+        self.video.reset().await.map_err(processor_error)?;
+        self.video_paused
+            .store(self.start_video_paused, Ordering::SeqCst);
+        #[cfg(feature = "paired-history")]
+        if let Some(history) = &self.history {
+            self.client
+                .validate_paired_history()
+                .map_err(processor_error)?;
+            // Publish only after every selected service setup check succeeds.
+            // Keep the real None-epoch setup route; Start must not replace it.
+            history.bind_service(ctx)?;
+            return Ok(());
+        }
+        let mut session = self.client.connect().await.map_err(processor_error)?;
+        let sender = session.sender();
+        *self
+            .sender
+            .lock()
+            .map_err(|_| ProcessorError::fatal("Gemini state lock poisoned"))? =
+            Some(sender.clone());
+        let output = ctx.clone();
+        let user_id = self.user_id.clone().unwrap_or_default();
+        let mode = self.client.config().mode;
+        let stt_user_id = if mode == SessionMode::Transcription && self.user_id.is_none() {
+            Some(
+                self.state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?
+                    .stt_user_id
+                    .clone(),
+            )
+        } else {
+            None
+        };
+        let emit_metrics = config.enable_usage_metrics;
+        ctx.spawn("gemini-live-receive", false, async move {
+            let mut mapper = GeminiFrameMapper::new(mode, user_id);
+            let mut generation = sender.generation();
+            while let Some(result) = session.next_event_with_details().await {
+                let received = match result {
+                    Ok(received) => received,
+                    Err(error) => {
+                        output.push_error(error_frame(error)).await?;
+                        break;
+                    }
+                };
+                let event = received.event;
+                if generation != sender.generation() {
+                    mapper.reset();
+                    generation = sender.generation();
+                }
+                if matches!(event.event, Event::Interrupted) {
+                    mapper.reset();
+                    output.broadcast_interruption().await?;
+                    continue;
+                }
+                if matches!(event.event, Event::Usage(_)) && !emit_metrics {
+                    continue;
+                }
+                let is_output = event.event.is_output();
+                if matches!(event.event, Event::InputTranscription { .. }) {
+                    if let Some(user_id) = &stt_user_id {
+                        // A service-level label at receipt, not per-audio attribution.
+                        mapper.user_id = user_id
+                            .lock()
+                            .map_err(|_| ProcessorError::fatal("Gemini STT label lock poisoned"))?
+                            .clone();
+                    }
+                }
+                for mut frame in mapper.frames(&event) {
+                    if let Some(details) = &received.usage_details {
+                        attach_usage_details(&mut frame, details);
+                    }
+                    if let FrameData::Error(error) = &frame.data {
+                        output.push_error(error.clone()).await?;
+                    } else if is_output {
+                        if let Some(result) = sender
+                            .while_current(
+                                event.generation,
+                                output.push(frame, Direction::Downstream),
+                            )
+                            .await
+                        {
+                            result?;
+                        }
+                    } else {
+                        output.push(frame, Direction::Downstream).await?;
+                    }
+                }
+            }
+            session.shutdown().await.map_err(processor_error)
+        })?;
+        Ok(())
+    }
+    async fn process(
+        &self,
+        frame: Frame,
+        direction: Direction,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let result = self.process_frame(frame, direction, ctx).await;
+        #[cfg(feature = "paired-history")]
+        if let (Some(history), Err(error)) = (&self.history, &result) {
+            // Locally detected selected failures close releases and settle the
+            // actual provider owner before fatal propagation when possible.
+            if let Err(shutdown) = history.abort_service().await {
+                return Err(ProcessorError::fatal(format!(
+                    "{}; paired history shutdown failed: {}",
+                    error.message, shutdown.message
+                )));
+            }
+            let mut error = error.clone();
+            error.fatal = true;
+            return Err(error);
+        }
+        result
+    }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        #[cfg(feature = "paired-history")]
+        if let Some(history) = &self.history {
+            // End/Stop share this hook. Only the gate knows which terminal was
+            // consumed and has already completed its bounded owner protocol.
+            return history.prepare_service_end().await;
+        }
         if let Ok(sender) = self.sender() {
             sender.finish().await.map_err(processor_error)?;
         }
@@ -832,6 +1069,15 @@ impl FrameProcessor for GeminiLiveProcessor {
             .take()
         {
             sender.cancel();
+        }
+        #[cfg(feature = "paired-history")]
+        if let Some(history) = &self.history {
+            // Core can reach cleanup after aborting every owned background
+            // task. This releases scopes without falsely awaiting that lost
+            // inner owner; normal terminal joins happened at the gate.
+            let result = history.cleanup_service().await;
+            self.video.finish().await.map_err(processor_error)?;
+            return result;
         }
         self.video.finish().await.map_err(processor_error)?;
         Ok(())
@@ -1050,7 +1296,7 @@ impl GeminiFrameMapper {
     }
 }
 // Runtime-only enrichment leaves standalone public mapper behavior unchanged.
-fn attach_usage_details(frame: &mut Frame, details: &crate::protocol::UsageDetails) {
+pub(crate) fn attach_usage_details(frame: &mut Frame, details: &crate::protocol::UsageDetails) {
     let FrameData::Metrics(metrics) = &frame.data else {
         return;
     };
@@ -1090,11 +1336,11 @@ fn attach_usage_details(frame: &mut Frame, details: &crate::protocol::UsageDetai
     }
 }
 
-fn processor_error(error: GeminiError) -> ProcessorError {
+pub(crate) fn processor_error(error: GeminiError) -> ProcessorError {
     let frame = error_frame(error);
     ProcessorError::new(frame.error).with_category(frame.category)
 }
-fn error_frame(error: GeminiError) -> ErrorFrame {
+pub(crate) fn error_frame(error: GeminiError) -> ErrorFrame {
     let category = match &error {
         GeminiError::Http(code) => ErrorCategory::from_http_status(*code),
         GeminiError::Provider { code, .. } => u16::try_from(*code)
@@ -1111,6 +1357,84 @@ fn error_frame(error: GeminiError) -> ErrorFrame {
         fatal: false,
         processor: None,
         category,
+    }
+}
+
+#[cfg(all(test, feature = "paired-history"))]
+mod selected_control_tests {
+    use super::*;
+
+    #[test]
+    fn external_transcript_and_tool_families_are_rejected_without_session_access() {
+        let transcript = TranscriptionFrame {
+            text: "foreign producer".into(),
+            finalized: true,
+            ..Default::default()
+        };
+        let detailed = pipecat_core::DetailedTranscriptionFrame {
+            text: TextFrame::new("foreign producer"),
+            user_id: String::new(),
+            timestamp: String::new(),
+            language: None,
+            result: None,
+            finalized: true,
+        };
+        for data in [
+            FrameData::InputText(TextFrame::new("typed")),
+            FrameData::LlmRun,
+            FrameData::LlmContext(LlmContextFrame::default()),
+            FrameData::LlmSetTools(pipecat_core::ToolSet::NotGiven),
+            FrameData::LlmSetToolChoice(pipecat_core::ToolChoice::Auto),
+            FrameData::LlmContinuationCheckpoint,
+            FrameData::FunctionCallsStarted(vec![]),
+            FrameData::FunctionCallsStartedDetailed(vec![]),
+            FrameData::ExternalFunctionCallsStarted(vec![]),
+            FrameData::FunctionCallCancel(FunctionCallCancelFrame {
+                function_name: "foreign".into(),
+                tool_call_id: "foreign".into(),
+                run_llm: false,
+            }),
+            FrameData::Transcription(transcript.clone()),
+            FrameData::InterimTranscription(transcript.clone()),
+            FrameData::EagerTranscription(transcript.clone()),
+            FrameData::Translation(transcript),
+            FrameData::TranscriptionDetailed(detailed.clone()),
+            FrameData::InterimTranscriptionDetailed(detailed.clone()),
+            FrameData::EagerTranscriptionDetailed(detailed.clone()),
+            FrameData::TranslationDetailed(detailed),
+        ] {
+            let mut frame = Frame::new(data);
+            // Public flags cannot exempt a foreign frame from the selected
+            // route's pre-consumer/live-service mutation check.
+            frame
+                .metadata
+                .insert("realtime_context_update".into(), json!(true));
+            assert!(reject_selected_live_frame(&frame).unwrap_err().fatal);
+        }
+    }
+
+    #[test]
+    fn independent_audio_vad_mute_and_terminal_controls_remain_admissible() {
+        for data in [
+            FrameData::InputAudio(AudioRawFrame {
+                audio: vec![0, 0],
+                sample_rate: 16_000,
+                num_channels: 1,
+                context_id: None,
+            }),
+            FrameData::UserStartedSpeaking,
+            FrameData::UserStoppedSpeaking,
+            FrameData::UserMuteStarted,
+            FrameData::UserMuteStopped,
+            FrameData::SttMute(true),
+            FrameData::Interruption,
+            FrameData::Start(StartFrame::default()),
+            FrameData::End(pipecat_core::EndFrame::default()),
+            FrameData::Stop,
+            FrameData::Cancel(pipecat_core::CancelFrame::default()),
+        ] {
+            reject_selected_live_frame(&Frame::new(data)).unwrap();
+        }
     }
 }
 

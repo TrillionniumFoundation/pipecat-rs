@@ -356,9 +356,43 @@ impl GeminiClient {
     pub fn config(&self) -> &GeminiConfig {
         &self.config
     }
+    /// The selected route is deliberately single-session and tool-free.
+    /// Keep this preflight separate so its constructor can fail before setup.
+    #[cfg(feature = "paired-history")]
+    pub(crate) fn validate_paired_history(&self) -> Result<(), GeminiError> {
+        if self.config.mode != SessionMode::Conversation || !self.config.session.input_transcription
+        {
+            return Err(GeminiError::Unsupported(
+                "paired history requires conversation input transcription",
+            ));
+        }
+        if self.resumption.is_some() {
+            return Err(GeminiError::Unsupported(
+                "paired history session resumption",
+            ));
+        }
+        if !self.config.session.tools.is_empty() || !self.non_blocking_tools.is_empty() {
+            return Err(GeminiError::Unsupported("paired history tools"));
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "paired-history")]
+    pub(crate) async fn connect_paired_history(&self) -> Result<GeminiSession, GeminiError> {
+        self.validate_paired_history()?;
+        self.connect_with_policy(ReceivePolicy::PairedHistory).await
+    }
+
     /// Returns only after the peer acknowledges setup. Dropping this future
     /// drops its socket; it does not leave a detached handshake task.
     pub async fn connect(&self) -> Result<GeminiSession, GeminiError> {
+        self.connect_with_policy(ReceivePolicy::Raw).await
+    }
+
+    async fn connect_with_policy(
+        &self,
+        receive_policy: ReceivePolicy,
+    ) -> Result<GeminiSession, GeminiError> {
         let config = &self.config;
         let (socket, update) = open_socket(
             config,
@@ -366,6 +400,7 @@ impl GeminiClient {
             None,
             self.thinking.as_ref(),
             &self.non_blocking_tools,
+            receive_policy,
         )
         .await?;
         let mut handle = None;
@@ -398,6 +433,7 @@ impl GeminiClient {
                     policy,
                     handle,
                     thinking,
+                    receive_policy,
                 },
             )
             .await
@@ -459,7 +495,10 @@ async fn open_socket(
     handle: Option<&str>,
     thinking: Option<&ThinkingPolicy>,
     non_blocking_tools: &HashSet<String>,
+    receive_policy: ReceivePolicy,
 ) -> Result<(Socket, Option<protocol::ResumptionUpdate>), GeminiError> {
+    #[cfg(not(feature = "paired-history"))]
+    let _ = receive_policy;
     let mut setup = configured_setup(config, thinking, non_blocking_tools);
     if policy.is_some() {
         setup["setup"]["sessionResumption"] = match handle {
@@ -506,6 +545,10 @@ async fn open_socket(
                 _ => return Err(GeminiError::Protocol("unexpected WebSocket frame")),
             };
             let packet = protocol::parse(&bytes, config, policy)?;
+            #[cfg(feature = "paired-history")]
+            if matches!(receive_policy, ReceivePolicy::PairedHistory) && packet.has_tool_fields {
+                return Err(GeminiError::Unsupported("paired history provider tools"));
+            }
             if !packet.setup_complete
                 || !packet.events.is_empty()
                 || !packet.cancellations.is_empty()
@@ -690,9 +733,15 @@ impl GeminiSender {
 pub(crate) struct ReceivedEvent {
     pub event: GeminiEvent,
     pub usage_details: Option<protocol::UsageDetails>,
+    #[cfg(feature = "paired-history")]
+    pub packet: Option<Arc<protocol::InputPacket>>,
 }
 impl ReceivedEvent {
-    fn from_packet(event: GeminiEvent, details: &mut Option<protocol::UsageDetails>) -> Self {
+    fn from_packet(
+        event: GeminiEvent,
+        details: &mut Option<protocol::UsageDetails>,
+        #[cfg(feature = "paired-history")] packet: Option<Arc<protocol::InputPacket>>,
+    ) -> Self {
         let usage_details = if matches!(event.event, Event::Usage(_)) {
             details.take()
         } else {
@@ -701,6 +750,8 @@ impl ReceivedEvent {
         Self {
             event,
             usage_details,
+            #[cfg(feature = "paired-history")]
+            packet,
         }
     }
 }
@@ -709,6 +760,8 @@ impl From<GeminiEvent> for ReceivedEvent {
         Self {
             event,
             usage_details: None,
+            #[cfg(feature = "paired-history")]
+            packet: None,
         }
     }
 }
@@ -773,6 +826,21 @@ impl GeminiSession {
         self.worker.take();
         result
     }
+
+    /// Retain the sole worker owner across a dropped selected terminal wait.
+    /// Only an actual JoinHandle await can complete this operation; a peer EOF
+    /// or a signal from the worker is insufficient. Forced Session drop keeps
+    /// its existing, explicitly weaker abort-without-await semantics.
+    #[cfg(feature = "paired-history")]
+    pub(crate) async fn cancel_and_join(&mut self) -> Result<(), GeminiError> {
+        self.sender.cancel();
+        let result = match self.worker.as_mut() {
+            Some(worker) => worker.await.map_err(|_| GeminiError::Transport),
+            None => return Ok(()),
+        };
+        self.worker.take();
+        result?
+    }
 }
 impl Drop for GeminiSession {
     fn drop(&mut self) {
@@ -836,10 +904,48 @@ fn recoverable_read(
     }
 }
 
+#[derive(Clone, Copy)]
+enum ReceivePolicy {
+    Raw,
+    #[cfg(feature = "paired-history")]
+    PairedHistory,
+}
+
+#[cfg(feature = "paired-history")]
+#[derive(Default)]
+struct InputWatermarks {
+    sequence: u64,
+    received: u64,
+}
+
+#[cfg(feature = "paired-history")]
+impl InputWatermarks {
+    fn observe(
+        &mut self,
+        packet: &mut protocol::Parsed,
+    ) -> Result<Arc<protocol::InputPacket>, GeminiError> {
+        // Validate both additions before changing either counter. Empty actual
+        // input and explicit interim input do not consume an input ordinal.
+        let sequence = self.sequence.checked_add(1).ok_or(GeminiError::TooLarge)?;
+        let received = self
+            .received
+            .checked_add(u64::from(packet.actual_input.is_some()))
+            .ok_or(GeminiError::TooLarge)?;
+        self.sequence = sequence;
+        self.received = received;
+        Ok(Arc::new(protocol::InputPacket {
+            sequence,
+            received_input_watermark: received,
+            actual_input: packet.actual_input.take(),
+        }))
+    }
+}
+
 struct WorkerOptions {
     policy: Option<ResumptionPolicy>,
     handle: Option<String>,
     thinking: Option<ThinkingPolicy>,
+    receive_policy: ReceivePolicy,
 }
 
 async fn run(
@@ -855,11 +961,16 @@ async fn run(
         policy,
         mut handle,
         thinking,
+        receive_policy,
     } = options;
+    #[cfg(feature = "paired-history")]
+    let mut input_watermarks = InputWatermarks::default();
     struct HeldCompletion {
         origin: Origin,
         generation: u64,
         deadline: Instant,
+        #[cfg(feature = "paired-history")]
+        packet: Option<Arc<protocol::InputPacket>>,
     }
     let mut held: Option<HeldCompletion> = None;
     let mut reconnects = 0usize;
@@ -953,7 +1064,7 @@ async fn run(
                         // bounded queue until setupComplete; no sent action is replayed.
                         drop(socket);
                         let (replacement, update) = {
-                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref(), &sender.non_blocking_tools);
+                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref(), &sender.non_blocking_tools, receive_policy);
                             tokio::pin!(connecting);
                             loop {
                                 if held.as_ref().is_some_and(|h| h.generation != sender.generation()) {
@@ -1023,6 +1134,20 @@ async fn run(
                     if packet.setup_complete {
                         return Err(GeminiError::Protocol("duplicate setupComplete"));
                     }
+                    #[cfg(feature = "paired-history")]
+                    let packet_descriptor = match receive_policy {
+                        ReceivePolicy::Raw => None,
+                        ReceivePolicy::PairedHistory => {
+                            // Validate the complete envelope before dispatching
+                            // even its earlier model/input/usage fields. Empty
+                            // cancellation lists and null tool fields are not
+                            // an escape from the selected tool-free contract.
+                            if packet.has_tool_fields {
+                                return Err(GeminiError::Unsupported("paired history provider tools"));
+                            }
+                            Some(input_watermarks.observe(&mut packet)?)
+                        }
+                    };
                     let cancellation_ids: HashSet<_> = packet.cancellations.iter().cloned().collect();
                     if !cancellation_ids.is_empty() && !sender.non_blocking_tools.is_empty() {
                         let mut admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
@@ -1036,6 +1161,8 @@ async fn run(
                     let interaction_status = packet.interaction_status;
                     apply_resumption(&mut handle, packet.resumption);
                     for mut event in packet.events {
+                        #[cfg(feature = "paired-history")]
+                        let mut event_packet = packet_descriptor.clone();
                         if policy.is_some() && matches!(event, Event::GoAway { .. }) {
                             go_away = true;
                             continue;
@@ -1135,7 +1262,12 @@ async fn run(
                                     }
                                     (Event::ToolCalls(calls), output_origin.clone())
                                 };
-                                permit.send(GeminiEvent { event, origin, generation }.into());
+                                permit.send(ReceivedEvent::from_packet(
+                                    GeminiEvent { event, origin, generation },
+                                    &mut packet.usage_details,
+                                    #[cfg(feature = "paired-history")]
+                                    packet_descriptor.clone(),
+                                ));
                             }
                             continue;
                         }
@@ -1147,11 +1279,20 @@ async fn run(
                                             origin: if output_active { output_origin.clone() } else { input_origin.clone() },
                                             generation,
                                             deadline: Instant::now() + thinking.silence_timeout,
+                                            #[cfg(feature = "paired-history")]
+                                            packet: packet_descriptor.clone(),
                                         });
                                         busy = true;
                                         busy_generation = generation;
                                     }
                                     continue;
+                                }
+                                #[cfg(feature = "paired-history")]
+                                if let Some(completion) = &held {
+                                    // An IDLE envelope may repeat turnComplete.
+                                    // Preserve the original held dependency just
+                                    // as in the synthetic IDLE-only path below.
+                                    event_packet = completion.packet.clone();
                                 }
                                 held = None;
                             }
@@ -1193,6 +1334,8 @@ async fn run(
                             ReceivedEvent::from_packet(
                                 GeminiEvent { event, origin, generation },
                                 &mut packet.usage_details,
+                                #[cfg(feature = "paired-history")]
+                                event_packet,
                             ),
                         )?;
                         if ended {
@@ -1222,22 +1365,32 @@ async fn run(
                             }
                         }
                         for (origin, call_generation, selected, calls) in groups {
-                            emit(&events, GeminiEvent {
-                                event: if selected { Event::NonBlockingToolCallsCancelled(calls) }
-                                    else { Event::ToolCallsCancelled(calls) },
-                                origin,
-                                generation: call_generation,
-                            })?;
+                            emit(&events, ReceivedEvent::from_packet(
+                                GeminiEvent {
+                                    event: if selected { Event::NonBlockingToolCallsCancelled(calls) }
+                                        else { Event::ToolCallsCancelled(calls) },
+                                    origin,
+                                    generation: call_generation,
+                                },
+                                &mut packet.usage_details,
+                                #[cfg(feature = "paired-history")]
+                                packet_descriptor.clone(),
+                            ))?;
                         }
                     }
                     if thinking.is_some() && interaction_status == Some(protocol::InteractionStatus::Idle) {
                         if let Some(completion) = held.take() {
                             if completion.generation == generation && generation == sender.generation() {
-                                emit(&events, GeminiEvent {
-                                    event: Event::TurnComplete,
-                                    origin: completion.origin,
-                                    generation: completion.generation,
-                                })?;
+                                emit(&events, ReceivedEvent::from_packet(
+                                    GeminiEvent {
+                                        event: Event::TurnComplete,
+                                        origin: completion.origin,
+                                        generation: completion.generation,
+                                    },
+                                    &mut None,
+                                    #[cfg(feature = "paired-history")]
+                                    completion.packet,
+                                ))?;
                                 busy = false;
                                 has_audio = false;
                                 output_active = false;
@@ -1421,6 +1574,10 @@ fn emit(
         mpsc::error::TrySendError::Closed(_) => GeminiError::Closed,
     })
 }
+
+#[cfg(all(test, feature = "paired-history"))]
+#[path = "client_paired_history_tests.rs"]
+mod paired_history_tests;
 
 #[cfg(test)]
 mod ownership_tests {
@@ -1868,6 +2025,8 @@ mod non_blocking_admission_tests {
                         generation: 0,
                     },
                     &mut packet.usage_details,
+                    #[cfg(feature = "paired-history")]
+                    None,
                 );
                 assert_eq!(received.usage_details, is_usage.then_some(expected));
                 assert_eq!(packet.usage_details, (!is_usage).then_some(expected));
@@ -1880,6 +2039,8 @@ mod non_blocking_admission_tests {
                     generation: 0,
                 },
                 &mut packet.usage_details,
+                #[cfg(feature = "paired-history")]
+                None,
             );
             assert!(repeated.usage_details.is_none());
         }
@@ -1935,6 +2096,8 @@ mod non_blocking_admission_tests {
                             reasoning_tokens: Some(count),
                             ..Default::default()
                         }),
+                        #[cfg(feature = "paired-history")]
+                        packet: None,
                     },
                 )
                 .unwrap();
@@ -2093,8 +2256,10 @@ mod non_blocking_admission_tests {
     #[test]
     fn tombstones_never_recycle_and_count_exhaustion_rejects_whole_batch() {
         let mut ledger = ToolAdmissions::default();
-        let mut limits = Limits::default();
-        limits.max_pending_tools = 1;
+        let limits = Limits {
+            max_pending_tools: 1,
+            ..Limits::default()
+        };
         for n in 0..31 {
             let tool = tool(&format!("id-{n}"), true);
             ledger.register(&[&tool], &HashSet::new(), &limits).unwrap();

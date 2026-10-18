@@ -372,3 +372,10 @@ default client remains unchanged.
 [Asynchronous tools](ASYNC_TOOLS.md) describes per-name NON_BLOCKING selection,
 intermediate and final results, SILENT/WHEN_IDLE scheduling, interruption,
 provider cancellation, and the bounded call-identity ledger.
+
+## Optional standard paired history
+
+The default-off `paired-history` feature provides a finite, tool-free audio route
+through the actual standard user/assistant pair. See [PAIRED_HISTORY.md](PAIRED_HISTORY.md)
+for construction, received-prefix receipts, graceful End/Cancel behavior and limits.
+It preserves the raw public event order and is not a general history/tool replacement.

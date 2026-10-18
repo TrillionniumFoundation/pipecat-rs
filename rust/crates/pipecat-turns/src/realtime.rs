@@ -21,7 +21,7 @@ pub enum RealtimeServiceMode {
     Disabled,
 }
 
-struct State {
+pub(crate) struct State {
     enabled: bool,
     text: TextBuffer,
     latency: Duration,
@@ -29,8 +29,10 @@ struct State {
     generation: u64,
     cause: Option<ProcessorContext>,
     effect_cause: Option<(u64, ProcessorContext)>,
-    user_route: Option<ProcessorContext>,
-    user_identity: Option<pipecat_core::ObservedProcessor>,
+    pub(crate) user_route: Option<ProcessorContext>,
+    pub(crate) user_identity: Option<pipecat_core::ObservedProcessor>,
+    pub(crate) history: Option<crate::user_history::HistoryState>,
+    used: bool,
     timers_closed: bool,
     closed: bool,
     resolves_start: bool,
@@ -63,6 +65,8 @@ impl RealtimeState {
                 effect_cause: None,
                 user_route: None,
                 user_identity: None,
+                history: None,
+                used: false,
                 timers_closed: false,
                 closed: false,
                 resolves_start: false,
@@ -75,10 +79,119 @@ impl RealtimeState {
             origin: Instant::now(),
         }
     }
-    fn lock(&self) -> Result<MutexGuard<'_, State>, ProcessorError> {
+    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, State>, ProcessorError> {
         self.state
             .lock()
             .map_err(|_| ProcessorError::fatal("realtime aggregation lock poisoned"))
+    }
+    pub(crate) fn mark_used(&self) -> Result<(), ProcessorError> {
+        self.lock()?.used = true;
+        Ok(())
+    }
+    pub(crate) fn reserve_history(
+        self: &Arc<Self>,
+        context: &SharedContext,
+    ) -> Result<crate::RealtimeUserHistoryEndpoint, ProcessorError> {
+        let mut state = self.lock()?;
+        if self.mode != RealtimeServiceMode::Enabled
+            || !self.paired
+            || self.eager
+            || state.model_wrapper
+            || state.used
+            || state.closed
+            || state.history.is_some()
+            || state.user_identity.is_some()
+            || !state.text.text.is_empty()
+        {
+            return Err(ProcessorError::new(
+                "history binding requires one unused explicitly Enabled standard non-eager pair",
+            ));
+        }
+        let lineage = context.lock()?.lineage;
+        let gate = Arc::new(Mutex::new(true));
+        state.history = Some(crate::user_history::HistoryState::new(
+            lineage,
+            gate.clone(),
+        )?);
+        Ok(crate::RealtimeUserHistoryEndpoint {
+            realtime: self.clone(),
+            context: context.clone(),
+            gate,
+        })
+    }
+    pub(crate) fn history_bound(&self) -> Result<bool, ProcessorError> {
+        Ok(self.lock()?.history.is_some())
+    }
+    pub(crate) fn setup_user(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        let duplicate = {
+            let mut state = self.lock()?;
+            state.used = true;
+            let duplicate = state.history.is_some() && state.user_identity.is_some();
+            if let Some(history) = &mut state.history {
+                history.require_open()?;
+                if duplicate {
+                    history.poison_setup("selected user setup cannot repeat");
+                } else {
+                    state.user_identity = Some(ctx.processor_identity());
+                    state.user_route = Some(ctx.clone());
+                }
+            }
+            duplicate
+        };
+        if duplicate {
+            self.fail_history("selected user setup cannot repeat", true)?;
+            return Err(ProcessorError::fatal("selected user setup cannot repeat"));
+        }
+        Ok(())
+    }
+    pub(crate) fn setup_assistant(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        let duplicate = {
+            let mut state = self.lock()?;
+            state.used = true;
+            if let Some(history) = &mut state.history {
+                history.require_open()?;
+                if history.assistant_setup.is_some() {
+                    history.poison_setup("selected assistant setup cannot repeat");
+                    true
+                } else {
+                    history.assistant_setup = Some(ctx.processor_identity());
+                    false
+                }
+            } else {
+                false
+            }
+        };
+        if duplicate {
+            self.fail_history("selected assistant setup cannot repeat", true)?;
+            return Err(ProcessorError::fatal(
+                "selected assistant setup cannot repeat",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn service_history(
+        self: &Arc<Self>,
+        context: &SharedContext,
+        output: &mut AggregationOutput,
+    ) -> Result<(), ProcessorError> {
+        let ready = {
+            let state = self.lock()?;
+            match &state.history {
+                Some(history)
+                    if matches!(
+                        history.phase,
+                        crate::user_history::Phase::Open | crate::user_history::Phase::DrainingEnd
+                    ) =>
+                {
+                    history.command_ready()?
+                }
+                _ => false,
+            }
+        };
+        if ready {
+            self.flush(context, None, output)?;
+        }
+        Ok(())
     }
     pub(crate) fn paired(&self) -> bool {
         self.paired
@@ -122,6 +235,14 @@ impl RealtimeState {
     pub(crate) fn bind_user(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         let mut state = self.lock()?;
         let identity = ctx.processor_identity();
+        if state.history.is_some() {
+            if state.user_identity.as_ref() != Some(&identity) {
+                return Err(ProcessorError::fatal(
+                    "selected user runtime does not match successful setup",
+                ));
+            }
+            return Ok(());
+        }
         if let Some(previous) = &state.user_identity {
             if previous != &identity {
                 return Err(ProcessorError::fatal(
@@ -224,6 +345,14 @@ impl RealtimeState {
         })
     }
     pub(crate) fn append(&self, text: &str, spaces: bool) -> Result<(), ProcessorError> {
+        self.append_registered(text, spaces, None)
+    }
+    pub(crate) fn append_registered(
+        &self,
+        text: &str,
+        spaces: bool,
+        frame: Option<&Frame>,
+    ) -> Result<(), ProcessorError> {
         let mut state = self.lock()?;
         if state.closed {
             return Ok(());
@@ -241,6 +370,12 @@ impl RealtimeState {
                 "pending realtime transcript exceeds 1048576 bytes",
             ));
         }
+        if let Some(history) = &mut state.history {
+            let frame = frame.ok_or_else(|| {
+                ProcessorError::fatal("selected append requires an actual registered final")
+            })?;
+            history.stage(frame)?;
+        }
         state.text.append(text, spaces);
         Ok(())
     }
@@ -248,7 +383,13 @@ impl RealtimeState {
         Ok(self.lock()?.text.text.clone())
     }
     pub(crate) fn take(&self) -> Result<String, ProcessorError> {
-        Ok(self.lock()?.text.take())
+        let mut state = self.lock()?;
+        if state.history.is_some() && !state.text.text.trim().is_empty() {
+            return Err(ProcessorError::fatal(
+                "strategy reset would discard registered user history",
+            ));
+        }
+        Ok(state.text.take())
     }
     pub(crate) fn deadline(&self) -> Result<Option<Duration>, ProcessorError> {
         Ok(self.lock()?.deadline)
@@ -298,12 +439,56 @@ impl RealtimeState {
             .generation
             .checked_add(1)
             .ok_or_else(|| ProcessorError::fatal("realtime handoff generation exhausted"))?;
-        let mut frame =
-            Frame::new(context.append_with_frame(Message::text(Role::User, text.clone()))?);
-        frame.metadata.insert(
-            pipecat_core::REALTIME_CONTEXT_UPDATE_METADATA.into(),
-            true.into(),
-        );
+        let mut selected_sequence = None;
+        let terminal_only = state
+            .history
+            .as_ref()
+            .is_some_and(|history| history.phase == crate::user_history::Phase::ClosingTerminal);
+        let frame = if let Some(history) = &mut state.history {
+            if history.phase == crate::user_history::Phase::Closed {
+                return Err(ProcessorError::fatal("history session is closed"));
+            }
+            let through = history.staged_through()?;
+            if through <= history.appended_through {
+                return Err(ProcessorError::fatal(
+                    "selected user text has no staged registered prefix",
+                ));
+            }
+            let lineage = history.lineage;
+            let (frame, ledger) = context.append_with_prepared_frame_at_lineage(
+                Message::text(Role::User, text.clone()),
+                Some(lineage),
+                |data| {
+                    let mut frame = Frame::new(data);
+                    frame.interruptible = false;
+                    frame.metadata.insert(
+                        pipecat_core::REALTIME_CONTEXT_UPDATE_METADATA.into(),
+                        true.into(),
+                    );
+                    let ledger = if terminal_only {
+                        None
+                    } else {
+                        Some(history.prepare_ledger(&frame, through)?)
+                    };
+                    Ok((frame, ledger))
+                },
+            )?;
+            history.appended_through = through;
+            if let Some(ledger) = ledger {
+                history.sequence = ledger.receipt.sequence();
+                selected_sequence = Some(history.sequence);
+                history.ledger.push_back(ledger);
+            }
+            frame
+        } else {
+            let mut frame =
+                Frame::new(context.append_with_frame(Message::text(Role::User, text.clone()))?);
+            frame.metadata.insert(
+                pipecat_core::REALTIME_CONTEXT_UPDATE_METADATA.into(),
+                true.into(),
+            );
+            frame
+        };
         state.text.take();
         state.generation = generation;
         state.deadline = None;
@@ -318,14 +503,18 @@ impl RealtimeState {
         output
             .events
             .push(AggregationEvent::UserTurnMessageAdded { text });
-        output.actions.push(AggregationAction::RealtimeUserContext(
-            RealtimeUserContext {
-                frame,
-                route: self.clone(),
-                captured_cause,
-                generation: state.generation,
-            },
-        ));
+        if !terminal_only {
+            output.actions.push(AggregationAction::RealtimeUserContext(
+                RealtimeUserContext {
+                    frame,
+                    route: self.clone(),
+                    captured_cause,
+                    generation: state.generation,
+                    selected_sequence,
+                    context: context.clone(),
+                },
+            ));
+        }
         self.changed.notify_one();
         Ok(())
     }
@@ -349,12 +538,25 @@ impl RealtimeState {
             .ok_or_else(|| ProcessorError::fatal("realtime handoff generation exhausted"))
     }
     pub(crate) fn close(&self) -> Result<(), ProcessorError> {
+        self.fail_history("user history cleanup closed", false)?;
         self.stop_timer()?;
         let mut state = self.lock()?;
         state.closed = true;
         state.text.take();
         state.user_route = None;
+        Self::release_history_routes(&mut state);
         Ok(())
+    }
+    fn release_history_routes(state: &mut State) {
+        if let Some(history) = &mut state.history {
+            history.phase = crate::user_history::Phase::Closed;
+            history.gate_setup = None;
+            history.service_setup = None;
+            history.registrations.clear();
+            // Retain bounded weak snapshot identities so already-admitted
+            // notifications can be consumed after terminal revocation. They
+            // retain neither a runtime nor successful release authority.
+        }
     }
     /// Stop deliberately skips processor cleanup in core. Drop owning runtime
     /// handles only after attempting the terminal's context effects. Admission
@@ -362,6 +564,7 @@ impl RealtimeState {
     /// Retain identity (not Runtime) to validate downstream terminal frames and
     /// reject attempts to reuse this already-ended session in another runtime.
     pub(crate) fn terminal_emitted(&self) -> Result<(), ProcessorError> {
+        self.fail_history("user history terminal completed", false)?;
         let mut state = self.lock()?;
         state.closed = true;
         state.timers_closed = true;
@@ -369,6 +572,7 @@ impl RealtimeState {
         state.cause = None;
         state.effect_cause = None;
         state.user_route = None;
+        Self::release_history_routes(&mut state);
         self.changed.notify_one();
         Ok(())
     }
@@ -383,6 +587,8 @@ pub struct RealtimeUserContext {
     route: Arc<RealtimeState>,
     captured_cause: bool,
     generation: u64,
+    selected_sequence: Option<u64>,
+    context: SharedContext,
 }
 impl fmt::Debug for RealtimeUserContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -399,27 +605,117 @@ impl PartialEq for RealtimeUserContext {
             && Arc::ptr_eq(&self.route, &other.route)
     }
 }
+pub(crate) enum RealtimeEffectAdmission {
+    Admitted,
+    Closed,
+    Ordinary,
+}
 impl RealtimeUserContext {
-    pub(crate) fn emit(self, current: &ProcessorContext) -> Result<(), ProcessorError> {
+    #[cfg(test)]
+    pub(crate) async fn pause_history_effect(&self) {
+        if self.selected_sequence.is_some() {
+            self.route.pause_history_effects(true).await;
+        }
+    }
+    pub(crate) fn emit(
+        self,
+        current: &ProcessorContext,
+    ) -> Result<RealtimeEffectAdmission, ProcessorError> {
+        if let Some(sequence) = self.selected_sequence {
+            let (route, gate) = {
+                let state = self.route.lock()?;
+                let history = state
+                    .history
+                    .as_ref()
+                    .ok_or_else(|| ProcessorError::fatal("history effect lost its binding"))?;
+                history.require_healthy()?;
+                if matches!(
+                    history.phase,
+                    crate::user_history::Phase::ClosingTerminal
+                        | crate::user_history::Phase::Closed
+                ) {
+                    return Ok(RealtimeEffectAdmission::Closed);
+                }
+                history.require_open()?;
+                if self.context.lock()?.lineage != history.lineage {
+                    return Err(ProcessorError::fatal(
+                        "history context lineage changed before effect admission",
+                    ));
+                }
+                let record = history
+                    .ledger
+                    .iter()
+                    .find(|record| record.receipt.sequence() == sequence)
+                    .ok_or_else(|| {
+                        ProcessorError::fatal("history effect has no actual commit ledger")
+                    })?;
+                if !record.seal.matches(&self.frame, Direction::Downstream)? {
+                    return Err(ProcessorError::fatal("history effect seal mismatch"));
+                }
+                (
+                    state.user_route.clone().ok_or_else(|| {
+                        ProcessorError::fatal("history user setup route is unavailable")
+                    })?,
+                    history.gate.clone(),
+                )
+            };
+            let admitted = {
+                let open = gate
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("history release gate poisoned"))?;
+                if !*open {
+                    return Ok(RealtimeEffectAdmission::Closed);
+                } else {
+                    route.try_push(self.frame, Direction::Downstream)
+                }
+            };
+            if let Err(error) = admitted {
+                self.route.fail_history(
+                    "CommittedButEffectsFailed: actual user history is retained",
+                    true,
+                )?;
+                return Err(ProcessorError::fatal(format!(
+                    "CommittedButEffectsFailed: {}",
+                    error.message
+                )));
+            }
+            {
+                let mut state = self.route.lock()?;
+                let history = state
+                    .history
+                    .as_mut()
+                    .ok_or_else(|| ProcessorError::fatal("history effect binding disappeared"))?;
+                if let Some(record) = history
+                    .ledger
+                    .iter_mut()
+                    .find(|record| record.receipt.sequence() == sequence)
+                {
+                    record.admitted = true;
+                }
+            }
+            self.route.resolve_history(&self.context)?;
+            return Ok(RealtimeEffectAdmission::Admitted);
+        }
         let state = self.route.lock()?;
         if state.closed || state.generation != self.generation {
-            return Ok(());
+            return Ok(RealtimeEffectAdmission::Ordinary);
         }
         let route = state.user_route.as_ref().ok_or_else(|| {
             ProcessorError::new("realtime context emission requires the paired user runtime")
         })?;
         let source = if self.captured_cause {
             let Some((generation, cause)) = &state.effect_cause else {
-                return Ok(());
+                return Ok(RealtimeEffectAdmission::Ordinary);
             };
             if *generation != self.generation {
-                return Ok(());
+                return Ok(RealtimeEffectAdmission::Ordinary);
             }
             cause
         } else {
             current
         };
-        route.try_push_from_invocation(self.frame, Direction::Downstream, source)
+        route.try_push_from_invocation(self.frame, Direction::Downstream, source)?;
+        Ok(RealtimeEffectAdmission::Ordinary)
     }
 }
 

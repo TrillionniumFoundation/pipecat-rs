@@ -28,6 +28,8 @@ mod stop;
 mod strategies;
 mod summary;
 mod user;
+mod user_history;
+pub use user_history::{CommittedUserPrefix, RealtimeUserHistoryEndpoint, UserHistoryCommit};
 
 pub use assistant::{AssistantAggregatorConfig, AssistantTextMode, LLMAssistantAggregator};
 pub use completion::{
@@ -209,7 +211,11 @@ impl AggregationOutput {
                         callback.call().await
                     })?;
                 }
-                AggregationAction::RealtimeUserContext(context) => context.emit(ctx)?,
+                AggregationAction::RealtimeUserContext(context) => {
+                    #[cfg(test)]
+                    context.pause_history_effect().await;
+                    context.emit(ctx)?;
+                }
                 AggregationAction::AssistantStopped(action) => {
                     action.admit_with_fence(&ctx.invocation_fence()?)?;
                 }
@@ -303,6 +309,14 @@ impl LLMContextAggregatorPair {
             assistant,
             context,
         })
+    }
+    /// Reserve the actual standard consumer once, before either half is used.
+    /// The caller must install the exact pair in the endpoint-validated topology.
+    pub fn reserve_realtime_user_history(
+        &self,
+    ) -> Result<RealtimeUserHistoryEndpoint, ProcessorError> {
+        self.assistant.validate_history_configuration()?;
+        self.user.reserve_history()
     }
     pub fn context(&self) -> SharedContext {
         self.context.clone()

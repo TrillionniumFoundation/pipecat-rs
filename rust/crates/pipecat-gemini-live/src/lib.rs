@@ -12,3 +12,8 @@ mod video;
 pub use client::*;
 pub use processor::*;
 pub use types::*;
+
+#[cfg(feature = "paired-history")]
+mod history;
+#[cfg(feature = "paired-history")]
+pub use history::{GeminiHistoryOptions, GeminiHistoryRoute};

@@ -74,6 +74,7 @@ struct UserState {
     timer_disabled: bool,
     timer_id: Option<u64>,
     timer_running: bool,
+    input_controls_closed: bool,
 }
 /// Final transcripts are appended once; interim hypotheses replace only the
 /// preview and are never committed as final user speech.
@@ -134,7 +135,11 @@ impl UserState {
     }
     fn deadline(&self) -> Result<Option<Duration>, ProcessorError> {
         Ok([
-            self.controller.deadline(),
+            if self.input_controls_closed {
+                None
+            } else {
+                self.controller.deadline()
+            },
             self.aggregation.deadline()?,
             self.eager
                 .as_ref()
@@ -221,6 +226,7 @@ impl LLMUserAggregator {
                 timer_disabled: false,
                 timer_id: None,
                 timer_running: false,
+                input_controls_closed: false,
             })),
             changed: realtime.changed.clone(),
             origin,
@@ -365,6 +371,21 @@ impl LLMUserAggregator {
             .lock()
             .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))
     }
+    #[cfg(test)]
+    pub(crate) fn history_controls_closed(&self) -> bool {
+        self.lock().unwrap().input_controls_closed
+    }
+    pub(crate) fn reserve_history(
+        &self,
+    ) -> Result<crate::RealtimeUserHistoryEndpoint, ProcessorError> {
+        let state = self.lock()?;
+        if state.ended || state.timer_running || state.context_cause_failed {
+            return Err(ProcessorError::new(
+                "history requires an unused healthy user aggregator",
+            ));
+        }
+        state.aggregation.reserve_history(&self.context)
+    }
     /// Synchronous state-machine entry point. Effects are returned, not emitted.
     pub fn process_at(
         &self,
@@ -372,6 +393,12 @@ impl LLMUserAggregator {
         direction: Direction,
         now: Duration,
     ) -> Result<AggregationOutput, ProcessorError> {
+        let aggregation = self.lock()?.aggregation.clone();
+        let registered_history = aggregation.history_validate_reducer(&frame, direction)?;
+        aggregation.mark_used()?;
+        if aggregation.history_bound()? {
+            crate::user_history::validate_live_control(&frame.data)?;
+        }
         // Consume and validate private authority before deduplication, policy,
         // history retention or forwarding. Upstream/private or mutated roles
         // fail closed here rather than reaching a wire adapter.
@@ -512,6 +539,7 @@ impl LLMUserAggregator {
                 | FrameData::LlmMessagesAppend(_)
                 | FrameData::LlmMessagesUpdate(_)
         ) && source.is_none()
+            && !registered_history
             && !state.seen.insert(frame.id)
         {
             return Ok(output);
@@ -706,10 +734,11 @@ impl LLMUserAggregator {
         // Adopted external starts also reach the idle tracker below. Capture
         // its waiting window before that frame closes it.
         let waiting_before_frame = state.idle.waiting_for_user()?;
-        let hold_external_stop = matches!(frame.data, FrameData::UserStoppedSpeaking)
+        let hold_external_stop = !state.input_controls_closed
+            && matches!(frame.data, FrameData::UserStoppedSpeaking)
             && state.controller.config().stop_strategies.is_some()
             && state.controller.is_active();
-        if let Err(error) = if hold_external_stop {
+        if let Err(error) = if hold_external_stop || state.input_controls_closed {
             Ok(())
         } else {
             state.idle.process(&frame.data, state.now)
@@ -776,7 +805,7 @@ impl LLMUserAggregator {
                     .metadata
                     .get("transcript_id")
                     .and_then(|id| id.as_str())
-                    .filter(|_| source.is_none())
+                    .filter(|_| source.is_none() && !registered_history)
                 {
                     if state.transcript_ids.iter().any(|old| old == id) {
                         return Ok(output);
@@ -800,10 +829,19 @@ impl LLMUserAggregator {
                         eager.record_transcript(text, append, spaces, &mut output)?;
                     }
                     if append && !text.trim().is_empty() {
-                        state.aggregation.append(text, spaces)?;
+                        state.aggregation.append_registered(
+                            text,
+                            spaces,
+                            registered_history.then_some(&frame),
+                        )?;
                     }
                 }
                 Self::remember_transcript(&mut state, frame.clone());
+                if registered_history {
+                    while state.transcript_frames.len() > 16 {
+                        state.transcript_frames.pop_front();
+                    }
+                }
                 state.interim.clear();
             }
             FrameData::InterimTranscription(text) => {
@@ -997,6 +1035,9 @@ impl LLMUserAggregator {
                 if state.controller.resolves_proposed_turn_stop_frames() => {}
             _ => output.push(frame.clone(), direction),
         }
+        if state.input_controls_closed {
+            return Ok(output);
+        }
         let events = state.controller.process(&frame.data, now);
         for event in &events {
             if let UserTurnEvent::Started { interrupt, .. } = event {
@@ -1111,7 +1152,11 @@ impl LLMUserAggregator {
         if !state.ended && !state.timer_disabled {
             Self::sync_realtime(&mut state, false)?;
             state.now = state.now.max(now);
+            state.aggregation.service_history(context, &mut output)?;
             state.aggregation.flush(context, Some(now), &mut output)?;
+            if state.input_controls_closed {
+                return Ok(output);
+            }
             if let Some(eager) = &mut state.eager {
                 eager.advance(now, &mut output)?;
             }
@@ -1442,6 +1487,7 @@ impl LLMUserAggregator {
             return Ok(());
         }
         state.timer_running = true;
+        drop(state);
         let shared = self.state.clone();
         let context = self.context.clone();
         let changed = self.changed.clone();
@@ -1452,6 +1498,34 @@ impl LLMUserAggregator {
         match ctx.spawn("user-turn-deadline", false, async move {
             let _guard = UserTimerGuard(shared.clone());
             loop {
+                let notified = changed.notified();
+                tokio::pin!(notified);
+                notified.as_mut().enable();
+                let effects = Self::advance_state(&shared, &context, origin.elapsed())?;
+                #[cfg(test)]
+                if !effects.actions.is_empty() {
+                    let aggregation = shared
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))?
+                        .aggregation
+                        .clone();
+                    aggregation.pause_history_effects(false).await;
+                }
+                Self::notify_handlers(&handlers, &effects, &output).await?;
+                effects.emit(&output).await?;
+                let aggregation = shared
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))?
+                    .aggregation
+                    .clone();
+                aggregation.resolve_history(&context)?;
+                let controls_closed = shared
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("user aggregator lock poisoned"))?
+                    .input_controls_closed;
+                if !controls_closed {
+                    idle.schedule(&output)?;
+                }
                 let deadline = {
                     let state = shared
                         .lock()
@@ -1467,27 +1541,36 @@ impl LLMUserAggregator {
                             Some(deadline) => tokio::time::sleep_until(deadline).await,
                             None => std::future::pending::<()>().await,
                         }
-                    } => {
-                        let effects = Self::advance_state(&shared, &context, origin.elapsed())?;
-                        Self::notify_handlers(&handlers, &effects, &output).await?;
-                        effects.emit(&output).await?;
-                        idle.schedule(&output)?;
-                    }
-                    _ = changed.notified() => {}
+                    } => {}
+                    _ = &mut notified => {}
                 }
             }
         }) {
             Ok(id) => {
-                state.timer_id = Some(id);
+                let cancel = {
+                    let mut state = self.lock()?;
+                    if state.timer_disabled || state.ended || !state.timer_running {
+                        true
+                    } else {
+                        state.timer_id = Some(id);
+                        false
+                    }
+                };
+                if cancel {
+                    ctx.cancel_task(id);
+                }
                 Ok(())
             }
             Err(error) => {
-                state.timer_running = false;
+                self.lock()?.timer_running = false;
                 Err(error)
             }
         }
     }
     pub(crate) fn schedule_idle_timer(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        if self.lock()?.input_controls_closed {
+            return Ok(());
+        }
         self.idle.schedule(ctx)
     }
 }
@@ -1505,6 +1588,22 @@ impl FrameProcessor for LLMUserAggregator {
     fn name(&self) -> &str {
         "LLMUserAggregator"
     }
+    async fn setup(
+        &self,
+        _config: &pipecat_core::StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let aggregation = {
+            let state = self.lock()?;
+            if state.ended {
+                return Err(ProcessorError::fatal(
+                    "ended user aggregator cannot be set up again",
+                ));
+            }
+            state.aggregation.clone()
+        };
+        aggregation.setup_user(ctx)
+    }
     async fn process(
         &self,
         frame: Frame,
@@ -1519,15 +1618,44 @@ impl FrameProcessor for LLMUserAggregator {
                 | FrameData::Cancel(_)
                 | FrameData::CancelDetailed(_)
         );
-        self.lock()?.aggregation.bind_user(ctx)?;
+        let aggregation = self.lock()?.aggregation.clone();
+        aggregation.bind_user(ctx)?;
+        let processing = aggregation.history_processing(&frame, direction, ctx)?;
+        if processing
+            .as_ref()
+            .is_some_and(|guard| guard.skip_processing())
+        {
+            processing
+                .expect("non-processing disposition exists")
+                .finish()?;
+            aggregation.resolve_history(&self.context)?;
+            return Ok(());
+        }
+        #[cfg(test)]
+        if processing.is_some() {
+            aggregation.pause_history_consumer().await;
+        }
+        if aggregation.history_marker(&frame, direction, true)? {
+            {
+                let mut state = self.lock()?;
+                state.input_controls_closed = true;
+                state.held_external_stop = None;
+                state.controller.cleanup();
+            }
+            self.idle.stop(Some(ctx))?;
+        }
         let output = self.process_at(frame, direction, self.origin.elapsed())?;
+        #[cfg(test)]
+        if processing.is_some() {
+            aggregation.pause_history_staged().await;
+        }
         let emitted = async {
             self.notify_inference_requests(&output, ctx).await?;
             output.emit(ctx).await
         }
         .await;
         let released = if terminal {
-            self.lock()?.aggregation.terminal_emitted()
+            aggregation.terminal_emitted()
         } else {
             Ok(())
         };
@@ -1538,6 +1666,18 @@ impl FrameProcessor for LLMUserAggregator {
             return Err(error);
         }
         released?;
+        if let Some(processing) = processing {
+            processing.finish()?;
+        }
+        let mut effects = AggregationOutput::default();
+        {
+            let state = self.lock()?;
+            state
+                .aggregation
+                .service_history(&self.context, &mut effects)?;
+        }
+        effects.emit(ctx).await?;
+        aggregation.resolve_history(&self.context)?;
         self.schedule_timer(ctx)
     }
     async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
@@ -1546,10 +1686,12 @@ impl FrameProcessor for LLMUserAggregator {
         state.cancel_eager(&mut AggregationOutput::default())?;
         state.timer_disabled = true;
         state.aggregation.stop_timer()?;
-        if let Some(id) = state.timer_id.take() {
+        let task = state.timer_id.take();
+        state.timer_running = false;
+        drop(state);
+        if let Some(id) = task {
             ctx.cancel_task(id);
         }
-        state.timer_running = false;
         self.changed.notify_one();
         Ok(())
     }
@@ -1564,13 +1706,15 @@ impl FrameProcessor for LLMUserAggregator {
         state.ended = true;
         state.binding = ControllerBinding::Inactive;
         state.timer_disabled = true;
-        state.aggregation.close()?;
+        let aggregation = state.aggregation.clone();
         state.controller.cleanup();
         state.mute_strategies.cleanup();
         if let Some(eager) = &mut state.eager {
             eager.reset_turn();
         }
         state.interim.clear();
+        drop(state);
+        aggregation.close()?;
         self.changed.notify_one();
         Ok(())
     }

@@ -258,7 +258,7 @@ impl ContextState {
         }
         Ok(())
     }
-    fn legacy_frame(&self) -> Result<LlmContextFrame, ProcessorError> {
+    pub(crate) fn legacy_frame(&self) -> Result<LlmContextFrame, ProcessorError> {
         if self
             .messages
             .iter()
@@ -342,11 +342,32 @@ impl SharedContext {
         message: Message,
         prepare: impl FnOnce(FrameData) -> Result<T, ProcessorError>,
     ) -> Result<T, ProcessorError> {
+        self.append_with_prepared_frame_at_lineage(message, None, prepare)
+    }
+    pub(crate) fn append_with_prepared_frame_at_lineage<T>(
+        &self,
+        message: Message,
+        expected: Option<u64>,
+        prepare: impl FnOnce(FrameData) -> Result<T, ProcessorError>,
+    ) -> Result<T, ProcessorError> {
         let mut state = self.lock()?;
+        if expected.is_some_and(|lineage| lineage != state.lineage) {
+            return Err(ProcessorError::fatal(
+                "history context lineage changed before actual append",
+            ));
+        }
+        if expected.is_some() {
+            crate::user_history::bounded_context(&state)?;
+        }
         state.require_lossless_rich_projection()?;
         let index = state.messages.len();
         state.append_native(message);
-        match state.frame_data().and_then(prepare) {
+        let bounded = if expected.is_some() {
+            crate::user_history::bounded_context(&state).map(|_| ())
+        } else {
+            Ok(())
+        };
+        match bounded.and_then(|()| state.frame_data()).and_then(prepare) {
             Ok(frame) => Ok(frame),
             Err(error) => {
                 state.messages.truncate(index);
