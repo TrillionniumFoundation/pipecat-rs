@@ -1,0 +1,36 @@
+{
+  "source_repository": "ProfHepta/pipecat",
+  "source_revision": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "evidence_kind": "static source inspection; not an executed Python/SDK oracle",
+  "files": [
+    {"path": "src/pipecat/services/google/gemini_live/llm.py", "git_blob_sha": "37bca74f94be634e7acc6b1d087dc107b588f874"},
+    {"path": "src/pipecat/adapters/services/gemini_live_adapter.py", "git_blob_sha": "64eacdcf14e43e7e8514cf2031a424cca61c0a98", "sha256": "c57a7d59bc59479e09af420b40918e4f2a76edb5ee360ca2aaaafd280749acfb"},
+    {"path": "src/pipecat/adapters/services/gemini_adapter.py", "git_blob_sha": "2a50d6df834ccd829aa8e72560f481bac7bed0f2", "sha256": "6716fc0eb0188c92b40cbadb271d16f33832fe342b95a589fc9aeb49f68b6dc1"},
+    {"path": "src/pipecat/adapters/base_llm_adapter.py", "git_blob_sha": "269920adaff94d35266d2dcd9d5c554b87c44e61", "sha256": "b6c4db487397ebac19e365e74cf9171276a611f218404a70ff9e6c919e79e96e"}
+  ],
+  "source_ranges": {
+    "setup_history_flag": [1394, 1400, 1448, 1451],
+    "initial_seed_and_nudge": [1997, 2044],
+    "first_stop": [1017, 1021],
+    "explicit_completion": [1162, 1175],
+    "first_context_adapter_call": [1190, 1216],
+    "adapter_system_extraction": [449, 514],
+    "adapter_effective_system_fallback": [417, 429]
+  },
+  "conclusions": {
+    "empty_seed_with_configured_system": "zero content wire; initial-response second projection has no init-system argument",
+    "sole_system": "user turn",
+    "developer": "user turn, not extracted as system",
+    "gemini_25_model_final": "append user text containing exactly one space",
+    "gemini_3_initial_inference": "clientContent completion then realtime text containing exactly one space",
+    "gemini_25_silent_first_stop": "one completion under both server and manual VAD",
+    "run_or_interrupt_before_first_stop": "does not clear pending first-stop flag"
+  },
+  "native_boundaries": [
+    "explicit opt-in; raw defaults unchanged",
+    "plain text only; reject unsupported or ambiguous source messages",
+    "empty seed is different from invalid empty text",
+    "native append roles/direct run semantics, not Python aggregator coordination",
+    "no tool-history conversion, evolving-context replay, fresh-session reconnect or hosted-model availability claim"
+  ]
+}

@@ -214,14 +214,24 @@ control, not a device microphone switch or withdrawal of sent data. Conversation
 mode keeps these controls as ordinary passthrough. Each native setup resets mute
 to false. See [STT mute boundaries](STT_MUTE.md).
 
-`LlmContext` supports one initial text-only seed; repeated identical snapshots
-are no-ops. System instructions/tools must already match connection setup.
-Evolving/replaced snapshots and detailed/non-text histories are rejected, since
-blindly replaying them would duplicate the server's live history. Explicit
-`LlmMessagesAppend` / `ClientContent` provide append-only history. There is no
-Python mutable-context sharing or model-family-specific initial-history dance.
-The application must select a model supporting the documented client-content
-semantics; no artificial whitespace prompts are inserted to trigger inference.
+By default, `LlmContext` supports one initial text-only seed and requests inference;
+repeated identical snapshots are no-ops. System instructions/tools must already
+match connection setup. Evolving/replaced snapshots and detailed/non-text
+histories are rejected, since replaying them would duplicate live history.
+Explicit `LlmMessagesAppend` / `ClientContent` provide append-only history.
+
+`GeminiClient::with_initial_history(InitialHistoryPolicy {
+inference_on_initialization: false })` explicitly selects processor-owned startup
+with a history-enabled setup, silent or inference-triggering seed, Gemini 2.5
+final-user padding/first-stop completion, and Gemini 3 completion nudges. The
+default path is unchanged. An empty seed is zero-wire Ready even with configured
+system instruction and inference selected. Selected public `connect` and every
+raw `sender().try_send(Action, ...)` are rejected; supported processor frames use
+private, bounded admission. Selected policy and session resumption are mutually
+exclusive in either builder order. See [Initial history](INITIAL_HISTORY.md) for
+projection, readiness, actual actor-join evidence, and the explicit limits of
+Python compatibility. This does not implement evolving-context reconciliation
+or certify the availability of any hosted model.
 
 Tool IDs and names are retained. Calls must match configured declarations.
 Missing, null, or empty provider IDs receive session-owned opaque IDs in the
@@ -297,7 +307,7 @@ acknowledged. The pipeline owns and joins its receive work on cleanup.
 
 The following are not implemented, and no pass-through setting/action advertises
 them: automatic replay, handle-less session rebuilding, Vertex authentication, ephemeral token
-creation, initial-history configuration, context-window compression, thinking tools/budgets,
+creation, context-window compression, thinking tools/budgets,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
 file input and image formats beyond the bounded RGB video path, Google File API upload/list/get/delete, live setting
 updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,

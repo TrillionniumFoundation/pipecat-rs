@@ -57,8 +57,10 @@ resumption, runtime text/run requests, context editing/replacement, summaries,
 image/file input, foreign transcription and unsupported live settings before
 history mutation. Unexpected provider tool packets fail before any of that
 packet's model output is dispatched. Raw unbound tools retain their existing
-behavior. This mode does not implement tool-result reconciliation or Gemini 3
-initial-history nudges. Eager/SmartTurn and automatic summary combinations are
+behavior. This mode does not implement tool-result reconciliation. The separate
+explicit [initial-history policy](INITIAL_HISTORY.md) adds the bounded Gemini 3
+startup nudge and Gemini 2.5 padding/first-stop completion. Without that policy,
+existing startup is unchanged. Eager/SmartTurn and automatic summary combinations are
 not part of this initial mode.
 
 A nonempty initial context requires `initial_seed` explicitly matching the
@@ -66,6 +68,23 @@ pair's plain legacy text context. Seed size and shape are validated before
 connection and revalidated at Start. It is sent once; subsequent local snapshots
 are never provider seeds. System/developer text must match configured setup.
 `user_id` supplies the final transcript label.
+
+With `with_initial_history`, constructor preflight uses the same whole-snapshot
+projection and wire budget as ordinary selected startup. A synthetic padding turn
+or nudge never enters the pair's real shared context. Actual user receipts still
+gate assistant delivery, and authentic local snapshots are still consumed rather
+than replayed. Both absent seed on an authenticated empty pair and explicit empty
+seed transition to Ready without sending client content, including when a system
+instruction is configured. Later real audio remains admissible. This zero-wire
+case does not request a greeting.
+
+`GeminiHistoryRoute::service()` returns `Some` of the exact typed service included
+by `into_processors` only when initial-history policy is selected. The default
+paired route returns `None`, so this observation API does not expose its raw
+sender. Retain the selected service before consuming the route to inspect that
+run's read-only `selected_join_observer()`. Its raw sender remains permanently
+sealed, so the handle grants no alternate history or public sender admission path. Runtime run/append, mutable history, tools and resumption
+remain excluded when initial-history policy is selected.
 
 ## Lifetime and limits
 
@@ -91,7 +110,14 @@ only shutdown owner. Normal cooperative completion awaits the inner provider
 worker, then the pipeline joins its tracked receive task. A forced supervisor or
 explicit cooperative-join deadline abort has a narrower guarantee: the existing
 session destructor requests inner abort, but does not prove an awaited inner
-join. Actual outer pipeline and loopback peer joins are reported separately.
+join. This narrower guarantee describes the default route. With the explicit
+initial-history policy, processor and paired receive paths share a retained
+session owner; selected terminal paths borrow it and await the actual inner
+socket actor, including abort-then-await after a deadline. The read-only observer
+changes only after that await resolves. A completion receipt, EOF, peer close,
+or outer task join is never substituted for it. A forced join is settled but
+retains its error; it is not relabeled graceful success. Actual outer pipeline
+and loopback peer joins remain separate observations.
 The default consumer deadline is 5 s; drain and cooperative settlement each have
 a finite 30 s default. Configure pipeline shutdown accommodation accordingly.
 

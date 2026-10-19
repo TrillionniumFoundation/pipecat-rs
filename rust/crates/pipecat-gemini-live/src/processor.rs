@@ -1,3 +1,4 @@
+pub(crate) mod selected;
 use crate::*;
 use pipecat_core::{
     async_trait, AggregatedTextFrame, AudioRawFrame, ChatMessage, ChatRole, Direction,
@@ -6,11 +7,12 @@ use pipecat_core::{
     ProcessorReference, ServiceMetadataFrame, StartFrame, SttMetadataFrame, TextFrame,
     TranscriptionFrame, TtsStartedFrame, TtsStoppedFrame,
 };
+pub(crate) use selected::SelectedSessionOwner;
 use serde_json::json;
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
 };
@@ -23,6 +25,12 @@ pub struct GeminiLiveProcessor {
     client: GeminiClient,
     sender: Mutex<Option<GeminiSender>>,
     state: Mutex<InputState>,
+    selected_owner: Mutex<Option<Arc<SelectedSessionOwner>>>,
+    selected_join: Mutex<Option<SelectedJoinObserver>>,
+    next_run: AtomicU64,
+    selected_setup: tokio::sync::Mutex<()>,
+    #[cfg(test)]
+    receiver_handoff: Mutex<Option<SelectedReceiveGate>>,
     preroll_bytes: usize,
     explicit_preroll: bool,
     user_id: Option<String>,
@@ -36,9 +44,16 @@ pub struct GeminiLiveProcessor {
     #[cfg(feature = "paired-history")]
     history: Option<Arc<crate::history::SelectedHistory>>,
 }
+#[cfg(test)]
+struct SelectedReceiveGate {
+    reached: tokio::sync::oneshot::Sender<()>,
+    release: tokio::sync::oneshot::Receiver<()>,
+}
 #[derive(Default)]
 struct InputState {
     activity: bool,
+    selected: Option<Arc<SelectedSessionOwner>>,
+    pending_first_stop: bool,
     stt_muted: bool,
     // Each setup owns a new label; a retired receiver cannot read the next run.
     stt_user_id: Arc<Mutex<String>>,
@@ -56,6 +71,12 @@ impl GeminiLiveProcessor {
         Self {
             client,
             sender: Mutex::new(None),
+            selected_owner: Mutex::new(None),
+            selected_join: Mutex::new(None),
+            next_run: AtomicU64::new(1),
+            selected_setup: tokio::sync::Mutex::new(()),
+            #[cfg(test)]
+            receiver_handoff: Mutex::new(None),
             state: Mutex::new(InputState {
                 preroll_bytes,
                 ..Default::default()
@@ -93,6 +114,43 @@ impl GeminiLiveProcessor {
         // This validates the exact successful gate/user/service/assistant
         // setup identities and initial context before any provider connection.
         let initial_seed = history.begin_service_start(ctx)?;
+        if self.client.initial_history_policy().is_some() {
+            let run_id = self.next_run_id()?;
+            let session = self
+                .client
+                .connect_paired_history_owned(run_id)
+                .await
+                .map_err(processor_error)?;
+            let owner = SelectedSessionOwner::new(
+                run_id,
+                session,
+                history.selected_drain_timeout(),
+                Some(ctx),
+            );
+            self.publish_owner(owner.clone());
+            history.bind_initial_owner(owner.clone());
+            let seed = initial_seed.unwrap_or_default();
+            let admitted =
+                history.admit_initial_seed(|| self.seed_context(&seed, Origin::default()));
+            if let Err(error) = &admitted {
+                owner.record_failure(error.message.clone());
+                let joined = owner.settle(false).await;
+                return selected::combine(admitted, joined);
+            }
+            let started = history
+                .start_receive_owned(
+                    owner.clone(),
+                    self.user_id.clone().unwrap_or_default(),
+                    config.enable_usage_metrics,
+                )
+                .await;
+            if let Err(error) = &started {
+                owner.record_failure(error.message.clone());
+                let joined = owner.settle(false).await;
+                return selected::combine(started, joined);
+            }
+            return Ok(());
+        }
         let mut session = self
             .client
             .connect_paired_history()
@@ -146,6 +204,67 @@ impl GeminiLiveProcessor {
                 config.enable_usage_metrics,
             )
             .await
+    }
+    async fn start_initial_history(
+        &self,
+        config: &StartFrame,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let run_id = self.next_run_id()?;
+        let budget = self.selected_terminal_budget()?;
+        let session = self
+            .client
+            .connect_owned(run_id)
+            .await
+            .map_err(processor_error)?;
+        let owner = SelectedSessionOwner::new(run_id, session, budget, Some(ctx));
+        // No await occurs between the returned actor and recoverable publication.
+        self.publish_owner(owner.clone());
+        let (ownership, acknowledged) = tokio::sync::oneshot::channel();
+        let receiver = owner.clone();
+        let output = ctx.clone();
+        let user_id = self.user_id.clone().unwrap_or_default();
+        let emit_metrics = config.enable_usage_metrics;
+        #[cfg(test)]
+        let handoff = self.receiver_handoff.lock().unwrap().take();
+        let spawned = ctx.spawn("gemini-live-receive", false, async move {
+            #[cfg(test)]
+            if let Some(gate) = handoff {
+                let _ = gate.reached.send(());
+                let _ = gate.release.await;
+            }
+            let mut session = receiver.session.lock().await;
+            let result = if ownership.send(()).is_err() {
+                Err(ProcessorError::fatal(
+                    "Gemini selected receive handoff was cancelled",
+                ))
+            } else {
+                receive_initial_history(&receiver, &mut session, &output, user_id, emit_metrics)
+                    .await
+            };
+            receiver.record_result(&result);
+            let joined = session.selected_shutdown().await.map_err(processor_error);
+            let result = selected::combine(result, joined);
+            receiver.complete(&result);
+            result
+        });
+        let start = match spawned {
+            Ok(id) => {
+                owner.bind_receiver(ctx.clone(), id);
+                acknowledged.await.map_err(|_| {
+                    ProcessorError::fatal(
+                        "Gemini selected receive owner ended before startup handoff",
+                    )
+                })
+            }
+            Err(error) => Err(error),
+        };
+        if let Err(error) = &start {
+            owner.record_failure(error.message.clone());
+            let cleanup = owner.settle(false).await;
+            return selected::combine(start, cleanup);
+        }
+        Ok(())
     }
     /// Fixed transcription label, including an explicitly empty string.
     /// Without an override, dedicated STT follows the latest valid downstream
@@ -246,6 +365,9 @@ impl GeminiLiveProcessor {
         if self.video_paused.load(Ordering::SeqCst) {
             return Ok(());
         }
+        if self.client.initial_history_policy().is_some() {
+            return self.send_selected_video(image, origin, ctx).await;
+        }
         let sender = match self.sender() {
             Ok(sender) => sender,
             Err(_) => return Ok(()),
@@ -293,6 +415,86 @@ impl GeminiLiveProcessor {
             .with_current(|| sender.try_send_video_at_generation(jpeg, origin, generation))
             .transpose()
             .map_err(processor_error)?;
+        Ok(())
+    }
+    async fn send_selected_video(
+        &self,
+        image: &pipecat_core::ImageRawFrame,
+        origin: Origin,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        let fence = ctx.invocation_fence()?;
+        let captured = fence
+            .with_current(|| {
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                let Some(owner) = state.selected.clone() else {
+                    return Ok(None);
+                };
+                if !owner.accepts_input() || state.initial_context.is_none() {
+                    return Ok(None);
+                }
+                let now = Instant::now();
+                if state.last_video.is_some_and(|last| {
+                    now.duration_since(last) < std::time::Duration::from_secs(1)
+                }) {
+                    return Ok(None);
+                }
+                state.last_video = Some(now);
+                let generation = owner.sender.generation();
+                Ok::<_, ProcessorError>(Some((owner, generation)))
+            })
+            .transpose()?
+            .flatten();
+        let Some((owner, generation)) = captured else {
+            return Ok(());
+        };
+        let overhead = serde_json::to_vec(
+            &json!({"realtimeInput":{"video":{"mimeType":"image/jpeg","data":""}}}),
+        )
+        .map_err(|_| ProcessorError::new("video JSON"))?
+        .len();
+        let max_jpeg = self
+            .client
+            .config()
+            .limits
+            .max_message_bytes
+            .saturating_sub(overhead)
+            / 4
+            * 3;
+        let jpeg = self
+            .video
+            .encode(image, max_jpeg)
+            .await
+            .map_err(|error| processor_error(error).with_permanence_override(false))?;
+        fence
+            .with_current(|| {
+                let state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                if !state
+                    .selected
+                    .as_ref()
+                    .is_some_and(|current| Arc::ptr_eq(current, &owner))
+                    || !owner.accepts_input()
+                    || state.initial_context.is_none()
+                    || owner.sender.generation() != generation
+                {
+                    return Ok(());
+                }
+                let plan = owner
+                    .sender
+                    .plan_video(owner.run_id, jpeg, origin, generation)
+                    .map_err(processor_error)?;
+                owner
+                    .sender
+                    .try_send_selected(plan)
+                    .map_err(processor_error)
+            })
+            .transpose()?;
         Ok(())
     }
     /// Explicit fixed local pre-roll, including zero. This overrides subsequent
@@ -371,9 +573,252 @@ impl GeminiLiveProcessor {
             .ok_or_else(|| ProcessorError::new("Gemini session is not ready"))
     }
     fn enqueue(&self, action: Action, origin: Origin) -> Result<(), ProcessorError> {
+        if self.client.initial_history_policy().is_some() {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+            return self.enqueue_locked(&state, action, origin);
+        }
         self.sender()?
             .try_send(action, origin)
             .map_err(processor_error)
+    }
+    fn enqueue_locked(
+        &self,
+        state: &InputState,
+        action: Action,
+        origin: Origin,
+    ) -> Result<(), ProcessorError> {
+        let Some(owner) = &state.selected else {
+            return self
+                .sender()?
+                .try_send(action, origin)
+                .map_err(processor_error);
+        };
+        if !owner.accepts_input()
+            && !matches!(
+                action,
+                Action::ToolResponses(_) | Action::NonBlockingToolResponses(_)
+            )
+        {
+            return Err(processor_error(GeminiError::Closed));
+        }
+        if state.initial_context.is_none() {
+            return Err(processor_error(GeminiError::Unsupported(
+                "explicit initial context is required before run or append",
+            )));
+        }
+        let sender = &owner.sender;
+        let id = owner.run_id;
+        let generation = sender.generation();
+        // No Action bypass exists at the sender. Each internal operation builds
+        // its own typed, bounded plan, tied to this run and sampled generation.
+        let plan = match action {
+            Action::Audio(pcm) => sender.plan_audio(id, pcm, origin, generation),
+            Action::VideoJpeg(jpeg) => sender.plan_video(id, jpeg, origin, generation),
+            Action::RealtimeText(text) => sender.plan_realtime_text(id, text, origin, generation),
+            Action::ClientContent {
+                turns,
+                turn_complete,
+            } if turns.is_empty() && turn_complete => {
+                sender.plan_completion(id, origin, generation)
+            }
+            Action::ClientContent {
+                turns,
+                turn_complete,
+            } => sender.plan_content(id, turns, turn_complete, origin, generation),
+            Action::ActivityStart { preroll } => {
+                sender.plan_activity_start(id, preroll, origin, generation)
+            }
+            Action::ActivityEnd => sender.plan_first_stop(id, true, false, origin, generation),
+            Action::AudioStreamEnd => sender.plan_audio_stream_end(id, origin, generation),
+            Action::ToolResponses(responses) => {
+                sender.plan_tool_responses(id, responses, origin, generation)
+            }
+            Action::NonBlockingToolResponses(responses) => {
+                sender.plan_non_blocking_tool_responses(id, responses, origin, generation)
+            }
+        }
+        .map_err(processor_error)?;
+        sender.try_send_selected(plan).map_err(processor_error)
+    }
+    fn enqueue_owned(
+        &self,
+        owner: &Arc<SelectedSessionOwner>,
+        action: Action,
+        origin: Origin,
+    ) -> Result<(), ProcessorError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+        if !state
+            .selected
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, owner))
+        {
+            return Err(processor_error(GeminiError::Closed));
+        }
+        self.enqueue_locked(&state, action, origin)
+    }
+    fn tool_action(&self, frame: &FrameData) -> Result<Option<Action>, ProcessorError> {
+        match frame {
+            FrameData::FunctionCallResult(result) => tool_result(
+                &result.tool_call_id,
+                &result.function_name,
+                &result.result,
+                result.is_final,
+                result.run_llm,
+                result.error.as_deref(),
+                self.client.is_non_blocking_tool(&result.function_name),
+            )
+            .map(Some),
+            FrameData::FunctionCallResultDetailed(result) => {
+                if result
+                    .properties
+                    .as_ref()
+                    .is_some_and(|properties| properties.on_context_updated.is_some())
+                {
+                    return Err(processor_error(GeminiError::Unsupported(
+                        "tool context callbacks",
+                    )));
+                }
+                tool_result(
+                    &result.tool_call_id,
+                    &result.function_name,
+                    &result.result,
+                    result
+                        .properties
+                        .as_ref()
+                        .is_none_or(|properties| properties.is_final),
+                    result
+                        .properties
+                        .as_ref()
+                        .and_then(|properties| properties.run_llm)
+                        .or(result.run_llm),
+                    result.error.as_deref(),
+                    self.client.is_non_blocking_tool(&result.function_name),
+                )
+                .map(Some)
+            }
+            _ => Ok(None),
+        }
+    }
+    fn stop_selected(&self, origin: Origin) -> Result<(), ProcessorError> {
+        let manual = self.client.config().session.activity_detection.disabled;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+        let owner = state
+            .selected
+            .as_ref()
+            .ok_or_else(|| ProcessorError::new("Gemini session is not ready"))?;
+        let activity_end = manual && state.activity;
+        let complete = state.pending_first_stop;
+        if activity_end || complete {
+            if !owner.accepts_input() {
+                return Err(processor_error(GeminiError::Closed));
+            }
+            let plan = owner
+                .sender
+                .plan_first_stop(
+                    owner.run_id,
+                    activity_end,
+                    complete,
+                    origin,
+                    owner.sender.generation(),
+                )
+                .map_err(processor_error)?;
+            // One admission covers activityEnd and completion. Queue
+            // rejection preserves both activity and first-stop state.
+            owner
+                .sender
+                .try_send_selected(plan)
+                .map_err(processor_error)?;
+            state.activity = false;
+            state.pending_first_stop = false;
+        }
+        state.preroll.clear();
+        Ok(())
+    }
+    fn waiting_for_seed(&self) -> Result<bool, ProcessorError> {
+        if self.client.initial_history_policy().is_none() {
+            return Ok(false);
+        }
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+        Ok(state.initial_context.is_none())
+    }
+    /// Read-only evidence for the most recently created selected socket actor.
+    /// A joined observer includes abort-then-await and is not a clean-close claim.
+    pub fn selected_join_observer(&self) -> Option<SelectedJoinObserver> {
+        self.selected_join
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    pub fn selected_session_joined(&self) -> bool {
+        self.selected_join_observer()
+            .is_some_and(|observer| observer.joined())
+    }
+    fn current_owner(&self) -> Option<Arc<SelectedSessionOwner>> {
+        self.selected_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    fn is_current_owner(&self, owner: &Arc<SelectedSessionOwner>) -> bool {
+        self.current_owner()
+            .as_ref()
+            .is_some_and(|current| current.run_id == owner.run_id && Arc::ptr_eq(current, owner))
+    }
+    fn publish_owner(&self, owner: Arc<SelectedSessionOwner>) {
+        // The selected setup mutex serializes connect/publication; setup settles
+        // the previous run before entering connect. Paired Start is single-use.
+        // Recover poisoned slots here so the newly created actor is retained
+        // before any possible error-return or await.
+        *self
+            .selected_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(owner.clone());
+        *self.selected_join.lock().unwrap_or_else(|e| e.into_inner()) = Some(owner.joined.clone());
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .selected = Some(owner.clone());
+        *self.sender.lock().unwrap_or_else(|e| e.into_inner()) = Some(owner.sender.clone());
+    }
+    fn retire_owner(&self, owner: &Arc<SelectedSessionOwner>) {
+        if !owner.joined.joined() {
+            return;
+        }
+        let mut slot = self
+            .selected_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if slot
+            .as_ref()
+            .is_some_and(|current| current.run_id == owner.run_id && Arc::ptr_eq(current, owner))
+        {
+            *slot = None;
+        }
+    }
+    fn next_run_id(&self) -> Result<u64, ProcessorError> {
+        self.next_run
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |id| id.checked_add(1))
+            .map_err(|_| ProcessorError::fatal("Gemini run identity exhausted"))
+    }
+    fn selected_terminal_budget(&self) -> Result<std::time::Duration, ProcessorError> {
+        self.client
+            .config()
+            .limits
+            .finish_timeout
+            .checked_add(self.client.config().limits.write_timeout)
+            .ok_or_else(|| ProcessorError::fatal("Gemini terminal budget overflow"))
     }
     fn origin(frame: &Frame) -> Origin {
         Origin {
@@ -390,6 +835,73 @@ impl GeminiLiveProcessor {
         context: &LlmContextFrame,
         origin: Origin,
     ) -> Result<(), ProcessorError> {
+        if self.client.initial_history_policy().is_some() {
+            // Full original-snapshot validation and wire sizing precede mutable
+            // admission. A leading system message cannot hide an invalid tail.
+            let captured = {
+                let state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                if let Some(existing) = &state.initial_context {
+                    return if existing == context {
+                        Ok(())
+                    } else {
+                        Err(processor_error(GeminiError::Unsupported(
+                            "replacing or replaying evolving context; use explicit append-only ClientContent",
+                        )))
+                    };
+                }
+                state
+                    .selected
+                    .clone()
+                    .ok_or_else(|| ProcessorError::new("Gemini session is not ready"))?
+            };
+            let seed = self
+                .client
+                .plan_initial_history(context)
+                .map_err(processor_error)?;
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+            if !state
+                .selected
+                .as_ref()
+                .is_some_and(|owner| Arc::ptr_eq(owner, &captured))
+            {
+                return Err(processor_error(GeminiError::Closed));
+            }
+            if let Some(existing) = &state.initial_context {
+                return if existing == context {
+                    Ok(())
+                } else {
+                    Err(processor_error(GeminiError::Unsupported(
+                        "replacing or replaying evolving context; use explicit append-only ClientContent",
+                    )))
+                };
+            }
+            let owner = state
+                .selected
+                .as_ref()
+                .ok_or_else(|| ProcessorError::new("Gemini session is not ready"))?;
+            if !owner.accepts_input() {
+                return Err(processor_error(GeminiError::Closed));
+            }
+            let pending = seed.pending_first_stop();
+            let generation = owner.sender.generation();
+            let plan = owner
+                .sender
+                .plan_seed(owner.run_id, seed, origin, generation)
+                .map_err(processor_error)?;
+            owner
+                .sender
+                .try_send_selected(plan)
+                .map_err(processor_error)?;
+            state.initial_context = Some(context.clone());
+            state.pending_first_stop = pending;
+            return Ok(());
+        }
         let mut state = self
             .state
             .lock()
@@ -515,6 +1027,31 @@ pub(crate) fn reject_selected_live_frame(frame: &Frame) -> Result<(), ProcessorE
     Ok(())
 }
 
+fn validate_suppressed_video(image: &pipecat_core::ImageRawFrame) -> Result<(), ProcessorError> {
+    let (width, height) = image.size;
+    if image.format.as_deref() != Some("RGB")
+        || width == 0
+        || height == 0
+        || width > 2048
+        || height > 2048
+    {
+        return Err(processor_error(GeminiError::Invalid(
+            "video requires packed RGB, dimensions 1..=2048",
+        )));
+    }
+    let required = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|pixels| *pixels <= 262_144)
+        .and_then(|pixels| pixels.checked_mul(3))
+        .ok_or_else(|| processor_error(GeminiError::TooLarge))?;
+    if image.image.len() > 262_144 * 3 {
+        return Err(processor_error(GeminiError::TooLarge));
+    }
+    if image.image.len() < required {
+        return Err(processor_error(GeminiError::Invalid("short RGB image")));
+    }
+    Ok(())
+}
 fn text_turn(message: &ChatMessage) -> Result<TextTurn, ProcessorError> {
     if !message.tool_calls.is_empty() || message.tool_call_id.is_some() || message.name.is_some() {
         return Err(processor_error(GeminiError::Unsupported(
@@ -675,6 +1212,65 @@ impl GeminiLiveProcessor {
         if direction == Direction::Downstream {
             let origin = Self::origin(&frame);
             let manual = self.client.config().session.activity_detection.disabled;
+            if self.waiting_for_seed()? {
+                let suppressed = match &frame.data {
+                    FrameData::InputAudio(audio)
+                    | FrameData::UserAudio(pipecat_core::UserAudioRawFrame { audio, .. }) => {
+                        audio
+                            .validate()
+                            .map_err(|_| ProcessorError::new("invalid Gemini PCM"))?;
+                        if audio.num_channels != 1
+                            || audio.sample_rate != self.client.config().input_sample_rate
+                        {
+                            return Err(processor_error(GeminiError::Invalid(
+                                "input must match configured mono PCM16 rate",
+                            )));
+                        }
+                        if audio.audio.len() > self.client.config().limits.max_audio_bytes {
+                            return Err(processor_error(GeminiError::TooLarge));
+                        }
+                        true
+                    }
+                    FrameData::InputText(text) => {
+                        // Plan only for shape/serialized-size validation. Never
+                        // enqueue, open an activity window or keep a backlog.
+                        let state = self
+                            .state
+                            .lock()
+                            .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
+                        if let Some(owner) = &state.selected {
+                            owner
+                                .sender
+                                .plan_realtime_text(
+                                    owner.run_id,
+                                    text.text.clone(),
+                                    origin.clone(),
+                                    owner.sender.generation(),
+                                )
+                                .map_err(processor_error)?;
+                        }
+                        true
+                    }
+                    FrameData::InputImage(image) => {
+                        validate_suppressed_video(image)?;
+                        true
+                    }
+                    FrameData::UserImage(image) => {
+                        validate_suppressed_video(&image.image)?;
+                        true
+                    }
+                    FrameData::UserStartedSpeaking
+                    | FrameData::UserStoppedSpeaking
+                    | FrameData::VadUserStartedSpeaking(_)
+                    | FrameData::VadUserStoppedSpeaking(_)
+                    | FrameData::VadUserStartedSpeakingDetailed(_)
+                    | FrameData::VadUserStoppedSpeakingDetailed(_) => true,
+                    _ => false,
+                };
+                if suppressed {
+                    return self.forward_original(frame, direction, ctx).await;
+                }
+            }
             match &frame.data {
                 FrameData::SpeechControlParams(control) => self.update_preroll(control, ctx)?,
                 FrameData::InputAudio(audio)
@@ -743,7 +1339,11 @@ impl GeminiLiveProcessor {
                                     if audio.context_id.is_some() {
                                         origin.context_id = audio.context_id.clone();
                                     }
-                                    self.enqueue(Action::Audio(audio.audio.clone()), origin)?;
+                                    self.enqueue_locked(
+                                        &state,
+                                        Action::Audio(audio.audio.clone()),
+                                        origin,
+                                    )?;
                                 }
                             }
                             Ok::<(), ProcessorError>(())
@@ -762,7 +1362,8 @@ impl GeminiLiveProcessor {
                         .lock()
                         .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
                     if !state.activity {
-                        self.enqueue(
+                        self.enqueue_locked(
+                            &state,
                             Action::ActivityStart {
                                 preroll: state.preroll.iter().copied().collect(),
                             },
@@ -772,13 +1373,18 @@ impl GeminiLiveProcessor {
                         state.activity = true;
                     }
                 }
+                FrameData::UserStoppedSpeaking
+                    if self.client.initial_history_policy().is_some() =>
+                {
+                    self.stop_selected(origin)?;
+                }
                 FrameData::UserStoppedSpeaking if manual => {
                     let mut state = self
                         .state
                         .lock()
                         .map_err(|_| ProcessorError::fatal("Gemini input lock poisoned"))?;
                     if state.activity {
-                        self.enqueue(Action::ActivityEnd, origin)?;
+                        self.enqueue_locked(&state, Action::ActivityEnd, origin)?;
                         state.activity = false;
                     }
                     state.preroll.clear();
@@ -914,6 +1520,11 @@ impl FrameProcessor for GeminiLiveProcessor {
         config: &StartFrame,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let _selected_setup = if self.client.initial_history_policy().is_some() {
+            Some(self.selected_setup.lock().await)
+        } else {
+            None
+        };
         if config.audio_in_sample_rate != self.client.config().input_sample_rate
             || (self.client.config().session.modality == Modality::Audio
                 && config.audio_out_sample_rate != 24_000)
@@ -921,6 +1532,23 @@ impl FrameProcessor for GeminiLiveProcessor {
             return Err(processor_error(GeminiError::Invalid(
                 "pipeline sample rates differ from Gemini config (output must be 24000 Hz)",
             )));
+        }
+        #[cfg(feature = "paired-history")]
+        if self.client.initial_history_policy().is_some() {
+            if let Some(history) = &self.history {
+                self.client
+                    .validate_paired_history()
+                    .map_err(processor_error)?;
+                // A rejected second paired setup must not reset the first run.
+                history.bind_service(ctx)?;
+            }
+        }
+        if self.client.initial_history_policy().is_some() {
+            if let Some(owner) = self.current_owner() {
+                let result = owner.settle(false).await;
+                self.retire_owner(&owner);
+                result?;
+            }
         }
         *self
             .state
@@ -941,8 +1569,13 @@ impl FrameProcessor for GeminiLiveProcessor {
                 .map_err(processor_error)?;
             // Publish only after every selected service setup check succeeds.
             // Keep the real None-epoch setup route; Start must not replace it.
-            history.bind_service(ctx)?;
+            if self.client.initial_history_policy().is_none() {
+                history.bind_service(ctx)?;
+            }
             return Ok(());
+        }
+        if self.client.initial_history_policy().is_some() {
+            return self.start_initial_history(config, ctx).await;
         }
         let mut session = self.client.connect().await.map_err(processor_error)?;
         let sender = session.sender();
@@ -1031,9 +1664,70 @@ impl FrameProcessor for GeminiLiveProcessor {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
-        let result = self.process_frame(frame, direction, ctx).await;
+        let selected = self.client.initial_history_policy().is_some();
+        let captured = if selected { self.current_owner() } else { None };
+        if captured
+            .as_ref()
+            .is_some_and(|owner| !owner.belongs_to(ctx))
+        {
+            return Err(ProcessorError::new("stale Gemini selected setup context"));
+        }
+        if frame.data.is_cancel() {
+            if let Some(owner) = &captured {
+                owner.sender.cancel();
+            }
+        }
+        #[cfg(feature = "paired-history")]
+        let ordinary = self.history.is_none();
+        #[cfg(not(feature = "paired-history"))]
+        let ordinary = true;
+        let tool_settlement = selected
+            && ordinary
+            && direction == Direction::Downstream
+            && matches!(
+                frame.data,
+                FrameData::FunctionCallResult(_) | FrameData::FunctionCallResultDetailed(_)
+            );
+        // Selected setup/ordinary frame/terminal lifetimes cannot cross runs.
+        // Authorized tool settlements are the sole exception: End may need
+        // those results while it holds this gate and drains the same actor.
+        let _lifecycle = if selected && !tool_settlement {
+            Some(self.selected_setup.lock().await)
+        } else {
+            None
+        };
+        if selected {
+            let current = self.current_owner();
+            let same = match (&captured, &current) {
+                (Some(old), Some(current)) => {
+                    Arc::ptr_eq(old, current) && old.run_id == current.run_id
+                }
+                (None, None) => true,
+                _ => false,
+            };
+            if !same || current.as_ref().is_some_and(|owner| !owner.belongs_to(ctx)) {
+                return Err(ProcessorError::new("stale Gemini selected run"));
+            }
+        }
+        let result = if tool_settlement {
+            match (&captured, self.tool_action(&frame.data)) {
+                (Some(owner), Ok(Some(action))) => {
+                    match self.enqueue_owned(owner, action, Self::origin(&frame)) {
+                        Ok(()) => self.forward_original(frame, direction, ctx).await,
+                        Err(error) => Err(error),
+                    }
+                }
+                (_, Err(error)) => Err(error),
+                _ => Err(ProcessorError::new("Gemini session is not ready")),
+            }
+        } else {
+            self.process_frame(frame, direction, ctx).await
+        };
         #[cfg(feature = "paired-history")]
         if let (Some(history), Err(error)) = (&self.history, &result) {
+            // Record the exact route owner's primary before cleanup can be
+            // cancelled, including Start which publishes its owner in this call.
+            history.record_failure(error.message.clone());
             // Locally detected selected failures close releases and settle the
             // actual provider owner before fatal propagation when possible.
             if let Err(shutdown) = history.abort_service().await {
@@ -1046,9 +1740,58 @@ impl FrameProcessor for GeminiLiveProcessor {
             error.fatal = true;
             return Err(error);
         }
+        if result.as_ref().is_err_and(|error| error.fatal) {
+            if let Some(owner) = captured {
+                owner.record_result(&result);
+                let settled = owner.settle(false).await;
+                return selected::combine(result, settled);
+            }
+        }
         result
     }
-    async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+    async fn prepare_end(&self, ctx: &ProcessorContext) -> Result<(), ProcessorError> {
+        if let Some(owner) = self.current_owner() {
+            if !owner.belongs_to(ctx) {
+                return Err(ProcessorError::new(
+                    "stale Gemini selected terminal context",
+                ));
+            }
+            let closed = owner.close_input();
+            let _lifecycle = self.selected_setup.lock().await;
+            if !self.is_current_owner(&owner) {
+                return selected::combine(closed, owner.settle(false).await);
+            }
+            let deadline = owner.terminal_deadline();
+            let encoded = match deadline {
+                Ok(deadline) => {
+                    match tokio::time::timeout_at(deadline, self.video.finish()).await {
+                        Ok(result) => result.map_err(processor_error),
+                        Err(_) => Err(ProcessorError::fatal(
+                            "Gemini selected video settlement deadline exceeded",
+                        )),
+                    }
+                }
+                Err(error) => Err(error),
+            };
+            if let Err(error) = &encoded {
+                owner.record_failure(error.message.clone());
+            }
+            #[cfg(feature = "paired-history")]
+            let route = if let Some(history) = &self.history {
+                history.prepare_service_end().await
+            } else {
+                Ok(())
+            };
+            #[cfg(not(feature = "paired-history"))]
+            let route = Ok(());
+            owner.record_result(&route);
+            let graceful = closed.is_ok() && encoded.is_ok() && route.is_ok();
+            let joined = owner.settle(graceful).await;
+            return selected::combine(
+                selected::combine(closed, encoded),
+                selected::combine(route, joined),
+            );
+        }
         #[cfg(feature = "paired-history")]
         if let Some(history) = &self.history {
             // End/Stop share this hook. Only the gate knows which terminal was
@@ -1061,6 +1804,46 @@ impl FrameProcessor for GeminiLiveProcessor {
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        if let Some(owner) = self.current_owner() {
+            let closed = owner.close_input();
+            // Cancellation must reach this exact session even while End owns
+            // the lifecycle gate. Never wait for the gate before the watch.
+            owner.sender.cancel();
+            let _lifecycle = self.selected_setup.lock().await;
+            if !self.is_current_owner(&owner) {
+                return selected::combine(closed, owner.settle(false).await);
+            }
+            self.video.cancel();
+            let encoded = match owner.terminal_deadline() {
+                Ok(deadline) => {
+                    match tokio::time::timeout_at(deadline, self.video.finish()).await {
+                        Ok(result) => result.map_err(processor_error),
+                        Err(_) => Err(ProcessorError::fatal(
+                            "Gemini selected video settlement deadline exceeded",
+                        )),
+                    }
+                }
+                Err(error) => Err(error),
+            };
+            if let Err(error) = &encoded {
+                owner.record_failure(error.message.clone());
+            }
+            #[cfg(feature = "paired-history")]
+            let route = if let Some(history) = &self.history {
+                history.cleanup_service().await
+            } else {
+                Ok(())
+            };
+            #[cfg(not(feature = "paired-history"))]
+            let route = Ok(());
+            owner.record_result(&route);
+            let joined = owner.settle(false).await;
+            self.retire_owner(&owner);
+            return selected::combine(
+                selected::combine(closed, encoded),
+                selected::combine(route, joined),
+            );
+        }
         self.video.cancel();
         if let Some(sender) = self
             .sender
@@ -1082,6 +1865,61 @@ impl FrameProcessor for GeminiLiveProcessor {
         self.video.finish().await.map_err(processor_error)?;
         Ok(())
     }
+}
+
+async fn receive_initial_history(
+    owner: &SelectedSessionOwner,
+    session: &mut GeminiSession,
+    output: &ProcessorContext,
+    user_id: String,
+    emit_metrics: bool,
+) -> Result<(), ProcessorError> {
+    let sender = &owner.sender;
+    let mut mapper = GeminiFrameMapper::new(SessionMode::Conversation, user_id);
+    let mut generation = sender.generation();
+    while let Some(received) = session.next_event_with_details().await {
+        let received = match received {
+            Ok(received) => received,
+            Err(error) => {
+                let message = error.to_string();
+                owner.record_failure(message.clone());
+                let emitted = output.push_error(error_frame(error)).await;
+                return selected::combine(Err(ProcessorError::fatal(message)), emitted);
+            }
+        };
+        if generation != sender.generation() {
+            mapper.reset();
+            generation = sender.generation();
+        }
+        let event = received.event;
+        if matches!(event.event, Event::Interrupted) {
+            mapper.reset();
+            output.broadcast_interruption().await?;
+            continue;
+        }
+        if matches!(event.event, Event::Usage(_)) && !emit_metrics {
+            continue;
+        }
+        let is_output = event.event.is_output();
+        for mut frame in mapper.frames(&event) {
+            if let Some(details) = &received.usage_details {
+                attach_usage_details(&mut frame, details);
+            }
+            if let FrameData::Error(error) = &frame.data {
+                output.push_error(error.clone()).await?;
+            } else if is_output {
+                if let Some(result) = sender
+                    .while_current(event.generation, output.push(frame, Direction::Downstream))
+                    .await
+                {
+                    result?;
+                }
+            } else {
+                output.push(frame, Direction::Downstream).await?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Deterministic event-to-frame mapping; generation completion is never reported
@@ -1589,5 +2427,616 @@ mod video_ownership_tests {
     #[tokio::test]
     async fn external_sender_interrupt_cannot_relabel_old_encoded_image() {
         blocked_encoding_terminal(true).await;
+    }
+}
+
+#[cfg(test)]
+mod initial_history_owner_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use pipecat_core::{Pipeline, PipelineConfig};
+    use serde_json::Value;
+    use std::time::Duration;
+    use tokio::{sync::mpsc, task::JoinHandle, time::timeout};
+    use tokio_tungstenite::tungstenite::Message;
+
+    const WAIT: Duration = Duration::from_secs(3);
+
+    async fn listener() -> (String, mpsc::Receiver<Value>, JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        let (sent, received) = mpsc::channel(32);
+        let peer = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let setup = socket.next().await.unwrap().unwrap();
+            assert!(setup.is_text());
+            socket
+                .send(Message::Text(
+                    json!({"setupComplete":{}}).to_string().into(),
+                ))
+                .await
+                .unwrap();
+            while let Some(message) = socket.next().await {
+                match message {
+                    Ok(Message::Text(message)) => {
+                        sent.send(serde_json::from_str(&message).unwrap())
+                            .await
+                            .unwrap();
+                    }
+                    Ok(Message::Close(_)) => {
+                        let _ = socket.flush().await;
+                        return;
+                    }
+                    Err(_) => return,
+                    _ => {}
+                }
+            }
+        });
+        (endpoint, received, peer)
+    }
+    fn client(endpoint: String, manual: bool) -> GeminiClient {
+        let mut config =
+            GeminiConfig::new("fixture", "gemini-2.5-flash-native-audio-preview-12-2025");
+        config.endpoint = endpoint;
+        config.session.activity_detection.disabled = manual;
+        config.session.modality = Modality::Text;
+        config.limits.queue_capacity = 4;
+        config.limits.finish_timeout = Duration::from_millis(200);
+        config.limits.write_timeout = Duration::from_millis(200);
+        GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap()
+    }
+    async fn owned(
+        manual: bool,
+        id: u64,
+    ) -> (
+        Arc<GeminiLiveProcessor>,
+        Arc<SelectedSessionOwner>,
+        mpsc::Receiver<Value>,
+        JoinHandle<()>,
+    ) {
+        let (endpoint, received, peer) = listener().await;
+        let processor = Arc::new(GeminiLiveProcessor::new(client(endpoint, manual)));
+        let session = processor.client.connect_owned(id).await.unwrap();
+        let owner = SelectedSessionOwner::new(id, session, Duration::from_millis(400), None);
+        processor.publish_owner(owner.clone());
+        (processor, owner, received, peer)
+    }
+    fn context() -> LlmContextFrame {
+        LlmContextFrame {
+            messages: vec![ChatMessage::new(ChatRole::User, "original seed")],
+            ..Default::default()
+        }
+    }
+    async fn next(received: &mut mpsc::Receiver<Value>) -> Value {
+        timeout(WAIT, received.recv()).await.unwrap().unwrap()
+    }
+    async fn settle(owner: &SelectedSessionOwner, peer: JoinHandle<()>) {
+        timeout(WAIT, owner.settle(false)).await.unwrap().unwrap();
+        assert!(owner.joined.joined());
+        timeout(WAIT, peer).await.unwrap().unwrap();
+    }
+    #[tokio::test]
+    async fn rejected_seed_has_no_readiness_and_equal_retry_has_one_admission() {
+        let (processor, owner, mut received, peer) = owned(false, 1).await;
+        let held = owner.sender.test_hold_queue().unwrap();
+        assert!(processor
+            .seed_context(&context(), Origin::default())
+            .is_err());
+        {
+            let state = processor.state.lock().unwrap();
+            assert!(state.initial_context.is_none());
+            assert!(!state.pending_first_stop);
+        }
+        drop(held);
+        processor
+            .seed_context(&context(), Origin::default())
+            .unwrap();
+        assert_eq!(
+            next(&mut received).await["clientContent"]["turnComplete"],
+            false
+        );
+        let held = owner.sender.test_hold_queue().unwrap();
+        // Equal accepted source never needs a queue slot, even under pressure.
+        processor
+            .seed_context(&context(), Origin::default())
+            .unwrap();
+        let mut replacement = context();
+        replacement.messages[0].content.clear();
+        let error = processor
+            .seed_context(&replacement, Origin::default())
+            .unwrap_err();
+        assert!(error.message.contains("replacing or replaying"));
+        assert_eq!(
+            processor.state.lock().unwrap().initial_context,
+            Some(context())
+        );
+        drop(held);
+        processor
+            .enqueue(
+                Action::RealtimeText("wire witness".into()),
+                Origin::default(),
+            )
+            .unwrap();
+        assert_eq!(
+            next(&mut received).await["realtimeInput"]["text"],
+            "wire witness"
+        );
+        settle(&owner, peer).await;
+    }
+    #[tokio::test]
+    async fn first_stop_queue_rejection_preserves_activity_pending_and_preroll() {
+        let (processor, owner, mut received, peer) = owned(true, 2).await;
+        processor
+            .seed_context(&context(), Origin::default())
+            .unwrap();
+        next(&mut received).await;
+        processor
+            .enqueue(Action::ActivityStart { preroll: vec![] }, Origin::default())
+            .unwrap();
+        assert!(next(&mut received).await["realtimeInput"]["activityStart"].is_object());
+        {
+            let mut state = processor.state.lock().unwrap();
+            state.activity = true;
+            state.preroll.extend([1, 2]);
+        }
+        let held = owner.sender.test_hold_queue().unwrap();
+        assert!(processor.stop_selected(Origin::default()).is_err());
+        {
+            let state = processor.state.lock().unwrap();
+            assert!(state.activity && state.pending_first_stop);
+            assert_eq!(
+                state.preroll.iter().copied().collect::<Vec<_>>(),
+                vec![1, 2]
+            );
+        }
+        drop(held);
+        processor.stop_selected(Origin::default()).unwrap();
+        assert!(next(&mut received).await["realtimeInput"]["activityEnd"].is_object());
+        assert_eq!(
+            next(&mut received).await["clientContent"]["turnComplete"],
+            true
+        );
+        {
+            let state = processor.state.lock().unwrap();
+            assert!(!state.activity && !state.pending_first_stop && state.preroll.is_empty());
+        }
+        processor.stop_selected(Origin::default()).unwrap();
+        processor
+            .enqueue(Action::RealtimeText("after stop".into()), Origin::default())
+            .unwrap();
+        assert_eq!(
+            next(&mut received).await["realtimeInput"]["text"],
+            "after stop"
+        );
+        settle(&owner, peer).await;
+    }
+    #[tokio::test]
+    async fn closed_first_stop_leaves_the_whole_local_transition_unchanged() {
+        let (processor, owner, mut received, peer) = owned(false, 3).await;
+        processor
+            .seed_context(&context(), Origin::default())
+            .unwrap();
+        next(&mut received).await;
+        owner.close_input().unwrap();
+        assert!(processor.stop_selected(Origin::default()).is_err());
+        assert!(processor.state.lock().unwrap().pending_first_stop);
+        settle(&owner, peer).await;
+    }
+    #[tokio::test]
+    async fn cancelled_owner_wait_is_reenterable_and_old_cleanup_cannot_clear_new_run() {
+        let (processor, first, _received, peer) = owned(false, 4).await;
+        let first_observer = processor.selected_join_observer().unwrap();
+        let held_session = first.session.lock().await;
+        assert!(timeout(Duration::from_millis(10), first.settle(false))
+            .await
+            .is_err());
+        assert!(!first_observer.joined());
+        assert!(Arc::ptr_eq(&processor.current_owner().unwrap(), &first));
+        drop(held_session);
+        settle(&first, peer).await;
+        let (_second_processor, second, _received, peer) = owned(false, 5).await;
+        processor.publish_owner(second.clone());
+        processor.retire_owner(&first);
+        assert!(Arc::ptr_eq(&processor.current_owner().unwrap(), &second));
+        assert!(first_observer.joined());
+        assert!(!processor.selected_join_observer().unwrap().joined());
+        assert!(matches!(
+            first
+                .sender
+                .try_send(Action::RealtimeText("stale".into()), Origin::default()),
+            Err(GeminiError::Unsupported(_))
+        ));
+        settle(&second, peer).await;
+    }
+
+    struct OccupyReceiverSlot {
+        processor: Arc<GeminiLiveProcessor>,
+        setup_result: Mutex<Option<Result<(), ProcessorError>>>,
+    }
+    #[async_trait]
+    impl FrameProcessor for OccupyReceiverSlot {
+        fn name(&self) -> &str {
+            "OccupyReceiverSlot"
+        }
+        async fn setup(
+            &self,
+            config: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            ctx.spawn(
+                "occupied slot",
+                false,
+                std::future::pending::<Result<(), ProcessorError>>(),
+            )?;
+            let result = self.processor.setup(config, ctx).await;
+            *self.setup_result.lock().unwrap() = Some(result.clone());
+            result
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            ctx.push(frame, direction).await
+        }
+        async fn cleanup(&self) -> Result<(), ProcessorError> {
+            self.processor.cleanup().await
+        }
+    }
+    #[tokio::test]
+    async fn receive_spawn_rejection_retains_and_awaits_the_actual_actor() {
+        let (endpoint, _received, peer) = listener().await;
+        let processor = Arc::new(GeminiLiveProcessor::new(client(endpoint, false)));
+        let fixture = Arc::new(OccupyReceiverSlot {
+            processor: processor.clone(),
+            setup_result: Mutex::new(None),
+        });
+        // Core reports setup failures on the started worker; the direct setup
+        // result, not Pipeline::start's return type, witnesses spawn rejection.
+        let mut worker = timeout(
+            WAIT,
+            Pipeline::new(vec![fixture.clone()]).start(PipelineConfig {
+                max_background_tasks: 1,
+                ..Default::default()
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let rejected = fixture
+            .setup_result
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap()
+            .unwrap_err();
+        assert!(rejected.fatal);
+        assert_eq!(rejected.message, "background task limit reached");
+        assert!(worker
+            .errors()
+            .iter()
+            .any(|error| error.fatal && error.error == rejected.message));
+        assert!(processor.selected_session_joined());
+        let _ = worker.cancel("spawn rejection observed").await;
+        let joined = timeout(WAIT, worker.join()).await.unwrap();
+        assert!(joined.unwrap_err().to_string().contains(&rejected.message));
+        timeout(WAIT, peer).await.unwrap().unwrap();
+    }
+    struct CaptureContext(Mutex<Option<ProcessorContext>>);
+    #[async_trait]
+    impl FrameProcessor for CaptureContext {
+        fn name(&self) -> &str {
+            "CaptureSelectedContext"
+        }
+        async fn setup(
+            &self,
+            _: &StartFrame,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            *self.0.lock().unwrap() = Some(ctx.clone());
+            Ok(())
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            ctx.push(frame, direction).await
+        }
+    }
+    async fn cancelled_handoff(release_receiver: bool, abort_cleanup: bool) {
+        let (endpoint, _received, peer) = listener().await;
+        let processor = Arc::new(GeminiLiveProcessor::new(client(endpoint, false)));
+        let capture = Arc::new(CaptureContext(Mutex::new(None)));
+        let mut worker = Pipeline::new(vec![capture.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        let ctx = capture.0.lock().unwrap().clone().unwrap();
+        let (entered, entry) = tokio::sync::oneshot::channel();
+        let (release, released) = tokio::sync::oneshot::channel();
+        *processor.receiver_handoff.lock().unwrap() = Some(SelectedReceiveGate {
+            reached: entered,
+            release: released,
+        });
+        let starting = processor.clone();
+        let startup = tokio::spawn(async move {
+            starting
+                .start_initial_history(&StartFrame::default(), &ctx)
+                .await
+        });
+        timeout(WAIT, entry).await.unwrap().unwrap();
+        let owner = processor.current_owner().unwrap();
+        let observer = processor.selected_join_observer().unwrap();
+        assert!(!observer.joined());
+        startup.abort();
+        assert!(startup.await.unwrap_err().is_cancelled());
+        if release_receiver {
+            let shutdown_hold =
+                abort_cleanup.then(|| owner.sender.test_pause_before_selected_join());
+            release.send(()).unwrap();
+            if let Some((entered, release_join)) = shutdown_hold {
+                timeout(WAIT, entered).await.unwrap().unwrap();
+                assert!(!observer.joined());
+                // Abort the actual receiver after it knows the dropped-ACK
+                // error and cancels the socket, but before it awaits that actor.
+                let error = timeout(WAIT, owner.settle(false))
+                    .await
+                    .unwrap()
+                    .unwrap_err();
+                assert!(error.message.contains("handoff was cancelled"));
+                assert!(observer.joined());
+                // The actor itself ended cleanly; only the retained owner can
+                // preserve this locally detected primary across receiver abort.
+                owner
+                    .session
+                    .lock()
+                    .await
+                    .selected_shutdown()
+                    .await
+                    .unwrap();
+                assert!(owner
+                    .settle(false)
+                    .await
+                    .unwrap_err()
+                    .message
+                    .contains("handoff was cancelled"));
+                drop(release_join);
+            }
+            // The wrapper acquires the retained session, observes the dropped
+            // ownership ACK, and joins that actor before releasing its guard.
+            let result = timeout(WAIT, async {
+                loop {
+                    if observer.joined() {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+                owner.settle(false).await
+            })
+            .await
+            .unwrap();
+            assert!(result
+                .unwrap_err()
+                .message
+                .contains("handoff was cancelled"));
+        } else {
+            // Cleanup cancels the exact registered wrapper while it is still
+            // waiting before ACK, then borrows and joins the retained actor.
+            timeout(WAIT, processor.cleanup()).await.unwrap().unwrap();
+            drop(release);
+        }
+        assert!(observer.joined());
+        let _ = worker.cancel("selected handoff test completed").await;
+        timeout(WAIT, worker.join()).await.unwrap().unwrap();
+        timeout(WAIT, peer).await.unwrap().unwrap();
+    }
+    #[tokio::test]
+    async fn cancelled_start_before_receiver_ack_remains_recoverable() {
+        cancelled_handoff(false, false).await;
+    }
+    #[tokio::test]
+    async fn dropped_receiver_ack_joins_actor_and_preserves_handoff_failure() {
+        cancelled_handoff(true, false).await;
+    }
+    #[tokio::test]
+    async fn aborted_receiver_cleanup_preserves_dropped_ack_primary_and_real_join() {
+        cancelled_handoff(true, true).await;
+    }
+    #[tokio::test]
+    async fn cancelled_process_cleanup_preserves_fatal_forwarding_failure() {
+        let (processor, owner, _received, peer) = owned(false, 6).await;
+        let capture = Arc::new(CaptureContext(Mutex::new(None)));
+        let mut worker = Pipeline::new(vec![capture.clone()])
+            .start(PipelineConfig {
+                output_capacity: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let ctx = capture.0.lock().unwrap().clone().unwrap();
+        // The unconsumed real Start fills the one-slot output lane. Forwarding
+        // the valid preseed frame creates a local fatal error, not a socket error.
+        let held = owner.session.lock().await;
+        {
+            let processing = processor.process(
+                Frame::new(FrameData::InputText(TextFrame::new(
+                    "valid suppressed input",
+                ))),
+                Direction::Downstream,
+                &ctx,
+            );
+            tokio::pin!(processing);
+            assert!(matches!(
+                futures_util::poll!(&mut processing),
+                std::task::Poll::Pending
+            ));
+            assert!(!owner.accepts_input());
+            assert!(!owner.joined.joined());
+        }
+        drop(held);
+        let failure = timeout(WAIT, owner.settle(false))
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert!(failure.message.contains("worker output queue is full"));
+        assert!(owner.joined.joined());
+        owner
+            .session
+            .lock()
+            .await
+            .selected_shutdown()
+            .await
+            .unwrap();
+        assert!(owner
+            .settle(false)
+            .await
+            .unwrap_err()
+            .message
+            .contains("worker output queue is full"));
+        assert!(timeout(WAIT, worker.join())
+            .await
+            .unwrap()
+            .unwrap_err()
+            .to_string()
+            .contains("worker output queue is full"));
+        timeout(WAIT, peer).await.unwrap().unwrap();
+    }
+    #[tokio::test]
+    async fn held_old_runtime_seed_and_stop_cannot_mutate_a_restarted_run() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        let peer = tokio::spawn(async move {
+            let mut records = Vec::new();
+            for run in 0..2 {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+                socket.next().await.unwrap().unwrap();
+                socket
+                    .send(Message::Text(
+                        json!({"setupComplete":{}}).to_string().into(),
+                    ))
+                    .await
+                    .unwrap();
+                while let Some(message) = socket.next().await {
+                    match message {
+                        Ok(Message::Text(message)) => {
+                            records.push((run, serde_json::from_str::<Value>(&message).unwrap()))
+                        }
+                        Ok(Message::Close(_)) => {
+                            let _ = socket.flush().await;
+                            break;
+                        }
+                        Err(_) => break,
+                        _ => {}
+                    }
+                }
+            }
+            records
+        });
+        let processor = Arc::new(GeminiLiveProcessor::new(client(endpoint, false)));
+        let first_capture = Arc::new(CaptureContext(Mutex::new(None)));
+        let mut first_worker = Pipeline::new(vec![first_capture.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        let first_ctx = first_capture.0.lock().unwrap().clone().unwrap();
+        processor
+            .setup(&StartFrame::default(), &first_ctx)
+            .await
+            .unwrap();
+        processor
+            .process(
+                Frame::new(FrameData::LlmContext(context())),
+                Direction::Downstream,
+                &first_ctx,
+            )
+            .await
+            .unwrap();
+        let first_observer = processor.selected_join_observer().unwrap();
+        let (release, held) = tokio::sync::oneshot::channel();
+        let delayed = processor.clone();
+        let old_ctx = first_ctx.clone();
+        let stale = tokio::spawn(async move {
+            held.await.unwrap();
+            let seed = delayed
+                .process(
+                    Frame::new(FrameData::LlmContext(LlmContextFrame {
+                        messages: vec![ChatMessage::new(ChatRole::User, "stale seed")],
+                        ..Default::default()
+                    })),
+                    Direction::Downstream,
+                    &old_ctx,
+                )
+                .await;
+            let terminal = delayed.prepare_end(&old_ctx).await;
+            let stop = delayed
+                .process(Frame::new(FrameData::Stop), Direction::Downstream, &old_ctx)
+                .await;
+            (seed, terminal, stop)
+        });
+        processor.prepare_end(&first_ctx).await.unwrap();
+        processor.cleanup().await.unwrap();
+        assert!(first_observer.joined());
+        let second_capture = Arc::new(CaptureContext(Mutex::new(None)));
+        let mut second_worker = Pipeline::new(vec![second_capture.clone()])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        let second_ctx = second_capture.0.lock().unwrap().clone().unwrap();
+        processor
+            .setup(&StartFrame::default(), &second_ctx)
+            .await
+            .unwrap();
+        let second_owner = processor.current_owner().unwrap();
+        let second_observer = processor.selected_join_observer().unwrap();
+        release.send(()).unwrap();
+        let (seed, terminal, stop) = timeout(WAIT, stale).await.unwrap().unwrap();
+        assert!(seed.is_err() && terminal.is_err() && stop.is_err());
+        assert!(Arc::ptr_eq(
+            &processor.current_owner().unwrap(),
+            &second_owner
+        ));
+        assert!(processor.state.lock().unwrap().initial_context.is_none());
+        assert!(!second_observer.joined());
+        assert!(!processor.sender().unwrap().is_finishing());
+        processor
+            .process(
+                Frame::new(FrameData::LlmContext(LlmContextFrame {
+                    messages: vec![ChatMessage::new(ChatRole::User, "fresh seed")],
+                    ..Default::default()
+                })),
+                Direction::Downstream,
+                &second_ctx,
+            )
+            .await
+            .unwrap();
+        processor.prepare_end(&second_ctx).await.unwrap();
+        processor.cleanup().await.unwrap();
+        assert!(second_observer.joined());
+        let _ = first_worker.cancel("old run checked").await;
+        let _ = second_worker.cancel("new run checked").await;
+        timeout(WAIT, first_worker.join()).await.unwrap().unwrap();
+        timeout(WAIT, second_worker.join()).await.unwrap().unwrap();
+        let records = timeout(WAIT, peer).await.unwrap().unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].0, 0);
+        assert_eq!(
+            records[0].1["clientContent"]["turns"][0]["parts"][0]["text"],
+            "original seed"
+        );
+        assert_eq!(records[1].0, 1);
+        assert_eq!(
+            records[1].1["clientContent"]["turns"][0]["parts"][0]["text"],
+            "fresh seed"
+        );
     }
 }

@@ -17,6 +17,9 @@ use tokio_tungstenite::{
     WebSocketStream,
 };
 
+#[path = "support/initial_history.rs"]
+mod initial_history;
+
 type Ws = WebSocketStream<TcpStream>;
 const DEADLINE: Duration = Duration::from_secs(3);
 #[allow(clippy::result_large_err)]
@@ -1224,4 +1227,889 @@ fn incomplete_usage_never_fabricates_zero_tokens_or_playback() {
         generation: 0,
     };
     assert!(mapper.frames(&event).is_empty());
+}
+
+/// The selected contract uses the actual processor, actor, loopback socket and
+/// read-only join evidence. These tests never call a hosted Gemini endpoint.
+mod selected_initial_history {
+    use super::initial_history::*;
+    use pipecat_core::*;
+    use pipecat_gemini_live::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn four_startup_cases_and_both_final_roles_have_exact_wire_and_original_origin() {
+        for model in [
+            "gemini-2.5-flash-native-audio-preview-12-2025",
+            "models/gemini-3.8-live",
+        ] {
+            for inference in [false, true] {
+                for final_role in [ChatRole::User, ChatRole::Assistant] {
+                    let (peer, client) = Peer::open(|c| c.session.model = model.into()).await;
+                    let client = client.with_initial_history(policy(inference)).unwrap();
+                    let mut rig = Harness::start(client).await;
+                    let setup = peer.snapshot().setup.unwrap();
+                    assert_eq!(
+                        setup["setup"]["historyConfig"],
+                        json!({"initialHistoryInClientContent":true})
+                    );
+                    let original = context(vec![
+                        text(ChatRole::User, "Earlier question"),
+                        text(final_role, "Last message"),
+                    ]);
+                    let id = rig.seed(original.clone()).await;
+                    rig.seed(original.clone()).await;
+                    let is_three = model.contains("3.8");
+                    let mut turns = vec![
+                        turn("user", "Earlier question"),
+                        turn(
+                            if final_role == ChatRole::User {
+                                "user"
+                            } else {
+                                "model"
+                            },
+                            "Last message",
+                        ),
+                    ];
+                    if !is_three && final_role == ChatRole::Assistant {
+                        turns.push(turn("user", " "));
+                    }
+                    let mut expected = vec![seed_wire(turns, inference)];
+                    if is_three && inference {
+                        expected.push(nudge());
+                    }
+                    peer.wait_for(|trace| trace.input.len() >= expected.len())
+                        .await;
+                    peer.send(
+                        json!({"serverContent":{"modelTurn":{"parts":[{"text":"Actual answer"}]}}}),
+                    )
+                    .await;
+                    loop {
+                        let output = rig.next().await;
+                        if matches!(&output.frame.data, FrameData::LlmText(t) if t.text == "Actual answer")
+                        {
+                            assert_eq!(output.frame.metadata["source_frame_id"], json!(id));
+                            assert_eq!(output.frame.metadata["context_id"], "startup-origin");
+                            break;
+                        }
+                    }
+                    rig.settle_turn(&peer).await;
+                    let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+                    assert!(report.errors.is_empty(), "{:?}", report.errors);
+                    assert_eq!(
+                        trace.input, expected,
+                        "model={model}, inference={inference}, role={final_role:?}"
+                    );
+                    assert_eq!(
+                        original.messages.len(),
+                        2,
+                        "projection must not mutate its source"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn selected_text_projection_preserves_system_developer_and_whitespace() {
+        let cases = vec![
+            (
+                vec![
+                    text(ChatRole::System, "Configured"),
+                    text(ChatRole::User, "Question"),
+                ],
+                vec![turn("user", "Question")],
+            ),
+            (
+                vec![text(ChatRole::System, "Configured")],
+                vec![turn("user", "Configured")],
+            ),
+            (
+                vec![text(ChatRole::Developer, "Configured")],
+                vec![turn("user", "Configured")],
+            ),
+            (
+                vec![
+                    text(ChatRole::User, "Question"),
+                    text(ChatRole::Developer, "Configured"),
+                    text(ChatRole::System, "Configured"),
+                ],
+                vec![
+                    turn("user", "Question"),
+                    turn("user", "Configured"),
+                    turn("user", "Configured"),
+                ],
+            ),
+            (vec![text(ChatRole::User, " ")], vec![turn("user", " ")]),
+            (
+                vec![text(ChatRole::User, "Escaped \"quote\"\nline\\tail\t界")],
+                vec![turn("user", "Escaped \"quote\"\nline\\tail\t界")],
+            ),
+        ];
+        for (messages, projected) in cases {
+            let (peer, client) =
+                Peer::open(|c| c.session.system_instruction = Some("Configured".into())).await;
+            let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+            rig.seed(context(messages)).await;
+            peer.wait_for(|trace| !trace.input.is_empty()).await;
+            let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert_eq!(trace.input, vec![seed_wire(projected, false)]);
+        }
+    }
+
+    #[tokio::test]
+    async fn original_snapshot_is_fully_validated_before_any_seed_bytes_and_remains_retryable() {
+        let (peer, client) =
+            Peer::open(|c| c.session.system_instruction = Some("Configured".into())).await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        let mut invalid = vec![
+            context(vec![
+                text(ChatRole::User, "valid prefix"),
+                text(ChatRole::Tool, "invalid tail"),
+            ]),
+            context(vec![
+                text(ChatRole::User, "valid prefix"),
+                text(ChatRole::System, "Mismatch"),
+            ]),
+            context(vec![text(ChatRole::Developer, "Mismatch")]),
+            context(vec![text(ChatRole::User, "")]),
+        ];
+        let mut named = text(ChatRole::System, "Configured");
+        named.name = Some("must not disappear with extracted system".into());
+        invalid.push(context(vec![named, text(ChatRole::User, "valid suffix")]));
+        let mut unresolved = text(ChatRole::User, "valid text");
+        unresolved.tool_call_id = Some("orphan".into());
+        invalid.push(context(vec![
+            text(ChatRole::User, "valid prefix"),
+            unresolved,
+        ]));
+        let mut tool_call = text(ChatRole::Assistant, "valid text");
+        tool_call.tool_calls.push(pipecat_core::FunctionCall {
+            function_name: "lookup".into(),
+            tool_call_id: "call".into(),
+            arguments: json!({}),
+        });
+        invalid.push(context(vec![
+            text(ChatRole::User, "valid prefix"),
+            tool_call,
+        ]));
+        let mut choice = context(vec![text(ChatRole::User, "valid prefix")]);
+        choice.tool_choice = Some(ToolChoice::Required);
+        invalid.push(choice);
+        let mut tools = context(vec![text(ChatRole::User, "valid prefix")]);
+        tools.tools.push(ToolDefinition {
+            name: "undeclared".into(),
+            description: "synthetic".into(),
+            parameters: json!({}),
+        });
+        invalid.push(tools);
+        let count = invalid.len() as u64;
+        for seed in invalid {
+            rig.frame(FrameData::LlmContext(seed), true).await;
+        }
+        let accepted = context(vec![text(ChatRole::User, "One accepted seed")]);
+        rig.seed(accepted.clone()).await;
+        rig.seed(accepted).await;
+        rig.frame(
+            FrameData::LlmContext(context(vec![text(ChatRole::User, "Replacement")])),
+            true,
+        )
+        .await;
+        peer.wait_for(|trace| !trace.input.is_empty()).await;
+        let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+        assert_eq!(report.total_errors, count + 1);
+        assert_eq!(
+            trace.input,
+            vec![seed_wire(vec![turn("user", "One accepted seed")], false)]
+        );
+    }
+
+    #[tokio::test]
+    async fn transformed_1024_turn_limit_counts_the_two_five_padding_turn() {
+        for (model, count, last, rejected) in [
+            ("gemini-2.5-live", 1023, ChatRole::Assistant, false),
+            ("gemini-2.5-live", 1024, ChatRole::Assistant, true),
+            ("gemini-2.5-live", 1024, ChatRole::User, false),
+            ("gemini-3-live", 1024, ChatRole::Assistant, false),
+            ("gemini-3-live", 1025, ChatRole::User, true),
+        ] {
+            let (peer, client) = Peer::open(|c| c.session.model = model.into()).await;
+            let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+            let mut messages = vec![text(ChatRole::User, "x"); count];
+            messages.last_mut().unwrap().role = last;
+            rig.frame(FrameData::LlmContext(context(messages)), rejected)
+                .await;
+            if rejected {
+                rig.seed(context(vec![text(ChatRole::User, "Retry")])).await;
+            }
+            peer.wait_for(|trace| !trace.input.is_empty()).await;
+            let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+            assert_eq!(report.total_errors, u64::from(rejected));
+            assert_eq!(trace.input.len(), 1);
+            let turns = trace.input[0]["clientContent"]["turns"].as_array().unwrap();
+            assert_eq!(turns.len(), if rejected { 1 } else { 1024 });
+            if !rejected && model == "gemini-2.5-live" && last == ChatRole::Assistant {
+                assert_eq!(turns.last().unwrap(), &turn("user", " "));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn source_serialization_and_aggregate_append_budget_reject_before_any_prefix_write() {
+        let (peer, client) = Peer::open(|c| {
+            c.limits.max_message_bytes = 600;
+            c.limits.max_audio_bytes = 128;
+        })
+        .await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        let too_large = context(vec![text(ChatRole::User, &"\"\\\n".repeat(100))]);
+        assert!(serde_json::to_vec(&too_large).unwrap().len() > 600);
+        rig.frame(FrameData::LlmContext(too_large), true).await;
+        let source_only = context(vec![text(ChatRole::User, &"x".repeat(480))]);
+        assert!(serde_json::to_vec(&source_only).unwrap().len() > 600);
+        assert!(
+            serde_json::to_vec(&seed_wire(vec![turn("user", &"x".repeat(480))], false))
+                .unwrap()
+                .len()
+                <= 600
+        );
+        rig.frame(FrameData::LlmContext(source_only), true).await;
+        rig.seed(context(vec![])).await;
+        let large = "x".repeat(512);
+        let wire = seed_wire(vec![turn("user", &large)], true);
+        assert!(serde_json::to_vec(&wire).unwrap().len() <= 600);
+        assert!(
+            serde_json::to_vec(&wire).unwrap().len() + serde_json::to_vec(&nudge()).unwrap().len()
+                > 600
+        );
+        rig.frame(
+            FrameData::LlmMessagesAppend(MessagesFrame {
+                messages: vec![text(ChatRole::User, &large)],
+                run_llm: true,
+            }),
+            true,
+        )
+        .await;
+        rig.frame(
+            FrameData::LlmMessagesAppend(MessagesFrame {
+                messages: vec![text(ChatRole::User, "Small accepted append")],
+                run_llm: true,
+            }),
+            false,
+        )
+        .await;
+        peer.wait_for(|trace| trace.input.len() >= 2).await;
+        rig.settle_turn(&peer).await;
+        let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+        assert_eq!(report.total_errors, 3);
+        assert_eq!(
+            trace.input,
+            vec![
+                seed_wire(vec![turn("user", "Small accepted append")], true),
+                nudge()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_with_or_without_system_is_zero_wire_ready_even_when_inference_is_selected() {
+        for model in ["gemini-2.5-live", "gemini-3-live"] {
+            for system in [None, Some("Configured")] {
+                for inference in [false, true] {
+                    let (peer, client) = Peer::open(|c| {
+                        c.session.model = model.into();
+                        c.session.system_instruction = system.map(str::to_owned);
+                    })
+                    .await;
+                    let mut rig =
+                        Harness::start(client.with_initial_history(policy(inference)).unwrap())
+                            .await;
+                    rig.seed(context(vec![])).await;
+                    rig.seed(context(vec![])).await;
+                    rig.frame(audio(), false).await;
+                    peer.wait_for(|trace| !trace.input.is_empty()).await;
+                    rig.settle_turn(&peer).await;
+                    let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+                    assert!(report.errors.is_empty(), "{:?}", report.errors);
+                    assert_eq!(
+                        trace.input.len(),
+                        1,
+                        "empty startup synthesized content: {:?}",
+                        trace.input
+                    );
+                    assert!(trace.input[0]["realtimeInput"]["audio"].is_object());
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn waiting_for_seed_suppresses_realtime_and_edges_without_preroll_or_video_leakage() {
+        let (peer, client) = Peer::open(|c| c.session.activity_detection.disabled = true).await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        rig.frame(
+            FrameData::InputAudio(AudioRawFrame {
+                audio: vec![0],
+                sample_rate: 16_000,
+                num_channels: 1,
+                context_id: None,
+            }),
+            true,
+        )
+        .await;
+        rig.frame(
+            FrameData::InputImage(ImageRawFrame {
+                image: vec![0],
+                size: (2, 2),
+                format: Some("RGB".into()),
+            }),
+            true,
+        )
+        .await;
+        for data in [
+            audio(),
+            FrameData::InputText(TextFrame::new("suppressed")),
+            video(),
+            FrameData::UserStartedSpeaking,
+            audio(),
+            FrameData::UserStoppedSpeaking,
+        ] {
+            rig.frame(data, false).await;
+        }
+        rig.frame(FrameData::LlmRun, true).await;
+        rig.frame(
+            FrameData::LlmMessagesAppend(MessagesFrame {
+                messages: vec![text(ChatRole::User, "not a seed")],
+                run_llm: false,
+            }),
+            true,
+        )
+        .await;
+        rig.seed(context(vec![])).await;
+        rig.frame(FrameData::UserStartedSpeaking, false).await;
+        rig.frame(audio(), false).await;
+        rig.frame(FrameData::UserStoppedSpeaking, false).await;
+        peer.wait_for(|trace| trace.input.len() >= 3).await;
+        rig.settle_turn(&peer).await;
+        let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+        assert_eq!(report.total_errors, 4);
+        assert_eq!(trace.input.len(), 3);
+        assert_eq!(
+            trace.input[0],
+            json!({"realtimeInput":{"activityStart":{}}})
+        );
+        assert_eq!(trace.input[1]["realtimeInput"]["audio"]["data"], "AwAEAA==");
+        assert_eq!(trace.input[2], json!({"realtimeInput":{"activityEnd":{}}}));
+    }
+
+    #[tokio::test]
+    async fn explicit_run_and_append_keep_native_roles_and_add_only_required_nudges() {
+        for model in ["gemini-2.5-live", "gemini-3-live"] {
+            let (peer, client) = Peer::open(|c| c.session.model = model.into()).await;
+            let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+            rig.seed(context(vec![])).await;
+            let mut expected = Vec::new();
+            for run_llm in [false, true] {
+                rig.frame(
+                    FrameData::LlmMessagesAppend(MessagesFrame {
+                        messages: vec![text(ChatRole::Assistant, "Native assistant append")],
+                        run_llm,
+                    }),
+                    false,
+                )
+                .await;
+                expected.push(seed_wire(
+                    vec![turn("model", "Native assistant append")],
+                    run_llm,
+                ));
+                if run_llm && model == "gemini-3-live" {
+                    expected.push(nudge());
+                }
+            }
+            rig.frame(FrameData::LlmRun, false).await;
+            expected.push(seed_wire(vec![], true));
+            if model == "gemini-3-live" {
+                expected.push(nudge());
+            }
+            peer.wait_for(|trace| trace.input.len() >= expected.len())
+                .await;
+            rig.settle_turn(&peer).await;
+            let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert_eq!(trace.input, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_stop_and_end_await_the_actual_actor_before_and_after_initialization() {
+        for terminal in [
+            WorkerState::Ended,
+            WorkerState::Stopped,
+            WorkerState::Cancelled,
+        ] {
+            for stage in [0, 1, 2, 3] {
+                let (peer, client) =
+                    Peer::open(|c| c.session.model = "gemini-2.5-live".into()).await;
+                let mut rig =
+                    Harness::start(client.with_initial_history(policy(stage == 3)).unwrap()).await;
+                if stage > 0 {
+                    rig.seed(context(if stage == 1 {
+                        vec![]
+                    } else {
+                        vec![text(ChatRole::User, "Seed")]
+                    }))
+                    .await;
+                }
+                if stage >= 2 {
+                    peer.wait_for(|trace| !trace.input.is_empty()).await;
+                }
+                if stage == 3 && terminal != WorkerState::Cancelled {
+                    // Both graceful terminal hooks settle the real outstanding startup response.
+                    let sender = rig.worker.sender();
+                    if terminal == WorkerState::Ended {
+                        sender.end().await.unwrap();
+                    } else {
+                        sender
+                            .send(Frame::new(FrameData::Stop), Direction::Downstream)
+                            .await
+                            .unwrap();
+                    }
+                    peer.send(json!({"serverContent":{"modelTurn":{"parts":[{"text":"Drained startup answer"}]},"turnComplete":true}})).await;
+                    let observer = rig.processor.selected_join_observer().unwrap();
+                    let (_, report) = tokio::time::timeout(WAIT, rig.worker.collect())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(report.state, terminal);
+                    assert!(report.errors.is_empty(), "{:?}", report.errors);
+                    assert!(
+                        observer.joined(),
+                        "terminal receipt is not a substitute for actor join"
+                    );
+                    peer.join().await;
+                } else {
+                    let (report, _) = rig.terminal(peer, terminal).await;
+                    assert!(
+                        report.errors.is_empty(),
+                        "stage={stage}: {:?}",
+                        report.errors
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn selected_public_sender_clones_stay_sealed_and_private_input_still_works() {
+        for inference in [false, true] {
+            let (peer, client) = Peer::open(|_| {}).await;
+            let mut rig =
+                Harness::start(client.with_initial_history(policy(inference)).unwrap()).await;
+            let sender = rig.processor.sender().unwrap();
+            let clones = [sender.clone(), sender.clone()];
+            for stage in [0, 1, 2] {
+                if stage == 1 {
+                    rig.seed(context(vec![text(ChatRole::User, "Seed")])).await;
+                }
+                if stage == 2 {
+                    rig.seed(context(vec![text(ChatRole::User, "Seed")])).await;
+                }
+                for selected in &clones {
+                    let generation = selected.generation();
+                    for action in [
+                        Action::Audio(vec![0, 0]),
+                        Action::Audio(vec![0]),
+                        Action::VideoJpeg(vec![0xff, 0xd8, 0xff, 0xd9]),
+                        Action::RealtimeText("x".repeat((1 << 20) + 1)),
+                        Action::ClientContent {
+                            turns: vec![],
+                            turn_complete: false,
+                        },
+                        Action::ClientContent {
+                            turns: vec![],
+                            turn_complete: true,
+                        },
+                        Action::ActivityStart { preroll: vec![] },
+                        Action::ActivityEnd,
+                        Action::AudioStreamEnd,
+                        Action::ToolResponses(vec![]),
+                        Action::NonBlockingToolResponses(vec![]),
+                    ] {
+                        assert!(matches!(
+                            selected.try_send(action, Origin::default()),
+                            Err(GeminiError::Unsupported(_))
+                        ));
+                        assert_eq!(selected.generation(), generation);
+                    }
+                }
+            }
+            rig.frame(
+                FrameData::InputText(TextFrame::new("Private legitimate text")),
+                false,
+            )
+            .await;
+            let expected = if inference { 3 } else { 2 };
+            peer.wait_for(|trace| trace.input.len() >= expected).await;
+            rig.settle_turn(&peer).await;
+            let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert_eq!(trace.input.len(), expected);
+            assert_eq!(
+                trace.input.last().unwrap(),
+                &json!({"realtimeInput":{"text":"Private legitimate text"}})
+            );
+            for sender in &clones {
+                assert!(matches!(
+                    sender.try_send(Action::RealtimeText("stale".into()), Origin::default()),
+                    Err(GeminiError::Unsupported(_))
+                ));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn selected_video_and_blocking_tool_results_reach_private_typed_admission() {
+        let (peer, client) = Peer::open(|c| {
+            c.session.tools = vec![FunctionDeclaration {
+                name: "lookup".into(),
+                description: "synthetic".into(),
+                parameters: json!({"type":"object"}),
+            }]
+        })
+        .await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        rig.seed(context(vec![])).await;
+        rig.frame(video(), false).await;
+        peer.wait_for(|trace| {
+            trace
+                .input
+                .iter()
+                .any(|v| v["realtimeInput"]["video"].is_object())
+        })
+        .await;
+        peer.send(
+            json!({"toolCall":{"functionCalls":[{"id":"real-call","name":"lookup","args":{}}]}}),
+        )
+        .await;
+        loop {
+            let out = rig.next().await;
+            if matches!(&out.frame.data, FrameData::FunctionCallInProgress(call) if call.tool_call_id == "real-call")
+            {
+                break;
+            }
+        }
+        rig.frame(
+            FrameData::FunctionCallResult(FunctionCallResultFrame {
+                function_name: "lookup".into(),
+                tool_call_id: "real-call".into(),
+                arguments: json!({}),
+                result: json!({"answer":42}),
+                run_llm: Some(true),
+                is_final: true,
+                error: None,
+            }),
+            false,
+        )
+        .await;
+        peer.wait_for(|trace| trace.input.iter().any(|v| v["toolResponse"].is_object()))
+            .await;
+        rig.settle_turn(&peer).await;
+        let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(trace.input.len(), 2);
+        assert_eq!(
+            trace.input[0]["realtimeInput"]["video"]["mimeType"],
+            "image/jpeg"
+        );
+        assert_eq!(
+            trace.input[1],
+            json!({"toolResponse":{"functionResponses":[{
+                "id":"real-call","name":"lookup","response":{"answer":42}
+            }]}})
+        );
+    }
+}
+
+#[tokio::test]
+async fn selected_setup_ack_is_a_real_gate_and_pre_ack_cancel_creates_no_join_evidence() {
+    for cancel_before_ack in [false, true] {
+        let (seen_tx, seen_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let (url, peer) = server(move |mut ws, setup| async move {
+            assert_eq!(
+                setup["setup"]["historyConfig"],
+                json!({"initialHistoryInClientContent":true})
+            );
+            ws.send(Message::Ping(vec![7, 3].into())).await.unwrap();
+            assert!(
+                matches!(
+                    timeout(DEADLINE, ws.next())
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap(),
+                    Message::Pong(_)
+                ),
+                "content was written before setupComplete"
+            );
+            seen_tx.send(()).unwrap();
+            release_rx.await.unwrap();
+            if !cancel_before_ack {
+                ready(&mut ws).await;
+            }
+            disconnected(&mut ws).await;
+        })
+        .await;
+        let mut c = config(url);
+        c.session.model = "gemini-3-live".into();
+        let processor = Arc::new(GeminiLiveProcessor::new(
+            GeminiClient::new(c)
+                .unwrap()
+                .with_initial_history(initial_history::policy(true))
+                .unwrap(),
+        ));
+        let handle = processor.clone();
+        let startup = tokio::spawn(async move {
+            Pipeline::new(vec![handle])
+                .start(PipelineConfig::default())
+                .await
+        });
+        timeout(DEADLINE, seen_rx).await.unwrap().unwrap();
+        assert!(!startup.is_finished());
+        assert!(
+            processor.selected_join_observer().is_none(),
+            "no actor exists before setupComplete"
+        );
+        if cancel_before_ack {
+            startup.abort();
+            match startup.await {
+                Err(error) => assert!(error.is_cancelled()),
+                Ok(_) => panic!("aborted setup unexpectedly completed"),
+            }
+            release_tx.send(()).unwrap();
+            peer.await.unwrap();
+            assert!(
+                processor.selected_join_observer().is_none(),
+                "socket closure must not fabricate actor join"
+            );
+        } else {
+            release_tx.send(()).unwrap();
+            let worker = timeout(DEADLINE, startup).await.unwrap().unwrap().unwrap();
+            let observer = processor.selected_join_observer().unwrap();
+            assert!(!observer.joined());
+            worker.cancel("selected setup gate checked").await.unwrap();
+            let (_, report) = timeout(DEADLINE, worker.collect()).await.unwrap().unwrap();
+            assert_eq!(report.state, pipecat_core::WorkerState::Cancelled);
+            assert!(observer.joined());
+            peer.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
+async fn selected_sequential_restart_has_fresh_seed_and_distinct_join_authority() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("ws://{}/live", listener.local_addr().unwrap());
+    let peer = tokio::spawn(async move {
+        let mut trace = Vec::new();
+        for _ in 0..2 {
+            let (tcp, _) = timeout(DEADLINE, listener.accept()).await.unwrap().unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            assert_eq!(
+                read(&mut ws).await["setup"]["historyConfig"],
+                json!({"initialHistoryInClientContent":true})
+            );
+            ready(&mut ws).await;
+            trace.push(read(&mut ws).await);
+            // Any duplicate seed or use of an old sender is an extra JSON packet.
+            match timeout(DEADLINE, ws.next()).await.unwrap() {
+                Some(Ok(Message::Close(_))) | None => {
+                    let _ = ws.flush().await;
+                }
+                other => panic!("unexpected restarted-session wire: {other:?}"),
+            }
+        }
+        trace
+    });
+    let mut c = config(url);
+    c.session.model = "gemini-3-live".into();
+    let processor = Arc::new(GeminiLiveProcessor::new(
+        GeminiClient::new(c)
+            .unwrap()
+            .with_initial_history(initial_history::policy(false))
+            .unwrap(),
+    ));
+    let mut previous: Option<SelectedJoinObserver> = None;
+    let mut old_sender: Option<GeminiSender> = None;
+    for label in ["First run", "New run"] {
+        let mut rig = initial_history::Harness::reuse(processor.clone()).await;
+        let observer = processor.selected_join_observer().unwrap();
+        assert!(!observer.joined());
+        if let Some(old) = &previous {
+            assert!(old.joined());
+        }
+        if let Some(old) = &old_sender {
+            old.cancel();
+            assert!(matches!(
+                old.try_send(Action::RealtimeText("old run".into()), Origin::default()),
+                Err(GeminiError::Unsupported(_))
+            ));
+        }
+        rig.seed(initial_history::context(vec![initial_history::text(
+            ChatRole::User,
+            label,
+        )]))
+        .await;
+        old_sender = Some(processor.sender().unwrap());
+        rig.worker.end().await.unwrap();
+        let (_, report) = timeout(DEADLINE, rig.worker.collect())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.state, pipecat_core::WorkerState::Ended);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(observer.joined());
+        previous = Some(observer);
+    }
+    assert_eq!(
+        peer.await.unwrap(),
+        vec![
+            initial_history::seed_wire(vec![initial_history::turn("user", "First run")], false),
+            initial_history::seed_wire(vec![initial_history::turn("user", "New run")], false),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn selected_nonblocking_partial_and_final_results_remain_admissible_during_finish() {
+    use initial_history::{context, policy, Harness, Peer, WAIT};
+    use pipecat_core::FunctionCallResultFrame;
+    let (peer, client) = Peer::open(|c| {
+        c.session.tools = vec![FunctionDeclaration {
+            name: "lookup".into(),
+            description: "synthetic".into(),
+            parameters: json!({"type":"object"}),
+        }]
+    })
+    .await;
+    let client = client
+        .with_non_blocking_tools(vec!["lookup".into()])
+        .unwrap()
+        .with_initial_history(policy(false))
+        .unwrap();
+    let mut rig = Harness::start(client).await;
+    rig.seed(context(vec![])).await;
+    peer.send(
+        json!({"toolCall":{"functionCalls":[{"id":"pending-tool","name":"lookup","args":{}}]}}),
+    )
+    .await;
+    loop {
+        let output = rig.next().await;
+        if matches!(&output.frame.data, FrameData::FunctionCallInProgress(call) if call.tool_call_id == "pending-tool")
+        {
+            break;
+        }
+    }
+    let result = |is_final| {
+        FrameData::FunctionCallResult(FunctionCallResultFrame {
+            function_name: "lookup".into(),
+            tool_call_id: "pending-tool".into(),
+            arguments: json!({}),
+            result: json!({"answer":42}),
+            run_llm: Some(false),
+            is_final,
+            error: None,
+        })
+    };
+    rig.frame(result(false), false).await;
+    peer.wait_for(|trace| !trace.input.is_empty()).await;
+    let sender = rig.processor.sender().unwrap();
+    let observer = rig.processor.selected_join_observer().unwrap();
+    sender.finish().await.unwrap();
+    // This is the real public finish control followed by a real processor result,
+    // not a selected raw Action bypass. The pending tool keeps the actor alive.
+    assert!(!observer.joined());
+    rig.frame(result(true), false).await;
+    peer.wait_for(|trace| trace.input.len() >= 2).await;
+    rig.worker.end().await.unwrap();
+    let (_, report) = timeout(WAIT, rig.worker.collect()).await.unwrap().unwrap();
+    assert_eq!(report.state, pipecat_core::WorkerState::Ended);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(observer.joined());
+    let trace = peer.join().await;
+    assert_eq!(trace.input, [true, false].into_iter().map(|will_continue|
+        json!({"toolResponse":{"functionResponses":[{"id":"pending-tool","name":"lookup",
+            "response":{"answer":42},"willContinue":will_continue,"scheduling":"SILENT"}]}})
+    ).collect::<Vec<_>>());
+}
+
+#[test]
+fn initial_history_fixture_is_explicitly_static_source_evidence_not_sdk_execution() {
+    let source: Value =
+        serde_json::from_str(include_str!("fixtures/initial_history_source.json")).unwrap();
+    assert_eq!(
+        source["source_revision"],
+        "af9f9da9d7afddaa8811c0e0251b32566c980bdf"
+    );
+    assert_eq!(source["files"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        source["evidence_kind"],
+        "static source inspection; not an executed Python/SDK oracle"
+    );
+    assert_eq!(source["conclusions"]["sole_system"], "user turn");
+    assert_eq!(
+        source["conclusions"]["developer"],
+        "user turn, not extracted as system"
+    );
+}
+
+#[tokio::test]
+async fn selected_end_flushes_real_pending_audio_or_activity_then_awaits_actual_actor() {
+    use initial_history::{context, policy, Harness, Peer, WAIT};
+    for manual in [false, true] {
+        let (peer, client) = Peer::open(|c| c.session.activity_detection.disabled = manual).await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        rig.seed(context(vec![])).await;
+        if manual {
+            rig.frame(FrameData::UserStartedSpeaking, false).await;
+        }
+        rig.frame(initial_history::audio(), false).await;
+        peer.wait_for(|trace| {
+            trace
+                .input
+                .iter()
+                .any(|wire| wire["realtimeInput"]["audio"].is_object())
+        })
+        .await;
+        let observer = rig.processor.selected_join_observer().unwrap();
+        rig.worker.end().await.unwrap();
+        let trace = peer
+            .wait_for(|trace| {
+                trace.input.iter().any(|wire| {
+                    if manual {
+                        wire["realtimeInput"]["activityEnd"].is_object()
+                    } else {
+                        wire["realtimeInput"]["audioStreamEnd"] == true
+                    }
+                })
+            })
+            .await;
+        assert!(
+            !observer.joined(),
+            "flush write is not the actual actor join"
+        );
+        peer.send(json!({"serverContent":{"turnComplete":true}}))
+            .await;
+        let (_, report) = timeout(WAIT, rig.worker.collect()).await.unwrap().unwrap();
+        assert_eq!(report.state, pipecat_core::WorkerState::Ended);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(observer.joined());
+        assert_eq!(trace.input.len(), if manual { 3 } else { 2 });
+        let complete = peer.join().await;
+        assert_eq!(
+            complete.input, trace.input,
+            "End emitted duplicate flush/content"
+        );
+    }
 }

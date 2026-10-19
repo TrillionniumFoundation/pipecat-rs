@@ -42,6 +42,7 @@ fn lossless_seed_context(seed: LlmContextFrame) -> LlmContextData {
 
 struct Rig {
     worker: PipelineWorker,
+    service: Option<Arc<GeminiLiveProcessor>>,
     context: SharedContext,
     before_assistant: Arc<ProbeState>,
     after_assistant: Arc<ProbeState>,
@@ -73,6 +74,7 @@ impl Rig {
         let after_assistant = Arc::new(ProbeState::default());
         let tail = Arc::new(ProbeState::default());
         let route = GeminiHistoryRoute::new(client, pair, options).unwrap();
+        let service = route.service();
         let mut processors = route.into_processors(vec![Arc::new(Probe {
             name: "BeforeActualAssistant",
             context: context.clone(),
@@ -109,6 +111,7 @@ impl Rig {
             .unwrap();
         Self {
             worker,
+            service,
             context,
             before_assistant,
             after_assistant,
@@ -155,19 +158,39 @@ impl Rig {
         history_text(&self.context.snapshot_rich().unwrap())
     }
     async fn end(mut self, peer: Peer) -> WireTrace {
+        let observer = self
+            .service
+            .as_ref()
+            .and_then(|service| service.selected_join_observer());
         self.worker.end().await.unwrap();
         let report = join_worker(&mut self.worker).await.unwrap();
         assert_eq!(report.state, WorkerState::Ended, "{:?}", report.errors);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
+        if let Some(observer) = observer {
+            assert!(
+                observer.joined(),
+                "selected End did not await the actual socket actor"
+            );
+        }
         peer.join().await
     }
     async fn cancel(mut self, peer: Peer) -> WireTrace {
+        let observer = self
+            .service
+            .as_ref()
+            .and_then(|service| service.selected_join_observer());
         self.worker
             .cancel("paired-history fixture complete")
             .await
             .unwrap();
         let report = join_worker(&mut self.worker).await.unwrap();
         assert_eq!(report.state, WorkerState::Cancelled, "{:?}", report.errors);
+        if let Some(observer) = observer {
+            assert!(
+                observer.joined(),
+                "selected Cancel did not await the actual socket actor"
+            );
+        }
         peer.join().await
     }
 }
@@ -2104,4 +2127,385 @@ async fn no_model_end_commits_already_consumed_source_finals_as_one_user_batch()
         .iter()
         .all(|item| !production(&item.frame)));
     assert_no_seed_or_typed_feedback(&peer.join().await);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn selected_startup_padding_and_nudge_never_enter_real_paired_history_or_bypass_receipts() {
+    for model in ["gemini-2.5-live", "gemini-3-live"] {
+        for inference_on_initialization in [false, true] {
+            let (peer, client) = Peer::open(|c| c.session.model = model.into()).await;
+            let client = client
+                .with_initial_history(InitialHistoryPolicy {
+                    inference_on_initialization,
+                })
+                .unwrap();
+            let seed = LlmContextFrame {
+                messages: vec![
+                    ChatMessage::new(ChatRole::User, "Earlier question."),
+                    ChatMessage::new(ChatRole::Assistant, "Earlier answer."),
+                ],
+                ..Default::default()
+            };
+            let initial = vec![
+                (ChatRole::User, "Earlier question.".into()),
+                (ChatRole::Assistant, "Earlier answer.".into()),
+            ];
+            let context = SharedContext::new_rich(lossless_seed_context(seed.clone()));
+            let hold = Hold::new(HoldKind::FinalTranscription);
+            let rig = Rig::with_options(
+                client,
+                pair(context, false),
+                Some(hold.clone()),
+                GeminiHistoryOptions {
+                    initial_seed: Some(seed),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let startup_count = if model == "gemini-3-live" && inference_on_initialization {
+                2
+            } else {
+                1
+            };
+            let startup = peer
+                .wait_for(|trace| trace.input.len() >= startup_count)
+                .await;
+            assert_eq!(
+                startup.setup.unwrap()["setup"]["historyConfig"],
+                json!({"initialHistoryInClientContent":true})
+            );
+            assert_eq!(
+                startup.input[0]["clientContent"]["turnComplete"],
+                inference_on_initialization
+            );
+            let turns = startup.input[0]["clientContent"]["turns"]
+                .as_array()
+                .unwrap();
+            assert_eq!(turns.len(), if model == "gemini-2.5-live" { 3 } else { 2 });
+            if model == "gemini-2.5-live" {
+                assert_eq!(turns[2], json!({"role":"user","parts":[{"text":" "}]}));
+            }
+            if startup_count == 2 {
+                assert_eq!(startup.input[1], json!({"realtimeInput":{"text":" "}}));
+            }
+            assert_eq!(rig.history(), initial);
+            let observer = rig
+                .service
+                .as_ref()
+                .unwrap()
+                .selected_join_observer()
+                .unwrap();
+            assert!(!observer.joined());
+            rig.input_audio().await;
+            peer.wait_for(|trace| {
+                trace
+                    .input
+                    .iter()
+                    .any(|wire| wire["realtimeInput"]["audio"].is_object())
+            })
+            .await;
+            peer.send(answer(
+                "Real assistant answer.",
+                Some("Real user question."),
+                true,
+                1261,
+            ))
+            .await;
+            hold.wait_entered().await;
+            rig.usage(1261).await;
+            assert_eq!(
+                rig.history(),
+                initial,
+                "synthetic seed text or unconsumed input entered history"
+            );
+            assert!(
+                rig.before_assistant
+                    .snapshot()
+                    .iter()
+                    .all(|item| !production(&item.frame)),
+                "startup policy bypassed the actual user-consumption barrier"
+            );
+            assert!(
+                !observer.joined(),
+                "a held output/history receipt cannot prove actor join"
+            );
+            hold.release();
+            let output = rig.response("Real assistant answer.").await;
+            let mut committed = initial;
+            committed.push((ChatRole::User, "Real user question.".into()));
+            assert_eq!(history_text(&output.history), committed);
+            rig.response_end().await;
+            committed.push((ChatRole::Assistant, "Real assistant answer.".into()));
+            assert_eq!(rig.history(), committed);
+            let trace = rig.end(peer).await;
+            assert!(observer.joined());
+            assert_eq!(
+                trace
+                    .input
+                    .iter()
+                    .filter(|wire| wire["clientContent"].is_object())
+                    .count(),
+                1,
+                "authentic local context feedback replayed the initial seed"
+            );
+            assert_eq!(
+                trace
+                    .input
+                    .iter()
+                    .filter(|wire| wire["realtimeInput"].get("text").is_some())
+                    .count(),
+                usize::from(startup_count == 2),
+                "local transcription echoed or synthetic nudge repeated"
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn selected_implicit_and_explicit_empty_pair_are_ready_for_real_audio_with_system_configured()
+{
+    for explicit in [false, true] {
+        let (peer, client) =
+            Peer::open(|c| c.session.system_instruction = Some("Configured system".into())).await;
+        let client = client
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: true,
+            })
+            .unwrap();
+        let rig = Rig::with_options(
+            client,
+            pair(SharedContext::default(), false),
+            None,
+            GeminiHistoryOptions {
+                initial_seed: explicit.then(LlmContextFrame::default),
+                ..Default::default()
+            },
+        )
+        .await;
+        rig.input_audio().await;
+        peer.wait_for(|trace| {
+            trace
+                .input
+                .iter()
+                .any(|wire| wire["realtimeInput"]["audio"].is_object())
+        })
+        .await;
+        peer.send(answer(
+            "Empty-pair real answer.",
+            Some("Empty-pair real question."),
+            false,
+            1262,
+        ))
+        .await;
+        let output = rig.response("Empty-pair real answer.").await;
+        assert_eq!(
+            history_text(&output.history),
+            vec![(ChatRole::User, "Empty-pair real question.".into())]
+        );
+        rig.response_end().await;
+        assert_eq!(
+            rig.history(),
+            vec![
+                (ChatRole::User, "Empty-pair real question.".into()),
+                (ChatRole::Assistant, "Empty-pair real answer.".into())
+            ]
+        );
+        let trace = rig.end(peer).await;
+        assert_no_seed_or_typed_feedback(&trace);
+        assert!(
+            trace
+                .input
+                .iter()
+                .any(|wire| wire["realtimeInput"]["audio"].is_object()),
+            "absence of empty seed alone does not prove the pair became ready"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn selected_paired_cancel_and_stop_recover_the_same_actual_socket_owner() {
+    for stop in [false, true] {
+        let (peer, client) = Peer::open(|c| c.session.model = "gemini-2.5-live".into()).await;
+        let client = client
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let seed = LlmContextFrame {
+            messages: vec![ChatMessage::new(ChatRole::User, "Silent pending seed.")],
+            ..Default::default()
+        };
+        let context = SharedContext::new_rich(lossless_seed_context(seed.clone()));
+        let mut rig = Rig::with_options(
+            client,
+            pair(context, false),
+            None,
+            GeminiHistoryOptions {
+                initial_seed: Some(seed),
+                ..Default::default()
+            },
+        )
+        .await;
+        peer.wait_for(|trace| !trace.input.is_empty()).await;
+        let observer = rig
+            .service
+            .as_ref()
+            .unwrap()
+            .selected_join_observer()
+            .unwrap();
+        assert!(!observer.joined());
+        if stop {
+            rig.send(FrameData::Stop).await;
+            let report = join_worker(&mut rig.worker).await.unwrap();
+            assert_eq!(report.state, WorkerState::Stopped, "{:?}", report.errors);
+            assert!(
+                observer.joined(),
+                "Stop must settle in prepare_end without relying on cleanup"
+            );
+            peer.join().await;
+        } else {
+            rig.cancel(peer).await;
+            assert!(observer.joined());
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn selected_paired_run_and_append_still_reject_before_history_mutation_and_join_on_failure() {
+    for data in [
+        FrameData::LlmRun,
+        FrameData::LlmMessagesAppend(MessagesFrame {
+            messages: vec![ChatMessage::new(ChatRole::User, "Forbidden append")],
+            run_llm: true,
+        }),
+    ] {
+        let (peer, client) = Peer::open(|_| {}).await;
+        let client = client
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let mut rig = Rig::start(client, false, None).await;
+        let observer = rig
+            .service
+            .as_ref()
+            .unwrap()
+            .selected_join_observer()
+            .unwrap();
+        rig.send(data).await;
+        let error = error_frame(&mut rig.worker, "selected paired mutation").await;
+        assert!(!error.error.is_empty());
+        assert!(rig.history().is_empty());
+        if !rig.worker.has_finished() {
+            let _ = rig.worker.cancel("observed rejection").await;
+        }
+        let _ = join_worker(&mut rig.worker).await;
+        assert!(observer.joined());
+        assert_no_seed_or_typed_feedback(&peer.join().await);
+    }
+}
+
+#[tokio::test]
+async fn selected_paired_transformed_limit_and_invalid_extracted_system_fail_before_connect() {
+    for invalid_system in [false, true] {
+        let (listener, client) = disconnected_client(|c| {
+            c.session.model = "gemini-2.5-live".into();
+            c.session.system_instruction = Some("Configured".into());
+        })
+        .await;
+        let client = client
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let messages = if invalid_system {
+            let mut system = ChatMessage::new(ChatRole::System, "Configured");
+            system.name = Some("unsupported metadata on omitted system".into());
+            vec![system, ChatMessage::new(ChatRole::User, "Regular text")]
+        } else {
+            let mut messages = vec![ChatMessage::new(ChatRole::User, "x"); 1024];
+            messages[1023].role = ChatRole::Assistant;
+            messages
+        };
+        let seed = LlmContextFrame {
+            messages,
+            ..Default::default()
+        };
+        let context = SharedContext::new_rich(lossless_seed_context(seed.clone()));
+        assert!(GeminiHistoryRoute::new(
+            client,
+            pair(context, false),
+            GeminiHistoryOptions {
+                initial_seed: Some(seed),
+                ..Default::default()
+            }
+        )
+        .is_err());
+        no_connection(&listener).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn selected_paired_route_cannot_be_started_a_second_time_after_real_join() {
+    let (peer, client) = Peer::open(|_| {}).await;
+    let client = client
+        .with_initial_history(InitialHistoryPolicy {
+            inference_on_initialization: false,
+        })
+        .unwrap();
+    let route = GeminiHistoryRoute::new(
+        client,
+        pair(SharedContext::default(), false),
+        GeminiHistoryOptions::default(),
+    )
+    .unwrap();
+    let service = route.service().unwrap();
+    let processors = route.into_processors(vec![]);
+    let mut worker = Pipeline::new(processors.clone())
+        .start(pipeline_config())
+        .await
+        .unwrap();
+    let observer = service.selected_join_observer().unwrap();
+    worker.end().await.unwrap();
+    let report = join_worker(&mut worker).await.unwrap();
+    assert_eq!(report.state, WorkerState::Ended, "{:?}", report.errors);
+    assert!(observer.joined());
+    peer.join().await;
+    assert!(Pipeline::new(processors)
+        .start(pipeline_config())
+        .await
+        .is_err());
+    assert!(
+        observer.joined(),
+        "second-use rejection changed the first run's join evidence"
+    );
+}
+
+#[tokio::test]
+async fn typed_service_observation_never_exposes_default_paired_raw_sender() {
+    for selected in [false, true] {
+        let (listener, client) =
+            disconnected_client(|c| c.session.model = "gemini-3-live".into()).await;
+        let client = if selected {
+            client
+                .with_initial_history(InitialHistoryPolicy {
+                    inference_on_initialization: false,
+                })
+                .unwrap()
+        } else {
+            client
+        };
+        let route = GeminiHistoryRoute::new(
+            client,
+            pair(SharedContext::default(), false),
+            GeminiHistoryOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            route.service().is_some(),
+            selected,
+            "typed service access must not open default paired raw sender admission"
+        );
+        no_connection(&listener).await;
+    }
 }

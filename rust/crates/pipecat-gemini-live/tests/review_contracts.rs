@@ -614,3 +614,112 @@ async fn generated_results_cannot_cross_sessions_or_survive_interruption() {
         task.await.unwrap();
     }
 }
+
+#[test]
+fn initial_history_is_additive_and_existing_config_literals_stay_source_compatible() {
+    let session = SessionConfig {
+        model: "source-model".into(),
+        modality: Modality::Audio,
+        system_instruction: None,
+        voice: None,
+        language_code: None,
+        temperature: None,
+        max_output_tokens: None,
+        top_p: None,
+        top_k: None,
+        input_transcription: true,
+        output_transcription: true,
+        activity_detection: AutomaticActivityDetection::default(),
+        tools: vec![],
+    };
+    let config = GeminiConfig {
+        endpoint: "ws://127.0.0.1:9/live".into(),
+        api_key: "synthetic-key".into(),
+        session,
+        mode: SessionMode::Conversation,
+        input_sample_rate: 16_000,
+        limits: Limits::default(),
+    };
+    assert!(GeminiClient::new(config).is_ok());
+    #[cfg(feature = "paired-history")]
+    {
+        let options = GeminiHistoryOptions {
+            initial_seed: None,
+            ..Default::default()
+        };
+        assert!(options.initial_seed.is_none());
+    }
+}
+
+#[tokio::test]
+async fn selected_model_grammar_and_public_connect_are_rejected_before_network() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+    let selected = InitialHistoryPolicy {
+        inference_on_initialization: false,
+    };
+    for model in [
+        "gemini-2.5-flash-native-audio-preview-12-2025",
+        "models/gemini-3.8-live",
+        "gemini-3-live",
+        "gemini-live-preview-3.8-live",
+    ] {
+        let mut config = GeminiConfig::new("synthetic-key", model);
+        config.endpoint = endpoint.clone();
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(selected)
+            .unwrap();
+        let outcome = timeout(DEADLINE, client.connect())
+            .await
+            .expect("selected public connect did not reject locally");
+        assert!(
+            matches!(outcome, Err(GeminiError::Unsupported(_))),
+            "model={model}"
+        );
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(listener.poll_accept(cx)))
+                .await
+                .is_pending()
+        );
+    }
+    for model in [
+        "arbitrary-3-live",
+        "notgemini-3-live",
+        "gemini-2.0-live",
+        "gemini-4.0-live",
+        "gemini-3.8.1-live",
+        "gemini-3.8x-live",
+        "gemini-3.-live",
+        "gemini-3x-live",
+        "gemini-30-live",
+        "gemini-2.50-live",
+        "gemini-3..8-live",
+        "gemini-live3-preview",
+    ] {
+        let mut config = GeminiConfig::new("synthetic-key", model);
+        config.endpoint = endpoint.clone();
+        // Generic raw model acceptance remains independent of selected parsing.
+        let client = GeminiClient::new(config).unwrap();
+        assert!(
+            client.with_initial_history(selected).is_err(),
+            "accepted invalid selected model {model}"
+        );
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(listener.poll_accept(cx)))
+                .await
+                .is_pending()
+        );
+    }
+    let mut transcription = GeminiConfig::transcription("synthetic-key", "gemini-3-live");
+    transcription.endpoint = endpoint;
+    assert!(GeminiClient::new(transcription)
+        .unwrap()
+        .with_initial_history(selected)
+        .is_err());
+    assert!(
+        std::future::poll_fn(|cx| std::task::Poll::Ready(listener.poll_accept(cx)))
+            .await
+            .is_pending()
+    );
+}

@@ -871,6 +871,33 @@ pub(super) async fn run(
     }
 }
 
+/// Selected initialization shares the retained processor owner. The receive
+/// wrapper borrows its session guard, so aborting that wrapper cannot lose the
+/// actual socket JoinHandle needed by terminal recovery.
+pub(super) async fn run_borrowed(
+    owner: Arc<SelectedHistory>,
+    session: &mut GeminiSession,
+    output: ProcessorContext,
+    user_id: String,
+    emit_metrics: bool,
+) -> Result<(), ProcessorError> {
+    let selected = owner.initial_owner();
+    let outcome = match ReceiveState::new(&owner, user_id, session.sender().generation()) {
+        Ok(mut state) => receive(&owner, session, &output, &mut state, emit_metrics).await,
+        Err(failure) => Err(failure),
+    };
+    let closed = owner.endpoint.close_releases();
+    if let Some(selected) = selected {
+        selected.record_result(&outcome);
+        selected.record_result(&closed);
+    }
+    let joined = session.selected_shutdown().await.map_err(provider_error);
+    crate::processor::selected::combine(
+        outcome,
+        crate::processor::selected::combine(closed, joined),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{prefix_plan, PrefixPlan, SourceDependency};

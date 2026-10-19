@@ -56,6 +56,14 @@ impl ResumptionPolicy {
     }
 }
 
+/// Explicit, processor-owned text-history initialization. Raw `connect` is not
+/// available with this policy. Empty context initializes without requesting a
+/// greeting; Gemini 2.5 and Gemini 3 use their distinct completion protocols.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InitialHistoryPolicy {
+    pub inference_on_initialization: bool,
+}
+
 /// Explicit reasoning depth for a provider model that supports Live thinking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

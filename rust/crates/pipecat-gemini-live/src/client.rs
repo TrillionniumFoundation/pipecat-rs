@@ -65,6 +65,7 @@ struct Control {
 }
 struct Command {
     action: Option<Action>,
+    selected: Option<SelectedPlan>,
     origin: Origin,
     generation: u64,
 }
@@ -247,6 +248,7 @@ pub struct GeminiClient {
     config: Arc<GeminiConfig>,
     resumption: Option<ResumptionPolicy>,
     thinking: Option<ThinkingPolicy>,
+    initial_history: Option<(InitialHistoryPolicy, protocol::InitialHistoryModel)>,
     non_blocking_tools: Arc<HashSet<String>>,
 }
 impl GeminiClient {
@@ -272,6 +274,7 @@ impl GeminiClient {
             config: Arc::new(config),
             resumption: None,
             thinking: None,
+            initial_history: None,
             non_blocking_tools: Arc::new(HashSet::new()),
         })
     }
@@ -283,8 +286,71 @@ impl GeminiClient {
         policy: ResumptionPolicy,
     ) -> Result<Self, GeminiError> {
         policy.validate()?;
+        if self.initial_history.is_some() {
+            return Err(GeminiError::Unsupported(
+                "initial history with session resumption",
+            ));
+        }
         self.resumption = Some(policy);
         Ok(self)
+    }
+    /// Enable bounded initial-history startup owned by `GeminiLiveProcessor`.
+    /// Only complete Gemini 2.5 or Gemini 3 model tokens are accepted; model
+    /// parsing does not establish hosted availability. Session resumption and
+    /// transcription-only sessions are deliberately unsupported.
+    pub fn with_initial_history(
+        mut self,
+        policy: InitialHistoryPolicy,
+    ) -> Result<Self, GeminiError> {
+        if self.resumption.is_some() {
+            return Err(GeminiError::Unsupported(
+                "initial history with session resumption",
+            ));
+        }
+        if self.config.mode != SessionMode::Conversation {
+            return Err(GeminiError::Unsupported(
+                "initial history requires conversation mode",
+            ));
+        }
+        let model = protocol::initial_history_model(&self.config.session.model)?;
+        let setup = configured_setup(
+            &self.config,
+            self.thinking.as_ref(),
+            &self.non_blocking_tools,
+            true,
+        );
+        protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
+        self.initial_history = Some((policy, model));
+        Ok(self)
+    }
+    pub(crate) fn initial_history_policy(&self) -> Option<InitialHistoryPolicy> {
+        self.initial_history.map(|(policy, _)| policy)
+    }
+    pub(crate) fn plan_initial_history(
+        &self,
+        context: &pipecat_core::LlmContextFrame,
+    ) -> Result<InitialHistorySeed, GeminiError> {
+        let (policy, model) = self
+            .initial_history
+            .ok_or(GeminiError::Unsupported("initial history is not selected"))?;
+        let turns = protocol::initial_history_turns(context, &self.config, model)?;
+        let pending_first_stop = !turns.is_empty()
+            && !policy.inference_on_initialization
+            && model == protocol::InitialHistoryModel::Gemini25;
+        let actions = if turns.is_empty() {
+            Vec::new()
+        } else {
+            completion_actions(turns, policy.inference_on_initialization, model)
+        };
+        let messages = selected_messages(&actions, &self.config)?;
+        Ok(InitialHistorySeed {
+            config: self.config.clone(),
+            policy,
+            model,
+            actions,
+            messages,
+            pending_first_stop,
+        })
     }
     /// Enable typed thinking setup and defer utterance completion while the
     /// provider reports IN_PROGRESS. Select a compatible model explicitly.
@@ -299,7 +365,12 @@ impl GeminiClient {
                 "thinking requires conversation mode without tools",
             ));
         }
-        let mut setup = protocol::setup(&self.config);
+        let mut setup = configured_setup(
+            &self.config,
+            None,
+            &self.non_blocking_tools,
+            self.initial_history.is_some(),
+        );
         setup["setup"]["generationConfig"]["thinkingConfig"] =
             serde_json::json!({"thinkingLevel": policy.level});
         protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
@@ -345,7 +416,12 @@ impl GeminiClient {
                 return Err(GeminiError::Invalid("non-blocking tool selection"));
             }
         }
-        let setup = configured_setup(&self.config, self.thinking.as_ref(), &selected);
+        let setup = configured_setup(
+            &self.config,
+            self.thinking.as_ref(),
+            &selected,
+            self.initial_history.is_some(),
+        );
         protocol::check_json_size(&setup, self.config.limits.max_message_bytes)?;
         self.non_blocking_tools = Arc::new(selected);
         Ok(self)
@@ -380,19 +456,59 @@ impl GeminiClient {
     #[cfg(feature = "paired-history")]
     pub(crate) async fn connect_paired_history(&self) -> Result<GeminiSession, GeminiError> {
         self.validate_paired_history()?;
-        self.connect_with_policy(ReceivePolicy::PairedHistory).await
+        self.connect_with_policy(ReceivePolicy::PairedHistory, None)
+            .await
     }
 
     /// Returns only after the peer acknowledges setup. Dropping this future
     /// drops its socket; it does not leave a detached handshake task.
     pub async fn connect(&self) -> Result<GeminiSession, GeminiError> {
-        self.connect_with_policy(ReceivePolicy::Raw).await
+        if self.initial_history.is_some() {
+            return Err(GeminiError::Unsupported(
+                "initial history requires a processor-owned connection",
+            ));
+        }
+        self.connect_with_policy(ReceivePolicy::Raw, None).await
+    }
+
+    pub(crate) async fn connect_owned(&self, run_id: u64) -> Result<GeminiSession, GeminiError> {
+        self.connect_with_policy(ReceivePolicy::Raw, Some(run_id))
+            .await
+    }
+    #[cfg(feature = "paired-history")]
+    pub(crate) async fn connect_paired_history_owned(
+        &self,
+        run_id: u64,
+    ) -> Result<GeminiSession, GeminiError> {
+        self.validate_paired_history()?;
+        self.connect_with_policy(ReceivePolicy::PairedHistory, Some(run_id))
+            .await
     }
 
     async fn connect_with_policy(
         &self,
         receive_policy: ReceivePolicy,
+        run_id: Option<u64>,
     ) -> Result<GeminiSession, GeminiError> {
+        let selected = match self.initial_history {
+            Some((policy, model)) => Some(Arc::new(SelectedSessionTag {
+                run_id: run_id.ok_or(GeminiError::Unsupported(
+                    "initial history requires a processor-owned connection",
+                ))?,
+                policy,
+                model,
+                closed: AtomicBool::new(false),
+                #[cfg(test)]
+                write_boundary: std::sync::Mutex::new(None),
+                #[cfg(test)]
+                validation_boundary: std::sync::Mutex::new(None),
+                #[cfg(test)]
+                join_boundary: std::sync::Mutex::new(None),
+                #[cfg(test)]
+                abort_join_pending: std::sync::Mutex::new(None),
+            })),
+            None => None,
+        };
         let config = &self.config;
         let (socket, update) = open_socket(
             config,
@@ -400,6 +516,7 @@ impl GeminiClient {
             None,
             self.thinking.as_ref(),
             &self.non_blocking_tools,
+            self.initial_history.is_some(),
             receive_policy,
         )
         .await?;
@@ -418,6 +535,7 @@ impl GeminiClient {
             admission: Arc::new(std::sync::Mutex::new(())),
             tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
             non_blocking_tools: self.non_blocking_tools.clone(),
+            selected,
         };
         let worker_sender = sender.clone();
         let policy = self.resumption.clone();
@@ -442,6 +560,8 @@ impl GeminiClient {
             sender,
             events: events_rx,
             worker: Some(worker),
+            joined: SelectedJoinObserver::default(),
+            selected_terminal: SelectedTerminal::default(),
         })
     }
 }
@@ -449,8 +569,13 @@ fn configured_setup(
     config: &GeminiConfig,
     thinking: Option<&ThinkingPolicy>,
     non_blocking_tools: &HashSet<String>,
+    initial_history: bool,
 ) -> serde_json::Value {
     let mut setup = protocol::setup(config);
+    if initial_history {
+        setup["setup"]["historyConfig"] =
+            serde_json::json!({"initialHistoryInClientContent": true});
+    }
     if let Some(thinking) = thinking {
         setup["setup"]["generationConfig"]["thinkingConfig"] =
             serde_json::json!({"thinkingLevel": thinking.level});
@@ -495,11 +620,12 @@ async fn open_socket(
     handle: Option<&str>,
     thinking: Option<&ThinkingPolicy>,
     non_blocking_tools: &HashSet<String>,
+    initial_history: bool,
     receive_policy: ReceivePolicy,
 ) -> Result<(Socket, Option<protocol::ResumptionUpdate>), GeminiError> {
     #[cfg(not(feature = "paired-history"))]
     let _ = receive_policy;
-    let mut setup = configured_setup(config, thinking, non_blocking_tools);
+    let mut setup = configured_setup(config, thinking, non_blocking_tools, initial_history);
     if policy.is_some() {
         setup["setup"]["sessionResumption"] = match handle {
             Some(handle) => serde_json::json!({"handle": handle}),
@@ -596,6 +722,444 @@ fn transport(error: tokio_tungstenite::tungstenite::Error) -> GeminiError {
     }
 }
 
+/// Read-only evidence that the selected session's actual socket JoinHandle was
+/// awaited. EOF, cancellation and a task's own completion signal do not set it.
+#[derive(Clone, Default)]
+pub struct SelectedJoinObserver {
+    joined: Arc<AtomicBool>,
+}
+impl SelectedJoinObserver {
+    pub fn joined(&self) -> bool {
+        self.joined.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Default)]
+struct SelectedTerminal {
+    deadline: Option<Instant>,
+    forced: bool,
+    outcome: Option<Result<(), GeminiError>>,
+}
+
+#[cfg(test)]
+type SelectedWriteBoundary = (
+    tokio::sync::oneshot::Sender<()>,
+    tokio::sync::oneshot::Receiver<()>,
+);
+
+struct SelectedSessionTag {
+    run_id: u64,
+    policy: InitialHistoryPolicy,
+    model: protocol::InitialHistoryModel,
+    closed: AtomicBool,
+    #[cfg(test)]
+    write_boundary: std::sync::Mutex<Option<SelectedWriteBoundary>>,
+    #[cfg(test)]
+    validation_boundary: std::sync::Mutex<Option<SelectedWriteBoundary>>,
+    #[cfg(test)]
+    join_boundary: std::sync::Mutex<Option<SelectedWriteBoundary>>,
+    #[cfg(test)]
+    abort_join_pending: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+pub(crate) struct InitialHistorySeed {
+    config: Arc<GeminiConfig>,
+    policy: InitialHistoryPolicy,
+    model: protocol::InitialHistoryModel,
+    actions: Vec<Action>,
+    messages: Vec<String>,
+    pending_first_stop: bool,
+}
+impl InitialHistorySeed {
+    pub(crate) fn pending_first_stop(&self) -> bool {
+        self.pending_first_stop
+    }
+}
+
+/// This private value has no public/deserializable constructor. Its immutable
+/// connection capability, generation and complete bounded wire plan travel in
+/// one queue slot, including a zero-wire empty initialization transition.
+pub(crate) struct SelectedPlan {
+    tag: Arc<SelectedSessionTag>,
+    generation: u64,
+    origin: Origin,
+    actions: Vec<Action>,
+    messages: Vec<String>,
+    atomic_transition: bool,
+    strict_generation: bool,
+}
+
+fn completion_actions(
+    turns: Vec<TextTurn>,
+    complete: bool,
+    model: protocol::InitialHistoryModel,
+) -> Vec<Action> {
+    let mut actions = vec![Action::ClientContent {
+        turns,
+        turn_complete: complete,
+    }];
+    if complete && model == protocol::InitialHistoryModel::Gemini3 {
+        actions.push(Action::RealtimeText(" ".into()));
+    }
+    actions
+}
+fn selected_messages(
+    actions: &[Action],
+    config: &GeminiConfig,
+) -> Result<Vec<String>, GeminiError> {
+    let mut messages = Vec::new();
+    let mut bytes = 0usize;
+    for action in actions {
+        for message in protocol::action_messages(action, config)? {
+            let message =
+                serde_json::to_string(&message).map_err(|_| GeminiError::Invalid("JSON"))?;
+            bytes = bytes
+                .checked_add(message.len())
+                .ok_or(GeminiError::TooLarge)?;
+            if bytes > config.limits.max_message_bytes {
+                return Err(GeminiError::TooLarge);
+            }
+            messages.push(message);
+        }
+    }
+    Ok(messages)
+}
+
+#[cfg(test)]
+pub(crate) struct SelectedQueueHold {
+    _permits: Vec<mpsc::OwnedPermit<Command>>,
+}
+#[cfg(test)]
+impl GeminiSender {
+    pub(crate) fn test_hold_queue(&self) -> Result<SelectedQueueHold, GeminiError> {
+        let mut permits = Vec::new();
+        for _ in 0..self.tx.capacity() {
+            permits.push(
+                self.tx
+                    .clone()
+                    .try_reserve_owned()
+                    .map_err(|_| GeminiError::Backpressure("test queue hold"))?,
+            );
+        }
+        Ok(SelectedQueueHold { _permits: permits })
+    }
+    fn test_notify_pending_abort_join(&self) -> tokio::sync::oneshot::Receiver<()> {
+        let (entered, notified) = tokio::sync::oneshot::channel();
+        *self
+            .selected
+            .as_ref()
+            .expect("selected session")
+            .abort_join_pending
+            .lock()
+            .unwrap() = Some(entered);
+        notified
+    }
+    pub(crate) fn test_pause_before_selected_join(
+        &self,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        *self
+            .selected
+            .as_ref()
+            .expect("selected session")
+            .join_boundary
+            .lock()
+            .unwrap() = Some((entered_tx, release_rx));
+        (entered_rx, release_tx)
+    }
+    fn test_pause_before_validation(
+        &self,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        *self
+            .selected
+            .as_ref()
+            .expect("selected session")
+            .validation_boundary
+            .lock()
+            .unwrap() = Some((entered_tx, release_rx));
+        (entered_rx, release_tx)
+    }
+    pub(crate) fn test_pause_second_write(
+        &self,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        *self
+            .selected
+            .as_ref()
+            .expect("selected session")
+            .write_boundary
+            .lock()
+            .unwrap() = Some((entered_tx, release_rx));
+        (entered_rx, release_tx)
+    }
+}
+
+impl GeminiSender {
+    pub(crate) fn selected_run_id(&self) -> Option<u64> {
+        self.selected.as_ref().map(|tag| tag.run_id)
+    }
+    pub(crate) fn close_selected_admission(&self, run_id: u64) -> Result<(), GeminiError> {
+        let _guard = self.admission.lock().map_err(|_| GeminiError::Closed)?;
+        let tag = self.selected_tag(run_id)?;
+        tag.closed.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+    fn selected_tag(&self, run_id: u64) -> Result<Arc<SelectedSessionTag>, GeminiError> {
+        let tag = self
+            .selected
+            .as_ref()
+            .ok_or(GeminiError::Unsupported("initial history is not selected"))?;
+        if self.selected_run_id() != Some(run_id) {
+            return Err(GeminiError::Closed);
+        }
+        Ok(tag.clone())
+    }
+    fn selected_plan(
+        &self,
+        run_id: u64,
+        actions: Vec<Action>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        let tag = self.selected_tag(run_id)?;
+        if origin.context_id.as_ref().is_some_and(|id| id.len() > 1024) {
+            return Err(GeminiError::TooLarge);
+        }
+        let messages = selected_messages(&actions, &self.config)?;
+        Ok(SelectedPlan {
+            tag,
+            generation,
+            origin,
+            actions,
+            messages,
+            atomic_transition: false,
+            strict_generation: false,
+        })
+    }
+    pub(crate) fn plan_seed(
+        &self,
+        run_id: u64,
+        seed: InitialHistorySeed,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        let tag = self.selected_tag(run_id)?;
+        if !Arc::ptr_eq(&seed.config, &self.config)
+            || seed.policy != tag.policy
+            || seed.model != tag.model
+        {
+            return Err(GeminiError::Invalid(
+                "initial history belongs to a different client",
+            ));
+        }
+        if origin.context_id.as_ref().is_some_and(|id| id.len() > 1024) {
+            return Err(GeminiError::TooLarge);
+        }
+        let has_wire = !seed.messages.is_empty();
+        Ok(SelectedPlan {
+            tag,
+            generation,
+            origin,
+            actions: seed.actions,
+            messages: seed.messages,
+            atomic_transition: has_wire,
+            strict_generation: has_wire,
+        })
+    }
+    pub(crate) fn plan_content(
+        &self,
+        run_id: u64,
+        turns: Vec<TextTurn>,
+        turn_complete: bool,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        let model = self.selected_tag(run_id)?.model;
+        let mut plan = self.selected_plan(
+            run_id,
+            completion_actions(turns, turn_complete, model),
+            origin,
+            generation,
+        )?;
+        plan.atomic_transition = plan.messages.len() > 1;
+        Ok(plan)
+    }
+    pub(crate) fn plan_completion(
+        &self,
+        run_id: u64,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.plan_content(run_id, Vec::new(), true, origin, generation)
+    }
+    pub(crate) fn plan_first_stop(
+        &self,
+        run_id: u64,
+        activity_end: bool,
+        complete: bool,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        let model = self.selected_tag(run_id)?.model;
+        let mut actions = Vec::new();
+        if activity_end {
+            actions.push(Action::ActivityEnd);
+        }
+        if complete {
+            actions.extend(completion_actions(Vec::new(), true, model));
+        }
+        let mut plan = self.selected_plan(run_id, actions, origin, generation)?;
+        plan.atomic_transition = complete;
+        plan.strict_generation = complete;
+        Ok(plan)
+    }
+    pub(crate) fn plan_audio(
+        &self,
+        run_id: u64,
+        audio: Vec<u8>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(run_id, vec![Action::Audio(audio)], origin, generation)
+    }
+    pub(crate) fn plan_activity_start(
+        &self,
+        run_id: u64,
+        preroll: Vec<u8>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(
+            run_id,
+            vec![Action::ActivityStart { preroll }],
+            origin,
+            generation,
+        )
+    }
+    pub(crate) fn plan_realtime_text(
+        &self,
+        run_id: u64,
+        text: String,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(run_id, vec![Action::RealtimeText(text)], origin, generation)
+    }
+    pub(crate) fn plan_video(
+        &self,
+        run_id: u64,
+        jpeg: Vec<u8>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(run_id, vec![Action::VideoJpeg(jpeg)], origin, generation)
+    }
+    pub(crate) fn plan_audio_stream_end(
+        &self,
+        run_id: u64,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(run_id, vec![Action::AudioStreamEnd], origin, generation)
+    }
+    pub(crate) fn plan_tool_responses(
+        &self,
+        run_id: u64,
+        responses: Vec<FunctionResponse>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(
+            run_id,
+            vec![Action::ToolResponses(responses)],
+            origin,
+            generation,
+        )
+    }
+    pub(crate) fn plan_non_blocking_tool_responses(
+        &self,
+        run_id: u64,
+        responses: Vec<NonBlockingFunctionResponse>,
+        origin: Origin,
+        generation: u64,
+    ) -> Result<SelectedPlan, GeminiError> {
+        self.selected_plan(
+            run_id,
+            vec![Action::NonBlockingToolResponses(responses)],
+            origin,
+            generation,
+        )
+    }
+    pub(crate) fn try_send_selected(&self, plan: SelectedPlan) -> Result<(), GeminiError> {
+        let _guard = self.admission.lock().map_err(|_| GeminiError::Closed)?;
+        let tag = self
+            .selected
+            .as_ref()
+            .ok_or(GeminiError::Unsupported("initial history is not selected"))?;
+        let tool_settlement = matches!(
+            plan.actions.as_slice(),
+            [Action::ToolResponses(_)] | [Action::NonBlockingToolResponses(_)]
+        );
+        if !Arc::ptr_eq(tag, &plan.tag)
+            || self.control.borrow().cancel
+            || (!tool_settlement
+                && (tag.closed.load(Ordering::SeqCst) || self.finishing.load(Ordering::SeqCst)))
+        {
+            return Err(GeminiError::Closed);
+        }
+        if plan.generation != self.generation() {
+            return if matches!(plan.actions.as_slice(), [Action::VideoJpeg(_)]) {
+                Ok(())
+            } else {
+                Err(GeminiError::Closed)
+            };
+        }
+        for action in &plan.actions {
+            if let Action::NonBlockingToolResponses(responses) = action {
+                let admissions = self
+                    .tool_admissions
+                    .lock()
+                    .map_err(|_| GeminiError::Closed)?;
+                if admissions.closed
+                    || responses.iter().any(|response| {
+                        !self.non_blocking_tools.contains(&response.name)
+                            || admissions.ids.get(response.id.as_str())
+                                != Some(&CallAdmission::Claimed)
+                    })
+                {
+                    return Err(GeminiError::Invalid(
+                        "unknown, unclaimed, or canceled non-blocking tool result",
+                    ));
+                }
+            }
+        }
+        self.tx
+            .try_send(Command {
+                action: None,
+                origin: plan.origin.clone(),
+                generation: plan.generation,
+                selected: Some(plan),
+            })
+            .map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => GeminiError::Backpressure("input"),
+                mpsc::error::TrySendError::Closed(_) => GeminiError::Closed,
+            })
+    }
+}
+
 #[derive(Clone)]
 pub struct GeminiSender {
     config: Arc<GeminiConfig>,
@@ -607,6 +1171,7 @@ pub struct GeminiSender {
     admission: Arc<std::sync::Mutex<()>>,
     tool_admissions: Arc<std::sync::Mutex<ToolAdmissions>>,
     non_blocking_tools: Arc<HashSet<String>>,
+    selected: Option<Arc<SelectedSessionTag>>,
 }
 impl GeminiSender {
     pub(crate) fn is_finishing(&self) -> bool {
@@ -614,6 +1179,11 @@ impl GeminiSender {
     }
     /// Admission never waits behind network I/O. A full queue is an explicit error.
     pub fn try_send(&self, action: Action, origin: Origin) -> Result<(), GeminiError> {
+        if self.selected.is_some() {
+            return Err(GeminiError::Unsupported(
+                "raw actions on an initial-history session",
+            ));
+        }
         self.try_send_generation(action, origin, None)
     }
     pub(crate) fn try_send_video_at_generation(
@@ -622,6 +1192,11 @@ impl GeminiSender {
         origin: Origin,
         generation: u64,
     ) -> Result<(), GeminiError> {
+        if self.selected.is_some() {
+            return Err(GeminiError::Unsupported(
+                "raw actions on an initial-history session",
+            ));
+        }
         self.try_send_generation(Action::VideoJpeg(jpeg), origin, Some(generation))
     }
     fn try_send_generation(
@@ -669,6 +1244,7 @@ impl GeminiSender {
         self.tx
             .try_send(Command {
                 action: Some(action),
+                selected: None,
                 origin,
                 generation,
             })
@@ -685,6 +1261,12 @@ impl GeminiSender {
     /// audio under server VAD, is needed to interrupt the provider's generation.
     pub async fn interrupt(&self) {
         let _guard = self.gate.lock().await;
+        // This short synchronous gate linearizes selected admission with
+        // generation changes. It is never held across an await.
+        let _admission = self
+            .selected
+            .as_ref()
+            .map(|_| self.admission.lock().unwrap_or_else(|e| e.into_inner()));
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         self.control.send_modify(|c| c.generation = generation);
     }
@@ -719,6 +1301,7 @@ impl GeminiSender {
         if !self.finishing.swap(true, Ordering::SeqCst) {
             permit.send(Command {
                 action: None,
+                selected: None,
                 origin: Origin::default(),
                 generation: self.generation(),
             });
@@ -770,10 +1353,115 @@ pub struct GeminiSession {
     sender: GeminiSender,
     events: mpsc::Receiver<ReceivedEvent>,
     worker: Option<JoinHandle<Result<(), GeminiError>>>,
+    joined: SelectedJoinObserver,
+    selected_terminal: SelectedTerminal,
 }
 impl GeminiSession {
     pub fn sender(&self) -> GeminiSender {
         self.sender.clone()
+    }
+    /// Obtain immutable actual-join evidence for this selected connection.
+    pub fn selected_join_observer(&self) -> Option<SelectedJoinObserver> {
+        self.sender.selected.as_ref().map(|_| self.joined.clone())
+    }
+    pub(crate) fn join_observer(&self) -> SelectedJoinObserver {
+        self.joined.clone()
+    }
+    fn record_join(
+        &mut self,
+        result: Result<Result<(), GeminiError>, tokio::task::JoinError>,
+    ) -> Result<(), GeminiError> {
+        self.worker.take();
+        self.joined.joined.store(true, Ordering::SeqCst);
+        let result = if self.selected_terminal.forced {
+            Err(GeminiError::Timeout("selected shutdown"))
+        } else {
+            result.unwrap_or(Err(GeminiError::Transport))
+        };
+        if self.sender.selected.is_some() {
+            self.selected_terminal.outcome = Some(result.clone());
+        }
+        result
+    }
+    /// Borrow the sole real JoinHandle across cancellation. The first shutdown
+    /// fixes a finish+write budget; retries retain it and any forced failure.
+    /// Timeout requests abort then actually awaits the same handle. Tokio abort
+    /// remains cooperative; no extra reaper or cleanup task is introduced.
+    pub(crate) async fn selected_shutdown(&mut self) -> Result<(), GeminiError> {
+        self.sender.cancel();
+        if let Some(result) = &self.selected_terminal.outcome {
+            return result.clone();
+        }
+        if self.worker.is_none() {
+            return Ok(());
+        }
+        let deadline = match self.selected_terminal.deadline {
+            Some(deadline) => deadline,
+            None => {
+                let budget = self
+                    .sender
+                    .config
+                    .limits
+                    .finish_timeout
+                    .checked_add(self.sender.config.limits.write_timeout)
+                    .ok_or(GeminiError::Invalid("selected shutdown budget"))?;
+                let deadline = Instant::now()
+                    .checked_add(budget)
+                    .ok_or(GeminiError::Invalid("selected shutdown deadline"))?;
+                self.selected_terminal.deadline = Some(deadline);
+                deadline
+            }
+        };
+        #[cfg(test)]
+        if let Some(tag) = &self.sender.selected {
+            let boundary = tag.join_boundary.lock().unwrap().take();
+            if let Some((entered, release)) = boundary {
+                // Test-only: cancel and the fixed deadline already exist, but
+                // the same sole actor handle has not yet been awaited here.
+                let _ = entered.send(());
+                let _ = release.await;
+            }
+        }
+        let result = if self.selected_terminal.forced {
+            self.worker.as_mut().expect("owned worker").await
+        } else {
+            match tokio::time::timeout_at(deadline, self.worker.as_mut().expect("owned worker"))
+                .await
+            {
+                Ok(result) => result,
+                Err(_) => {
+                    self.selected_terminal.forced = true;
+                    let worker = self.worker.as_mut().expect("owned worker");
+                    worker.abort();
+                    #[cfg(test)]
+                    {
+                        let mut notification = self
+                            .sender
+                            .selected
+                            .as_ref()
+                            .and_then(|tag| tag.abort_join_pending.lock().unwrap().take());
+                        std::future::poll_fn(|cx| {
+                            // This notification proves that abort was requested
+                            // and the actual retained JoinHandle was polled and
+                            // remained pending. It neither delays the actor nor
+                            // replaces the handle with a synthetic future.
+                            let result =
+                                std::future::Future::poll(std::pin::Pin::new(&mut *worker), cx);
+                            if result.is_pending() {
+                                if let Some(entered) = notification.take() {
+                                    let _ = entered.send(());
+                                }
+                            }
+                            result
+                        })
+                        .await
+                    }
+                    #[cfg(not(test))]
+                    worker.await
+                }
+            }
+        };
+        self.record_join(result)
     }
     pub async fn next_event(&mut self) -> Option<Result<GeminiEvent, GeminiError>> {
         self.next_event_with_details()
@@ -810,21 +1498,21 @@ impl GeminiSession {
             }
         }
         let result = self.worker.as_mut()?.await;
-        self.worker.take();
-        match result {
-            Ok(Ok(())) => None,
-            Ok(Err(error)) => Some(Err(error)),
-            Err(_) => Some(Err(GeminiError::Transport)),
+        match self.record_join(result) {
+            Ok(()) => None,
+            Err(error) => Some(Err(error)),
         }
     }
     pub async fn shutdown(mut self) -> Result<(), GeminiError> {
         self.sender.cancel();
+        if self.sender.selected.is_some() {
+            return self.selected_shutdown().await;
+        }
         let result = match self.worker.as_mut() {
-            Some(worker) => worker.await.map_err(|_| GeminiError::Transport)?,
-            None => Ok(()),
+            Some(worker) => worker.await,
+            None => return Ok(()),
         };
-        self.worker.take();
-        result
+        self.record_join(result)
     }
 
     /// Retain the sole worker owner across a dropped selected terminal wait.
@@ -833,6 +1521,9 @@ impl GeminiSession {
     /// its existing, explicitly weaker abort-without-await semantics.
     #[cfg(feature = "paired-history")]
     pub(crate) async fn cancel_and_join(&mut self) -> Result<(), GeminiError> {
+        if self.sender.selected.is_some() {
+            return self.selected_shutdown().await;
+        }
         self.sender.cancel();
         let result = match self.worker.as_mut() {
             Some(worker) => worker.await.map_err(|_| GeminiError::Transport),
@@ -865,6 +1556,84 @@ async fn write(
             result = &mut sending => return result.map_err(|_| GeminiError::Timeout("write"))?.map_err(transport),
         }
     }
+}
+
+/// Unlike a raw write, interruption invalidates an entire selected command.
+/// Cancellation or generation change during any member's write terminates the
+/// socket actor, rather than permitting an unknown partial seed to be retried.
+async fn selected_write(
+    socket: &mut Socket,
+    message: String,
+    control: &mut watch::Receiver<Control>,
+    duration: std::time::Duration,
+    generation: u64,
+) -> Result<(), GeminiError> {
+    let sending = timeout(duration, socket.send(Message::Text(message.into())));
+    tokio::pin!(sending);
+    loop {
+        if control.borrow().cancel {
+            return Err(GeminiError::Closed);
+        }
+        if control.borrow().generation != generation {
+            return Err(GeminiError::Protocol(
+                "initial-history command generation changed",
+            ));
+        }
+        tokio::select! { biased;
+            changed = control.changed() => { if changed.is_err() { return Err(GeminiError::Closed); } }
+            result = &mut sending => return result.map_err(|_| GeminiError::Timeout("write"))?.map_err(transport),
+        }
+    }
+}
+
+#[cfg(test)]
+async fn selected_test_validation_boundary(
+    tag: &SelectedSessionTag,
+    control: &mut watch::Receiver<Control>,
+) -> Result<(), GeminiError> {
+    let boundary = tag.validation_boundary.lock().unwrap().take();
+    if let Some((entered, release)) = boundary {
+        let _ = entered.send(());
+        tokio::pin!(release);
+        loop {
+            if control.borrow().cancel {
+                return Err(GeminiError::Closed);
+            }
+            tokio::select! { biased;
+                changed = control.changed() => { if changed.is_err() { return Err(GeminiError::Closed); } }
+                _ = &mut release => return Ok(()),
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+async fn selected_test_write_boundary(
+    tag: &SelectedSessionTag,
+    control: &mut watch::Receiver<Control>,
+    generation: u64,
+) -> Result<(), GeminiError> {
+    let boundary = tag.write_boundary.lock().unwrap().take();
+    if let Some((entered, release)) = boundary {
+        let _ = entered.send(());
+        tokio::pin!(release);
+        loop {
+            if control.borrow().cancel {
+                return Err(GeminiError::Closed);
+            }
+            if control.borrow().generation != generation {
+                return Err(GeminiError::Protocol(
+                    "initial-history command generation changed",
+                ));
+            }
+            tokio::select! { biased;
+                changed = control.changed() => { if changed.is_err() { return Err(GeminiError::Closed); } }
+                _ = &mut release => return Ok(()),
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn video_write_gate<'a>(
@@ -1064,7 +1833,7 @@ async fn run(
                         // bounded queue until setupComplete; no sent action is replayed.
                         drop(socket);
                         let (replacement, update) = {
-                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref(), &sender.non_blocking_tools, receive_policy);
+                            let connecting = open_socket(&sender.config, Some(policy), Some(token), thinking.as_ref(), &sender.non_blocking_tools, false, receive_policy);
                             tokio::pin!(connecting);
                             loop {
                                 if held.as_ref().is_some_and(|h| h.generation != sender.generation()) {
@@ -1407,6 +2176,117 @@ async fn run(
                     let Some(command) = command else {
                         return Ok(());
                     };
+                    if let Some(plan) = command.selected {
+                        let tag = sender.selected.as_ref().ok_or(GeminiError::Closed)?;
+                        if !Arc::ptr_eq(tag, &plan.tag) { return Err(GeminiError::Closed); }
+                        let video_only = matches!(plan.actions.as_slice(), [Action::VideoJpeg(_)]);
+                        let _video_gate = if video_only {
+                            Some(video_write_gate(&sender, &mut control).await?)
+                        } else { None };
+                        if command.generation != sender.generation() {
+                            // Media results retain their existing stale suppression;
+                            // a published state transition must never silently vanish.
+                            if video_only { continue; }
+                            if plan.strict_generation {
+                                return Err(GeminiError::Protocol("initial-history command generation changed"));
+                            }
+                        }
+                        #[cfg(test)]
+                        selected_test_validation_boundary(tag, &mut control).await?;
+                        let mut planned_activity = activity;
+                        for action in &plan.actions {
+                            match action {
+                                Action::Audio(_) if sender.config.session.activity_detection.disabled && !planned_activity => {
+                                    return Err(GeminiError::Invalid("manual VAD audio outside activity window"));
+                                }
+                                Action::ActivityStart { .. } => {
+                                    if planned_activity { return Err(GeminiError::Invalid("activity already started")); }
+                                    planned_activity = true;
+                                }
+                                Action::ActivityEnd => {
+                                    if !planned_activity { return Err(GeminiError::Invalid("activity not started")); }
+                                    planned_activity = false;
+                                }
+                                Action::ToolResponses(responses) => {
+                                    for response in responses {
+                                        if !pending.get(&response.id).is_some_and(|tool| {
+                                            !tool.non_blocking && tool.call.name == response.name
+                                                && tool.generation == command.generation
+                                                && command.generation == sender.generation()
+                                        }) { return Err(GeminiError::Invalid("unknown, canceled, or mismatched tool result")); }
+                                    }
+                                }
+                                Action::NonBlockingToolResponses(responses) => {
+                                    let admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                                    validate_non_blocking_responses(responses, &pending, &admissions)?;
+                                }
+                                _ => {}
+                            }
+                        }
+                        // All messages/effects have been preflighted before the
+                        // first write. One selected command is never interleaved
+                        // with another command; interrupted partial delivery is
+                        // terminal and is never resumed/reseeded.
+                        // Already-admitted ordinary run/append retain their raw
+                        // origin/generation even when queued across interruption.
+                        // Only their compound write is fenced from its start.
+                        let wire_generation = if plan.strict_generation { command.generation }
+                            else { control.borrow().generation };
+                        for (index, message) in plan.messages.into_iter().enumerate() {
+                            #[cfg(not(test))]
+                            let _ = index;
+                            #[cfg(test)]
+                            if index == 1 && plan.atomic_transition {
+                                selected_test_write_boundary(tag, &mut control, wire_generation).await?;
+                            }
+                            if plan.atomic_transition {
+                                selected_write(&mut socket, message, &mut control,
+                                    sender.config.limits.write_timeout, wire_generation).await?;
+                            } else {
+                                write(&mut socket, Message::Text(message.into()), &mut control,
+                                    sender.config.limits.write_timeout).await?;
+                            }
+                        }
+                        if plan.atomic_transition && wire_generation != sender.generation() {
+                            return Err(GeminiError::Protocol("initial-history command generation changed"));
+                        }
+                        for action in plan.actions {
+                            if !matches!(action, Action::NonBlockingToolResponses(_)) {
+                                input_origin = command.origin.clone();
+                            }
+                            if matches!(action, Action::ActivityEnd | Action::Audio(_) | Action::AudioStreamEnd
+                                | Action::RealtimeText(_) | Action::ClientContent { turn_complete: true, .. } | Action::ToolResponses(_)) {
+                                busy_generation = command.generation;
+                            }
+                            match action {
+                                Action::ActivityStart { preroll } => { activity = true; has_audio |= !preroll.is_empty(); }
+                                Action::ActivityEnd => { activity = false; busy = true; }
+                                Action::Audio(_) => { busy = true; has_audio = true; }
+                                Action::AudioStreamEnd => { busy = true; has_audio = false; }
+                                Action::RealtimeText(_) | Action::ClientContent { turn_complete: true, .. } => busy = true,
+                                Action::ToolResponses(responses) => {
+                                    for response in responses { pending.remove(&response.id); }
+                                    busy = true;
+                                }
+                                Action::NonBlockingToolResponses(responses) => {
+                                    if !busy && !output_active && !suppressed && !activity && !has_audio
+                                        && generation == sender.generation() {
+                                        if let Some(tool) = responses.iter()
+                                            .find(|response| response.scheduling == ToolResponseScheduling::WhenIdle)
+                                            .and_then(|response| pending.get(&response.id)) {
+                                            input_origin = tool.origin.clone(); busy = true; busy_generation = generation;
+                                        }
+                                    }
+                                    let mut admissions = sender.tool_admissions.lock().map_err(|_| GeminiError::Closed)?;
+                                    for response in responses {
+                                        if !response.will_continue { admissions.revoke(&response.id); pending.remove(&response.id); }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        continue;
+                    }
                     let Some(action) = command.action else {
                         let flush = if activity {
                             Some(Action::ActivityEnd)
@@ -1587,7 +2467,8 @@ mod ownership_tests {
 
     // Model the terminal cleanup interval: event delivery is closed, but the
     // connection task still owns an actual loopback WebSocket until its join.
-    async fn held_terminal_session() -> (GeminiSession, oneshot::Sender<()>, JoinHandle<()>) {
+    pub(super) async fn held_terminal_session(
+    ) -> (GeminiSession, oneshot::Sender<()>, JoinHandle<()>) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://{}/live", listener.local_addr().unwrap());
         let peer = tokio::spawn(async move {
@@ -1616,17 +2497,23 @@ mod ownership_tests {
             admission: Arc::new(std::sync::Mutex::new(())),
             tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
             non_blocking_tools: Arc::new(HashSet::new()),
+            selected: None,
         };
+        let (running, running_ack) = oneshot::channel();
         let worker = tokio::spawn(async move {
+            let _ = running.send(());
             let _ = release_rx.await;
             drop((socket, commands, control_rx));
             Err(GeminiError::Protocol("synthetic terminal failure"))
         });
+        running_ack.await.unwrap();
         (
             GeminiSession {
                 sender,
                 events: events_rx,
                 worker: Some(worker),
+                joined: SelectedJoinObserver::default(),
+                selected_terminal: SelectedTerminal::default(),
             },
             release_tx,
             peer,
@@ -1697,6 +2584,7 @@ mod video_generation_tests {
             admission: Arc::new(std::sync::Mutex::new(())),
             tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
             non_blocking_tools: Arc::new(HashSet::new()),
+            selected: None,
         };
         let captured = sender.generation();
         sender
@@ -1980,6 +2868,7 @@ mod non_blocking_admission_tests {
                 admission: Arc::new(std::sync::Mutex::new(())),
                 tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
                 non_blocking_tools: Arc::new(HashSet::from(["background".into()])),
+                selected: None,
             },
             rx,
         )
@@ -2116,6 +3005,8 @@ mod non_blocking_admission_tests {
                 sender,
                 events: rx,
                 worker: None,
+                joined: SelectedJoinObserver::default(),
+                selected_terminal: SelectedTerminal::default(),
             };
             if !cancel_first {
                 let received = session.next_event_with_details().await.unwrap().unwrap();
@@ -2167,7 +3058,7 @@ mod non_blocking_admission_tests {
         ] {
             let config = config(model);
             assert_eq!(
-                configured_setup(&config, None, &HashSet::new()),
+                configured_setup(&config, None, &HashSet::new(), false),
                 protocol::setup(&config)
             );
             let client = GeminiClient::new(config.clone())
@@ -2176,7 +3067,7 @@ mod non_blocking_admission_tests {
                 .unwrap();
             assert!(client.is_non_blocking_tool("background"));
             assert!(!client.is_non_blocking_tool("ordinary"));
-            let setup = configured_setup(&config, None, &client.non_blocking_tools);
+            let setup = configured_setup(&config, None, &client.non_blocking_tools, false);
             let declarations = &setup["setup"]["tools"][0]["functionDeclarations"];
             assert_eq!(declarations[0]["behavior"], "NON_BLOCKING");
             if model.ends_with("gemini-3.8-live") {
@@ -2376,6 +3267,8 @@ mod non_blocking_admission_tests {
                 sender,
                 events: rx,
                 worker: None,
+                joined: SelectedJoinObserver::default(),
+                selected_terminal: SelectedTerminal::default(),
             };
             let event = session.next_event().await.unwrap().unwrap();
             assert_eq!(event.origin, t.origin);
@@ -2429,6 +3322,8 @@ mod non_blocking_admission_tests {
             sender,
             events: rx,
             worker: Some(worker),
+            joined: SelectedJoinObserver::default(),
+            selected_terminal: SelectedTerminal::default(),
         };
         {
             let next = session.next_event();
@@ -2600,5 +3495,867 @@ mod non_blocking_admission_tests {
             pending.contains_key("selected"),
             "validation must not finalize a call"
         );
+    }
+}
+
+#[cfg(test)]
+mod initial_history_tests {
+    use super::*;
+    use pipecat_core::{ChatMessage, ChatRole, LlmContextFrame};
+    use std::{task::Poll, time::Duration};
+
+    fn client(model: &str, inference: bool) -> GeminiClient {
+        GeminiClient::new(GeminiConfig::new("synthetic-key", model))
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: inference,
+            })
+            .unwrap()
+    }
+    fn tag(run_id: u64, inference: bool) -> Arc<SelectedSessionTag> {
+        Arc::new(SelectedSessionTag {
+            run_id,
+            policy: InitialHistoryPolicy {
+                inference_on_initialization: inference,
+            },
+            model: protocol::InitialHistoryModel::Gemini3,
+            closed: AtomicBool::new(false),
+            write_boundary: std::sync::Mutex::new(None),
+            validation_boundary: std::sync::Mutex::new(None),
+            join_boundary: std::sync::Mutex::new(None),
+            abort_join_pending: std::sync::Mutex::new(None),
+        })
+    }
+    fn sender(
+        client: &GeminiClient,
+        run_id: u64,
+        capacity: usize,
+    ) -> (GeminiSender, mpsc::Receiver<Command>) {
+        let (tx, rx) = mpsc::channel(capacity);
+        let (control, _) = watch::channel(Control::default());
+        let (policy, model) = client.initial_history.unwrap();
+        (
+            GeminiSender {
+                config: client.config.clone(),
+                tx,
+                control,
+                generation: Arc::new(AtomicU64::new(0)),
+                finishing: Arc::new(AtomicBool::new(false)),
+                gate: Arc::new(Mutex::new(())),
+                admission: Arc::new(std::sync::Mutex::new(())),
+                tool_admissions: Arc::new(std::sync::Mutex::new(ToolAdmissions::default())),
+                non_blocking_tools: Arc::new(HashSet::new()),
+                selected: Some(Arc::new(SelectedSessionTag {
+                    run_id,
+                    policy,
+                    model,
+                    closed: AtomicBool::new(false),
+                    write_boundary: std::sync::Mutex::new(None),
+                    validation_boundary: std::sync::Mutex::new(None),
+                    join_boundary: std::sync::Mutex::new(None),
+                    abort_join_pending: std::sync::Mutex::new(None),
+                })),
+            },
+            rx,
+        )
+    }
+    fn context(role: ChatRole, text: &str) -> LlmContextFrame {
+        LlmContextFrame {
+            messages: vec![ChatMessage::new(role, text)],
+            ..Default::default()
+        }
+    }
+    fn actions() -> Vec<Action> {
+        vec![
+            Action::Audio(Vec::new()),
+            Action::VideoJpeg(Vec::new()),
+            Action::RealtimeText(String::new()),
+            Action::RealtimeText("x".repeat(2 << 20)),
+            Action::ClientContent {
+                turns: Vec::new(),
+                turn_complete: false,
+            },
+            Action::ClientContent {
+                turns: Vec::new(),
+                turn_complete: true,
+            },
+            Action::ActivityStart { preroll: vec![1] },
+            Action::ActivityEnd,
+            Action::AudioStreamEnd,
+            Action::ToolResponses(Vec::new()),
+            Action::NonBlockingToolResponses(Vec::new()),
+        ]
+    }
+    fn assert_sealed(sender: &GeminiSender) {
+        for clone in [sender.clone(), sender.clone()] {
+            for action in actions() {
+                assert_eq!(
+                    clone.try_send(action, Origin::default()),
+                    Err(GeminiError::Unsupported(
+                        "raw actions on an initial-history session"
+                    ))
+                );
+            }
+        }
+    }
+    #[test]
+    fn complete_model_tokens_have_explicit_boundaries() {
+        for (name, expected) in [
+            (
+                "gemini-2.5-flash-native-audio-preview-12-2025",
+                protocol::InitialHistoryModel::Gemini25,
+            ),
+            (
+                "models/gemini-3.8-live",
+                protocol::InitialHistoryModel::Gemini3,
+            ),
+            ("gemini-3-live", protocol::InitialHistoryModel::Gemini3),
+            (
+                "gemini-live-3.12-preview",
+                protocol::InitialHistoryModel::Gemini3,
+            ),
+        ] {
+            assert_eq!(protocol::initial_history_model(name), Ok(expected));
+        }
+        for name in [
+            "anything3",
+            "other-gemini-3-live",
+            "models/models/gemini-3-live",
+            "gemini-2.0-live",
+            "gemini-4.0-live",
+            "gemini-3.8bad-live",
+            "gemini-3.-live",
+            "gemini-3.8.1-live",
+            "gemini--3-live",
+            "gemini-3-live-",
+            "gemini-03-live",
+            "gemini-3.08-live",
+            "gemini-3_live",
+            "gemini-3-live.preview",
+        ] {
+            assert!(
+                protocol::initial_history_model(name).is_err(),
+                "accepted {name}"
+            );
+        }
+    }
+    #[test]
+    fn projection_validates_original_system_fields_and_transformed_limits() {
+        let mut config = GeminiConfig::new("synthetic", "gemini-2.5-live");
+        config.session.system_instruction = Some("system".into());
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        for role in [ChatRole::System, ChatRole::Developer] {
+            let seed = client
+                .plan_initial_history(&context(role, "system"))
+                .unwrap();
+            assert!(
+                matches!(&seed.actions[0], Action::ClientContent { turns, turn_complete: false }
+                if turns == &vec![TextTurn { role: Role::User, text: "system".into() }])
+            );
+        }
+        let mut snapshot = LlmContextFrame {
+            messages: vec![
+                ChatMessage::new(ChatRole::System, "system"),
+                ChatMessage::new(ChatRole::Assistant, "answer"),
+            ],
+            ..Default::default()
+        };
+        let seed = client.plan_initial_history(&snapshot).unwrap();
+        assert!(seed.pending_first_stop());
+        assert!(
+            matches!(&seed.actions[0], Action::ClientContent { turns, .. }
+            if turns.len() == 2 && turns[0].role == Role::Model && turns[1].text == " ")
+        );
+        snapshot.messages[0].tool_call_id = Some("hidden".into());
+        assert!(client.plan_initial_history(&snapshot).is_err());
+        snapshot.messages[0].tool_call_id = None;
+        snapshot
+            .messages
+            .push(ChatMessage::new(ChatRole::Tool, "bad tail"));
+        assert!(client.plan_initial_history(&snapshot).is_err());
+        assert!(client
+            .plan_initial_history(&context(ChatRole::User, ""))
+            .is_err());
+        assert!(client
+            .plan_initial_history(&context(ChatRole::User, " "))
+            .is_ok());
+        let empty = client
+            .plan_initial_history(&LlmContextFrame::default())
+            .unwrap();
+        assert!(
+            empty.actions.is_empty() && empty.messages.is_empty() && !empty.pending_first_stop()
+        );
+        let thousand = LlmContextFrame {
+            messages: vec![ChatMessage::new(ChatRole::Assistant, "x"); 1024],
+            ..Default::default()
+        };
+        assert!(matches!(
+            client.plan_initial_history(&thousand),
+            Err(GeminiError::TooLarge)
+        ));
+    }
+    #[test]
+    fn aggregate_wire_budget_includes_every_synthetic_message() {
+        let mut config = GeminiConfig::new("synthetic", "gemini-3-live");
+        config.limits.max_message_bytes = 256;
+        config.limits.max_audio_bytes = 128;
+        let actions = vec![Action::RealtimeText("\\\"".repeat(32)); 2];
+        assert!(actions
+            .iter()
+            .all(|action| protocol::action_messages(action, &config).is_ok()));
+        assert!(matches!(
+            selected_messages(&actions, &config),
+            Err(GeminiError::TooLarge)
+        ));
+    }
+    #[tokio::test]
+    async fn sealed_clone_admission_is_identity_generation_and_queue_atomic() {
+        let client = client("gemini-3-live", true);
+        let (sender, mut rx) = sender(&client, 7, 1);
+        assert_sealed(&sender);
+        let seed = || {
+            client
+                .plan_initial_history(&context(ChatRole::User, "seed"))
+                .unwrap()
+        };
+        sender
+            .try_send_selected(sender.plan_seed(7, seed(), Origin::default(), 0).unwrap())
+            .unwrap();
+        assert_sealed(&sender);
+        assert!(matches!(
+            sender.try_send_selected(
+                sender
+                    .plan_first_stop(7, false, true, Origin::default(), 0)
+                    .unwrap()
+            ),
+            Err(GeminiError::Backpressure("input"))
+        ));
+        let admitted = rx.try_recv().unwrap().selected.unwrap();
+        assert_eq!(admitted.messages.len(), 2);
+        let (other, _) = sender_fixture(&client, 7);
+        assert_eq!(
+            other.try_send_selected(sender.plan_completion(7, Origin::default(), 0).unwrap()),
+            Err(GeminiError::Closed)
+        );
+        assert!(sender.plan_completion(8, Origin::default(), 0).is_err());
+        let stale = sender.plan_completion(7, Origin::default(), 0).unwrap();
+        sender.interrupt().await;
+        assert_eq!(sender.generation(), 1);
+        assert_eq!(sender.try_send_selected(stale), Err(GeminiError::Closed));
+        assert!(rx.try_recv().is_err());
+        sender
+            .try_send_selected(sender.plan_completion(7, Origin::default(), 1).unwrap())
+            .unwrap();
+        rx.try_recv().unwrap();
+        sender.close_selected_admission(7).unwrap();
+        assert_eq!(
+            sender.try_send_selected(sender.plan_completion(7, Origin::default(), 1).unwrap()),
+            Err(GeminiError::Closed)
+        );
+        sender.finish().await.unwrap();
+        let finish = rx.try_recv().unwrap();
+        assert!(finish.action.is_none() && finish.selected.is_none());
+        assert_sealed(&sender);
+        sender.cancel();
+        assert!(sender.control.borrow().cancel);
+    }
+    fn sender_fixture(client: &GeminiClient, id: u64) -> (GeminiSender, mpsc::Receiver<Command>) {
+        sender(client, id, 1)
+    }
+
+    #[tokio::test]
+    async fn first_stop_is_one_retryable_bounded_queue_slot() {
+        let mut config = GeminiConfig::new("synthetic", "gemini-2.5-live");
+        config.session.activity_detection.disabled = true;
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let (sender, mut rx) = sender(&client, 1, 1);
+        sender
+            .try_send_selected(
+                sender
+                    .plan_activity_start(1, Vec::new(), Origin::default(), 0)
+                    .unwrap(),
+            )
+            .unwrap();
+        let stop = || {
+            sender
+                .plan_first_stop(1, true, true, Origin::default(), 0)
+                .unwrap()
+        };
+        assert!(matches!(
+            sender.try_send_selected(stop()),
+            Err(GeminiError::Backpressure("input"))
+        ));
+        assert!(matches!(
+            rx.try_recv().unwrap().selected.unwrap().actions.as_slice(),
+            [Action::ActivityStart { .. }]
+        ));
+        sender.try_send_selected(stop()).unwrap();
+        let stop = rx.try_recv().unwrap().selected.unwrap();
+        assert!(matches!(
+            stop.actions.as_slice(),
+            [
+                Action::ActivityEnd,
+                Action::ClientContent {
+                    turn_complete: true,
+                    ..
+                }
+            ]
+        ));
+        assert_eq!(stop.messages.len(), 2);
+    }
+
+    async fn connected(
+        inference: bool,
+    ) -> (
+        GeminiClient,
+        GeminiSession,
+        mpsc::UnboundedReceiver<serde_json::Value>,
+        JoinHandle<()>,
+    ) {
+        connected_model("gemini-3-live", inference).await
+    }
+    async fn connected_model(
+        model: &str,
+        inference: bool,
+    ) -> (
+        GeminiClient,
+        GeminiSession,
+        mpsc::UnboundedReceiver<serde_json::Value>,
+        JoinHandle<()>,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = GeminiConfig::new("synthetic", model);
+        config.endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: inference,
+            })
+            .unwrap();
+        let (tx, rx) = mpsc::unbounded_channel();
+        let peer = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let setup = socket.next().await.unwrap().unwrap();
+            let setup: serde_json::Value = serde_json::from_str(setup.to_text().unwrap()).unwrap();
+            assert_eq!(
+                setup["setup"]["historyConfig"]["initialHistoryInClientContent"],
+                true
+            );
+            socket
+                .send(Message::Text("{\"setupComplete\":{}}".into()))
+                .await
+                .unwrap();
+            while let Some(Ok(message)) = socket.next().await {
+                match message {
+                    Message::Text(text) => {
+                        tx.send(serde_json::from_str(&text).unwrap()).unwrap();
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        });
+        let session = client.connect_owned(19).await.unwrap();
+        (client, session, rx, peer)
+    }
+    #[tokio::test]
+    async fn real_selected_senders_stay_sealed_and_private_audio_follows_seed() {
+        for inference in [false, true] {
+            let (client, mut session, mut wire, peer) = connected(inference).await;
+            let sender = session.sender();
+            assert_sealed(&sender);
+            let seed = client
+                .plan_initial_history(&context(ChatRole::User, "hello"))
+                .unwrap();
+            sender
+                .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+                .unwrap();
+            let first = timeout(Duration::from_secs(2), wire.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(first["clientContent"]["turnComplete"], inference);
+            if inference {
+                assert_eq!(wire.recv().await.unwrap()["realtimeInput"]["text"], " ");
+            }
+            assert_sealed(&session.sender());
+            sender
+                .try_send_selected(
+                    sender
+                        .plan_audio(19, vec![0, 0], Origin::default(), 0)
+                        .unwrap(),
+                )
+                .unwrap();
+            assert!(wire.recv().await.unwrap()["realtimeInput"]["audio"].is_object());
+            let joined = session.selected_join_observer().unwrap();
+            assert!(!joined.joined());
+            session.selected_shutdown().await.unwrap();
+            assert!(joined.joined());
+            assert_sealed(&sender);
+            peer.await.unwrap();
+        }
+    }
+    #[tokio::test]
+    async fn selected_empty_seed_is_zero_wire_ready_for_real_audio() {
+        let (client, mut session, mut wire, peer) = connected(true).await;
+        let sender = session.sender();
+        let seed = client
+            .plan_initial_history(&LlmContextFrame::default())
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+            .unwrap();
+        sender
+            .try_send_selected(
+                sender
+                    .plan_audio(19, vec![0, 0], Origin::default(), 0)
+                    .unwrap(),
+            )
+            .unwrap();
+        assert!(wire.recv().await.unwrap()["realtimeInput"]["audio"].is_object());
+        session.selected_shutdown().await.unwrap();
+        peer.await.unwrap();
+        assert!(wire.try_recv().is_err());
+    }
+    #[tokio::test]
+    async fn cancelled_terminal_read_keeps_real_worker_and_failure() {
+        let (mut session, release, peer) = super::ownership_tests::held_terminal_session().await;
+        session.sender.selected = Some(tag(1, false));
+        let observed = session.selected_join_observer().unwrap();
+        {
+            let read = session.next_event();
+            tokio::pin!(read);
+            assert!(matches!(futures_util::poll!(&mut read), Poll::Pending));
+        }
+        assert!(!observed.joined());
+        assert!(session.worker.is_some());
+        release.send(()).unwrap();
+        assert_eq!(
+            session.next_event().await,
+            Some(Err(GeminiError::Protocol("synthetic terminal failure")))
+        );
+        assert!(observed.joined());
+        assert_eq!(
+            session.selected_shutdown().await,
+            Err(GeminiError::Protocol("synthetic terminal failure"))
+        );
+        peer.await.unwrap();
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn cancelled_normal_and_abort_waiters_retain_handle_and_forced_outcome() {
+        let (mut session, _release, peer) = super::ownership_tests::held_terminal_session().await;
+        session.sender.selected = Some(tag(1, false));
+        let limits = &mut Arc::make_mut(&mut session.sender.config).limits;
+        limits.finish_timeout = Duration::from_millis(10);
+        limits.write_timeout = Duration::from_millis(10);
+        let observed = session.selected_join_observer().unwrap();
+        {
+            let shutdown = session.selected_shutdown();
+            tokio::pin!(shutdown);
+            assert!(matches!(futures_util::poll!(&mut shutdown), Poll::Pending));
+        }
+        let original_deadline = session.selected_terminal.deadline;
+        assert!(original_deadline.is_some() && session.worker.is_some() && !observed.joined());
+        // Observe the actual configured timeout and the real post-abort
+        // JoinHandle Pending poll. A Pending timeout future alone says nothing
+        // about whether Tokio's millisecond timer wheel has fired yet.
+        let pending_abort_join = session.sender.test_notify_pending_abort_join();
+        {
+            let shutdown = session.selected_shutdown();
+            tokio::pin!(shutdown);
+            timeout(Duration::from_secs(1), async {
+                tokio::select! { biased;
+                    notified = pending_abort_join => notified.unwrap(),
+                    result = &mut shutdown => panic!("shutdown completed before the required cancelled-abort-wait boundary: {result:?}"),
+                }
+            }).await.expect("actual aborted JoinHandle did not reach its pending wait");
+        }
+        assert_eq!(session.selected_terminal.deadline, original_deadline);
+        assert!(session.selected_terminal.forced && session.worker.is_some() && !observed.joined());
+        assert_eq!(
+            session.selected_shutdown().await,
+            Err(GeminiError::Timeout("selected shutdown"))
+        );
+        assert!(observed.joined() && session.worker.is_none());
+        assert_eq!(
+            session.selected_shutdown().await,
+            Err(GeminiError::Timeout("selected shutdown"))
+        );
+        peer.await.unwrap();
+    }
+    #[tokio::test]
+    async fn interrupt_between_seed_writes_is_terminal_and_never_replays_nudge() {
+        let (client, mut session, mut wire, peer) = connected(true).await;
+        let sender = session.sender();
+        let (entered_rx, _release_tx) = sender.test_pause_second_write();
+        let seed = client
+            .plan_initial_history(&context(ChatRole::User, "hello"))
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+            .unwrap();
+        timeout(Duration::from_secs(2), entered_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(wire.recv().await.unwrap()["clientContent"].is_object());
+        sender.interrupt().await;
+        let result = timeout(Duration::from_secs(2), session.next_event())
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            Some(Err(GeminiError::Protocol(
+                "initial-history command generation changed"
+            )))
+        );
+        assert!(session.selected_join_observer().unwrap().joined());
+        assert_eq!(
+            session.selected_shutdown().await,
+            Err(GeminiError::Protocol(
+                "initial-history command generation changed"
+            ))
+        );
+        peer.await.unwrap();
+        assert!(wire.try_recv().is_err());
+    }
+    #[tokio::test]
+    async fn queued_audio_and_compound_run_preserve_admitted_semantics_across_interrupt() {
+        let (client, mut session, mut wire, peer) = connected(false).await;
+        let sender = session.sender();
+        let empty = client
+            .plan_initial_history(&LlmContextFrame::default())
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_seed(19, empty, Origin::default(), 0).unwrap())
+            .unwrap();
+        sender
+            .try_send_selected(
+                sender
+                    .plan_audio(19, vec![0, 0], Origin::default(), 0)
+                    .unwrap(),
+            )
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_completion(19, Origin::default(), 0).unwrap())
+            .unwrap();
+        // This current-thread poll completes before the socket actor runs. All
+        // three plans remain queued under generation zero at this boundary.
+        sender.interrupt().await;
+        assert_eq!(sender.generation(), 1);
+        assert!(timeout(Duration::from_secs(2), wire.recv())
+            .await
+            .unwrap()
+            .unwrap()["realtimeInput"]["audio"]
+            .is_object());
+        assert_eq!(
+            wire.recv().await.unwrap()["clientContent"]["turnComplete"],
+            true
+        );
+        assert_eq!(wire.recv().await.unwrap()["realtimeInput"]["text"], " ");
+        assert!(!session.selected_join_observer().unwrap().joined());
+        session.selected_shutdown().await.unwrap();
+        peer.await.unwrap();
+    }
+    #[tokio::test]
+    async fn queued_seed_generation_change_is_terminal_without_any_seed_write() {
+        let (client, mut session, mut wire, peer) = connected(false).await;
+        let sender = session.sender();
+        let seed = client
+            .plan_initial_history(&context(ChatRole::User, "seed"))
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+            .unwrap();
+        sender.interrupt().await;
+        assert_eq!(
+            timeout(Duration::from_secs(2), session.next_event())
+                .await
+                .unwrap(),
+            Some(Err(GeminiError::Protocol(
+                "initial-history command generation changed"
+            )))
+        );
+        assert!(session.selected_join_observer().unwrap().joined());
+        peer.await.unwrap();
+        assert!(wire.try_recv().is_err());
+    }
+    #[tokio::test]
+    async fn finish_seals_input_but_claimed_tool_settlement_and_cancel_keep_their_contracts() {
+        let mut config = GeminiConfig::new("synthetic", "gemini-3.8-live");
+        config.session.tools = vec![FunctionDeclaration {
+            name: "background".into(),
+            description: "fixture".into(),
+            parameters: serde_json::json!({}),
+        }];
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_non_blocking_tools(vec!["background".into()])
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let (mut sender, mut rx) = sender(&client, 1, 2);
+        sender.non_blocking_tools = client.non_blocking_tools.clone();
+        sender
+            .tool_admissions
+            .lock()
+            .unwrap()
+            .ids
+            .insert("call".into(), CallAdmission::Claimed);
+        let held = sender.test_hold_queue().unwrap();
+        assert!(matches!(
+            sender.try_send_selected(sender.plan_completion(1, Origin::default(), 0).unwrap()),
+            Err(GeminiError::Backpressure("input"))
+        ));
+        drop(held);
+        sender.close_selected_admission(1).unwrap();
+        sender.finish().await.unwrap();
+        rx.try_recv().unwrap();
+        sender.interrupt().await;
+        let result = || {
+            sender
+                .plan_non_blocking_tool_responses(
+                    1,
+                    vec![NonBlockingFunctionResponse {
+                        id: "call".into(),
+                        name: "background".into(),
+                        response: serde_json::json!({"ok": true}),
+                        will_continue: false,
+                        scheduling: ToolResponseScheduling::Silent,
+                    }],
+                    Origin::default(),
+                    sender.generation(),
+                )
+                .unwrap()
+        };
+        sender.try_send_selected(result()).unwrap();
+        assert!(matches!(
+            rx.try_recv().unwrap().selected.unwrap().actions.as_slice(),
+            [Action::NonBlockingToolResponses(_)]
+        ));
+        let blocking = || {
+            sender
+                .plan_tool_responses(
+                    1,
+                    vec![FunctionResponse {
+                        id: "blocking-call".into(),
+                        name: "background".into(),
+                        response: serde_json::json!({"ok": true}),
+                    }],
+                    Origin::default(),
+                    sender.generation(),
+                )
+                .unwrap()
+        };
+        // Blocking call identity is checked against the actor's live pending
+        // map, exactly as on the raw path; input closure alone cannot preclude it.
+        sender.try_send_selected(blocking()).unwrap();
+        assert!(matches!(
+            rx.try_recv().unwrap().selected.unwrap().actions.as_slice(),
+            [Action::ToolResponses(_)]
+        ));
+        sender.cancel();
+        assert_eq!(sender.try_send_selected(result()), Err(GeminiError::Closed));
+        assert_eq!(
+            sender.try_send_selected(blocking()),
+            Err(GeminiError::Closed)
+        );
+    }
+    #[tokio::test]
+    async fn second_write_hold_proves_no_command_interleaving_and_cancel_reclaims_actor() {
+        for cancel in [false, true] {
+            let (client, mut session, mut wire, peer) = connected(true).await;
+            let sender = session.sender();
+            let (entered, release) = sender.test_pause_second_write();
+            let seed = client
+                .plan_initial_history(&context(ChatRole::User, "seed"))
+                .unwrap();
+            sender
+                .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+                .unwrap();
+            timeout(Duration::from_secs(2), entered)
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(wire.recv().await.unwrap()["clientContent"].is_object());
+            sender
+                .try_send_selected(
+                    sender
+                        .plan_audio(19, vec![0, 0], Origin::default(), 0)
+                        .unwrap(),
+                )
+                .unwrap();
+            assert!(wire.try_recv().is_err());
+            if cancel {
+                sender.cancel();
+                session.selected_shutdown().await.unwrap();
+                assert!(session.selected_join_observer().unwrap().joined());
+                peer.await.unwrap();
+                assert!(wire.try_recv().is_err());
+            } else {
+                release.send(()).unwrap();
+                assert_eq!(wire.recv().await.unwrap()["realtimeInput"]["text"], " ");
+                assert!(wire.recv().await.unwrap()["realtimeInput"]["audio"].is_object());
+                session.selected_shutdown().await.unwrap();
+                peer.await.unwrap();
+            }
+        }
+    }
+    #[tokio::test]
+    async fn dequeued_blocking_result_cannot_cross_a_new_interrupt_generation() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = GeminiConfig::new("synthetic", "gemini-3.8-live");
+        config.endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+        config.session.tools = vec![FunctionDeclaration {
+            name: "blocking".into(),
+            description: "fixture".into(),
+            parameters: serde_json::json!({}),
+        }];
+        let client = GeminiClient::new(config)
+            .unwrap()
+            .with_initial_history(InitialHistoryPolicy {
+                inference_on_initialization: false,
+            })
+            .unwrap();
+        let (release_call, call_ready) = tokio::sync::oneshot::channel();
+        let (wire_tx, mut wire) = mpsc::unbounded_channel();
+        let peer = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            socket.next().await.unwrap().unwrap();
+            socket
+                .send(Message::Text("{\"setupComplete\":{}}".into()))
+                .await
+                .unwrap();
+            call_ready.await.unwrap();
+            socket
+                .send(Message::Text(
+                    serde_json::json!({"toolCall": {"functionCalls": [
+                        {"id": "call", "name": "blocking", "args": {}}
+                    ]}})
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .unwrap();
+            while let Some(Ok(message)) = socket.next().await {
+                if let Message::Text(text) = message {
+                    wire_tx.send(text).unwrap();
+                }
+            }
+        });
+        let mut session = client.connect_owned(29).await.unwrap();
+        let sender = session.sender();
+        let seed = client
+            .plan_initial_history(&LlmContextFrame::default())
+            .unwrap();
+        sender
+            .try_send_selected(sender.plan_seed(29, seed, Origin::default(), 0).unwrap())
+            .unwrap();
+        release_call.send(()).unwrap();
+        let call = timeout(Duration::from_secs(2), session.next_event())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(call.event, Event::ToolCalls(_)));
+        let (entered, release) = sender.test_pause_before_validation();
+        let response = vec![FunctionResponse {
+            id: "call".into(),
+            name: "blocking".into(),
+            response: serde_json::json!({"ok": true}),
+        }];
+        sender
+            .try_send_selected(
+                sender
+                    .plan_tool_responses(29, response, Origin::default(), 0)
+                    .unwrap(),
+            )
+            .unwrap();
+        timeout(Duration::from_secs(2), entered)
+            .await
+            .unwrap()
+            .unwrap();
+        sender.interrupt().await;
+        release.send(()).unwrap();
+        assert_eq!(
+            timeout(Duration::from_secs(2), session.next_event())
+                .await
+                .unwrap(),
+            Some(Err(GeminiError::Invalid(
+                "unknown, canceled, or mismatched tool result"
+            )))
+        );
+        assert!(session.selected_join_observer().unwrap().joined());
+        peer.await.unwrap();
+        assert!(wire.try_recv().is_err());
+    }
+    #[tokio::test]
+    async fn selected_video_captured_generation_race_is_suppressed_without_resampling() {
+        let client = client("gemini-3-live", false);
+        let (sender, mut rx) = sender(&client, 1, 1);
+        let stale = sender
+            .plan_video(1, vec![255, 216, 255, 217], Origin::default(), 0)
+            .unwrap();
+        sender.interrupt().await;
+        assert!(sender.try_send_selected(stale).is_ok());
+        assert!(rx.try_recv().is_err());
+        sender
+            .try_send_selected(
+                sender
+                    .plan_video(1, vec![255, 216, 255, 217], Origin::default(), 1)
+                    .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(rx.try_recv().unwrap().generation, 1);
+    }
+    #[tokio::test]
+    async fn queued_first_stop_generation_change_is_terminal_without_partial_completion() {
+        let (client, mut session, mut wire, peer) = connected_model("gemini-2.5-live", false).await;
+        let sender = session.sender();
+        let seed = client
+            .plan_initial_history(&context(ChatRole::User, "silent seed"))
+            .unwrap();
+        assert!(seed.pending_first_stop());
+        sender
+            .try_send_selected(sender.plan_seed(19, seed, Origin::default(), 0).unwrap())
+            .unwrap();
+        let seeded = timeout(Duration::from_secs(2), wire.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(seeded["clientContent"]["turnComplete"], false);
+        sender
+            .try_send_selected(
+                sender
+                    .plan_first_stop(19, false, true, Origin::default(), 0)
+                    .unwrap(),
+            )
+            .unwrap();
+        sender.interrupt().await;
+        assert_eq!(
+            timeout(Duration::from_secs(2), session.next_event())
+                .await
+                .unwrap(),
+            Some(Err(GeminiError::Protocol(
+                "initial-history command generation changed"
+            )))
+        );
+        assert!(session.selected_join_observer().unwrap().joined());
+        peer.await.unwrap();
+        assert!(wire.try_recv().is_err());
     }
 }

@@ -482,3 +482,105 @@ fn pinned_source_records_shared_contract_and_explicit_native_boundaries() {
         3201
     );
 }
+
+#[path = "support/initial_history.rs"]
+mod initial_history;
+
+#[tokio::test]
+async fn silent_two_five_first_stop_is_once_for_manual_and_server_vad_even_after_run_or_interrupt()
+{
+    use initial_history::{context, policy, seed_wire, text, turn, Harness, Peer};
+    for manual in [false, true] {
+        for prior in ["none", "run", "interrupt"] {
+            let (peer, client) = Peer::open(|c| {
+                c.session.model = "gemini-2.5-flash-native-audio-preview-12-2025".into();
+                c.session.activity_detection.disabled = manual;
+            })
+            .await;
+            let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+            rig.seed(context(vec![text(ChatRole::Assistant, "Prior answer")]))
+                .await;
+            let mut expected = vec![seed_wire(
+                vec![turn("model", "Prior answer"), turn("user", " ")],
+                false,
+            )];
+            peer.wait_for(|trace| trace.input.len() == 1).await;
+            match prior {
+                "run" => {
+                    rig.frame(FrameData::LlmRun, false).await;
+                    expected.push(seed_wire(vec![], true));
+                    peer.wait_for(|trace| trace.input.len() == 2).await;
+                    rig.settle_turn(&peer).await;
+                }
+                "interrupt" => {
+                    let generation = rig.processor.sender().unwrap().generation();
+                    rig.frame(FrameData::Interruption, false).await;
+                    assert!(rig.processor.sender().unwrap().generation() > generation);
+                }
+                _ => {}
+            }
+            rig.frame(FrameData::UserStartedSpeaking, false).await;
+            rig.frame(initial_history::audio(), false).await;
+            rig.frame(FrameData::UserStoppedSpeaking, false).await;
+            rig.frame(FrameData::UserStoppedSpeaking, false).await;
+            if manual {
+                expected.push(json!({"realtimeInput":{"activityStart":{}}}));
+            }
+            expected.push(json!({"realtimeInput":{"audio":{"data":"AwAEAA==","mimeType":"audio/pcm;rate=16000"}}}));
+            if manual {
+                expected.push(json!({"realtimeInput":{"activityEnd":{}}}));
+            }
+            expected.push(seed_wire(vec![], true));
+            peer.wait_for(|trace| trace.input.len() >= expected.len())
+                .await;
+            rig.settle_turn(&peer).await;
+            let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+            assert!(
+                report.errors.is_empty(),
+                "manual={manual}, prior={prior}: {:?}",
+                report.errors
+            );
+            assert_eq!(trace.input, expected, "manual={manual}, prior={prior}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn empty_or_three_silent_startup_has_no_first_stop_workaround() {
+    use initial_history::{context, policy, seed_wire, text, turn, Harness, Peer};
+    for (model, empty) in [
+        ("gemini-2.5-live", true),
+        ("gemini-3-live", true),
+        ("gemini-3-live", false),
+    ] {
+        let (peer, client) = Peer::open(|c| c.session.model = model.into()).await;
+        let mut rig = Harness::start(client.with_initial_history(policy(false)).unwrap()).await;
+        rig.seed(context(if empty {
+            vec![]
+        } else {
+            vec![text(ChatRole::User, "Silent seed")]
+        }))
+        .await;
+        rig.frame(FrameData::UserStartedSpeaking, false).await;
+        rig.frame(initial_history::audio(), false).await;
+        rig.frame(FrameData::UserStoppedSpeaking, false).await;
+        let expected_len = if empty { 1 } else { 2 };
+        peer.wait_for(|trace| trace.input.len() >= expected_len)
+            .await;
+        rig.settle_turn(&peer).await;
+        let (report, trace) = rig.terminal(peer, WorkerState::Ended).await;
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(trace.input.len(), expected_len);
+        if !empty {
+            assert_eq!(
+                trace.input[0],
+                seed_wire(vec![turn("user", "Silent seed")], false)
+            );
+        }
+        assert!(trace.input.last().unwrap()["realtimeInput"]["audio"].is_object());
+        assert!(trace
+            .input
+            .iter()
+            .all(|wire| wire["clientContent"]["turnComplete"] != true));
+    }
+}

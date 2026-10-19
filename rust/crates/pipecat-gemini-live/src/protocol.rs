@@ -3,6 +3,134 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InitialHistoryModel {
+    Gemini25,
+    Gemini3,
+}
+
+/// Complete model-token grammar: `gemini-` + zero or more alphabetic infixes,
+/// one numeric version, and optional nonempty alphanumeric suffix tokens. The
+/// minor has digits only. No substring matching, extra dots or empty tokens.
+pub(crate) fn initial_history_model(model: &str) -> Result<InitialHistoryModel, GeminiError> {
+    let invalid = || GeminiError::Unsupported("initial history model family");
+    let model = model.strip_prefix("models/").unwrap_or(model);
+    let mut tokens = model
+        .strip_prefix("gemini-")
+        .ok_or_else(invalid)?
+        .split('-');
+    let version = loop {
+        let token = tokens.next().ok_or_else(invalid)?;
+        if token.is_empty() {
+            return Err(invalid());
+        }
+        if token.bytes().all(|b| b.is_ascii_lowercase()) {
+            continue;
+        }
+        break token;
+    };
+    let mut version_parts = version.split('.');
+    let major = version_parts.next().ok_or_else(invalid)?;
+    let minor = version_parts.next();
+    if version_parts.next().is_some()
+        || major.is_empty()
+        || !major.bytes().all(|b| b.is_ascii_digit())
+        || minor.is_some_and(|v| v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()))
+        || tokens.any(|token| token.is_empty() || !token.bytes().all(|b| b.is_ascii_alphanumeric()))
+    {
+        return Err(invalid());
+    }
+    // Canonical lexical versions avoid accidental aliases such as 03 or 2.05.
+    match (major, minor) {
+        ("2", Some("5")) => Ok(InitialHistoryModel::Gemini25),
+        ("3", None) => Ok(InitialHistoryModel::Gemini3),
+        ("3", Some(minor)) if minor == "0" || !minor.starts_with('0') => {
+            Ok(InitialHistoryModel::Gemini3)
+        }
+        _ => Err(invalid()),
+    }
+}
+
+pub(crate) fn initial_history_turns(
+    context: &pipecat_core::LlmContextFrame,
+    config: &GeminiConfig,
+    model: InitialHistoryModel,
+) -> Result<Vec<TextTurn>, GeminiError> {
+    use pipecat_core::{ChatRole, ToolChoice};
+    if context.messages.len() > 1024 {
+        return Err(GeminiError::TooLarge);
+    }
+    check_json_size(context, config.limits.max_message_bytes)?;
+    let configured = &config.session;
+    if !context.tools.is_empty()
+        && (context.tools.len() != configured.tools.len()
+            || !context.tools.iter().zip(&configured.tools).all(|(a, b)| {
+                a.name == b.name && a.description == b.description && a.parameters == b.parameters
+            }))
+    {
+        return Err(GeminiError::Unsupported(
+            "tools must be declared before connecting",
+        ));
+    }
+    if context
+        .tool_choice
+        .as_ref()
+        .is_some_and(|choice| *choice != ToolChoice::Auto)
+    {
+        return Err(GeminiError::Unsupported("tool choice"));
+    }
+    // Validate the entire original snapshot, including every field on a system
+    // message later omitted from projection. No prefix can escape preflight.
+    for message in &context.messages {
+        if !message.tool_calls.is_empty()
+            || message.tool_call_id.is_some()
+            || message.name.is_some()
+        {
+            return Err(GeminiError::Unsupported("non-text context history"));
+        }
+        if message.content.is_empty() {
+            return Err(GeminiError::Invalid("empty initial-history text"));
+        }
+        match message.role {
+            ChatRole::System | ChatRole::Developer => {
+                if configured.system_instruction.as_deref() != Some(message.content.as_str()) {
+                    return Err(GeminiError::Unsupported(
+                        "system instruction must match connection setup",
+                    ));
+                }
+            }
+            ChatRole::User | ChatRole::Assistant => {}
+            ChatRole::Tool => return Err(GeminiError::Unsupported("non-text context history")),
+        }
+    }
+    let mut turns = Vec::with_capacity(context.messages.len());
+    for (index, message) in context.messages.iter().enumerate() {
+        if index == 0 && message.role == ChatRole::System && context.messages.len() > 1 {
+            continue;
+        }
+        turns.push(TextTurn {
+            role: if message.role == ChatRole::Assistant {
+                Role::Model
+            } else {
+                Role::User
+            },
+            text: message.content.clone(),
+        });
+    }
+    if model == InitialHistoryModel::Gemini25
+        && turns.last().is_some_and(|turn| turn.role == Role::Model)
+    {
+        if turns.len() == 1024 {
+            return Err(GeminiError::TooLarge);
+        }
+        turns.push(TextTurn {
+            role: Role::User,
+            text: " ".into(),
+        });
+    }
+    Ok(turns)
+}
+
 pub(crate) fn setup(config: &GeminiConfig) -> Value {
     let s = &config.session;
     let mut generation = json!({"responseModalities": [s.modality]});

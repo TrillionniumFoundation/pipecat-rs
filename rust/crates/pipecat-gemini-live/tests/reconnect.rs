@@ -1447,3 +1447,36 @@ async fn stalled_write_is_terminal_and_never_replayed_or_reconnected() {
         "partial write must not be interpreted as a full message"
     );
 }
+
+#[tokio::test]
+async fn selected_initial_history_and_handle_resumption_are_mutually_exclusive_in_both_builder_orders(
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut config = config();
+    config.session.model = "gemini-3.8-live".into();
+    config.endpoint = format!("ws://{}/live", listener.local_addr().unwrap());
+    let policy = InitialHistoryPolicy {
+        inference_on_initialization: true,
+    };
+    assert!(matches!(
+        GeminiClient::new(config.clone())
+            .unwrap()
+            .with_initial_history(policy)
+            .unwrap()
+            .with_session_resumption(ResumptionPolicy::default()),
+        Err(GeminiError::Unsupported(_))
+    ));
+    assert!(matches!(
+        GeminiClient::new(config)
+            .unwrap()
+            .with_session_resumption(ResumptionPolicy::default())
+            .unwrap()
+            .with_initial_history(policy),
+        Err(GeminiError::Unsupported(_))
+    ));
+    assert!(
+        std::future::poll_fn(|cx| std::task::Poll::Ready(listener.poll_accept(cx)))
+            .await
+            .is_pending()
+    );
+}
