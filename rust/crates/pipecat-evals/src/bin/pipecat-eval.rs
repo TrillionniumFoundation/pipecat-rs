@@ -21,7 +21,7 @@ async fn main() {
     }
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
-    let suite = (2..=5).contains(&args.len()) && args[0] == "suite";
+    let suite = args.len() >= 2 && args[0] == "suite";
     let single = (3..=11).contains(&args.len()) && args[0] == "run";
     let mut stop_bot = false;
     let mut recorded = false;
@@ -33,6 +33,17 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         let mut flags = args[2..].iter();
         while let Some(flag) = flags.next() {
             match flag.as_str() {
+                "--user-speech" if user_speech.is_none() => {
+                    let path = flags
+                        .next()
+                        .filter(|path| !path.starts_with("--") && !path.is_empty())
+                        .ok_or_else(|| {
+                            pipecat_evals::EvalError::Scenario(
+                                "--user-speech needs a runtime configuration file path".into(),
+                            )
+                        })?;
+                    user_speech = Some(path.as_str());
+                }
                 "--recorded-audio" if !recorded => recorded = true,
                 "--bot-audio-response" if bot_audio_response.is_none() => {
                     let path = flags
@@ -104,7 +115,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json | --user-speech RUNTIME.json]".into()));
     }
     if user_images
         && (user_speech.is_some()
@@ -125,6 +136,11 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     if user_speech.is_some() && (recorded || bot_audio_wav.is_some()) {
         return Err(pipecat_evals::EvalError::Scenario(
             "--user-speech cannot combine with --recorded-audio or --bot-audio-wav".into(),
+        ));
+    }
+    if suite && user_speech.is_some() && bot_audio_response.is_some() {
+        return Err(pipecat_evals::EvalError::Unsupported(
+            "suite --user-speech cannot combine with --bot-audio-response".into(),
         ));
     }
     #[cfg(not(feature = "user-speech"))]
@@ -156,6 +172,14 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         // once, before either standalone branch, and can never be overwritten.
         // The signal owner is already installed for owned model preparation.
         let manifest = if suite {
+            #[cfg(feature = "user-speech")]
+            let speech_manifest = user_speech.map(|runtime| {
+                ReleaseManifest::load_user_speech(
+                    &args[1], pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?,
+                )
+            }).transpose()?;
+            #[cfg(not(feature = "user-speech"))]
+            let speech_manifest: Option<ReleaseManifest> = None;
             #[cfg(feature = "bot-audio-transcription")]
             let audio_manifest = bot_audio_response
                 .map(|config| {
@@ -168,7 +192,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                 .transpose()?;
             #[cfg(not(feature = "bot-audio-transcription"))]
             let audio_manifest: Option<ReleaseManifest> = None;
-            Some(match audio_manifest {
+            Some(match speech_manifest.or(audio_manifest) {
                 Some(manifest) => manifest,
                 None if recorded => ReleaseManifest::load_recorded(&args[1])?,
                 None => ReleaseManifest::load(&args[1])?,

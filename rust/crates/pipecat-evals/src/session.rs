@@ -5,7 +5,8 @@ use crate::bot_transcription::{BotTranscription, BotTranscriptionConfig};
 use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
 #[cfg(feature = "user-speech")]
 use crate::user_speech::{
-    CartesiaUserSpeechSettings, CartesiaUserSpeechVoice, UserSpeechBudget, UserSpeechOwner,
+    CartesiaUserSpeechSettings, CartesiaUserSpeechVoice, PreparedHostedSpeech, UserSpeechBudget,
+    UserSpeechOwner,
 };
 use crate::{
     events::{EventLimits, EventStream},
@@ -149,6 +150,13 @@ struct AudioToAudioState {
     stop_bot_attempted: bool,
 }
 
+/// Private selection state, separate from direct speech and duplex sessions.
+#[cfg(feature = "user-speech")]
+struct HostedSpeechState {
+    admission_closed: bool,
+    stop_bot_attempted: bool,
+}
+
 enum RecordedCompletion {
     Ordinary(tokio::sync::oneshot::Receiver<()>),
     #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
@@ -204,6 +212,8 @@ pub struct EvalSession {
     user_speech: Option<UserSpeechOwner>,
     #[cfg(feature = "user-speech")]
     user_speech_budget: Option<UserSpeechBudget>,
+    #[cfg(feature = "user-speech")]
+    hosted_speech: Option<HostedSpeechState>,
     capture: Option<Capture>,
     #[cfg(feature = "bot-audio-transcription")]
     transcription_config: Option<BotTranscriptionConfig>,
@@ -294,6 +304,8 @@ impl EvalSession {
             user_speech: None,
             #[cfg(feature = "user-speech")]
             user_speech_budget: None,
+            #[cfg(feature = "user-speech")]
+            hosted_speech: None,
             capture: None,
             #[cfg(feature = "bot-audio-transcription")]
             transcription_config: None,
@@ -543,6 +555,73 @@ impl EvalSession {
         self.user_speech_budget = Some(budget);
         self
     }
+    /// Attach only after immutable recordings and complete release preflight.
+    /// There is no public setter for the selected plan or its execution budget.
+    #[cfg(feature = "user-speech")]
+    pub(crate) fn with_hosted_user_speech(
+        mut self,
+        prepared: PreparedHostedSpeech,
+    ) -> Result<Self, EvalError> {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() || self.transcription.is_some() {
+            return Err(EvalError::Unsupported(
+                "hosted user speech combined with bot audio transcription".into(),
+            ));
+        }
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            return Err(EvalError::Unsupported(
+                "images combined with hosted user speech".into(),
+            ));
+        }
+        let mut uncovered = false;
+        let mut count = 0usize;
+        for (index, turn) in self.scenario.turns.iter().enumerate() {
+            if turn.dtmf.is_some() {
+                return Err(EvalError::Unsupported(
+                    "hosted user speech does not support DTMF".into(),
+                ));
+            }
+            if let Some(text) = &turn.user {
+                UserSpeechOwner::validate_text(text)?;
+                count += 1;
+                uncovered |= !self.recordings.contains_key(&index);
+            }
+        }
+        if count > 128 {
+            return Err(EvalError::Limit("user speech turns"));
+        }
+        if uncovered {
+            let voice = prepared.voice.ok_or_else(|| {
+                EvalError::Scenario("hosted user speech input coverage is incomplete".into())
+            })?;
+            self = self.with_cartesia_user_speech(prepared.settings, voice)?;
+        }
+        // All-WAV plans still freeze recordings and select actual joined cleanup,
+        // without constructing an HTTP/cache owner or charging WAVs a second time.
+        self = self.with_user_speech_budget(prepared.budget);
+        self.hosted_speech = Some(HostedSpeechState {
+            admission_closed: false,
+            stop_bot_attempted: false,
+        });
+        Ok(self)
+    }
+
+    /// A failed post-spawn setup keeps the original prepared session, records its
+    /// primary failure before the first cleanup await, and exposes cleanup errors.
+    #[cfg(feature = "user-speech")]
+    pub(crate) async fn stop_hosted_before_run(mut self, kind: &str, reason: &str) -> ScriptResult {
+        self.result.fail(AssertionFailure {
+            turn_index: -1,
+            expectation_index: -1,
+            event_name: "process".into(),
+            kind: kind.into(),
+            reason: reason.into(),
+        });
+        self.shutdown().await;
+        self.result
+    }
+
     /// Replace selected user turns with real recorded PCM input. The user text
     /// remains a judge reference and is never sent as text for these turns.
     /// Requires a compatible endpoint, such as EvalBotHost with_raw_audio_input(true).
@@ -1011,6 +1090,10 @@ impl EvalSession {
                     // Assertion deadlines include cache/HTTP production time.
                     speech_anchor = Some(admitted);
                     owner.begin(user, admitted)?;
+                } else if self.hosted_speech.is_some() {
+                    return Err(EvalError::Scenario(
+                        "hosted user speech input coverage is incomplete".into(),
+                    ));
                 } else {
                     self.send_user_text(user).await?;
                 }
@@ -1138,6 +1221,14 @@ impl EvalSession {
         self.send("send-text", json!({"content":user,"options":{"run_immediately":true,"audio_response":self.capture.is_some()}})).await
     }
     fn check_user_speech_deadline(&mut self) -> Result<(), EvalError> {
+        #[cfg(feature = "user-speech")]
+        if self
+            .hosted_speech
+            .as_ref()
+            .is_some_and(|state| state.admission_closed)
+        {
+            return Err(EvalError::Cancelled);
+        }
         #[cfg(feature = "user-speech")]
         if let Some(owner) = &mut self.user_speech {
             owner.check_deadline()?;
@@ -1800,7 +1891,99 @@ impl EvalSession {
         }
         self.transcription.take();
     }
+    #[cfg(feature = "user-speech")]
+    async fn shutdown_hosted_speech(&mut self) {
+        // No await or native join before every input producer is stopped.
+        self.hosted_speech.as_mut().unwrap().admission_closed = true;
+        if let Some(owner) = &mut self.user_speech {
+            owner.cancel_work();
+        }
+        if let Some(playback) = &self.playback {
+            playback.request_stop();
+        }
+        // This is the last possible application send. A cancelled cleanup wait
+        // may resume after borrowed socket shutdown took its sender.
+        let state = self.hosted_speech.as_mut().unwrap();
+        let send_stop = self.options.stop_bot && !state.stop_bot_attempted && self.socket.is_some();
+        state.stop_bot_attempted = true;
+        if send_stop {
+            if let Err(error) = self.send_control(serializer::EVAL_CANCEL, json!({})).await {
+                self.result
+                    .debug_log
+                    .push(format!("eval-cancel could not be sent: {error}"));
+            }
+        }
+        // Phase B keeps every owner in its field across cancellable awaits.
+        if let Some(playback) = &mut self.playback {
+            if let Err(error) = playback.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "recording".into(),
+                    reason: error.to_string(),
+                    kind: "audio_cleanup_error".into(),
+                });
+            }
+        }
+        self.playback.take();
+        if let Some(socket) = &mut self.socket {
+            match tokio::time::timeout(
+                self.options.transport.close_timeout + self.options.transport.write_timeout,
+                socket.finish_and_join(),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "transport_cleanup".into(),
+                    reason: format!("transport cleanup: {error}"),
+                    kind: "transport_cleanup_error".into(),
+                }),
+                Err(_) => {
+                    self.result.fail(AssertionFailure {
+                        turn_index: self.active_turn,
+                        expectation_index: -1,
+                        event_name: "transport_cleanup".into(),
+                        reason:
+                            "transport graceful cleanup exceeded deadline; cancelling and joining"
+                                .into(),
+                        kind: "transport_cleanup_error".into(),
+                    });
+                    if let Err(error) = socket.cancel_and_join().await {
+                        self.result.fail(AssertionFailure {
+                            turn_index: self.active_turn,
+                            expectation_index: -1,
+                            event_name: "transport_cleanup".into(),
+                            reason: format!("transport cancellation cleanup: {error}"),
+                            kind: "transport_cleanup_error".into(),
+                        });
+                    }
+                }
+            }
+        }
+        self.socket.take();
+        if let Some(owner) = &mut self.user_speech {
+            if let Err(error) = owner.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "user_speech_cleanup".into(),
+                    reason: error.to_string(),
+                    kind: "user_speech_cleanup_error".into(),
+                });
+            }
+            self.result.debug_log.extend(owner.take_cache_diagnostics());
+        }
+        self.user_speech.take();
+    }
     pub(crate) async fn shutdown(&mut self) {
+        #[cfg(feature = "user-speech")]
+        if self.hosted_speech.is_some() {
+            self.shutdown_hosted_speech().await;
+            return;
+        }
         #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
         if self.is_audio_to_audio() {
             self.shutdown_audio_to_audio().await;
@@ -2284,6 +2467,261 @@ mod speech_builder_tests {
             .unwrap();
         assert!(replaced.user_speech_budget.is_some());
         assert!(replaced.with_recorded_audio_inputs([(0, clip)]).is_err());
+    }
+}
+
+#[cfg(all(test, feature = "user-speech"))]
+mod hosted_speech_lifecycle_tests {
+    use super::*;
+    use pipecat_speech::SpeechConfig;
+    use std::sync::mpsc;
+    use tokio::sync::oneshot;
+
+    const WAIT: Duration = Duration::from_secs(3);
+
+    fn settings() -> CartesiaUserSpeechSettings {
+        let mut config = SpeechConfig::cartesia("synthetic-hosted-cleanup-key");
+        config.base_url = "http://127.0.0.1:1".into();
+        CartesiaUserSpeechSettings::new(config, crate::UserSpeechCachePolicy::Disabled).unwrap()
+    }
+    fn session() -> EvalSession {
+        let scenario = crate::ScenarioFile::from_value(json!({
+            "name": "hosted lifecycle", "turns": [{"user": "WAV reference"}]
+        }))
+        .unwrap()
+        .scenarios
+        .remove(0);
+        EvalSession::new(scenario, "ws://127.0.0.1:1", SessionOptions::default())
+            .unwrap()
+            .with_recorded_audio_inputs([(0, RecordedAudio::from_pcm16(&[1, 0]).unwrap())])
+            .unwrap()
+            .with_hosted_user_speech(PreparedHostedSpeech {
+                settings: settings(),
+                voice: Some(CartesiaUserSpeechVoice::new("unused-voice", None, None).unwrap()),
+                budget: UserSpeechBudget::new(2).unwrap(),
+            })
+            .unwrap()
+    }
+    fn primary(session: &mut EvalSession) {
+        session.result.fail(AssertionFailure {
+            turn_index: -1,
+            expectation_index: -1,
+            event_name: "original".into(),
+            kind: "original_error".into(),
+            reason: "primary failure".into(),
+        });
+    }
+    #[test]
+    fn all_wav_is_selected_frozen_and_has_no_http_or_cache_owner() {
+        let session = session();
+        assert!(session.hosted_speech.is_some());
+        assert!(session.user_speech_budget.is_some());
+        assert!(session.user_speech.is_none());
+        assert!(session
+            .with_recorded_audio_inputs([(0, RecordedAudio::from_pcm16(&[2, 0]).unwrap())])
+            .is_err());
+    }
+    #[tokio::test]
+    async fn selected_pre_run_failure_keeps_primary_and_closes_admission() {
+        let result = session()
+            .stop_hosted_before_run("process_wait", "original wait failure")
+            .await;
+        assert!(!result.passed);
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].kind, "process_wait");
+        assert_eq!(result.failures[0].reason, "original wait failure");
+        let mut session = session();
+        session.shutdown().await;
+        session.shutdown().await;
+        assert!(session.hosted_speech.as_ref().unwrap().admission_closed);
+        assert!(session.hosted_speech.as_ref().unwrap().stop_bot_attempted);
+        assert!(matches!(
+            session.check_user_speech_deadline(),
+            Err(EvalError::Cancelled)
+        ));
+    }
+    #[tokio::test]
+    async fn actual_socket_error_is_joined_and_appended_after_primary() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        let accept = async {
+            let (stream, _) = tokio::time::timeout(WAIT, listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            WebSocketSession::accept(stream, SessionConfig::default())
+                .await
+                .unwrap()
+        };
+        let connect = WebSocketSession::connect(
+            &url,
+            SessionConfig {
+                max_message_bytes: 4,
+                ..Default::default()
+            },
+        );
+        let (client, mut peer) = tokio::join!(connect, accept);
+        let mut session = session();
+        session.socket = Some(client.unwrap());
+        peer.sender()
+            .send(Packet::Text("12345".into()))
+            .await
+            .unwrap();
+        let disconnected =
+            tokio::time::timeout(WAIT, session.socket.as_mut().unwrap().recv()).await;
+        let peer_disconnected = tokio::time::timeout(WAIT, peer.recv()).await;
+        primary(&mut session);
+        let (_, peer_joined) = tokio::join!(session.shutdown(), peer.cancel_and_join());
+        assert!(matches!(disconnected, Ok(None)));
+        assert!(matches!(peer_disconnected, Ok(None)));
+        assert!(
+            matches!(&peer_joined,
+                Err(pipecat_transports::TransportError::WebSocket(inner))
+                    if format!("{inner:?}") == "Protocol(ResetWithoutClosingHandshake)"
+            ),
+            "actual peer terminal result: {peer_joined:?}"
+        );
+        assert!(session.socket.is_none());
+        assert_eq!(session.result.failures.len(), 2);
+        assert_eq!(session.result.failures[0].kind, "original_error");
+        assert_eq!(session.result.failures[1].kind, "transport_cleanup_error");
+        assert!(!session.result.passed);
+    }
+
+    /// The real peer actor's runtime is paused after its handshake. A small TCP
+    /// receive window and bounded large frame hold the real client write/join,
+    /// rather than using completion notification as a substitute for ownership.
+    struct HeldPeer {
+        release: Option<mpsc::Sender<()>>,
+        thread: Option<std::thread::JoinHandle<Result<(), String>>>,
+    }
+    impl HeldPeer {
+        fn finish(&mut self) -> Result<(), String> {
+            if let Some(release) = self.release.take() {
+                let _ = release.send(());
+            }
+            match self.thread.take() {
+                Some(thread) => thread
+                    .join()
+                    .map_err(|_| "peer thread panicked".to_owned())?,
+                None => Ok(()),
+            }
+        }
+    }
+    impl Drop for HeldPeer {
+        fn drop(&mut self) {
+            let _ = self.finish();
+        }
+    }
+    async fn held_socket() -> (WebSocketSession, HeldPeer) {
+        let (address_tx, address_rx) = oneshot::channel();
+        let (accepted_tx, accepted_rx) = oneshot::channel();
+        let (release, held) = mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            let mut peer = runtime.block_on(async {
+                let socket = tokio::net::TcpSocket::new_v4().map_err(|error| error.to_string())?;
+                socket
+                    .set_recv_buffer_size(1024)
+                    .map_err(|error| error.to_string())?;
+                socket
+                    .bind("127.0.0.1:0".parse().unwrap())
+                    .map_err(|error| error.to_string())?;
+                let listener = socket.listen(1).map_err(|error| error.to_string())?;
+                let _ = address_tx.send(listener.local_addr().map_err(|error| error.to_string())?);
+                let (stream, _) = tokio::time::timeout(WAIT, listener.accept())
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .map_err(|error| error.to_string())?;
+                WebSocketSession::accept(
+                    stream,
+                    SessionConfig {
+                        max_message_bytes: 4 * 1024 * 1024,
+                        write_timeout: WAIT,
+                        close_timeout: Duration::from_millis(50),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())
+            })?;
+            let _ = accepted_tx.send(());
+            let _ = held.recv_timeout(WAIT + WAIT);
+            // Both success and protocol failure are terminal here: the client
+            // deliberately interrupts a real partially written frame. Actual
+            // cancel_and_join is awaited regardless; the peer is never detached.
+            let _terminal = runtime.block_on(peer.cancel_and_join());
+            Ok(())
+        });
+        let peer = HeldPeer {
+            release: Some(release),
+            thread: Some(thread),
+        };
+        let address = tokio::time::timeout(WAIT, address_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        let client = WebSocketSession::connect(
+            &format!("ws://{address}"),
+            SessionConfig {
+                queue_capacity: 1,
+                max_message_bytes: 4 * 1024 * 1024,
+                write_timeout: WAIT,
+                close_timeout: Duration::from_millis(50),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        tokio::time::timeout(WAIT, accepted_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        (client, peer)
+    }
+    #[tokio::test]
+    async fn borrowed_shutdown_retains_real_socket_and_timeout_cancels_then_joins() {
+        let (socket, mut peer) = held_socket().await;
+        let sender = socket.sender();
+        sender
+            .send(Packet::Binary(vec![1; 4 * 1024 * 1024].into()))
+            .await
+            .unwrap();
+        sender
+            .send(Packet::Binary(vec![2; 4 * 1024 * 1024].into()))
+            .await
+            .unwrap();
+        let mut session = session();
+        session.options.transport.write_timeout = Duration::from_millis(250);
+        session.options.transport.close_timeout = Duration::from_millis(250);
+        session.socket = Some(socket);
+        primary(&mut session);
+        // Stop waiting on only this borrow, retaining the exact selected owner.
+        let first = tokio::time::timeout(Duration::from_millis(10), session.shutdown()).await;
+        let retained = session.socket.is_some();
+        let stopped = session.hosted_speech.as_ref().unwrap().stop_bot_attempted;
+        // Re-entry must not call sender() after the first finish removed it.
+        session.options.stop_bot = true;
+        session.options.transport.write_timeout = Duration::from_millis(1);
+        session.options.transport.close_timeout = Duration::from_millis(1);
+        session.shutdown().await;
+        let peer_joined = peer.finish();
+        assert!(
+            first.is_err(),
+            "real backpressured socket unexpectedly finished"
+        );
+        assert!(retained && stopped);
+        assert!(session.socket.is_none() && session.playback.is_none());
+        assert!(peer_joined.is_ok(), "peer actual join: {peer_joined:?}");
+        assert_eq!(session.result.failures[0].kind, "original_error");
+        assert!(session.result.failures.iter().any(|failure| {
+            failure.kind == "transport_cleanup_error"
+                && failure.reason.contains("cancelling and joining")
+        }));
+        assert!(!session.result.passed);
     }
 }
 

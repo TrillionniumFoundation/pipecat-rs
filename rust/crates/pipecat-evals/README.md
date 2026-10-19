@@ -98,6 +98,11 @@ bounded cleanup. A disconnected bot never satisfies an absence assertion.
 
 ## Native process hosting and release execution
 
+For opt-in local compiled-child Cartesia input with repeated scenarios, see
+[USER_SPEECH_SUITE.md](USER_SPEECH_SUITE.md). It keeps the ordinary manifest and
+result shapes, freezes selected scenario provenance, and shares one logical PCM
+budget across every attempt in an invocation.
+
 **Ownership is for the direct child only.** The runner does not create a Unix
 process group or Windows Job Object. Bots must not leave independently owned
 children running. It is not a sandbox: a trusted executable can access the same

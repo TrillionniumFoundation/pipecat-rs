@@ -7,6 +7,11 @@ indirect normal compile dependency through pipecat-turns to pipecat-vad and ORT;
 this feature does not introduce that dependency or require model execution.
 Ordinary scenario loaders and text-only runs keep their previous behavior.
 
+Local compiled-child manifests with repeats and shared invocation accounting
+are also available through `suite MANIFEST --user-speech RUNTIME.json`; see
+[USER_SPEECH_SUITE.md](USER_SPEECH_SUITE.md). That selected hosted profile rejects
+DTMF and bot-audio/duplex composition; the direct API below is unchanged.
+
 ## Direct command
 
 ```sh

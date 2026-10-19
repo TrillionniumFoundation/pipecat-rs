@@ -11,8 +11,21 @@ use crate::{
     Cancellation, EvalError, EvalSession, RecordedAudio, RecordedScenarioFile, ScenarioFile,
     ScriptScenario, SessionOptions,
 };
+#[cfg(feature = "bot-audio-transcription")]
+use crate::{
+    native_loader::{LoaderRegistrar, LoaderRegistry},
+    BotTranscriptionSettings,
+};
+#[cfg(feature = "user-speech")]
+use crate::{
+    user_speech::{PreparedHostedSpeech, UserSpeechBudget},
+    user_speech_scenario::{bounded_serialized_size, load_speech_plan_bounded, SpeechPlanLimits},
+    CartesiaUserSpeechSettings, CartesiaUserSpeechVoice,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+#[cfg(any(feature = "bot-audio-transcription", feature = "user-speech"))]
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashSet},
     io::Read,
@@ -20,14 +33,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use tokio::task::JoinSet;
-#[cfg(feature = "bot-audio-transcription")]
-use {
-    crate::{
-        native_loader::{LoaderRegistrar, LoaderRegistry},
-        BotTranscriptionSettings,
-    },
-    std::sync::Arc,
-};
 const MAX_RUNS: usize = 128;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 
@@ -98,11 +103,34 @@ pub struct ReleaseJob {
     command: NativeCommand,
     body: Option<Body>,
     recordings: Option<Vec<(usize, RecordedAudio)>>,
+    #[cfg(feature = "user-speech")]
+    user_speech: Option<Arc<HostedSpeechPlan>>,
     // Only settings/credentials are shared across repeats. Every executing
     // attempt owns its own model, analyzer state and HTTP configuration.
     #[cfg(feature = "bot-audio-transcription")]
     audio_response: Option<Arc<BotTranscriptionSettings>>,
 }
+/// Immutable source provenance; this contains no execution owner or quota.
+#[cfg(feature = "user-speech")]
+struct HostedSpeechPlan {
+    settings: CartesiaUserSpeechSettings,
+    voice: Option<CartesiaUserSpeechVoice>,
+    scenario: Arc<[u8]>,
+}
+
+enum UserInputMode {
+    Text,
+    Recorded,
+    #[cfg(feature = "user-speech")]
+    Speech(Arc<CartesiaUserSpeechSettings>),
+}
+struct LoadedScenario {
+    scenario: ScriptScenario,
+    recordings: Option<Vec<(usize, RecordedAudio)>>,
+    #[cfg(feature = "user-speech")]
+    speech: Option<Arc<HostedSpeechPlan>>,
+}
+
 /// Loaded and validated plans contain no executable shell templates. Use load()
 /// to validate every scenario and all configuration before executing any child.
 pub struct ReleaseManifest {
@@ -148,12 +176,30 @@ fn invalid(message: &str) -> EvalError {
 }
 impl ReleaseManifest {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        Self::load_mode(path.as_ref(), false, ResponseParseMode::Text)
+        Self::load_mode(path.as_ref(), UserInputMode::Text, ResponseParseMode::Text)
     }
     /// Opt into preloaded Unix PCM16 recordings in every referenced scenario.
     /// The ordinary loader and native compiled-child ownership remain unchanged.
     pub fn load_recorded(path: impl AsRef<Path>) -> Result<Self, EvalError> {
-        Self::load_mode(path.as_ref(), true, ResponseParseMode::Text)
+        Self::load_mode(
+            path.as_ref(),
+            UserInputMode::Recorded,
+            ResponseParseMode::Text,
+        )
+    }
+    /// Opt into local hosted Cartesia input with recording overrides. Loading
+    /// performs no synthesis/cache I/O; execution freezes scenarios and shares
+    /// one 15,360,000-byte logical PCM allowance across all jobs and repeats.
+    #[cfg(feature = "user-speech")]
+    pub fn load_user_speech(
+        path: impl AsRef<Path>,
+        settings: CartesiaUserSpeechSettings,
+    ) -> Result<Self, EvalError> {
+        Self::load_mode(
+            path.as_ref(),
+            UserInputMode::Speech(Arc::new(settings)),
+            ResponseParseMode::Text,
+        )
     }
     /// Preserve explicit `response` events as spoken transcripts for every
     /// attempt, optionally with preloaded recorded user input. The complete
@@ -170,7 +216,11 @@ impl ReleaseManifest {
     ) -> Result<Self, EvalError> {
         let mut manifest = Self::load_mode(
             path.as_ref(),
-            recorded_audio,
+            if recorded_audio {
+                UserInputMode::Recorded
+            } else {
+                UserInputMode::Text
+            },
             ResponseParseMode::AudioResponse,
         )?;
         let settings = Arc::new(settings);
@@ -181,12 +231,13 @@ impl ReleaseManifest {
     }
     fn load_mode(
         path: &Path,
-        recorded: bool,
+        input_mode: UserInputMode,
         response_mode: ResponseParseMode,
     ) -> Result<Self, EvalError> {
         let path = path.canonicalize()?;
         let base = path.parent().unwrap();
-        let regular_files = recorded;
+        let recorded = matches!(input_mode, UserInputMode::Recorded);
+        let regular_files = !matches!(input_mode, UserInputMode::Text);
         #[cfg(feature = "bot-audio-transcription")]
         let regular_files =
             regular_files || matches!(response_mode, ResponseParseMode::AudioResponse);
@@ -305,7 +356,61 @@ impl ReleaseManifest {
                     base.join(&input.scenarios_dir)
                         .join(format!("{reference}.yaml"))
                 };
-                let scenarios = if recorded {
+                #[cfg(feature = "user-speech")]
+                let selected = if let UserInputMode::Speech(settings) = &input_mode {
+                    let (file, voices) = load_speech_plan_bounded(
+                        &path,
+                        response_mode,
+                        true,
+                        SpeechPlanLimits {
+                            wav_bytes: 16 * 1024 * 1024 - wav_bytes,
+                            pcm_bytes: (crate::recorded_audio::MAX_TOTAL_BYTES
+                                - audio_budget.pcm_bytes)
+                                / input.repeat,
+                            user_turns: (128 - audio_budget.references) / input.repeat,
+                            scenarios: MAX_RUNS / input.repeat - expanded.len(),
+                            scenario_bytes: Some(
+                                (4 * 1024 * 1024 - audio_budget.scenario_bytes) / input.repeat,
+                            ),
+                        },
+                    )?;
+                    wav_bytes = wav_bytes
+                        .checked_add(file.wav_bytes)
+                        .ok_or(EvalError::Limit("release recording WAV bytes"))?;
+                    let scenarios = file
+                        .into_parts()
+                        .into_iter()
+                        .zip(voices)
+                        .map(|((scenario, clips), voice)| {
+                            // The loader measured canonical bytes before reading
+                            // media; charge repeats before retaining the snapshot.
+                            audio_budget.admit_speech(
+                                &scenario,
+                                &clips,
+                                voice.is_some(),
+                                input.repeat,
+                            )?;
+                            let frozen = Arc::<[u8]>::from(serde_json::to_vec(&scenario)?);
+                            Ok(LoadedScenario {
+                                scenario,
+                                recordings: Some(clips),
+                                speech: Some(Arc::new(HostedSpeechPlan {
+                                    settings: settings.as_ref().clone(),
+                                    voice,
+                                    scenario: frozen,
+                                })),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, EvalError>>()?;
+                    Some(scenarios)
+                } else {
+                    None
+                };
+                #[cfg(not(feature = "user-speech"))]
+                let selected: Option<Vec<LoadedScenario>> = None;
+                let scenarios = if let Some(scenarios) = selected {
+                    scenarios
+                } else if recorded {
                     let file = RecordedScenarioFile::load_bounded_with_mode(
                         &path,
                         16 * 1024 * 1024 - wav_bytes,
@@ -322,7 +427,12 @@ impl ReleaseManifest {
                     }
                     file.into_parts()
                         .into_iter()
-                        .map(|(s, clips)| (s, Some(clips)))
+                        .map(|(scenario, clips)| LoadedScenario {
+                            scenario,
+                            recordings: Some(clips),
+                            #[cfg(feature = "user-speech")]
+                            speech: None,
+                        })
                         .collect::<Vec<_>>()
                 } else {
                     let file = match response_mode {
@@ -332,11 +442,31 @@ impl ReleaseManifest {
                             ScenarioFile::load_audio_response(path)?
                         }
                     };
-                    file.scenarios.into_iter().map(|s| (s, None)).collect()
+                    file.scenarios
+                        .into_iter()
+                        .map(|scenario| LoadedScenario {
+                            scenario,
+                            recordings: None,
+                            #[cfg(feature = "user-speech")]
+                            speech: None,
+                        })
+                        .collect()
                 };
-                for (scenario, recordings) in scenarios {
-                    if let Some(clips) = &recordings {
-                        audio_budget.admit(&scenario, clips, input.repeat)?;
+                for loaded in scenarios {
+                    let LoadedScenario {
+                        scenario,
+                        recordings,
+                        #[cfg(feature = "user-speech")]
+                        speech,
+                    } = loaded;
+                    #[cfg(feature = "user-speech")]
+                    let is_speech = speech.is_some();
+                    #[cfg(not(feature = "user-speech"))]
+                    let is_speech = false;
+                    if !is_speech {
+                        if let Some(clips) = &recordings {
+                            audio_budget.admit(&scenario, clips, input.repeat)?;
+                        }
                     }
                     #[cfg(feature = "bot-audio-transcription")]
                     if recordings.is_none()
@@ -364,6 +494,8 @@ impl ReleaseManifest {
                         command: command.clone(),
                         body: body.clone(),
                         recordings,
+                        #[cfg(feature = "user-speech")]
+                        user_speech: speech,
                         #[cfg(feature = "bot-audio-transcription")]
                         audio_response: None,
                     });
@@ -455,6 +587,100 @@ impl AudioBudget {
         }
         self.admit_scenario(scenario, repeat, "release recorded scenario bytes")
     }
+    #[cfg(feature = "user-speech")]
+    fn admit_speech(
+        &mut self,
+        scenario: &ScriptScenario,
+        clips: &[(usize, RecordedAudio)],
+        has_voice: bool,
+        repeat: usize,
+    ) -> Result<(), EvalError> {
+        // Structural limits and bounded serialization precede validate(), which
+        // otherwise allocates a JSON copy of a caller-mutated public scenario.
+        if scenario.turns.len() > 1024
+            || scenario
+                .turns
+                .iter()
+                .try_fold(0usize, |sum, turn| sum.checked_add(turn.expect.len()))
+                .is_none_or(|count| count > 4096)
+        {
+            return Err(EvalError::Limit("user speech scenario structure"));
+        }
+        if scenario.turns.iter().any(|turn| turn.dtmf.is_some()) || scenario.needs_images() {
+            return Err(EvalError::Unsupported(
+                "hosted user speech does not support DTMF or images".into(),
+            ));
+        }
+        let mut references = 0usize;
+        for turn in &scenario.turns {
+            if let Some(text) = &turn.user {
+                if text.len() > 16 * 1024 || text.trim().is_empty() {
+                    return Err(invalid(
+                        "hosted user speech requires 1..16384 byte nonempty references",
+                    ));
+                }
+                references += 1;
+            }
+        }
+        let indices = clips
+            .iter()
+            .map(|(index, _)| *index)
+            .collect::<HashSet<_>>();
+        if indices.len() != clips.len()
+            || clips.iter().any(|(index, _)| {
+                scenario
+                    .turns
+                    .get(*index)
+                    .is_none_or(|turn| turn.user.is_none())
+            })
+            || (!has_voice
+                && scenario
+                    .turns
+                    .iter()
+                    .enumerate()
+                    .any(|(index, turn)| turn.user.is_some() && !indices.contains(&index)))
+        {
+            return Err(invalid(
+                "hosted user speech recording coverage/provenance is invalid",
+            ));
+        }
+        let bytes =
+            bounded_serialized_size(scenario, (4 * 1024 * 1024 - self.scenario_bytes) / repeat)?;
+        scenario.validate()?;
+        let pcm = clips
+            .iter()
+            .try_fold(0usize, |sum, (_, clip)| {
+                sum.checked_add(clip.pcm_bytes().len())
+            })
+            .ok_or(EvalError::Limit("release recording PCM bytes"))?;
+        for (total, count, max, label) in [
+            (
+                &mut self.references,
+                references,
+                128,
+                "release user speech references",
+            ),
+            (
+                &mut self.pcm_bytes,
+                pcm,
+                crate::recorded_audio::MAX_TOTAL_BYTES,
+                "release user speech PCM bytes",
+            ),
+            (
+                &mut self.scenario_bytes,
+                bytes,
+                4 * 1024 * 1024,
+                "release user speech scenario bytes",
+            ),
+        ] {
+            *total = count
+                .checked_mul(repeat)
+                .and_then(|n| total.checked_add(n))
+                .filter(|total| *total <= max)
+                .ok_or(EvalError::Limit(label))?;
+        }
+        Ok(())
+    }
     fn admit_scenario(
         &mut self,
         scenario: &ScriptScenario,
@@ -536,6 +762,7 @@ impl ReleaseJob {
         process: ProcessOptions,
         cancel: Cancellation,
         #[cfg(feature = "bot-audio-transcription")] loaders: LoaderRegistrar,
+        #[cfg(feature = "user-speech")] speech: Option<PreparedHostedSpeech>,
     ) -> Result<ReleaseRun, EvalError> {
         if cancel.is_cancelled() {
             return Ok(self.failed("cancelled", "release run cancelled before launch"));
@@ -583,6 +810,8 @@ impl ReleaseJob {
             self.recordings.clone(),
             #[cfg(feature = "bot-audio-transcription")]
             transcription,
+            #[cfg(feature = "user-speech")]
+            speech,
         )
         .await?;
         Ok(self.record(hosted))
@@ -630,8 +859,8 @@ async fn cancel_and_finish<T: 'static>(
 ) {
     cancel.cancel();
     if drain_loaders {
-        // An audio task may own a native loader which must finish and be joined.
-        // Ordinary errors must preserve its cooperative cleanup path.
+        // Audio tasks may own native loaders or selected speech/cache/socket
+        // owners. Ordinary errors preserve their cooperative joined cleanup.
         while tasks.join_next().await.is_some() {}
     } else {
         tasks.shutdown().await;
@@ -669,11 +898,34 @@ pub async fn run_release_with_budget(
     let drain_loaders = manifest.jobs.iter().any(|job| job.audio_response.is_some());
     #[cfg(not(feature = "bot-audio-transcription"))]
     let drain_loaders = false;
+    #[cfg(feature = "user-speech")]
+    let has_speech = manifest.jobs.iter().any(|job| job.user_speech.is_some());
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    if has_speech && drain_loaders {
+        return Err(EvalError::Unsupported(
+            "hosted user speech cannot combine with audio response jobs".into(),
+        ));
+    }
+    #[cfg(feature = "user-speech")]
+    let drain_loaders = drain_loaders || has_speech;
     let mut audio_budget = AudioBudget::default();
     let mut ports = HashSet::new();
     let mut identities = HashSet::new();
     let mut caps = BTreeMap::<String, usize>::new();
     for job in &manifest.jobs {
+        #[cfg(feature = "user-speech")]
+        if let Some(plan) = &job.user_speech {
+            audio_budget.admit_speech(
+                &job.scenario,
+                job.recordings.as_deref().unwrap_or_default(),
+                plan.voice.is_some(),
+                1,
+            )?;
+            // Allocation is bounded by the just-validated remaining allowance.
+            if serde_json::to_vec(&job.scenario)?.as_slice() != plan.scenario.as_ref() {
+                return Err(invalid("hosted user speech scenario changed after loading"));
+            }
+        }
         if job.name.trim().is_empty()
             || job.name.len() > 1024
             || !(1..=MAX_RUNS).contains(&job.attempt)
@@ -698,8 +950,14 @@ pub async fn run_release_with_budget(
             }));
         }
         job.command.validate()?;
-        if let Some(clips) = &job.recordings {
-            audio_budget.admit(&job.scenario, clips, 1)?;
+        #[cfg(feature = "user-speech")]
+        let is_speech = job.user_speech.is_some();
+        #[cfg(not(feature = "user-speech"))]
+        let is_speech = false;
+        if !is_speech {
+            if let Some(clips) = &job.recordings {
+                audio_budget.admit(&job.scenario, clips, 1)?;
+            }
         }
         #[cfg(feature = "bot-audio-transcription")]
         if job.recordings.is_none() && job.audio_response.is_some() {
@@ -743,6 +1001,15 @@ pub async fn run_release_with_budget(
     if stored + reserved > max_bytes {
         return Err(EvalError::Limit("release summary budget"));
     }
+    // Exactly one shared admission counter per fully revalidated invocation.
+    // All recordings, including ordinary mixed jobs and repeated Arc clips,
+    // are conservatively precharged before any task, cache or HTTP owner exists.
+    #[cfg(feature = "user-speech")]
+    let speech_budget = if has_speech {
+        Some(UserSpeechBudget::new(audio_budget.pcm_bytes)?)
+    } else {
+        None
+    };
     // Declare the outer registry before the JoinSet: dropping the release first
     // aborts its tasks, then closes loader admission and joins all native work.
     #[cfg(feature = "bot-audio-transcription")]
@@ -801,6 +1068,15 @@ pub async fn run_release_with_budget(
                 let process = process.clone();
                 #[cfg(feature = "bot-audio-transcription")]
                 let loader_registrar = loader_registrar.clone();
+                #[cfg(feature = "user-speech")]
+                let speech = job.user_speech.as_ref().map(|plan| PreparedHostedSpeech {
+                    settings: plan.settings.clone(),
+                    voice: plan.voice.clone(),
+                    budget: speech_budget
+                        .as_ref()
+                        .expect("validated speech budget")
+                        .clone(),
+                });
                 tasks.spawn(async move {
                     let name = job.name.clone();
                     let result = if cancel.is_cancelled() {
@@ -814,6 +1090,8 @@ pub async fn run_release_with_budget(
                                 cancel,
                                 #[cfg(feature = "bot-audio-transcription")]
                                 loader_registrar,
+                                #[cfg(feature = "user-speech")]
+                                speech,
                             )
                             .await
                         {
@@ -998,6 +1276,8 @@ mod native_loader_tests {
                         command: command.clone(),
                         body: None,
                         recordings: None,
+                        #[cfg(feature = "user-speech")]
+                        user_speech: None,
                         audio_response: Some(settings.clone()),
                     })
                     .collect(),
@@ -1019,6 +1299,75 @@ mod native_loader_tests {
             assert_eq!(run.hosted.result.failures[0].kind, "cancelled");
         }
         assert!(!temp.marker().exists());
+    }
+
+    // This composition is exercised only by the combined-feature library
+    // graph; the first user-speech-only suite run cannot claim its coverage.
+    #[cfg(feature = "user-speech")]
+    #[tokio::test(flavor = "current_thread")]
+    async fn mixed_hosted_speech_and_audio_response_reject_before_any_owner_starts() {
+        let temp = Temp::new();
+        let preflights = Arc::new(AtomicUsize::new(0));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let preflight_count = preflights.clone();
+        let attempt_count = attempts.clone();
+        let settings = BotTranscriptionSettings::for_native_loader_test(
+            move || {
+                preflight_count.fetch_add(1, Ordering::SeqCst);
+                Err(invalid("mixed-mode rejection admitted model preflight"))
+            },
+            move || {
+                attempt_count.fetch_add(1, Ordering::SeqCst);
+                Err(invalid("mixed-mode rejection admitted attempt model"))
+            },
+        );
+        let mut manifest = temp.manifest(settings);
+        manifest.jobs.truncate(2);
+        let provider = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        provider.set_nonblocking(true).unwrap();
+        let speech = CartesiaUserSpeechSettings::new(
+            pipecat_speech::SpeechConfig {
+                base_url: format!("http://{}", provider.local_addr().unwrap()),
+                api_key: "synthetic-mixed-mode-fixture".into(),
+                timeout: Duration::from_secs(1),
+                max_audio_bytes: 1_920_000,
+                max_json_bytes: 64 * 1024,
+                queue_capacity: 1,
+            },
+            crate::UserSpeechCachePolicy::Disabled,
+        )
+        .unwrap();
+        let selected = &mut manifest.jobs[0];
+        selected.audio_response = None;
+        selected.scenario.turns[0].expect[0].event = "llm_response".into();
+        selected.scenario.validate().unwrap();
+        selected.recordings = Some(Vec::new());
+        selected.user_speech = Some(Arc::new(HostedSpeechPlan {
+            settings: speech,
+            voice: Some(CartesiaUserSpeechVoice::new("fixture-voice", None, None).unwrap()),
+            scenario: Arc::from(serde_json::to_vec(&selected.scenario).unwrap()),
+        }));
+        let result = run_release(
+            manifest,
+            SessionOptions::default(),
+            ProcessOptions::default(),
+            Cancellation::new(),
+        )
+        .await;
+        match result {
+            Err(EvalError::Unsupported(message)) => assert_eq!(
+                message,
+                "hosted user speech cannot combine with audio response jobs",
+            ),
+            other => panic!("expected exact mixed-profile rejection, got {other:?}"),
+        }
+        assert_eq!(preflights.load(Ordering::SeqCst), 0);
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
+        assert!(!temp.marker().exists(), "mixed plan launched a child");
+        assert_eq!(
+            provider.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

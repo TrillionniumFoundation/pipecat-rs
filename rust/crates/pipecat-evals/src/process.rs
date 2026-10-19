@@ -184,7 +184,8 @@ pub struct ProcessReport {
 }
 
 /// Owns the child even when the caller drops/aborts the async evaluation. Drop
-/// kills and synchronously reaps the direct child; no detached reaper is needed.
+/// attempts kill and synchronous reap, but cannot report OS failure. It is not
+/// evidence of successful reaping; only an observed status establishes that.
 /// OS kill/wait cannot promise a deadline for a kernel-stuck child.
 struct OwnedChild(Child);
 impl OwnedChild {
@@ -354,6 +355,8 @@ pub(crate) async fn run_hosted_with_recordings(
         recordings,
         #[cfg(feature = "bot-audio-transcription")]
         None,
+        #[cfg(feature = "user-speech")]
+        None,
     )
     .await
 }
@@ -372,6 +375,7 @@ pub(crate) async fn run_hosted_prepared(
     #[cfg(feature = "bot-audio-transcription")] transcription: Option<
         crate::BotTranscriptionConfig,
     >,
+    #[cfg(feature = "user-speech")] speech: Option<crate::user_speech::PreparedHostedSpeech>,
 ) -> Result<HostedResult, EvalError> {
     command.validate()?;
     options.validate()?;
@@ -389,6 +393,11 @@ pub(crate) async fn run_hosted_prepared(
     let mut session = EvalSession::new(scenario, bot_url, session_options)?;
     if let Some(recordings) = recordings {
         session = session.with_recorded_audio_inputs(recordings)?;
+    }
+    #[cfg(feature = "user-speech")]
+    if let Some(prepared) = speech {
+        session = session.with_hosted_user_speech(prepared)?;
+        return run_selected_hosted_speech(command, session, name, address, options, cancel).await;
     }
     let mut report = ProcessReport::default();
     let result = if cancel.is_cancelled() {
@@ -613,6 +622,492 @@ pub(crate) async fn run_hosted_prepared(
     }
     Ok(hosted)
 }
+/// The selected attempt's ordinary tail owns the exact prepared session (then
+/// its original pinned run future), direct child and pipe readers. External
+/// Drop/panic retains the weaker abort-owned fallback; it is not a join receipt.
+#[cfg(feature = "user-speech")]
+struct HostedSpeechAttempt {
+    child: OwnedChild,
+    pipes: JoinSet<()>,
+    stdout: Capture,
+    stderr: Capture,
+    overflow: Cancellation,
+    report: ProcessReport,
+    #[cfg(test)]
+    fault: Option<HostedSpeechFault>,
+}
+#[cfg(all(test, feature = "user-speech"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HostedSpeechFault {
+    StdoutAdapter,
+    PostReadinessStatus,
+    RunningWait,
+    CleanupStatus,
+}
+#[cfg(feature = "user-speech")]
+struct ProcessFailure {
+    kind: &'static str,
+    reason: String,
+}
+#[cfg(feature = "user-speech")]
+impl ProcessFailure {
+    fn new(kind: &'static str, reason: impl Into<String>) -> Self {
+        Self {
+            kind,
+            reason: reason.into(),
+        }
+    }
+    fn io(kind: &'static str, operation: &str, error: &std::io::Error) -> Self {
+        // Fixed operation plus OS category, never a child-supplied path/secret.
+        Self::new(kind, format!("{operation} ({:?})", error.kind()))
+    }
+    fn append(self, result: &mut ScriptResult) {
+        failure(result, self.kind, &self.reason);
+    }
+    fn before_cleanup(self, result: &mut ScriptResult) {
+        // The process cause was retained before awaiting the cancelled session.
+        // Earlier assertion failures stay earlier; cleanup and induced cancellation
+        // follow the stored primary cause, rather than replacing it.
+        let at = result
+            .failures
+            .iter()
+            .position(|failure| {
+                failure.kind.ends_with("_cleanup_error") || failure.kind == "cancelled"
+            })
+            .unwrap_or(result.failures.len());
+        self.append(result);
+        let last = result.failures.len() - 1;
+        result.failures[at..=last].rotate_right(1);
+    }
+}
+#[cfg(feature = "user-speech")]
+async fn run_selected_hosted_speech(
+    command: NativeCommand,
+    session: EvalSession,
+    name: String,
+    address: std::net::SocketAddr,
+    options: ProcessOptions,
+    cancel: Cancellation,
+) -> Result<HostedResult, EvalError> {
+    let mut hosted = if cancel.is_cancelled() {
+        HostedResult {
+            result: summary(
+                &name,
+                "cancelled",
+                "evaluation cancelled before process launch",
+            ),
+            process: ProcessReport::default(),
+        }
+    } else {
+        let deadline = Instant::now() + options.startup_timeout;
+        match spawn_native(&command, address, &cancel, deadline).await {
+            Err((kind, reason)) => HostedResult {
+                result: summary(&name, kind, &reason),
+                process: ProcessReport::default(),
+            },
+            Ok(child) => {
+                let attempt = HostedSpeechAttempt {
+                    report: ProcessReport {
+                        pid: Some(child.id()),
+                        ..Default::default()
+                    },
+                    child: OwnedChild(child),
+                    pipes: JoinSet::new(),
+                    stdout: Capture::default(),
+                    stderr: Capture::default(),
+                    overflow: Cancellation::new(),
+                    #[cfg(test)]
+                    fault: None,
+                };
+                attempt
+                    .run(session, &command, &options, &cancel, deadline)
+                    .await
+            }
+        }
+    };
+    // Serialization is deliberately after session, child and pipe settlement.
+    if serialized_size(&hosted)? > options.max_result_bytes {
+        hosted.result = summary(
+            &name,
+            "limit_exceeded",
+            "hosted result budget exceeded; full result and process output omitted",
+        );
+        hosted.process.stdout.clear();
+        hosted.process.stderr.clear();
+    }
+    if serialized_size(&hosted)? > options.max_result_bytes {
+        return Err(EvalError::Limit("hosted summary size"));
+    }
+    Ok(hosted)
+}
+#[cfg(feature = "user-speech")]
+impl HostedSpeechAttempt {
+    #[cfg(test)]
+    fn take_fault(&mut self, fault: HostedSpeechFault) -> bool {
+        if self.fault == Some(fault) {
+            self.fault.take();
+            true
+        } else {
+            false
+        }
+    }
+    /// No fallible post-spawn operation returns past this owned tail.
+    async fn run(
+        mut self,
+        mut session: EvalSession,
+        command: &NativeCommand,
+        options: &ProcessOptions,
+        cancel: &Cancellation,
+        startup_deadline: Instant,
+    ) -> HostedResult {
+        let mut setup = Vec::new();
+        let stdout = self
+            .child
+            .0
+            .stdout
+            .take()
+            .map(tokio::process::ChildStdout::from_std);
+        #[cfg(test)]
+        let stdout = if self.take_fault(HostedSpeechFault::StdoutAdapter) {
+            drop(stdout);
+            Some(Err(std::io::Error::other(
+                "injected stdout adapter failure",
+            )))
+        } else {
+            stdout
+        };
+        match stdout {
+            Some(Ok(stdout)) => drain(
+                stdout,
+                options.max_stdout_bytes,
+                self.stdout.clone(),
+                self.overflow.clone(),
+                &mut self.pipes,
+            ),
+            Some(Err(error)) => setup.push(ProcessFailure::io(
+                "process_output",
+                "stdout adapter failed",
+                &error,
+            )),
+            None => setup.push(ProcessFailure::new(
+                "process_output",
+                "native stdout pipe is missing",
+            )),
+        }
+        match self
+            .child
+            .0
+            .stderr
+            .take()
+            .map(tokio::process::ChildStderr::from_std)
+        {
+            Some(Ok(stderr)) => drain(
+                stderr,
+                options.max_stderr_bytes,
+                self.stderr.clone(),
+                self.overflow.clone(),
+                &mut self.pipes,
+            ),
+            Some(Err(error)) => setup.push(ProcessFailure::io(
+                "process_output",
+                "stderr adapter failed",
+                &error,
+            )),
+            None => setup.push(ProcessFailure::new(
+                "process_output",
+                "native stderr pipe is missing",
+            )),
+        }
+        let mut startup = if setup.is_empty() {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => Some(ProcessFailure::new("cancelled", "cancelled during process readiness")),
+                _ = self.overflow.cancelled() => Some(ProcessFailure::new("limit_exceeded", "process output limit or read failure")),
+                status = wait_child(&mut self.child) => Some(match status {
+                    Ok(_) => ProcessFailure::new("process_exit", "process exited before readiness"),
+                    Err(error) => ProcessFailure::io("process_wait", "readiness child wait failed", &error),
+                }),
+                _ = tokio::time::sleep_until(startup_deadline) => Some(ProcessFailure::new("startup_timeout", "process readiness timed out")),
+                connected = session.connect_hosted() => connected.err().map(|error| ProcessFailure::new("connect_failed", error.to_string())),
+            }
+        } else {
+            Some(setup.remove(0))
+        };
+        if startup.is_none() {
+            let status = self.child.try_wait();
+            #[cfg(test)]
+            let status = if self.take_fault(HostedSpeechFault::PostReadinessStatus) {
+                Err(std::io::Error::other(
+                    "injected post-readiness status failure",
+                ))
+            } else {
+                status
+            };
+            startup = match status {
+                Ok(None) => None,
+                Ok(Some(_)) => Some(ProcessFailure::new(
+                    "process_exit",
+                    "process exited after readiness",
+                )),
+                Err(error) => Some(ProcessFailure::io(
+                    "process_wait",
+                    "post-readiness child status failed",
+                    &error,
+                )),
+            };
+        }
+        let mut result = if let Some(primary) = startup {
+            // Preserve this exact prepared session; shutdown records its cleanup
+            // failures after the primary failure, including before run started.
+            session
+                .stop_hosted_before_run(primary.kind, &primary.reason)
+                .await
+        } else {
+            let session_cancel = Cancellation::new();
+            let future = session.run(session_cancel.clone());
+            tokio::pin!(future);
+            #[cfg(test)]
+            let fail_wait = self.take_fault(HostedSpeechFault::RunningWait);
+            let cause = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => SomeResult::Stopped("cancelled", "cancelled during evaluation"),
+                _ = self.overflow.cancelled() => SomeResult::Stopped("limit_exceeded", "process output limit or read failure"),
+                status = async {
+                    #[cfg(test)]
+                    if fail_wait {
+                        return Err(std::io::Error::other("injected running child wait failure"));
+                    }
+                    wait_child(&mut self.child).await
+                } => SomeResult::Exited(status),
+                result = &mut future => SomeResult::Ready(result),
+            };
+            match cause {
+                SomeResult::Ready(result) => result,
+                SomeResult::Stopped(kind, reason) => {
+                    let primary = ProcessFailure::new(kind, reason);
+                    session_cancel.cancel();
+                    let mut result = future.await;
+                    primary.before_cleanup(&mut result);
+                    result
+                }
+                SomeResult::Exited(status) => {
+                    let primary = match status {
+                        Ok(status) if status.success() => None,
+                        Ok(_) => Some(ProcessFailure::new(
+                            "process_exit",
+                            "process exited during evaluation",
+                        )),
+                        Err(error) => Some(ProcessFailure::io(
+                            "process_wait",
+                            "evaluation child wait failed",
+                            &error,
+                        )),
+                    };
+                    if primary.is_some() {
+                        session_cancel.cancel();
+                    }
+                    let mut result = tokio::select! {
+                        biased;
+                        _ = cancel.cancelled() => {
+                            let stopped = ProcessFailure::new("cancelled", "cancelled after process exit");
+                            session_cancel.cancel();
+                            let mut result = future.await;
+                            stopped.before_cleanup(&mut result);
+                            result
+                        },
+                        _ = self.overflow.cancelled() => {
+                            let stopped = ProcessFailure::new("limit_exceeded", "process output retention exceeded");
+                            session_cancel.cancel();
+                            let mut result = future.await;
+                            stopped.before_cleanup(&mut result);
+                            result
+                        },
+                        result = &mut future => result,
+                    };
+                    if let Some(primary) = primary {
+                        primary.before_cleanup(&mut result);
+                    }
+                    result
+                }
+            }
+        };
+        for error in setup {
+            error.before_cleanup(&mut result);
+        }
+        self.reap(options, cancel, &mut result).await;
+        self.join_output(command, options, &mut result).await;
+        if cancel.is_cancelled()
+            && !result
+                .failures
+                .iter()
+                .any(|failure| failure.kind == "cancelled")
+        {
+            failure(&mut result, "cancelled", "cancelled during process cleanup");
+        }
+        HostedResult {
+            result,
+            process: self.report,
+        }
+    }
+
+    async fn reap(
+        &mut self,
+        options: &ProcessOptions,
+        cancel: &Cancellation,
+        result: &mut ScriptResult,
+    ) {
+        let status = self.child.try_wait();
+        #[cfg(test)]
+        let status = if self.take_fault(HostedSpeechFault::CleanupStatus) {
+            Err(std::io::Error::other(
+                "injected cleanup child status failure",
+            ))
+        } else {
+            status
+        };
+        let mut status = match status {
+            Ok(status) => status,
+            Err(error) => {
+                ProcessFailure::io(
+                    "process_cleanup_error",
+                    "child status failed during cleanup",
+                    &error,
+                )
+                .append(result);
+                None
+            }
+        };
+        if status.is_none() {
+            status = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => None,
+                _ = self.overflow.cancelled() => None,
+                waited = wait_child(&mut self.child) => match waited {
+                    Ok(status) => Some(status),
+                    Err(error) => {
+                        ProcessFailure::io("process_cleanup_error", "child wait failed during cleanup", &error).append(result);
+                        None
+                    }
+                },
+                _ = tokio::time::sleep(options.shutdown_grace) => None,
+            };
+        }
+        if status.is_none() {
+            self.report.forced = true;
+            let killed = self.child.0.kill();
+            // Always attempt an actual wait even when status/kill failed. Normal
+            // polls remain async; an OS wait error gets a direct final reap attempt.
+            let waited = wait_child(&mut self.child).await;
+            status = match waited {
+                Ok(status) => Some(status),
+                Err(error) => {
+                    ProcessFailure::io(
+                        "process_cleanup_error",
+                        "child reap polling failed",
+                        &error,
+                    )
+                    .append(result);
+                    match self.child.0.wait() {
+                        Ok(status) => Some(status),
+                        Err(error) => {
+                            ProcessFailure::io(
+                                "process_cleanup_error",
+                                "direct child could not be reaped",
+                                &error,
+                            )
+                            .append(result);
+                            None
+                        }
+                    }
+                }
+            };
+            // A failed kill followed by successful wait is the normal exit race.
+            if status.is_none() {
+                if let Err(error) = killed {
+                    ProcessFailure::io("process_cleanup_error", "child kill failed", &error)
+                        .append(result);
+                }
+            }
+        }
+        if let Some(status) = status {
+            self.report.reaped = true;
+            self.report.exit_code = status.code();
+            self.report.success = status.success();
+            if !status.success() && !self.report.forced {
+                failure(
+                    result,
+                    "process_exit",
+                    "native process exited unsuccessfully",
+                );
+            }
+        }
+    }
+
+    async fn join_output(
+        &mut self,
+        command: &NativeCommand,
+        options: &ProcessOptions,
+        result: &mut ScriptResult,
+    ) {
+        let deadline = Instant::now() + options.output_drain_timeout;
+        loop {
+            tokio::select! {
+                biased;
+                _ = tokio::time::sleep_until(deadline) => {
+                    // Abort is only the request; shutdown actually awaits every
+                    // retained reader before this attempt releases its slot.
+                    self.pipes.shutdown().await;
+                    break;
+                },
+                joined = self.pipes.join_next() => match joined {
+                    None => break,
+                    Some(Ok(())) => {},
+                    Some(Err(_)) => failure(result, "process_output", "output reader task failed"),
+                },
+            }
+        }
+        // Native mutexes are acquired only after all asynchronous joins.
+        let out = self.stdout.lock().unwrap();
+        let err = self.stderr.lock().unwrap();
+        self.report.output_overflow = out.overflow || err.overflow;
+        self.report.output_incomplete =
+            !out.complete || !err.complete || out.read_error || err.read_error;
+        if !self.report.output_overflow && !self.report.output_incomplete {
+            match (
+                redact(
+                    &String::from_utf8_lossy(&out.bytes),
+                    command,
+                    options.max_stdout_bytes,
+                ),
+                redact(
+                    &String::from_utf8_lossy(&err.bytes),
+                    command,
+                    options.max_stderr_bytes,
+                ),
+            ) {
+                (Some(stdout), Some(stderr)) => {
+                    self.report.stdout = stdout;
+                    self.report.stderr = stderr;
+                }
+                _ => self.report.output_overflow = true,
+            }
+        }
+        if self.report.output_overflow {
+            failure(
+                result,
+                "limit_exceeded",
+                "process output retention exceeded",
+            );
+        }
+        if self.report.output_incomplete {
+            failure(
+                result,
+                "process_output",
+                "process pipes did not finish cleanly before the drain deadline",
+            );
+        }
+    }
+}
 enum SomeResult {
     Ready(ScriptResult),
     Exited(std::io::Result<ExitStatus>),
@@ -764,5 +1259,197 @@ mod tests {
         )
         .await;
         assert_eq!(result.unwrap_err().0, "startup_timeout");
+    }
+}
+
+#[cfg(all(test, feature = "user-speech"))]
+mod hosted_speech_attempt_tests {
+    use super::*;
+    use crate::user_speech::{CartesiaUserSpeechSettings, PreparedHostedSpeech, UserSpeechBudget};
+    use pipecat_speech::SpeechConfig;
+    use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
+    use serde_json::json;
+
+    const WAIT: Duration = Duration::from_secs(3);
+
+    // Test-harness entry, not a substantive acceptance case. Only this compiled
+    // unit-test executable sees this private fixture switch; no production env
+    // or executable route can enable an injected failure.
+    #[test]
+    fn direct_child_fixture() {
+        if std::env::var_os("PIPECAT_127_UNIT_CHILD").is_none() {
+            return;
+        }
+        use std::io::Write;
+        // The adapter-error case closes stdout before this child is scheduled.
+        // BrokenPipe must not turn the intended held process into an early exit.
+        let _ = writeln!(std::io::stdout().lock(), "owned native unit child");
+        let _ = writeln!(std::io::stderr().lock(), "owned native unit diagnostic");
+        std::thread::sleep(WAIT + WAIT);
+    }
+
+    #[tokio::test]
+    async fn post_spawn_adapter_status_and_wait_errors_keep_the_actual_owned_tail() {
+        for fault in [
+            HostedSpeechFault::StdoutAdapter,
+            HostedSpeechFault::PostReadinessStatus,
+            HostedSpeechFault::RunningWait,
+            HostedSpeechFault::CleanupStatus,
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", listener.local_addr().unwrap());
+            let stop_peer = Cancellation::new();
+            let peer_stop = stop_peer.clone();
+            let mut peer = tokio::spawn(async move {
+                let accepted = tokio::select! {
+                    biased;
+                    _ = peer_stop.cancelled() => return false,
+                    accepted = listener.accept() => accepted,
+                };
+                let (stream, _) = accepted.unwrap();
+                let mut socket = WebSocketSession::accept(
+                    stream,
+                    SessionConfig {
+                        close_timeout: Duration::from_millis(50),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap();
+                let mut stopped = false;
+                while let Some(packet) = socket.recv().await {
+                    let bytes = match packet {
+                        Packet::Text(text) => text.into_bytes(),
+                        Packet::Binary(bytes) => bytes.to_vec(),
+                    };
+                    match crate::serializer::decode_control(&bytes, 1024 * 1024).unwrap() {
+                        crate::serializer::EvalControl::Cancel => stopped = true,
+                        crate::serializer::EvalControl::Rtvi(message)
+                            if message.message_type == "client-ready" =>
+                        {
+                            socket
+                                .sender()
+                                .send(Packet::Text(
+                                    json!({
+                                        "label": "rtvi-ai", "type": "bot-ready", "data": {}
+                                    })
+                                    .to_string(),
+                                ))
+                                .await
+                                .unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+                let _terminal = socket.cancel_and_join().await;
+                stopped
+            });
+            let scenario =
+                crate::ScenarioFile::from_value(json!({"name": "post-spawn errors", "turns": []}))
+                    .unwrap()
+                    .scenarios
+                    .remove(0);
+            let mut config = SpeechConfig::cartesia("synthetic-process-tail-key");
+            config.base_url = "http://127.0.0.1:1".into();
+            let session = EvalSession::new(
+                scenario,
+                &url,
+                SessionOptions {
+                    stop_bot: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .with_hosted_user_speech(PreparedHostedSpeech {
+                settings: CartesiaUserSpeechSettings::new(
+                    config,
+                    crate::UserSpeechCachePolicy::Disabled,
+                )
+                .unwrap(),
+                voice: None,
+                budget: UserSpeechBudget::new(0).unwrap(),
+            })
+            .unwrap();
+            let command = NativeCommand {
+                executable: std::env::current_exe().unwrap(),
+                args: vec![
+                    "--exact".into(),
+                    "process::hosted_speech_attempt_tests::direct_child_fixture".into(),
+                    "--nocapture".into(),
+                ],
+                cwd: std::env::current_dir().unwrap(),
+                env: BTreeMap::from([("PIPECAT_127_UNIT_CHILD".into(), "1".into())]),
+            };
+            let child = Command::new(&command.executable)
+                .args(&command.args)
+                .current_dir(&command.cwd)
+                .env_clear()
+                .envs(&command.env)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let attempt = HostedSpeechAttempt {
+                report: ProcessReport {
+                    pid: Some(child.id()),
+                    ..Default::default()
+                },
+                child: OwnedChild(child),
+                pipes: JoinSet::new(),
+                stdout: Capture::default(),
+                stderr: Capture::default(),
+                overflow: Cancellation::new(),
+                fault: Some(fault),
+            };
+            let options = ProcessOptions {
+                shutdown_grace: Duration::from_millis(25),
+                output_drain_timeout: WAIT,
+                ..Default::default()
+            };
+            let result = attempt
+                .run(
+                    session,
+                    &command,
+                    &options,
+                    &Cancellation::new(),
+                    Instant::now() + WAIT,
+                )
+                .await;
+            stop_peer.cancel();
+            let peer_outcome = tokio::time::timeout(WAIT, &mut peer).await;
+            let stop_seen = match peer_outcome {
+                Ok(outcome) => outcome.unwrap(),
+                Err(_) => {
+                    peer.abort();
+                    let terminal = peer.await;
+                    panic!("peer did not settle; abort was actually joined: {terminal:?}");
+                }
+            };
+            assert!(!result.result.passed);
+            assert!(result.process.reaped);
+            if fault == HostedSpeechFault::StdoutAdapter {
+                // The libtest harness may exit on its own stdout BrokenPipe
+                // before this helper starts. Reaping is required either way.
+                assert_eq!(result.result.failures[0].kind, "process_output");
+                assert!(result.process.output_incomplete);
+                assert!(!stop_seen);
+            } else {
+                assert!(result.process.forced);
+                assert!(
+                    stop_seen,
+                    "the original connected session sent its cleanup control"
+                );
+                assert!(!result.process.output_incomplete);
+                assert_eq!(
+                    result.result.failures[0].kind,
+                    if fault == HostedSpeechFault::CleanupStatus {
+                        "process_cleanup_error"
+                    } else {
+                        "process_wait"
+                    }
+                );
+            }
+        }
     }
 }

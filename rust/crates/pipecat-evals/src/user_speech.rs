@@ -239,6 +239,15 @@ fn validate_voice_field(value: &str, max: usize, message: &'static str) -> Resul
     Ok(())
 }
 
+/// Execution-only handoff. The release preflight constructs one budget for the
+/// complete invocation; cloning this wrapper shares its logical-use counter.
+/// A present handoff selects joined hosted cleanup even when every turn is WAV.
+pub(crate) struct PreparedHostedSpeech {
+    pub(crate) settings: CartesiaUserSpeechSettings,
+    pub(crate) voice: Option<CartesiaUserSpeechVoice>,
+    pub(crate) budget: UserSpeechBudget,
+}
+
 /// Logical played bytes, charged once for every use, including repeated hits.
 #[derive(Clone)]
 pub(crate) struct UserSpeechBudget(Arc<AtomicUsize>);

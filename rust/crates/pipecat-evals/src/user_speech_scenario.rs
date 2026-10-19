@@ -4,6 +4,7 @@ use crate::{
     CartesiaUserSpeechSettings, CartesiaUserSpeechVoice, EvalError, EvalSession,
     RecordedScenarioFile, SessionOptions,
 };
+use serde::Serialize;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -70,19 +71,50 @@ pub(crate) fn load_speech_plan(
     mode: ResponseParseMode,
     combined: bool,
 ) -> Result<(RecordedScenarioFile, Vec<Option<CartesiaUserSpeechVoice>>), EvalError> {
+    load_speech_plan_bounded(
+        path,
+        mode,
+        combined,
+        SpeechPlanLimits {
+            wav_bytes: 16 * 1024 * 1024,
+            pcm_bytes: MAX_TOTAL_BYTES,
+            user_turns: 128,
+            scenarios: 16,
+            scenario_bytes: None,
+        },
+    )
+}
+
+/// Remaining invocation allowances, supplied before the next bundle's media
+/// is read. Logical limits already account for repeat expansion at the caller.
+pub(crate) struct SpeechPlanLimits {
+    pub(crate) wav_bytes: usize,
+    pub(crate) pcm_bytes: usize,
+    pub(crate) user_turns: usize,
+    pub(crate) scenarios: usize,
+    pub(crate) scenario_bytes: Option<usize>,
+}
+
+pub(crate) fn load_speech_plan_bounded(
+    path: &Path,
+    mode: ResponseParseMode,
+    reject_dtmf: bool,
+    limits: SpeechPlanLimits,
+) -> Result<(RecordedScenarioFile, Vec<Option<CartesiaUserSpeechVoice>>), EvalError> {
     let mut voices = Vec::new();
     let mut user_turns = 0usize;
+    let mut scenario_bytes = 0usize;
     let file = RecordedScenarioFile::load_with_transform(
         path,
-        16 * 1024 * 1024,
-        MAX_TOTAL_BYTES,
-        128,
+        limits.wav_bytes,
+        limits.pcm_bytes,
+        limits.user_turns,
         mode,
         |raw| {
-            if voices.len() >= 16 {
+            if voices.len() >= limits.scenarios {
                 return Err(EvalError::Limit("user speech scenarios"));
             }
-            if combined
+            if reject_dtmf
                 && raw
                     .get("turns")
                     .and_then(Value::as_array)
@@ -93,24 +125,84 @@ pub(crate) fn load_speech_plan(
                     })
             {
                 return Err(EvalError::Unsupported(
-                    "audio-to-audio scenarios do not support DTMF".into(),
+                    if limits.scenario_bytes.is_some() {
+                        "hosted user speech scenarios do not support DTMF"
+                    } else {
+                        "audio-to-audio scenarios do not support DTMF"
+                    }
+                    .into(),
                 ));
             }
-            let (voice, recordings) = normalize(raw, &mut user_turns)?;
+            let (voice, recordings) = normalize_bounded(raw, &mut user_turns, limits.user_turns)?;
+            // The transform runs before any WAV payload read. Use the same
+            // source parser to measure the final normalized representation,
+            // including defaults, aliases, shorthand and inherited names.
+            if let Some(limit) = limits.scenario_bytes {
+                let normalized = crate::ScenarioFile::from_value_with_mode(
+                    Value::Object(raw.clone()),
+                    mode,
+                    |_| Ok(()),
+                )?;
+                for scenario in &normalized.scenarios {
+                    if scenario.needs_images() {
+                        return Err(EvalError::Unsupported(
+                            "hosted user speech does not support images".into(),
+                        ));
+                    }
+                    scenario_bytes += bounded_serialized_size(scenario, limit - scenario_bytes)?;
+                }
+            }
             voices.push(voice);
             Ok(recordings)
         },
     )?;
     Ok((file, voices))
 }
+/// Stop counting at the remaining allowance without allocating a JSON copy.
+/// Public mutable scenarios must pass this before validation clones or snapshots.
+pub(crate) fn bounded_serialized_size(
+    value: &impl Serialize,
+    limit: usize,
+) -> Result<usize, EvalError> {
+    struct Counter {
+        bytes: usize,
+        limit: usize,
+    }
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.bytes = self
+                .bytes
+                .checked_add(bytes.len())
+                .filter(|total| *total <= self.limit)
+                .ok_or_else(|| std::io::Error::other("user speech scenario bytes"))?;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut writer = Counter { bytes: 0, limit };
+    serde_json::to_writer(&mut writer, value)
+        .map_err(|_| EvalError::Limit("release user speech scenario bytes"))?;
+    Ok(writer.bytes)
+}
+
 fn invalid(message: &str) -> EvalError {
     EvalError::Scenario(message.into())
 }
 type NormalizedSpeech = (Option<CartesiaUserSpeechVoice>, Vec<(usize, PathBuf)>);
 
+#[cfg(test)]
 fn normalize(
     raw: &mut Map<String, Value>,
     count: &mut usize,
+) -> Result<NormalizedSpeech, EvalError> {
+    normalize_bounded(raw, count, 128)
+}
+fn normalize_bounded(
+    raw: &mut Map<String, Value>,
+    count: &mut usize,
+    turn_limit: usize,
 ) -> Result<NormalizedSpeech, EvalError> {
     let user = raw
         .get_mut("user")
@@ -153,7 +245,7 @@ fn normalize(
             *count = count
                 .checked_add(1)
                 .ok_or(EvalError::Limit("user speech turns"))?;
-            if *count > 128 {
+            if *count > turn_limit.min(128) {
                 return Err(EvalError::Limit("user speech turns"));
             }
             if turn.get("dtmf").is_some_and(|v| !v.is_null()) {
