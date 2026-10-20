@@ -1,7 +1,7 @@
-//! Trusted-local, no-clobber publication of bounded received bot PCM.
+//! Trusted-local, no-clobber publication of bounded diagnostic PCM WAVs.
 #[cfg(unix)]
 mod native {
-    use pipecat_evals::{BotAudioRun, EvalError};
+    use pipecat_evals::{BotAudioRun, EvalError, TimelineRecordingRun};
     use std::{
         fs::{self, File, OpenOptions},
         io::Write,
@@ -16,29 +16,36 @@ mod native {
         temporary: PathBuf,
         file: Option<File>,
         identity: (u64, u64),
+        label: &'static str,
     }
     impl Output {
         pub fn prepare(path: &str) -> Result<Self, EvalError> {
+            Self::prepare_labeled(path, "bot audio WAV")
+        }
+        pub fn prepare_recording(path: &str) -> Result<Self, EvalError> {
+            Self::prepare_labeled(path, "timeline recording WAV")
+        }
+        fn prepare_labeled(path: &str, label: &'static str) -> Result<Self, EvalError> {
             let path = Path::new(path);
             let name = path
                 .file_name()
-                .ok_or_else(|| EvalError::Scenario("bot audio WAV needs a file path".into()))?;
+                .ok_or_else(|| EvalError::Scenario(format!("{label} needs a file path")))?;
             let parent = path
                 .parent()
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or(Path::new("."));
             let parent = parent.canonicalize()?;
             if !parent.is_dir() {
-                return Err(EvalError::Scenario(
-                    "bot audio WAV parent must be a directory".into(),
-                ));
+                return Err(EvalError::Scenario(format!(
+                    "{label} parent must be a directory"
+                )));
             }
             let destination = parent.join(name);
             match fs::symlink_metadata(&destination) {
                 Ok(_) => {
-                    return Err(EvalError::Scenario(
-                        "bot audio WAV destination already exists".into(),
-                    ))
+                    return Err(EvalError::Scenario(format!(
+                        "{label} destination already exists"
+                    )))
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(error.into()),
@@ -70,28 +77,48 @@ mod native {
                     temporary,
                     file: Some(file),
                     identity: (metadata.dev(), metadata.ino()),
+                    label,
                 });
             }
-            Err(EvalError::Scenario(
-                "bot audio WAV temporary name collisions".into(),
-            ))
+            Err(EvalError::Scenario(format!(
+                "{label} temporary name collisions"
+            )))
         }
         fn owns_temporary(&self) -> bool {
             fs::symlink_metadata(&self.temporary)
                 .is_ok_and(|m| m.is_file() && (m.dev(), m.ino()) == self.identity)
         }
-        pub fn publish(mut self, run: &BotAudioRun) -> Result<Option<usize>, EvalError> {
-            let Some(wav) = run.to_wav()? else {
+        pub fn publish(self, run: &BotAudioRun) -> Result<Option<usize>, EvalError> {
+            self.publish_bytes(run.to_wav()?.as_deref(), 16 * 1024 * 1024 + 44)
+        }
+        pub fn publish_recording(
+            self,
+            run: &TimelineRecordingRun,
+        ) -> Result<Option<usize>, EvalError> {
+            self.publish_bytes(run.to_wav()?.as_deref(), 3_840_044)
+        }
+        fn publish_bytes(
+            mut self,
+            wav: Option<&[u8]>,
+            max_bytes: usize,
+        ) -> Result<Option<usize>, EvalError> {
+            let Some(wav) = wav else {
                 return Ok(None);
             };
+            // Both typed renderers validate PCM before allocating their WAV.
+            // Keep the shared disk writer independently bounded as well.
+            if wav.len() > max_bytes {
+                return Err(EvalError::Limit("WAV publication bytes"));
+            }
             let file = self.file.as_mut().expect("owned WAV file");
-            file.write_all(&wav)?;
+            file.write_all(wav)?;
             file.flush()?;
             file.sync_all()?;
             if !self.owns_temporary() {
-                return Err(EvalError::Scenario(
-                    "bot audio WAV temporary identity changed".into(),
-                ));
+                return Err(EvalError::Scenario(format!(
+                    "{} temporary identity changed",
+                    self.label
+                )));
             }
             // Atomic same-directory no-clobber publication. Existing files and
             // symlinks, including a target created during the run, are never replaced.
@@ -145,6 +172,17 @@ impl Output {
     pub fn publish(
         self,
         _: &pipecat_evals::BotAudioRun,
+    ) -> Result<Option<usize>, pipecat_evals::EvalError> {
+        unreachable!("non-Unix preparation rejects before connection")
+    }
+    pub fn prepare_recording(_: &str) -> Result<Self, pipecat_evals::EvalError> {
+        Err(pipecat_evals::EvalError::Unsupported(
+            "timeline recording WAV publication requires Unix".into(),
+        ))
+    }
+    pub fn publish_recording(
+        self,
+        _: &pipecat_evals::TimelineRecordingRun,
     ) -> Result<Option<usize>, pipecat_evals::EvalError> {
         unreachable!("non-Unix preparation rejects before connection")
     }

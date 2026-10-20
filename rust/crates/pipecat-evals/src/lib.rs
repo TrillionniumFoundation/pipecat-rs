@@ -24,6 +24,8 @@ pub mod matcher;
 pub mod process;
 mod recorded_audio;
 mod recorded_scenario;
+mod timeline_recording;
+pub use timeline_recording::{TimelineRecordingLimits, TimelineRecordingRun};
 #[cfg(feature = "user-speech")]
 mod user_speech;
 #[cfg(feature = "user-speech")]

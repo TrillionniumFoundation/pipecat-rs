@@ -348,10 +348,22 @@ async fn join_pipe(
     }
 }
 async fn cli(args: &[String], cwd: &Path, cancel_after: Option<&Notify>) -> Result<Output, Error> {
+    cli_env(args, cwd, cancel_after, None).await
+}
+async fn cli_env(
+    args: &[String],
+    cwd: &Path,
+    cancel_after: Option<&Notify>,
+    key: Option<(&str, &str)>,
+) -> Result<Output, Error> {
     let executable = std::env::var_os("PIPECAT_EVAL_REPLAY_CLI")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_pipecat-eval")));
-    let mut child = Command::new(executable)
+    let mut command = Command::new(executable);
+    if let Some((name, value)) = key {
+        command.env(name, value);
+    }
+    let mut child = command
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::null())
@@ -883,3 +895,6 @@ async fn invalid_export_requests_and_existing_targets_are_rejected_before_connec
     assert!(out.stdout.is_empty());
     assert_eq!(b.names(), before);
 }
+
+#[path = "support/timeline_recording.rs"]
+mod timeline_recording;

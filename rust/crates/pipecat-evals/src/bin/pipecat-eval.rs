@@ -6,6 +6,7 @@ use pipecat_evals::{
     process::ProcessOptions,
     release::{run_release, ReleaseManifest},
     BotAudioLimits, Cancellation, EvalSession, RecordedScenarioFile, ScenarioFile, SessionOptions,
+    TimelineRecordingLimits,
 };
 #[tokio::main]
 async fn main() {
@@ -26,6 +27,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     let mut stop_bot = false;
     let mut recorded = false;
     let mut bot_audio_wav = None;
+    let mut recording_wav = None;
     let mut bot_audio_response = None;
     let mut user_speech = None;
     let mut user_images = false;
@@ -93,6 +95,17 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                         })?;
                     bot_audio_wav = Some(path.as_str());
                 }
+                "--recording-wav" if recording_wav.is_none() => {
+                    let path = flags
+                        .next()
+                        .filter(|path| !path.starts_with("--") && !path.is_empty())
+                        .ok_or_else(|| {
+                            pipecat_evals::EvalError::Scenario(
+                                "--recording-wav needs a file path".into(),
+                            )
+                        })?;
+                    recording_wav = Some(path.as_str());
+                }
                 "--bot-audio-response" if bot_audio_response.is_none() => {
                     let path = flags
                         .next()
@@ -115,7 +128,31 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json | --user-speech RUNTIME.json]".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --recording-wav NEW.wav] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json | --user-speech RUNTIME.json]\n       --recording-wav requires --recorded-audio or --user-speech and exactly one direct scenario".into()));
+    }
+    // Reject unsupported recording compositions before loading any scenario,
+    // runtime configuration or model, or creating an output temporary.
+    if recording_wav.is_some() {
+        if bot_audio_response.is_some() {
+            return Err(pipecat_evals::EvalError::Unsupported(
+                "--recording-wav cannot combine with --bot-audio-response".into(),
+            ));
+        }
+        if bot_audio_wav.is_some() {
+            return Err(pipecat_evals::EvalError::Scenario(
+                "--recording-wav and --bot-audio-wav are mutually exclusive".into(),
+            ));
+        }
+        if user_images {
+            return Err(pipecat_evals::EvalError::Unsupported(
+                "--recording-wav cannot combine with --user-images".into(),
+            ));
+        }
+        if !recorded && user_speech.is_none() {
+            return Err(pipecat_evals::EvalError::Unsupported(
+                "--recording-wav requires --recorded-audio or --user-speech".into(),
+            ));
+        }
     }
     if user_images
         && (user_speech.is_some()
@@ -243,6 +280,11 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                 #[cfg(feature = "user-speech")]
                 {
                     let file = pipecat_evals::UserSpeechScenarioFile::load(&args[1])?;
+                    if recording_wav.is_some() && file.len() != 1 {
+                        return Err(pipecat_evals::EvalError::Scenario(
+                            "--recording-wav requires exactly one scenario".into(),
+                        ));
+                    }
                     if options.stop_bot && file.len() > 1 {
                         return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
                     }
@@ -277,6 +319,11 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                 }
             } else if recorded {
                 let file = RecordedScenarioFile::load(&args[1])?;
+                if recording_wav.is_some() && file.len() != 1 {
+                    return Err(pipecat_evals::EvalError::Scenario(
+                        "--recording-wav requires exactly one scenario".into(),
+                    ));
+                }
                 if options.stop_bot && file.len() > 1 {
                     return Err(pipecat_evals::EvalError::Scenario("--stop-bot with several scenarios needs independent bot endpoints; use separate runs".into()));
                 }
@@ -299,7 +346,18 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
                 "--bot-audio-wav requires exactly one scenario".into(),
             ));
         }
+        if recording_wav.is_some() {
+            if sessions.len() != 1 {
+                return Err(pipecat_evals::EvalError::Scenario(
+                    "--recording-wav requires exactly one scenario".into(),
+                ));
+            }
+            sessions[0].validate_timeline_recording(TimelineRecordingLimits::default())?;
+        }
         let mut wav_output = bot_audio_wav.map(wav_output::Output::prepare).transpose()?;
+        let mut recording_output = recording_wav
+            .map(wav_output::Output::prepare_recording)
+            .transpose()?;
         if let Some(manifest) = manifest {
             let result = run_release(
                 manifest,
@@ -313,7 +371,19 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         } else {
             let mut passed = true;
             for session in sessions {
-                if let Some(output) = wav_output.take() {
+                if let Some(output) = recording_output.take() {
+                    let run = session
+                        .run_with_timeline_recording(cancel.clone(), TimelineRecordingLimits::default())
+                        .await?;
+                    passed &= run.result.passed;
+                    // Rendering and publication can fail independently of the run.
+                    println!("{}", serde_json::to_string(&run.result)?);
+                    match output.publish_recording(&run) {
+                        Ok(Some(bytes)) => eprintln!("timeline recording WAV saved ({bytes} bytes); admitted user source and simulated bot playout, possibly partial"),
+                        Ok(None) => eprintln!("no WAV written: empty timeline recording"),
+                        Err(error) => return Err(pipecat_evals::EvalError::Scenario(format!("timeline recording WAV artifact: {error}"))),
+                    }
+                } else if let Some(output) = wav_output.take() {
                     let run = session.run_with_bot_audio(cancel.clone(), BotAudioLimits::default()).await?;
                     passed &= run.result.passed;
                     // Preserve the evaluation result even when artifact publication fails.

@@ -1,8 +1,12 @@
 //! Opt-in bounded recording playback for compatible RTVI evaluation endpoints.
+use crate::timeline_recording::{Capture as TimelineCapture, UserTicket};
 use crate::{Cancellation, EvalError, SessionOptions};
 use pipecat_protocol::rtvi::{ClientCommand, Envelope, RawAudioData};
 use pipecat_transports::{Packet, SessionSender};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex, MutexGuard},
+    time::Duration,
+};
 use tokio::{
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
@@ -51,6 +55,33 @@ impl RecordedAudio {
     }
 }
 
+/// The only clock and shared ledger used by the session and its existing player.
+/// A lock is always short-lived and is never retained across an await.
+#[derive(Clone)]
+pub(crate) struct TimelineRecorder {
+    pub origin: Instant,
+    pub capture: Arc<Mutex<TimelineCapture>>,
+}
+impl TimelineRecorder {
+    pub fn elapsed_ns(&self) -> Result<u64, EvalError> {
+        let elapsed = Instant::now()
+            .checked_duration_since(self.origin)
+            .ok_or_else(|| EvalError::Scenario("timeline clock moved backwards".into()))?;
+        u64::try_from(elapsed.as_nanos()).map_err(|_| EvalError::Limit("timeline clock"))
+    }
+    pub fn lock(&self) -> Result<MutexGuard<'_, TimelineCapture>, EvalError> {
+        self.capture
+            .lock()
+            .map_err(|_| EvalError::Scenario("timeline recording ledger poisoned".into()))
+    }
+}
+
+struct QueuedClip {
+    clip: RecordedAudio,
+    completion: Completion,
+    ticket: Option<UserTicket>,
+}
+
 enum Completion {
     Ordinary(oneshot::Sender<()>),
     #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
@@ -70,7 +101,8 @@ impl Completion {
     }
 }
 pub(crate) struct Playback {
-    commands: mpsc::Sender<(RecordedAudio, Completion)>,
+    commands: mpsc::Sender<QueuedClip>,
+    timeline: Option<TimelineRecorder>,
     stop: Cancellation,
     health: watch::Receiver<Option<String>>,
     task: Option<JoinHandle<Result<(), EvalError>>>,
@@ -85,16 +117,24 @@ impl Drop for Playback {
 }
 impl Playback {
     pub fn start(sender: SessionSender, options: &SessionOptions) -> Self {
+        Self::start_with_timeline(sender, options, None)
+    }
+    pub(crate) fn start_with_timeline(
+        sender: SessionSender,
+        options: &SessionOptions,
+        timeline: Option<TimelineRecorder>,
+    ) -> Self {
         let (commands, rx) = mpsc::channel(1);
         let (tx, health) = watch::channel(None);
         let stop = Cancellation::new();
         let task_stop = stop.clone();
         let options = options.clone();
+        let task_timeline = timeline.clone();
         let task = tokio::spawn(async move {
             let result = tokio::select! {
                 biased;
                 _ = task_stop.cancelled() => Ok(()),
-                result = stream(sender, rx, &options) => result,
+                result = stream(sender, rx, &options, task_timeline.as_ref()) => result,
             };
             if let Err(error) = &result {
                 tx.send_replace(Some(error.to_string()));
@@ -103,6 +143,7 @@ impl Playback {
         });
         Self {
             commands,
+            timeline,
             stop,
             health,
             task: Some(task),
@@ -130,9 +171,24 @@ impl Playback {
         if self.stop.is_cancelled() {
             return Err(EvalError::Cancelled);
         }
-        self.commands
-            .try_send((clip, completion))
-            .map_err(|_| EvalError::Limit("recording playback queue"))
+        // Reserve queue capacity first. Publication cannot fail after ledger
+        // registration, and a consumer can never observe an unregistered ticket.
+        let permit = self
+            .commands
+            .try_reserve()
+            .map_err(|_| EvalError::Limit("recording playback queue"))?;
+        let ticket = if let Some(timeline) = &self.timeline {
+            let mut capture = timeline.lock()?;
+            Some(capture.register_user(timeline.elapsed_ns()?, clip.pcm.clone())?)
+        } else {
+            None
+        };
+        permit.send(QueuedClip {
+            clip,
+            completion,
+            ticket,
+        });
+        Ok(())
     }
     pub fn health(&self) -> watch::Receiver<Option<String>> {
         self.health.clone()
@@ -155,10 +211,11 @@ impl Playback {
 
 async fn stream(
     sender: SessionSender,
-    mut commands: mpsc::Receiver<(RecordedAudio, Completion)>,
+    mut commands: mpsc::Receiver<QueuedClip>,
     options: &SessionOptions,
+    timeline: Option<&TimelineRecorder>,
 ) -> Result<(), EvalError> {
-    let mut current: Option<(RecordedAudio, usize, Completion)> = None;
+    let mut current: Option<(QueuedClip, usize)> = None;
     let mut next = Instant::now();
     let mut count = 0usize;
     let mut bytes = 0usize;
@@ -168,14 +225,16 @@ async fn stream(
         // Missed ticks never burst-catch up. Preserve source 40 ms stream pacing.
         next = tick + PERIOD;
         if current.is_none() {
-            current = commands.try_recv().ok().map(|(clip, done)| (clip, 0, done));
+            current = commands.try_recv().ok().map(|queued| (queued, 0));
         }
         let mut chunk = [0u8; CHUNK_BYTES];
-        if let Some((clip, offset, _)) = &mut current {
-            let size = CHUNK_BYTES.min(clip.pcm.len() - *offset);
-            chunk[..size].copy_from_slice(&clip.pcm[*offset..*offset + size]);
-            *offset += size;
-        }
+        let source = if let Some((queued, offset)) = &current {
+            let size = CHUNK_BYTES.min(queued.clip.pcm.len() - *offset);
+            chunk[..size].copy_from_slice(&queued.clip.pcm[*offset..*offset + size]);
+            Some((queued.ticket, *offset, size))
+        } else {
+            None
+        };
         count = count
             .checked_add(1)
             .ok_or(EvalError::Limit("recording wire messages"))?;
@@ -197,12 +256,23 @@ async fn stream(
         )
         .await
         .map_err(|_| EvalError::Timeout("recording send"))??;
+        // Successful local mpsc admission is the sole qualification point.
+        // There is no await or completion receipt between send success and
+        // this pre-reserved, synchronous cursor commit. Padding/idle is absent.
+        if let Some((ticket, offset, size)) = source {
+            if let (Some(timeline), Some(ticket)) = (timeline, ticket) {
+                timeline.lock()?.commit_user(ticket, offset, size)?;
+            }
+            if let Some((_, cursor)) = &mut current {
+                *cursor = offset + size;
+            }
+        }
         if current
             .as_ref()
-            .is_some_and(|(clip, offset, _)| *offset == clip.pcm.len())
+            .is_some_and(|(queued, offset)| *offset == queued.clip.pcm.len())
         {
-            if let Some((_, _, done)) = current.take() {
-                done.send();
+            if let Some((queued, _)) = current.take() {
+                queued.completion.send();
             }
         }
     }
@@ -230,6 +300,7 @@ mod ownership_tests {
         });
         let mut playback = Playback {
             commands,
+            timeline: None,
             stop,
             health,
             task: Some(task),
@@ -263,6 +334,7 @@ mod ownership_tests {
         let (_health_tx, health) = watch::channel(None);
         let mut playback = Playback {
             commands,
+            timeline: None,
             stop: Cancellation::new(),
             health,
             task: Some(tokio::spawn(async {
@@ -273,5 +345,154 @@ mod ownership_tests {
         assert!(playback.task.is_none());
         assert!(matches!(first, Err(EvalError::Timeout("recording send"))));
         playback.finish().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod timeline_tests {
+    use super::*;
+    use crate::{matcher::ScriptResult, TimelineRecordingLimits};
+    use pipecat_transports::{SessionConfig, WebSocketSession};
+
+    fn recorder(limits: TimelineRecordingLimits) -> TimelineRecorder {
+        TimelineRecorder {
+            origin: Instant::now(),
+            capture: Arc::new(Mutex::new(TimelineCapture::new(limits).unwrap())),
+        }
+    }
+    fn snapshot(recorder: TimelineRecorder) -> crate::TimelineRecordingRun {
+        Arc::try_unwrap(recorder.capture)
+            .unwrap()
+            .into_inner()
+            .unwrap()
+            .into_run(ScriptResult::new("playback recording", 0))
+    }
+    async fn sockets() -> (WebSocketSession, WebSocketSession) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("ws://{}", listener.local_addr().unwrap());
+        let accept = async {
+            let (socket, _) = listener.accept().await.unwrap();
+            WebSocketSession::accept(socket, SessionConfig::default())
+                .await
+                .unwrap()
+        };
+        let (client, server) = tokio::join!(
+            WebSocketSession::connect(&address, SessionConfig::default()),
+            accept
+        );
+        (client.unwrap(), server)
+    }
+
+    #[test]
+    fn rejected_queue_never_registers_a_source_and_failed_registration_releases_permit() {
+        let timeline = recorder(TimelineRecordingLimits {
+            max_raw_bytes: 2,
+            ..Default::default()
+        });
+        let (commands, mut input) = mpsc::channel(1);
+        let (_health_tx, health) = watch::channel(None);
+        let playback = Playback {
+            commands,
+            timeline: Some(timeline.clone()),
+            stop: Cancellation::new(),
+            health,
+            task: None,
+        };
+        let too_large = playback.queue(RecordedAudio::from_pcm16(&[1, 0, 2, 0]).unwrap());
+        assert!(matches!(
+            too_large,
+            Err(EvalError::Limit("timeline recording raw bytes"))
+        ));
+        assert_eq!(timeline.lock().unwrap().remaining_raw_bytes(), 2);
+        assert!(matches!(
+            input.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        let _receipt = playback
+            .queue(RecordedAudio::from_pcm16(&[1, 0]).unwrap())
+            .unwrap();
+        let records = timeline.lock().unwrap().remaining_records();
+        let full = playback.queue(RecordedAudio::from_pcm16(&[2, 0]).unwrap());
+        assert!(matches!(
+            full,
+            Err(EvalError::Limit("recording playback queue"))
+        ));
+        assert_eq!(timeline.lock().unwrap().remaining_records(), records);
+        let registered = input.try_recv().unwrap();
+        assert!(registered.ticket.is_some());
+        timeline.lock().unwrap().close(1_000_000_000).unwrap();
+        let closed = playback.queue(RecordedAudio::from_pcm16(&[3, 0]).unwrap());
+        assert!(matches!(closed, Err(EvalError::Cancelled)));
+        assert!(matches!(
+            input.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        drop(playback);
+        assert!(snapshot(timeline).to_wav().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn actual_send_receipt_keeps_source_only_and_excludes_wire_idle_and_padding() {
+        let (mut client, mut peer) = sockets().await;
+        let timeline = recorder(TimelineRecordingLimits::default());
+        let mut playback = Playback::start_with_timeline(
+            client.sender(),
+            &SessionOptions::default(),
+            Some(timeline.clone()),
+        );
+        // Observe a real idle wire packet before a source is queued.
+        tokio::time::timeout(Duration::from_secs(2), peer.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let pcm = [9, 0, 10, 0, 11, 0];
+        let receipt = playback
+            .queue(RecordedAudio::from_pcm16(&pcm).unwrap())
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), receipt)
+            .await
+            .unwrap()
+            .unwrap();
+        // A zero bot cutoff must not discard the actual successful user receipt.
+        timeline.lock().unwrap().close(0).unwrap();
+        playback.finish().await.unwrap();
+        drop(playback);
+        let (client_joined, peer_joined) =
+            tokio::join!(client.cancel_and_join(), peer.cancel_and_join());
+        assert!(client_joined.is_ok() && peer_joined.is_ok());
+        let wav = snapshot(timeline).to_wav().unwrap().unwrap();
+        assert_eq!(pipecat_audio::read_pcm16_wav(&wav).unwrap().pcm, pcm);
+    }
+
+    #[tokio::test]
+    async fn rejected_actual_sender_does_not_commit_or_send_a_completion_receipt() {
+        let (mut client, mut peer) = sockets().await;
+        let sender = client.sender();
+        let (client_joined, peer_joined) =
+            tokio::join!(client.cancel_and_join(), peer.cancel_and_join());
+        assert!(client_joined.is_ok() && peer_joined.is_ok());
+        let timeline = recorder(TimelineRecordingLimits::default());
+        let mut playback = Playback::start_with_timeline(
+            sender,
+            &SessionOptions::default(),
+            Some(timeline.clone()),
+        );
+        let receipt = playback
+            .queue(RecordedAudio::from_pcm16(&[9, 0]).unwrap())
+            .unwrap();
+        let mut health = playback.health();
+        tokio::time::timeout(Duration::from_secs(2), health.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(health.borrow().is_some());
+        assert!(receipt.await.is_err());
+        assert!(matches!(
+            playback.finish().await,
+            Err(EvalError::Transport(_))
+        ));
+        drop(playback);
+        timeline.lock().unwrap().close(0).unwrap();
+        assert!(snapshot(timeline).to_wav().unwrap().is_none());
     }
 }

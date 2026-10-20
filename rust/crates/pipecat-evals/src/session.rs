@@ -2,7 +2,10 @@
 use crate::bot_audio::{BotAudioLimits, BotAudioRun, Capture};
 #[cfg(feature = "bot-audio-transcription")]
 use crate::bot_transcription::{BotTranscription, BotTranscriptionConfig};
-use crate::recorded_audio::{Playback, RecordedAudio, MAX_TOTAL_BYTES};
+use crate::recorded_audio::{Playback, RecordedAudio, TimelineRecorder, MAX_TOTAL_BYTES};
+use crate::timeline_recording::{
+    Capture as TimelineCapture, TimelineRecordingLimits, TimelineRecordingRun,
+};
 #[cfg(feature = "user-speech")]
 use crate::user_speech::{
     CartesiaUserSpeechSettings, CartesiaUserSpeechVoice, PreparedHostedSpeech, UserSpeechBudget,
@@ -22,7 +25,11 @@ use pipecat_classifiers::{CallOptions, ClassifierError};
 use pipecat_protocol::rtvi::{Envelope, PROTOCOL_VERSION};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::{sync::watch, time::Instant};
 
 #[derive(Debug, Clone)]
@@ -157,6 +164,14 @@ struct HostedSpeechState {
     stop_bot_attempted: bool,
 }
 
+/// Passive recording metadata only; Playback and the existing socket retain
+/// their original owner/task responsibilities.
+struct TimelineRecordingState {
+    recorder: TimelineRecorder,
+    closed: bool,
+    stop_bot_attempted: bool,
+}
+
 enum RecordedCompletion {
     Ordinary(tokio::sync::oneshot::Receiver<()>),
     #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
@@ -215,6 +230,7 @@ pub struct EvalSession {
     #[cfg(feature = "user-speech")]
     hosted_speech: Option<HostedSpeechState>,
     capture: Option<Capture>,
+    timeline: Option<TimelineRecordingState>,
     #[cfg(feature = "bot-audio-transcription")]
     transcription_config: Option<BotTranscriptionConfig>,
     #[cfg(feature = "bot-audio-transcription")]
@@ -307,6 +323,7 @@ impl EvalSession {
             #[cfg(feature = "user-speech")]
             hosted_speech: None,
             capture: None,
+            timeline: None,
             #[cfg(feature = "bot-audio-transcription")]
             transcription_config: None,
             #[cfg(feature = "bot-audio-transcription")]
@@ -727,8 +744,90 @@ impl EvalSession {
             chunks: self.capture.take().unwrap().chunks,
         })
     }
+    /// Check the opt-in direct recording selection without starting any owner,
+    /// connection, synthesis, model, or output file. Callers may use this before
+    /// reserving a recording destination; `run_with_timeline_recording` repeats it.
+    pub fn validate_timeline_recording(
+        &self,
+        limits: TimelineRecordingLimits,
+    ) -> Result<(), EvalError> {
+        limits.validate()?;
+        if self.scenario.needs_images()
+            || self.scenario.turns.iter().any(|turn| turn.dtmf.is_some())
+        {
+            return Err(EvalError::Unsupported(
+                "timeline recording with images or DTMF".into(),
+            ));
+        }
+        #[cfg(feature = "user-images")]
+        if self.user_images.is_some() {
+            return Err(EvalError::Unsupported(
+                "timeline recording with images".into(),
+            ));
+        }
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.transcription_config.is_some() || self.transcription.is_some() {
+            return Err(EvalError::Unsupported(
+                "timeline recording with bot audio response or transcription".into(),
+            ));
+        }
+        if self.is_audio_to_audio() || self.capture.is_some() {
+            return Err(EvalError::Unsupported(
+                "timeline recording with joint or existing bot-only capture".into(),
+            ));
+        }
+        #[cfg(feature = "user-speech")]
+        if self.hosted_speech.is_some() {
+            return Err(EvalError::Unsupported(
+                "timeline recording with hosted user speech".into(),
+            ));
+        }
+        let audio_input = !self.recordings.is_empty();
+        #[cfg(feature = "user-speech")]
+        let audio_input = audio_input || self.user_speech.is_some();
+        if !audio_input {
+            return Err(EvalError::Unsupported(
+                "timeline recording requires selected recorded or user-speech input".into(),
+            ));
+        }
+        Ok(())
+    }
+    /// Record both locally admitted user source PCM and simulated bot playout
+    /// on one clock. Wire idle and padding are excluded; bot future tails are
+    /// cropped at interruption/end. This is not a remote playback receipt.
+    /// Awaiting cancellation returns a diagnostic prefix after actual cleanup;
+    /// dropping the future cannot promise a recording or asynchronous joins.
+    pub async fn run_with_timeline_recording(
+        mut self,
+        cancel: Cancellation,
+        limits: TimelineRecordingLimits,
+    ) -> Result<TimelineRecordingRun, EvalError> {
+        self.validate_timeline_recording(limits)?;
+        self.enable_bot_audio_url()?;
+        self.timeline = Some(TimelineRecordingState {
+            recorder: TimelineRecorder {
+                // run_inner resets this to its exact shared pre-connect epoch.
+                origin: Instant::now(),
+                capture: Arc::new(Mutex::new(TimelineCapture::new(limits)?)),
+            },
+            closed: false,
+            stop_bot_attempted: false,
+        });
+        self.run_inner(cancel).await;
+        // Playback/socket/speech have actually retired before taking the sole
+        // remaining ledger reference. No producer may alter the final snapshot.
+        let state = self.timeline.take().expect("selected timeline recording");
+        let capture = Arc::try_unwrap(state.recorder.capture)
+            .map_err(|_| EvalError::Scenario("timeline recording still has an owner".into()))?
+            .into_inner()
+            .map_err(|_| EvalError::Scenario("timeline recording ledger poisoned".into()))?;
+        Ok(capture.into_run(self.result))
+    }
     async fn run_inner(&mut self, cancel: Cancellation) {
         let started = Instant::now();
+        if let Some(state) = &mut self.timeline {
+            state.recorder.origin = started;
+        }
         self.stream = EventStream::new(self.options.event_limits.clone());
         self.bot_ready_received = false;
         #[cfg(feature = "bot-audio-transcription")]
@@ -768,6 +867,9 @@ impl EvalSession {
         } else {
             outcome
         };
+        // Freeze the semantic bot cutoff before formatting errors or awaiting
+        // cleanup. Existing user receipts remain writable until Playback joins.
+        self.close_timeline_recording();
         if let Err(error) = outcome {
             if let (Ok(index), Some(started)) =
                 (usize::try_from(self.active_turn), self.active_turn_started)
@@ -879,13 +981,16 @@ impl EvalSession {
         #[cfg(feature = "user-speech")]
         let audio_input = audio_input || self.user_speech.is_some();
         if audio_input {
-            self.playback = Some(Playback::start(
-                self.socket
-                    .as_ref()
-                    .ok_or(EvalError::Disconnected)?
-                    .sender(),
-                &self.options,
-            ));
+            let sender = self
+                .socket
+                .as_ref()
+                .ok_or(EvalError::Disconnected)?
+                .sender();
+            self.playback = Some(if let Some(state) = &self.timeline {
+                Playback::start_with_timeline(sender, &self.options, Some(state.recorder.clone()))
+            } else {
+                Playback::start(sender, &self.options)
+            });
         }
         self.phase = "turn";
         for index in 0..self.scenario.turns.len() {
@@ -1653,6 +1758,13 @@ impl EvalSession {
             return Ok(true);
         }
         if envelope.message_type == "eval-bot-audio" {
+            if let Some(state) = &self.timeline {
+                ingest_timeline_bot(
+                    &state.recorder,
+                    envelope.data.as_ref().unwrap_or(&Value::Null),
+                )?;
+                return Ok(false);
+            }
             if let Some(capture) = &mut self.capture {
                 capture.ingest(envelope.data.as_ref().unwrap_or(&Value::Null))?;
                 #[cfg(feature = "bot-audio-transcription")]
@@ -1678,6 +1790,14 @@ impl EvalSession {
             }
         }
         self.stream.ingest(&envelope)?;
+        if envelope.message_type == "bot-interrupted" {
+            if let Some(state) = &self.timeline {
+                state
+                    .recorder
+                    .lock()?
+                    .interrupt_bot(state.recorder.elapsed_ns()?)?;
+            }
+        }
         #[cfg(feature = "bot-audio-transcription")]
         if let Some(engine) = &mut self.transcription {
             engine.set_epoch(self.stream.epoch())?;
@@ -1978,7 +2098,129 @@ impl EvalSession {
         }
         self.user_speech.take();
     }
+    fn close_timeline_recording(&mut self) {
+        let Some(state) = &mut self.timeline else {
+            return;
+        };
+        if state.closed {
+            return;
+        }
+        state.closed = true;
+        let closed = state
+            .recorder
+            .elapsed_ns()
+            .and_then(|cutoff| state.recorder.lock()?.close(cutoff));
+        if let Some(playback) = &self.playback {
+            playback.request_stop();
+        }
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            owner.cancel_work();
+        }
+        if let Err(error) = closed {
+            self.result.fail(AssertionFailure {
+                turn_index: self.active_turn,
+                expectation_index: -1,
+                event_name: "recording".into(),
+                reason: error.to_string(),
+                kind: "audio_recording_error".into(),
+            });
+        }
+    }
+    async fn shutdown_timeline_recording(&mut self) {
+        // Freeze once and signal every existing producer before the first await.
+        // Closing recording admission intentionally does not close receipt writes.
+        self.close_timeline_recording();
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            owner.cancel_work();
+        }
+        if let Some(playback) = &self.playback {
+            playback.request_stop();
+        }
+        let state = self.timeline.as_mut().expect("selected timeline recording");
+        let send_stop = self.options.stop_bot && !state.stop_bot_attempted && self.socket.is_some();
+        state.stop_bot_attempted = true;
+        if send_stop {
+            if let Err(error) = self.send_control(serializer::EVAL_CANCEL, json!({})).await {
+                self.result
+                    .debug_log
+                    .push(format!("eval-cancel could not be sent: {error}"));
+            }
+        }
+        // Keep handles in their fields across cancellation, as in the existing
+        // joined hosted/joint paths. A stop/abort request is never a join receipt.
+        if let Some(playback) = &mut self.playback {
+            if let Err(error) = playback.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "recording".into(),
+                    reason: error.to_string(),
+                    kind: "audio_cleanup_error".into(),
+                });
+            }
+        }
+        self.playback.take();
+        if let Some(socket) = &mut self.socket {
+            match tokio::time::timeout(
+                self.options.transport.close_timeout + self.options.transport.write_timeout,
+                socket.finish_and_join(),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "transport_cleanup".into(),
+                    reason: format!("transport cleanup: {error}"),
+                    kind: "transport_cleanup_error".into(),
+                }),
+                Err(_) => {
+                    self.result.fail(AssertionFailure {
+                        turn_index: self.active_turn,
+                        expectation_index: -1,
+                        event_name: "transport_cleanup".into(),
+                        reason:
+                            "transport graceful cleanup exceeded deadline; cancelling and joining"
+                                .into(),
+                        kind: "transport_cleanup_error".into(),
+                    });
+                    if let Err(error) = socket.cancel_and_join().await {
+                        self.result.fail(AssertionFailure {
+                            turn_index: self.active_turn,
+                            expectation_index: -1,
+                            event_name: "transport_cleanup".into(),
+                            reason: format!("transport cancellation cleanup: {error}"),
+                            kind: "transport_cleanup_error".into(),
+                        });
+                    }
+                }
+            }
+        }
+        self.socket.take();
+        #[cfg(feature = "user-speech")]
+        if let Some(owner) = &mut self.user_speech {
+            if let Err(error) = owner.finish().await {
+                self.result.fail(AssertionFailure {
+                    turn_index: self.active_turn,
+                    expectation_index: -1,
+                    event_name: "user_speech_cleanup".into(),
+                    reason: error.to_string(),
+                    kind: "user_speech_cleanup_error".into(),
+                });
+            }
+            self.result.debug_log.extend(owner.take_cache_diagnostics());
+        }
+        #[cfg(feature = "user-speech")]
+        self.user_speech.take();
+    }
     pub(crate) async fn shutdown(&mut self) {
+        if self.timeline.is_some() {
+            self.shutdown_timeline_recording().await;
+            return;
+        }
         #[cfg(feature = "user-speech")]
         if self.hosted_speech.is_some() {
             self.shutdown_hosted_speech().await;
@@ -2066,6 +2308,73 @@ impl EvalSession {
         }
     }
 }
+/// Decode only after bounded metadata checks, under the same admission lock.
+/// The old original-rate capture route has its own unchanged decoder/limits.
+fn ingest_timeline_bot(recorder: &TimelineRecorder, data: &Value) -> Result<(), EvalError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let encoded = data
+        .get("audio")
+        .and_then(Value::as_str)
+        .ok_or_else(|| EvalError::Scenario("bot audio requires base64 audio".into()))?;
+    let rate = data
+        .get("sampleRate")
+        .and_then(Value::as_u64)
+        .filter(|rate| matches!(*rate, 8_000 | 16_000 | 24_000 | 48_000))
+        .ok_or_else(|| {
+            EvalError::Scenario("bot audio sampleRate must be 8000, 16000, 24000 or 48000".into())
+        })? as u32;
+    // The host's existing wire contract omits channels for mono. Explicit
+    // channel metadata cannot silently reinterpret stereo or invalid values.
+    for key in ["numChannels", "channels"] {
+        if data
+            .get(key)
+            .is_some_and(|channels| channels.as_u64() != Some(1))
+        {
+            return Err(EvalError::Unsupported(
+                "timeline bot audio requires mono PCM16".into(),
+            ));
+        }
+    }
+    let mut capture = recorder.lock()?;
+    if capture.remaining_records() == 0 {
+        return Err(EvalError::Limit("timeline recording records"));
+    }
+    if encoded.is_empty() || !encoded.len().is_multiple_of(4) {
+        return Err(EvalError::Scenario("invalid bot audio base64".into()));
+    }
+    let padding = if encoded.ends_with("==") {
+        2
+    } else {
+        usize::from(encoded.ends_with('='))
+    };
+    let decoded_len = encoded
+        .len()
+        .checked_div(4)
+        .and_then(|groups| groups.checked_mul(3))
+        .and_then(|bytes| bytes.checked_sub(padding))
+        .ok_or(EvalError::Limit("timeline recording raw bytes"))?;
+    if decoded_len > capture.remaining_raw_bytes() {
+        return Err(EvalError::Limit("timeline recording raw bytes"));
+    }
+    if decoded_len == 0 || !decoded_len.is_multiple_of(2) {
+        return Err(EvalError::Scenario(
+            "bot audio requires complete PCM16 samples".into(),
+        ));
+    }
+    // Exact-sized decoding avoids base64's rounded-up capacity crossing the
+    // fixed raw limit by up to two spare bytes at its boundary.
+    let mut pcm = vec![0; decoded_len];
+    let decoded = STANDARD
+        .decode_slice(encoded, &mut pcm)
+        .map_err(|_| EvalError::Scenario("invalid bot audio base64".into()))?;
+    if decoded != decoded_len {
+        return Err(EvalError::Scenario(
+            "invalid bot audio decoded length".into(),
+        ));
+    }
+    capture.ingest_bot(recorder.elapsed_ns()?, pcm, rate, 1)
+}
+
 fn validate_recording_inputs(
     scenario: &ScriptScenario,
     inputs: impl IntoIterator<Item = (usize, RecordedAudio)>,
@@ -2723,6 +3032,84 @@ mod hosted_speech_lifecycle_tests {
         }));
         assert!(!session.result.passed);
     }
+    #[tokio::test]
+    async fn timeline_cutoff_survives_cancelled_real_socket_join_and_reentry() {
+        let (socket, mut peer) = held_socket().await;
+        let sender = socket.sender();
+        let mut session = session();
+        session.hosted_speech = None;
+        session.options.transport.write_timeout = Duration::from_millis(250);
+        session.options.transport.close_timeout = Duration::from_millis(250);
+        session.socket = Some(socket);
+        let mut capture = TimelineCapture::new(TimelineRecordingLimits::default()).unwrap();
+        capture.ingest_bot(0, vec![1; 32_000], 16_000, 1).unwrap();
+        let origin = Instant::now() - Duration::from_millis(50);
+        session.timeline = Some(TimelineRecordingState {
+            recorder: TimelineRecorder {
+                origin,
+                capture: Arc::new(Mutex::new(capture)),
+            },
+            closed: false,
+            stop_bot_attempted: false,
+        });
+        let recorder = session.timeline.as_ref().unwrap().recorder.clone();
+        session.playback = Some(Playback::start_with_timeline(
+            sender.clone(),
+            &session.options,
+            Some(recorder),
+        ));
+        let receipt = session
+            .playback
+            .as_ref()
+            .unwrap()
+            .queue(RecordedAudio::from_pcm16(&[2, 0].repeat(640)).unwrap())
+            .unwrap();
+        tokio::time::timeout(WAIT, receipt).await.unwrap().unwrap();
+        let user_end_upper = origin.elapsed().as_nanos() + 40_000_000;
+        sender
+            .send(Packet::Binary(vec![1; 4 * 1024 * 1024].into()))
+            .await
+            .unwrap();
+        sender
+            .send(Packet::Binary(vec![2; 4 * 1024 * 1024].into()))
+            .await
+            .unwrap();
+        primary(&mut session);
+        let first = tokio::time::timeout(Duration::from_millis(10), session.shutdown()).await;
+        let upper_cutoff = origin.elapsed().as_nanos();
+        let retained = session.socket.is_some();
+        let state = session.timeline.as_ref().unwrap();
+        assert!(state.closed && state.stop_bot_attempted);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        session.options.stop_bot = true;
+        session.options.transport.write_timeout = Duration::from_millis(1);
+        session.options.transport.close_timeout = Duration::from_millis(1);
+        session.shutdown().await;
+        let peer_joined = peer.finish();
+        assert!(first.is_err() && retained);
+        assert!(
+            session.socket.is_none() && session.playback.is_none() && session.user_speech.is_none()
+        );
+        assert!(peer_joined.is_ok(), "peer actual join: {peer_joined:?}");
+        assert_eq!(session.result.failures[0].kind, "original_error");
+        let state = session.timeline.take().unwrap();
+        let run = Arc::try_unwrap(state.recorder.capture)
+            .unwrap()
+            .into_inner()
+            .unwrap()
+            .into_run(session.result);
+        let wav = run.to_wav().unwrap().unwrap();
+        let pcm = pipecat_audio::read_pcm16_wav(&wav).unwrap().pcm;
+        let frames = pcm.len() / 2;
+        // Bot is 257; admitted user is 2, producing either 2 or mixed 259.
+        assert!(pcm
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .any(|sample| { matches!(i16::from_le_bytes([sample[0], sample[1]]), 2 | 259) }));
+        assert!(frames as u128 <= upper_cutoff.max(user_end_upper) * 16_000 / 1_000_000_000);
+        assert!(!run.result.passed);
+    }
 }
 
 #[cfg(all(test, feature = "user-speech", feature = "bot-audio-transcription"))]
@@ -3140,5 +3527,120 @@ mod audio_to_audio_lifecycle_tests {
             assert!(options.validate().is_ok());
             assert!(options.validate_audio_to_audio().is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod timeline_session_tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    fn session() -> EvalSession {
+        let scenario = crate::ScenarioFile::from_value(json!({
+            "name": "direct timeline", "turns": [{"user": "recorded reference"}]
+        }))
+        .unwrap()
+        .scenarios
+        .remove(0);
+        EvalSession::new(scenario, "ws://127.0.0.1:1", SessionOptions::default()).unwrap()
+    }
+    fn recorded() -> EvalSession {
+        session()
+            .with_recorded_audio_inputs([(0, RecordedAudio::from_pcm16(&[7, 0]).unwrap())])
+            .unwrap()
+    }
+    fn select(session: &mut EvalSession, limits: TimelineRecordingLimits) {
+        session.timeline = Some(TimelineRecordingState {
+            recorder: TimelineRecorder {
+                origin: Instant::now(),
+                capture: Arc::new(Mutex::new(TimelineCapture::new(limits).unwrap())),
+            },
+            closed: false,
+            stop_bot_attempted: false,
+        });
+    }
+
+    #[test]
+    fn direct_preflight_rejects_text_dtmf_existing_capture_and_invalid_limits() {
+        let limits = TimelineRecordingLimits::default();
+        assert!(matches!(
+            session().validate_timeline_recording(limits),
+            Err(EvalError::Unsupported(_))
+        ));
+        assert!(recorded().validate_timeline_recording(limits).is_ok());
+        let mut dtmf = recorded();
+        dtmf.scenario.turns[0].dtmf = Some("1".into());
+        assert!(matches!(
+            dtmf.validate_timeline_recording(limits),
+            Err(EvalError::Unsupported(_))
+        ));
+        let mut existing = recorded();
+        existing.capture = Some(Capture::new(BotAudioLimits::default()));
+        assert!(matches!(
+            existing.validate_timeline_recording(limits),
+            Err(EvalError::Unsupported(_))
+        ));
+        assert!(matches!(
+            recorded().validate_timeline_recording(TimelineRecordingLimits {
+                max_records: 0,
+                ..limits
+            }),
+            Err(EvalError::Scenario(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn already_cancelled_direct_recording_returns_empty_failure_without_connecting() {
+        let cancellation = Cancellation::new();
+        cancellation.cancel();
+        let run = recorded()
+            .run_with_timeline_recording(cancellation, TimelineRecordingLimits::default())
+            .await
+            .unwrap();
+        assert!(!run.result.passed);
+        assert_eq!(run.result.failures[0].kind, "cancelled");
+        assert!(run.to_wav().unwrap().is_none());
+    }
+
+    #[test]
+    fn bot_decoder_has_exact_raw_boundary_and_rejects_explicit_nonmono() {
+        let mut session = recorded();
+        select(
+            &mut session,
+            TimelineRecordingLimits {
+                max_raw_bytes: 2,
+                ..Default::default()
+            },
+        );
+        let recorder = &session.timeline.as_ref().unwrap().recorder;
+        let stereo =
+            json!({"audio": STANDARD.encode([1, 0]), "sampleRate": 16000, "numChannels": 2});
+        assert!(matches!(
+            ingest_timeline_bot(recorder, &stereo),
+            Err(EvalError::Unsupported(_))
+        ));
+        assert_eq!(recorder.lock().unwrap().remaining_raw_bytes(), 2);
+        let admitted =
+            json!({"audio": STANDARD.encode([1, 0]), "sampleRate": 16000, "channels": 1});
+        ingest_timeline_bot(recorder, &admitted).unwrap();
+        assert_eq!(recorder.lock().unwrap().remaining_raw_bytes(), 0);
+        assert!(matches!(
+            ingest_timeline_bot(recorder, &admitted),
+            Err(EvalError::Limit("timeline recording raw bytes"))
+        ));
+    }
+
+    #[cfg(feature = "user-speech")]
+    #[test]
+    fn configured_hosted_recording_is_refused_by_local_state_guard() {
+        let mut session = recorded();
+        session.hosted_speech = Some(HostedSpeechState {
+            admission_closed: false,
+            stop_bot_attempted: false,
+        });
+        assert!(matches!(
+            session.validate_timeline_recording(TimelineRecordingLimits::default()),
+            Err(EvalError::Unsupported(_))
+        ));
     }
 }

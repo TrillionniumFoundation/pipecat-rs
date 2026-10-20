@@ -581,6 +581,12 @@ judge audio. Unix `run ... --bot-audio-wav NEW.wav` exports same-rate received
 chunks for exactly one scenario, with bounded no-clobber publication and explicit
 partial/empty results. Existing text and CLI behavior remain the default.
 
+Direct recorded/user-speech sessions can instead opt into a bounded, two-sided
+16 kHz mono [timeline recording](TIMELINE_RECORDING.md) with
+`--recording-wav NEW.wav`. It aligns admitted user-source PCM with simulated bot
+playout; its 120-second diagnostic limit and local-admission semantics are explicit.
+Bot-response/joint, hosted/suite, images and DTMF recording are unsupported.
+
 ## Spoken response evaluation
 
 An explicit optional library path now connects received 16 kHz bot PCM to native
