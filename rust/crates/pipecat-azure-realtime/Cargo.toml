@@ -1,0 +1,24 @@
+[package]
+name = "pipecat-azure-realtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+pipecat-realtime = { path = "../pipecat-realtime" }
+pipecat-processors = { path = "../pipecat-processors" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-turns = { path = "../pipecat-turns" }
+
+[dev-dependencies]
+base64 = "0.22"
+futures-util = { version = "0.3", features = ["sink"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+
+[lints]
+workspace = true

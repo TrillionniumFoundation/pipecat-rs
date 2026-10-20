@@ -222,6 +222,61 @@ impl RealtimeLimits {
         Ok(())
     }
 }
+/// An explicitly supplied Azure OpenAI Realtime credential. Tokens are not
+/// obtained, refreshed, persisted, or replaced with another credential.
+#[derive(Clone)]
+pub enum AzureRealtimeCredential {
+    ApiKey(String),
+    EntraBearer(String),
+}
+impl fmt::Debug for AzureRealtimeCredential {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ApiKey(_) => f.write_str("ApiKey([REDACTED])"),
+            Self::EntraBearer(_) => f.write_str("EntraBearer([REDACTED])"),
+        }
+    }
+}
+impl AzureRealtimeCredential {
+    fn secret(&self) -> &str {
+        match self {
+            Self::ApiKey(value) | Self::EntraBearer(value) => value,
+        }
+    }
+}
+#[derive(Clone)]
+enum ConnectionProfile {
+    OpenAi {
+        api_key: String,
+    },
+    Azure {
+        deployment: String,
+        credential: AzureRealtimeCredential,
+    },
+}
+impl ConnectionProfile {
+    fn secret(&self) -> &str {
+        match self {
+            Self::OpenAi { api_key } => api_key,
+            Self::Azure { credential, .. } => credential.secret(),
+        }
+    }
+    fn authentication(&self) -> Result<(&'static str, HeaderValue), RealtimeError> {
+        let (name, value) = match self {
+            Self::Azure {
+                credential: AzureRealtimeCredential::ApiKey(key),
+                ..
+            } => ("api-key", HeaderValue::from_str(key)),
+            _ => (
+                "authorization",
+                HeaderValue::from_str(&format!("Bearer {}", self.secret())),
+            ),
+        };
+        let mut value = value.map_err(|_| RealtimeError::Invalid("authentication header"))?;
+        value.set_sensitive(true);
+        Ok((name, value))
+    }
+}
 #[derive(Clone)]
 pub struct RealtimeConfig {
     pub endpoint: String,
@@ -229,13 +284,20 @@ pub struct RealtimeConfig {
     pub session: SessionProperties,
     pub context_id: Option<String>,
     pub limits: RealtimeLimits,
-    api_key: String,
+    profile: ConnectionProfile,
 }
 impl fmt::Debug for RealtimeConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RealtimeConfig")
             .field("endpoint", &"[configured]")
-            .field("model", &self.model)
+            .field(
+                "model",
+                &if self.is_azure() {
+                    "[configured deployment]"
+                } else {
+                    &self.model
+                },
+            )
             .field("api_key", &"[REDACTED]")
             .field("limits", &self.limits)
             .finish_non_exhaustive()
@@ -249,20 +311,102 @@ impl RealtimeConfig {
             session: SessionProperties::pcm(),
             context_id: None,
             limits: RealtimeLimits::default(),
-            api_key: api_key.into(),
+            profile: ConnectionProfile::OpenAi {
+                api_key: api_key.into(),
+            },
         }
+    }
+    /// Select Azure OpenAI's GA v1 endpoint and an explicit deployment.
+    ///
+    /// The endpoint must end in `/openai/v1/realtime`, with either no query or
+    /// exactly one `model` query value equal to the deployment. Preview and
+    /// Voice Live endpoints are deliberately unsupported. Production requires
+    /// WSS; plaintext is allowed only for literal loopback-IP test peers.
+    ///
+    /// Endpoint, deployment, and credential bounds are 8192, 256, and 16384
+    /// bytes respectively. Public-field edits are revalidated before connection;
+    /// they cannot change the deployment selected by this constructor.
+    pub fn azure(
+        endpoint: impl Into<String>,
+        deployment: impl Into<String>,
+        credential: AzureRealtimeCredential,
+    ) -> Result<Self, RealtimeError> {
+        let deployment = deployment.into();
+        let mut session = SessionProperties::pcm();
+        session.model = Some(deployment.clone());
+        let config = Self {
+            endpoint: endpoint.into(),
+            model: deployment.clone(),
+            session,
+            context_id: None,
+            limits: RealtimeLimits::default(),
+            profile: ConnectionProfile::Azure {
+                deployment,
+                credential,
+            },
+        };
+        config.validate()?;
+        Ok(config)
+    }
+    pub fn is_azure(&self) -> bool {
+        matches!(self.profile, ConnectionProfile::Azure { .. })
+    }
+    pub fn service_name(&self) -> &'static str {
+        if self.is_azure() {
+            "AzureOpenAiRealtimeService"
+        } else {
+            "OpenAiRealtimeService"
+        }
+    }
+    fn connection_url(&self) -> Result<url::Url, RealtimeError> {
+        let mut url = match &self.profile {
+            ConnectionProfile::OpenAi { .. } => endpoint(&self.endpoint)?,
+            ConnectionProfile::Azure { deployment, .. } => {
+                azure_endpoint(&self.endpoint, deployment)?
+            }
+        };
+        if url.query().is_none() {
+            url.query_pairs_mut().append_pair("model", &self.model);
+        }
+        Ok(url)
     }
     pub fn validate(&self) -> Result<(), RealtimeError> {
         self.limits.validate()?;
-        endpoint(&self.endpoint)?;
+        if let ConnectionProfile::Azure {
+            deployment,
+            credential,
+        } = &self.profile
+        {
+            if deployment.trim().is_empty()
+                || deployment.len() > 256
+                || deployment.chars().any(char::is_control)
+            {
+                return Err(RealtimeError::Invalid("Azure deployment"));
+            }
+            if self.model != *deployment {
+                return Err(RealtimeError::Invalid(
+                    "Azure deployment cannot change after configuration",
+                ));
+            }
+            let secret = credential.secret();
+            if secret.trim().is_empty()
+                || secret.len() > 16_384
+                || secret.chars().any(char::is_control)
+            {
+                return Err(RealtimeError::Invalid("Azure credential"));
+            }
+        }
+        self.connection_url()?;
         if self.context_id.as_ref().is_some_and(|id| id.len() > 256) {
             return Err(RealtimeError::Invalid("context ID exceeds 256 bytes"));
         }
-        if self.model.trim().is_empty() || self.model.len() > 256 || self.api_key.is_empty() {
+        if self.model.trim().is_empty()
+            || self.model.len() > 256
+            || self.profile.secret().is_empty()
+        {
             return Err(RealtimeError::Invalid("model and API key are required"));
         }
-        HeaderValue::from_str(&format!("Bearer {}", self.api_key))
-            .map_err(|_| RealtimeError::Invalid("authentication header"))?;
+        self.profile.authentication()?;
         validate_session(&self.session)?;
         bounded_serialized(&self.session, self.limits.max_message_bytes)?;
         if self
@@ -278,13 +422,63 @@ impl RealtimeConfig {
         Ok(())
     }
 }
+fn azure_endpoint(s: &str, deployment: &str) -> Result<url::Url, RealtimeError> {
+    if s.len() > 8192 || s.trim() != s || s.chars().any(char::is_control) {
+        return Err(RealtimeError::Invalid("Azure endpoint URL"));
+    }
+    let url = endpoint_base(s, true)?;
+    // URL parsing normalizes dot paths, abbreviated IPv4 hosts, and empty
+    // userinfo. Those are not the explicit canonical endpoint contract.
+    let remainder = s
+        .split_once("://")
+        .ok_or(RealtimeError::Invalid("Azure endpoint URL"))?
+        .1;
+    let authority_end = remainder.find(['/', '?', '#']).unwrap_or(remainder.len());
+    let authority = &remainder[..authority_end];
+    let raw_path = remainder[authority_end..]
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default();
+    if authority.contains('@') || raw_path != "/openai/v1/realtime" {
+        return Err(RealtimeError::Invalid(
+            "Azure requires the GA v1 realtime endpoint",
+        ));
+    }
+    if url.scheme() == "ws" {
+        let host = if let Some(ipv6) = authority.strip_prefix('[') {
+            ipv6.split(']').next().unwrap_or_default()
+        } else {
+            authority.split(':').next().unwrap_or_default()
+        };
+        if !host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback()) {
+            return Err(RealtimeError::Invalid(
+                "plaintext requires an explicit loopback IP address",
+            ));
+        }
+    }
+    if let Some(query) = url.query() {
+        let mut pairs = url.query_pairs();
+        if query.contains('&')
+            || !matches!(pairs.next(), Some((key, value)) if key == "model" && value == deployment)
+            || pairs.next().is_some()
+        {
+            return Err(RealtimeError::Invalid(
+                "Azure endpoint query must name exactly the configured deployment",
+            ));
+        }
+    }
+    Ok(url)
+}
 fn endpoint(s: &str) -> Result<url::Url, RealtimeError> {
+    endpoint_base(s, false)
+}
+fn endpoint_base(s: &str, allow_query: bool) -> Result<url::Url, RealtimeError> {
     let url = url::Url::parse(s).map_err(|_| RealtimeError::Invalid("endpoint URL"))?;
     if !matches!(url.scheme(), "ws" | "wss")
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
-        || url.query().is_some()
+        || !allow_query && url.query().is_some()
         || url.fragment().is_some()
     {
         return Err(RealtimeError::Invalid(
@@ -358,6 +552,7 @@ pub struct RealtimeClient {
     config: RealtimeConfig,
     pub(crate) pipeline_turns: bool,
     pub(crate) audio_preroll_bytes: Option<usize>,
+    pub(crate) final_tool_app: bool,
 }
 impl RealtimeClient {
     pub fn config(&self) -> &RealtimeConfig {
@@ -369,6 +564,7 @@ impl RealtimeClient {
             config,
             pipeline_turns: false,
             audio_preroll_bytes: None,
+            final_tool_app: false,
         })
     }
     /// Opens a single authenticated connection. Redirects and automatic retries
@@ -376,16 +572,14 @@ impl RealtimeClient {
     /// replay its bounded PCM suffix within this same connection on interruption.
     pub async fn connect(&self) -> Result<RealtimeSession, RealtimeError> {
         let c = &self.config;
-        let mut url = endpoint(&c.endpoint)?;
-        url.query_pairs_mut().append_pair("model", &c.model);
+        c.validate()?;
+        let url = c.connection_url()?;
         let mut req = url
             .as_str()
             .into_client_request()
             .map_err(|_| RealtimeError::Invalid("WebSocket request"))?;
-        let mut auth = HeaderValue::from_str(&format!("Bearer {}", c.api_key))
-            .map_err(|_| RealtimeError::Invalid("authentication header"))?;
-        auth.set_sensitive(true);
-        req.headers_mut().insert("authorization", auth);
+        let (header, value) = c.profile.authentication()?;
+        req.headers_mut().insert(header, value);
         let ws_config = WebSocketConfig::default()
             .max_message_size(Some(c.limits.max_message_bytes))
             .max_frame_size(Some(c.limits.max_message_bytes));
@@ -413,6 +607,7 @@ impl RealtimeClient {
         let mut actor = Actor::new(c.clone(), generation.clone(), emission_gate, events_tx);
         actor.response_fences = response_fences;
         actor.pipeline_turns = self.pipeline_turns;
+        actor.final_tool_app = self.final_tool_app;
         actor.audio_preroll = self.audio_preroll_bytes.map(Preroll::new);
         // session.update precedes every user action, including appended audio.
         actor
@@ -797,6 +992,7 @@ struct Actor {
     audio_preroll: Option<Preroll>,
     response_fences: ResponseFences,
     pipeline_turns: bool,
+    final_tool_app: bool,
     config: RealtimeConfig,
     generation: Arc<AtomicU64>,
     emission_gate: Arc<Mutex<()>>,
@@ -836,6 +1032,7 @@ impl Actor {
             audio_preroll: None,
             response_fences: Arc::new(Mutex::new(HashMap::new())),
             pipeline_turns: false,
+            final_tool_app: false,
             config,
             generation,
             emission_gate,
@@ -974,6 +1171,9 @@ impl Actor {
         let Some(action) = action else {
             return self.maybe_continue(socket).await;
         };
+        if self.final_tool_app && self.finishing && matches!(action, Action::CreateResponse(_)) {
+            return Ok(());
+        }
         if let Some(alternatives) = alternatives {
             let Action::CreateResponse(options) = action else {
                 return Err(RealtimeError::Invalid(
@@ -1069,6 +1269,20 @@ impl Actor {
         let value = match action {
             Action::Finish => {
                 self.finishing = true;
+                if self.final_tool_app {
+                    self.deferred_response = None;
+                    self.selected_debts.clear();
+                    self.continue_response = false;
+                    self.continuation_context = None;
+                    if self.active.is_none()
+                        && self.pending.is_none()
+                        && !self.tools.is_empty()
+                        && self.settlement_deadline.is_none()
+                    {
+                        self.settlement_deadline =
+                            Some(Instant::now() + self.config.limits.response_timeout);
+                    }
+                }
                 return Ok(());
             }
             Action::UpdateSession(mut session) => {
@@ -1157,6 +1371,9 @@ impl Actor {
                 json!({"type":"conversation.item.truncate", "item_id":position.item_id, "content_index":position.content_index, "audio_end_ms":position.audio_end_ms})
             }
             Action::CreateResponse(response) => {
+                if self.final_tool_app && self.finishing {
+                    return Ok(());
+                }
                 if inference_fence
                     .as_ref()
                     .is_some_and(|fence| !fence.is_current())
@@ -1296,6 +1513,7 @@ impl Actor {
                 while self.completed_tools.len() > self.config.limits.max_outstanding_tools {
                     self.completed_tools.pop_front();
                 }
+                let run_response = run_response && !(self.final_tool_app && self.finishing);
                 self.continue_response |= run_response;
                 if run_response {
                     self.continuation_context = tool_context;
@@ -1307,6 +1525,9 @@ impl Actor {
         self.write(socket, value).await
     }
     async fn maybe_continue(&mut self, socket: &mut Socket) -> Result<(), RealtimeError> {
+        if self.final_tool_app && self.finishing {
+            return Ok(());
+        }
         self.maybe_selected_continue(socket).await?;
         if (self.continue_response || self.deferred_response.is_some())
             && self.tools.is_empty()
@@ -1580,7 +1801,11 @@ impl Actor {
                 }
                 continue;
             }
-            if self.finishing && self.active.is_none() && self.pending.is_none() {
+            if self.finishing
+                && self.active.is_none()
+                && self.pending.is_none()
+                && (!self.final_tool_app || self.tools.is_empty())
+            {
                 return Ok(());
             }
             let deadline = self
@@ -1631,7 +1856,7 @@ impl Actor {
                         }
                         Some(Ok(Message::Ping(p))) => { timeout(self.config.limits.operation_timeout, socket.send(Message::Pong(p))).await.map_err(|_| RealtimeError::Timeout("pong"))?.map_err(transport)?; }
                         Some(Ok(Message::Pong(_))) => {}
-                        Some(Ok(Message::Close(_))) | None => return if self.active.is_some() || self.pending.is_some() { Err(RealtimeError::Protocol("response ended before response.done")) } else { Ok(()) },
+                        Some(Ok(Message::Close(_))) | None => return if self.active.is_some() || self.pending.is_some() { Err(RealtimeError::Protocol("response ended before response.done")) } else if self.final_tool_app && !self.tools.is_empty() { Err(RealtimeError::Protocol("provider ended before final tool settlement")) } else if self.final_tool_app && !self.finishing { Err(RealtimeError::Protocol("provider ended before final-tool Finish")) } else { Ok(()) },
                         Some(Ok(_)) => return Err(RealtimeError::Protocol("expected JSON text")),
                         Some(Err(e)) => return Err(transport(e)),
                     }
@@ -1750,6 +1975,15 @@ impl Actor {
                 if self.responses.iter().any(|(id, _)| id == &response.id) {
                     return Ok(());
                 }
+                if self.final_tool_app
+                    && self.finishing
+                    && self.active.is_none()
+                    && self.pending.is_none()
+                {
+                    return Err(RealtimeError::Protocol(
+                        "new response announced after final-tool drain began",
+                    ));
+                }
                 if self.active.as_ref().is_some_and(|id| id != &response.id) {
                     return Err(RealtimeError::Protocol("overlapping responses"));
                 }
@@ -1824,6 +2058,11 @@ impl Actor {
                     if self.completed_tools.contains(call_id) {
                         return Ok(());
                     }
+                    if self.final_tool_app && self.finishing && !self.tools.contains_key(call_id) {
+                        return Err(RealtimeError::Protocol(
+                            "new tool announced after final-tool drain began",
+                        ));
+                    }
                     if !self.tools.contains_key(call_id)
                         && self.tools.len() >= self.config.limits.max_outstanding_tools
                     {
@@ -1869,6 +2108,11 @@ impl Actor {
                     if tool.announced {
                         return Ok(());
                     }
+                    if self.final_tool_app && self.finishing {
+                        return Err(RealtimeError::Protocol(
+                            "new tool announced after final-tool drain began",
+                        ));
+                    }
                     if !serde_json::from_str::<Value>(arguments).is_ok_and(|v| v.is_object()) {
                         return Err(RealtimeError::Protocol(
                             "tool arguments must be a JSON object",
@@ -1912,7 +2156,7 @@ impl Actor {
         let context_id = context
             .and_then(|c| c.context_id)
             .or_else(|| self.config.context_id.clone());
-        redact_event(&mut event, &self.config.api_key);
+        redact_event(&mut event, self.config.profile.secret());
         self.tx
             .try_send(ReceivedEvent {
                 usage_details,
@@ -2417,5 +2661,34 @@ mod session_join_cancellation_tests {
         assert!(session.task.is_none());
         assert!(joined.load(Ordering::Acquire));
         peer.await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod azure_authentication_tests {
+    use super::*;
+
+    #[test]
+    fn selected_authentication_values_are_sensitive() {
+        let configs = [
+            RealtimeConfig::new("synthetic-openai-key"),
+            RealtimeConfig::azure(
+                "wss://synthetic-resource.example/openai/v1/realtime",
+                "deployment",
+                AzureRealtimeCredential::ApiKey("synthetic-azure-key".into()),
+            )
+            .unwrap(),
+            RealtimeConfig::azure(
+                "wss://synthetic-resource.example/openai/v1/realtime",
+                "deployment",
+                AzureRealtimeCredential::EntraBearer("synthetic-entra-token".into()),
+            )
+            .unwrap(),
+        ];
+        for config in configs {
+            let (_, value) = config.profile.authentication().unwrap();
+            assert!(value.is_sensitive());
+            assert!(!format!("{value:?}").contains(config.profile.secret()));
+        }
     }
 }

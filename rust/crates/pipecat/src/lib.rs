@@ -9,6 +9,8 @@ pub use pipecat_audio as audio;
 pub use pipecat_aws_bedrock as aws_bedrock;
 #[cfg(feature = "aws-speech")]
 pub use pipecat_aws_speech as aws_speech;
+#[cfg(feature = "azure-realtime")]
+pub use pipecat_azure_realtime as azure_realtime;
 #[cfg(feature = "classifiers")]
 pub use pipecat_classifiers as classifiers;
 #[cfg(feature = "client-server")]
@@ -100,6 +102,34 @@ mod inworld_feature_tests {
             config.validate().unwrap();
             let client = InworldClient::new(config).unwrap();
             assert!(InworldRealtimeProcessor::new(client).is_ok());
+        }
+    }
+}
+
+#[cfg(all(test, feature = "azure-realtime"))]
+mod azure_feature_tests {
+    use super::azure_realtime::{AzureRealtimeApp, AzureRealtimeCredential, RealtimeConfig};
+    use std::sync::Arc;
+
+    #[test]
+    fn facade_constructs_both_explicit_azure_credentials_without_connecting() {
+        for credential in [
+            AzureRealtimeCredential::ApiKey("synthetic-facade-key".into()),
+            AzureRealtimeCredential::EntraBearer("synthetic-facade-token".into()),
+        ] {
+            let config = RealtimeConfig::azure(
+                "wss://resource.example.invalid/openai/v1/realtime",
+                "explicit-deployment",
+                credential,
+            )
+            .unwrap();
+            assert!(AzureRealtimeApp::new(
+                config,
+                pipecat_services::Context::default(),
+                vec![],
+                Arc::new(pipecat_core::IdentityProcessor),
+            )
+            .is_ok());
         }
     }
 }

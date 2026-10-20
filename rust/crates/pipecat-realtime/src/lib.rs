@@ -1,7 +1,9 @@
-//! Native OpenAI GA Realtime WebSocket sessions and frame processing.
+//! Native OpenAI and explicit Azure OpenAI GA Realtime sessions and processing.
 //!
 //! The protocol follows the repository's OpenAI service: nested audio settings,
-//! `response.output_audio.*` events, and bearer authentication without a beta header.
+//! `response.output_audio.*` events, without a beta header. Azure's GA v1 profile
+//! selects either an API key or caller-supplied Entra bearer credential while
+//! reusing the same socket actor and frame processor.
 mod client;
 mod context;
 mod processor;

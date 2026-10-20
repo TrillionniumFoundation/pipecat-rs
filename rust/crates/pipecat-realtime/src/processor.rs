@@ -72,6 +72,9 @@ pub struct OpenAiRealtimeProcessor {
     progress_output: Mutex<Option<ProcessorContext>>,
     selected_session: Mutex<Option<Arc<tokio::sync::Mutex<RealtimeSession>>>>,
     selected_join_observer: Mutex<Option<Arc<AtomicBool>>>,
+    final_tool_terminal: Arc<AtomicBool>,
+    final_tool_draining: AtomicBool,
+    final_tool_result: Arc<Mutex<Option<Result<(), ProcessorError>>>>,
 }
 impl OpenAiRealtimeProcessor {
     pub fn new(mut client: RealtimeClient) -> Result<Self, RealtimeError> {
@@ -132,7 +135,83 @@ impl OpenAiRealtimeProcessor {
             progress_output: Mutex::new(None),
             selected_session: Mutex::new(None),
             selected_join_observer: Mutex::new(None),
+            final_tool_terminal: Arc::new(AtomicBool::new(false)),
+            final_tool_draining: AtomicBool::new(false),
+            final_tool_result: Arc::new(Mutex::new(None)),
         })
+    }
+    /// Opt in to an application-owned final-tool End gate placed immediately
+    /// before this provider. Its wait must not block the downstream executor's
+    /// upstream native receipts, which terminate at this provider.
+    ///
+    /// End drains already announced tools without starting a new response.
+    /// Newly announced callbacks after Finish and unexpected provider EOF fail
+    /// closed. The default OpenAI and selected-progress lifecycles are unchanged.
+    pub fn with_final_tool_app(mut self) -> Result<Self, RealtimeError> {
+        if self.progress_route.is_some() {
+            return Err(RealtimeError::Invalid(
+                "final-tool application mode cannot use a selected-progress route",
+            ));
+        }
+        self.client.final_tool_app = true;
+        Ok(self)
+    }
+    /// Drain the real socket actor for the application's intentional End.
+    /// This must run in a gate before the provider, not in the same lane that
+    /// delivers its native tool receipts. Cancel uses the independent system
+    /// lane and cleanup retains the actual actor owner if this wait is aborted.
+    pub async fn drain_final_tools(&self) -> Result<(), ProcessorError> {
+        if !self.client.final_tool_app {
+            return Err(ProcessorError::fatal(
+                "final-tool drain requires explicit application mode",
+            ));
+        }
+        let limits = &self.client.config().limits;
+        let budget = limits
+            .response_timeout
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(limits.operation_timeout))
+            .and_then(|value| value.checked_add(limits.close_timeout))
+            .ok_or_else(|| ProcessorError::fatal("final-tool drain deadline overflow"))?;
+        let sender = self.sender()?;
+        self.final_tool_terminal.store(true, Ordering::Release);
+        let first = !self.final_tool_draining.swap(true, Ordering::AcqRel);
+        let drain = async {
+            if first {
+                if let Err(error) = sender.finish().await {
+                    publish_final_tool_result(
+                        &self.final_tool_result,
+                        Err(ProcessorError::fatal(error.to_string())),
+                    );
+                    sender.close();
+                }
+            }
+            // The receive owner holds this same mutex until its final result
+            // is published. A joined-observer bit alone is not enough.
+            let joined = self.join_selected_session().await;
+            let received = self
+                .final_tool_result
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clone()
+                .unwrap_or_else(|| {
+                    Err(ProcessorError::fatal(
+                        "final-tool receive owner ended without a terminal result",
+                    ))
+                });
+            with_cleanup_result(received, joined, "provider cleanup")
+        };
+        match tokio::time::timeout(budget, drain).await {
+            Ok(result) => result,
+            Err(_) => {
+                sender.close();
+                let error = ProcessorError::fatal("final-tool drain timed out");
+                publish_final_tool_result(&self.final_tool_result, Err(error.clone()));
+                // Returning fatal lets core abort a blocked receive wrapper,
+                // then cleanup reclaims the still-published actual actor.
+                Err(error)
+            }
+        }
     }
     /// Opt in to one actual same-runtime reporting composition. Role/configuration
     /// validation happens before the selected Start opens its provider socket.
@@ -474,7 +553,13 @@ impl OpenAiRealtimeProcessor {
             }
             Some(alternatives)
         };
+        let draining =
+            self.client.final_tool_app && self.final_tool_draining.load(Ordering::Acquire);
+        if draining {
+            next.continuation_owed = None;
+        }
         let run = run
+            && !draining
             && selected_permission.as_ref().is_none_or(|p| p.is_allowed())
             && selected_alternatives.as_ref().is_none_or(|v| !v.is_empty());
         let permission_revision = if reasons.is_empty() {
@@ -543,6 +628,21 @@ impl OpenAiRealtimeProcessor {
                     next.continuation_owed = None;
                 }
             }
+        }
+        if draining && continuation {
+            // The final native receipt may already have made the actor fully
+            // settled. Keep the validated paired history/cause below, but a
+            // late assistant continuation cannot update a closed session or
+            // reopen inference. Never silently accept a new provider item.
+            if actions
+                .iter()
+                .any(|action| matches!(action, Action::CreateItem { .. }))
+            {
+                return Err(ProcessorError::fatal(
+                    "final-tool drain cannot import new provider history",
+                ));
+            }
+            actions.clear();
         }
         if !actions.is_empty() {
             if let Some(route) = &self.progress_route {
@@ -633,7 +733,10 @@ impl OpenAiRealtimeProcessor {
         if let Some(action) = action {
             self.enqueue(action)?;
         }
-        let reevaluate = if fresh && !next.has_open_calls() {
+        let reevaluate = if fresh
+            && !next.has_open_calls()
+            && !(self.client.final_tool_app && self.final_tool_draining.load(Ordering::Acquire))
+        {
             next.continuation_owed.as_mut().and_then(|held| {
                 if held.reevaluation_queued || !held.fence.is_current() {
                     return None;
@@ -692,27 +795,34 @@ impl OpenAiRealtimeProcessor {
         let sender = session.sender();
         let joined = session.join_observer();
         let session = Arc::new(tokio::sync::Mutex::new(session));
-        if self.progress_route.is_some() {
-            // Publish the recovery owner before any further await, including an
-            // error shutdown or one-shot handoff. Cancel may abort this Start.
-            *self
-                .selected_session
-                .lock()
-                .unwrap_or_else(|error| error.into_inner()) = Some(session.clone());
-            *self
-                .selected_join_observer
-                .lock()
-                .unwrap_or_else(|error| error.into_inner()) = Some(joined);
-        }
+        // Publish the recovery owner for every profile before any further await,
+        // including an error shutdown or one-shot handoff. Cancel may abort
+        // ordinary paired setup just as it can abort selected-route Start.
+        *self
+            .selected_session
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(session.clone());
+        *self
+            .selected_join_observer
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(joined);
         if self
             .progress_route
             .as_ref()
             .is_some_and(NativeToolProgressRoute::is_closed)
         {
-            let _ = session.lock().await.shutdown().await;
-            return Err(ProcessorError::fatal(
-                "selected route closed during provider connection",
-            ));
+            return with_cleanup_result(
+                Err(ProcessorError::fatal(
+                    "selected route closed during provider connection",
+                )),
+                session
+                    .lock()
+                    .await
+                    .shutdown()
+                    .await
+                    .map_err(processor_error),
+                "provider cleanup",
+            );
         }
         let prepare = (|| {
             *self
@@ -731,8 +841,16 @@ impl OpenAiRealtimeProcessor {
             Ok::<_, ProcessorError>(())
         })();
         if let Err(error) = prepare {
-            let _ = session.lock().await.shutdown().await;
-            return Err(error);
+            return with_cleanup_result(
+                Err(error),
+                session
+                    .lock()
+                    .await
+                    .shutdown()
+                    .await
+                    .map_err(processor_error),
+                "provider cleanup",
+            );
         }
         let user_id = self.user_id.clone();
         let context = self.context.clone();
@@ -741,6 +859,10 @@ impl OpenAiRealtimeProcessor {
         let ready = self.receive_ready.clone();
         let enable_usage_metrics = config.enable_usage_metrics;
         let progress_route = self.progress_route.clone();
+        let service_name = self.client.config().service_name();
+        let final_tool_app = self.client.final_tool_app;
+        let final_tool_terminal = self.final_tool_terminal.clone();
+        let final_tool_result = self.final_tool_result.clone();
         let (handoff, receive) =
             tokio::sync::oneshot::channel::<Arc<tokio::sync::Mutex<RealtimeSession>>>();
         let (owned, ownership) = tokio::sync::oneshot::channel::<()>();
@@ -751,6 +873,7 @@ impl OpenAiRealtimeProcessor {
             let closed = wait_progress_route_closed(progress_route.as_ref());
             tokio::pin!(closed);
             let mut mapper = RealtimeFrameMapper::new(user_id);
+            mapper.service_name = service_name;
             let mut generation = sender.generation();
             let result = async {
                 tokio::select! {
@@ -771,6 +894,11 @@ impl OpenAiRealtimeProcessor {
                             route.state(), NativeToolProgressRouteState::Open | NativeToolProgressRouteState::Draining
                         )) {
                             return Err(ProcessorError::fatal("selected provider ended before route shutdown"));
+                        }
+                        if final_tool_app && !final_tool_terminal.load(Ordering::Acquire) {
+                            return Err(ProcessorError::fatal(
+                                "final-tool provider ended before intentional shutdown",
+                            ));
                         }
                         break;
                     };
@@ -877,6 +1005,9 @@ impl OpenAiRealtimeProcessor {
                             }
                         }
                         if let FrameData::Error(error) = frame.data {
+                            if final_tool_app {
+                                return Err(ProcessorError::fatal(error.error));
+                            }
                             output.push_error(error).await?;
                             continue;
                         }
@@ -916,8 +1047,14 @@ impl OpenAiRealtimeProcessor {
             // Join first, then release the recoverable owner before route
             // revocation or reporting a fatal selected transport failure.
             let shutdown = session.shutdown().await.map_err(processor_error);
+            let mut result = with_cleanup_result(result, shutdown, "provider cleanup");
+            if final_tool_app {
+                if let Err(error) = &mut result {
+                    error.fatal = true;
+                }
+                publish_final_tool_result(&final_tool_result, result.clone());
+            }
             drop(session);
-            let result = result.and(shutdown);
             if let Some(route) = &progress_route {
                 if let Err(error) = result {
                     route.close(NativeToolProgressFailure::ProviderRejected);
@@ -930,10 +1067,18 @@ impl OpenAiRealtimeProcessor {
         match task {
             Ok(_) => {
                 if let Err(session) = handoff.send(session) {
-                    let _ = session.lock().await.shutdown().await;
-                    return Err(ProcessorError::fatal(
-                        "realtime receive owner closed before handoff",
-                    ));
+                    return with_cleanup_result(
+                        Err(ProcessorError::fatal(
+                            "realtime receive owner closed before handoff",
+                        )),
+                        session
+                            .lock()
+                            .await
+                            .shutdown()
+                            .await
+                            .map_err(processor_error),
+                        "provider cleanup",
+                    );
                 }
                 // Ensure graceful End cannot acquire the session before its
                 // receive owner and turn ordered finish into an early close.
@@ -941,21 +1086,31 @@ impl OpenAiRealtimeProcessor {
                     ProcessorError::fatal("realtime receive owner ended before startup handoff")
                 })
             }
-            Err(error) => {
-                let _ = session.lock().await.shutdown().await;
-                Err(error)
-            }
+            Err(error) => with_cleanup_result(
+                Err(error),
+                session
+                    .lock()
+                    .await
+                    .shutdown()
+                    .await
+                    .map_err(processor_error),
+                "provider cleanup",
+            ),
         }
     }
-    /// Whether the selected connection's actual socket-actor JoinHandle was
+    /// Whether this connection's actual socket-actor JoinHandle was
     /// awaited. False before connection. True also covers a forced abort followed
     /// by its actual join; it does not claim a clean close or remote acceptance.
-    pub fn selected_session_joined(&self) -> bool {
+    pub fn session_joined(&self) -> bool {
         self.selected_join_observer
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .as_ref()
             .is_some_and(|joined| joined.load(Ordering::Acquire))
+    }
+    /// Compatibility alias for selected-progress users.
+    pub fn selected_session_joined(&self) -> bool {
+        self.session_joined()
     }
     async fn join_selected_session(&self) -> Result<(), ProcessorError> {
         let owner = self
@@ -976,6 +1131,9 @@ impl OpenAiRealtimeProcessor {
         result
     }
     fn close(&self) -> Result<(), ProcessorError> {
+        if self.client.final_tool_app {
+            self.final_tool_terminal.store(true, Ordering::Release);
+        }
         self.progress_output
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -1066,7 +1224,7 @@ fn selected_receive_close_result(
 #[async_trait]
 impl FrameProcessor for OpenAiRealtimeProcessor {
     fn name(&self) -> &str {
-        "OpenAiRealtimeService"
+        self.client.config().service_name()
     }
     async fn setup(
         &self,
@@ -1076,6 +1234,11 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         if self.started.swap(true, Ordering::AcqRel) {
             return Err(ProcessorError::new(
                 "realtime processors are single-session; construct a new processor",
+            ));
+        }
+        if self.client.final_tool_app && self.progress_route.is_some() {
+            return Err(ProcessorError::fatal(
+                "final-tool application mode cannot use a selected-progress route",
             ));
         }
         if config.audio_in_sample_rate != 24_000 || config.audio_out_sample_rate != 24_000 {
@@ -1580,6 +1743,11 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
         self.video_closed.store(true, Ordering::SeqCst);
+        if self.client.final_tool_app {
+            let encoded = self.video.finish().await.map_err(processor_error);
+            let drained = self.drain_final_tools().await;
+            return with_cleanup_result(drained, encoded, "encoder cleanup");
+        }
         let graceful = self
             .progress_route
             .as_ref()
@@ -1606,7 +1774,11 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         // Stop skips cleanup. Even encoding/finish errors must not bypass the
         // actual inner actor join; core subsequently joins the receive wrapper.
         let joined = self.join_selected_session().await;
-        finished.and(encoded).and(joined)
+        with_cleanup_result(
+            with_cleanup_result(finished, encoded, "encoder cleanup"),
+            joined,
+            "provider cleanup",
+        )
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
         let closed = self.close();
@@ -1614,7 +1786,11 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         // Cancel/Failed abort the receive task before cleanup. Its async mutex
         // guard drops, while this processor still owns the recoverable session.
         let joined = self.join_selected_session().await;
-        closed.and(encoded).and(joined)
+        with_cleanup_result(
+            with_cleanup_result(closed, encoded, "encoder cleanup"),
+            joined,
+            "provider cleanup",
+        )
     }
 }
 
@@ -1674,11 +1850,21 @@ pub(crate) fn project_timeout(frame: &mut Frame) -> Result<(), ProcessorError> {
 }
 /// Deterministic GA event-to-frame mapping, including split PCM samples and one
 /// TTS lifecycle pair per response even when it contains several audio items.
-#[derive(Default)]
 pub struct RealtimeFrameMapper {
     user_id: String,
+    service_name: &'static str,
     speaking: Option<String>,
     partial_samples: HashMap<(String, u32), u8>,
+}
+impl Default for RealtimeFrameMapper {
+    fn default() -> Self {
+        Self {
+            user_id: String::new(),
+            service_name: "OpenAiRealtimeService",
+            speaking: None,
+            partial_samples: HashMap::new(),
+        }
+    }
 }
 impl RealtimeFrameMapper {
     pub fn new(user_id: impl Into<String>) -> Self {
@@ -1818,7 +2004,7 @@ impl RealtimeFrameMapper {
                 }
                 if let Some(usage) = &response.usage {
                     frames.push(Frame::new(FrameData::Metrics(vec![Metric::LlmUsage {
-                        processor: "OpenAiRealtimeService".into(),
+                        processor: self.service_name.into(),
                         prompt_tokens: usage.input_tokens,
                         completion_tokens: usage.output_tokens,
                         total_tokens: usage.total_tokens,
@@ -1903,6 +2089,31 @@ fn processor_error(error: RealtimeError) -> ProcessorError {
         }
         _ => ErrorCategory::Unknown,
     })
+}
+fn with_cleanup_result(
+    primary: Result<(), ProcessorError>,
+    cleanup: Result<(), ProcessorError>,
+    label: &'static str,
+) -> Result<(), ProcessorError> {
+    match (primary, cleanup) {
+        (Err(mut primary), Err(cleanup)) => {
+            primary.message = format!("{}; {label}: {}", primary.message, cleanup.message);
+            primary.fatal |= cleanup.fatal;
+            Err(primary)
+        }
+        (Err(error), _) | (Ok(()), Err(error)) => Err(error),
+        (Ok(()), Ok(())) => Ok(()),
+    }
+}
+fn publish_final_tool_result(
+    target: &Mutex<Option<Result<(), ProcessorError>>>,
+    result: Result<(), ProcessorError>,
+) {
+    let mut target = target.lock().unwrap_or_else(|error| error.into_inner());
+    *target = Some(match target.take() {
+        Some(Err(primary)) => with_cleanup_result(Err(primary), result, "receive completion"),
+        _ => result,
+    });
 }
 
 #[cfg(test)]
@@ -2143,5 +2354,25 @@ mod camera_ownership_tests {
     #[tokio::test]
     async fn camera_cancel_waits_for_system_encoding_then_closes_and_joins() {
         blocked_encoding_terminal(Terminal::Cancel).await;
+    }
+}
+
+#[cfg(test)]
+mod cleanup_error_tests {
+    use super::*;
+
+    #[test]
+    fn failed_primary_and_cleanup_are_both_preserved() {
+        let primary =
+            ProcessorError::new("primary rejected").with_category(ErrorCategory::InvalidRequest);
+        let cleanup = ProcessorError::fatal("close timed out");
+        let error =
+            with_cleanup_result(Err(primary), Err(cleanup), "provider cleanup").unwrap_err();
+        assert_eq!(
+            error.message,
+            "primary rejected; provider cleanup: close timed out"
+        );
+        assert_eq!(error.category, ErrorCategory::InvalidRequest);
+        assert!(error.fatal);
     }
 }
