@@ -1136,3 +1136,87 @@ async fn pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload() {
         );
     }
 }
+
+// The second STT response is held until after its PCM is processed. For the
+// fresh variant, observed history below verifies the first recognition was
+// published before the remote start; exact completion ordering is separately
+// tested with controlled session instants.
+async fn spoken_absence_pcm_case(fresh: Option<&str>) {
+    let fixture = Fixture::new(
+        scenario(json!([{"user":"play two segments", "expect":[
+            {"event":"response", "text_contains":"first phrase"},
+            {"event":"response", "absent":true, "within_ms":7000}
+        ]}])),
+        vec![start_speech()],
+        &["first phrase", "held second phrase"],
+        options(),
+    )
+    .await
+    .unwrap();
+    let work: Result<(), Error> = async {
+        fixture.http.gates[0].received().await?;
+        fixture.http.gates[0].release.notify_one();
+        fixture.http.gates[0].completed().await?;
+        // Let the real 600 ms speech-timeout aggregator publish the first
+        // turn before admitting another PCM segment. This pacing is not the
+        // exact-ordering proof: history assertions and unit gates supply it.
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        fixture.peer.send(vec![speech()]).await?;
+        fixture.http.gates[1].received().await?;
+        if let Some(kind) = fresh {
+            fixture.peer.send(vec![wire(kind, json!({}))]).await?;
+        }
+        fixture.http.gates[1].release.notify_one();
+        Ok(())
+    }
+    .await;
+    let (result, _) = fixture.finish(work.is_err()).await.checked();
+    work.unwrap();
+    assert_eq!(responses(&result), ["first phrase", "held second phrase"]);
+    assert!(result.turns[0].expectations[0].passed, "{result:?}");
+    if let Some(kind) = fresh {
+        assert!(!result.passed, "{result:?}");
+        assert_eq!(result.failures[0].kind, "unexpected_event");
+        assert!(result.failures[0].reason.contains("held second phrase"));
+        let response = result
+            .events_seen
+            .iter()
+            .position(|e| e["type"] == "response")
+            .unwrap();
+        let friendly = if kind == "bot-llm-started" {
+            "llm_started"
+        } else {
+            "bot_started_speaking"
+        };
+        let start = result
+            .events_seen
+            .iter()
+            .rposition(|e| e["type"] == friendly)
+            .unwrap();
+        assert!(
+            response < start,
+            "fresh start must be observed after first response: {result:?}"
+        );
+    } else {
+        assert!(result.passed, "{result:?}");
+        assert!(
+            result.turns[0].duration_ms >= 7000,
+            "continuation must not finish the absence window early"
+        );
+    }
+}
+
+#[tokio::test]
+async fn spoken_absence_held_pcm_continuation_keeps_original_deadline() {
+    spoken_absence_pcm_case(None).await;
+}
+
+#[tokio::test]
+async fn spoken_absence_held_pcm_new_llm_start_fails() {
+    spoken_absence_pcm_case(Some("bot-llm-started")).await;
+}
+
+#[tokio::test]
+async fn spoken_absence_held_pcm_new_remote_speaking_start_fails() {
+    spoken_absence_pcm_case(Some("bot-started-speaking")).await;
+}

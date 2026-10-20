@@ -65,6 +65,26 @@ after a fresh LLM start cannot be distinguished from new PCM without a remote
 identity protocol. A transcript is evidence of the received, locally segmented
 audio, not a guarantee of complete synthesis or playback.
 
+## Continuation-aware absence
+
+A spoken `response` with `absent: true` follows the pinned Python matcher:
+segments continuing a previously matched reply are consumed while the original
+absence deadline continues. A response fails absence only when the latest
+observed remote `llm_started` or `bot_started_speaking` event is strictly later
+than the last successful positive expectation's completion. Any positive event
+or complete function-call expectation advances that session-lifetime boundary;
+judge-backed checks advance it only after acceptance. Failed checks, timeouts,
+successful absence, turn resets and interruptions do not advance/reset it.
+
+These are local ingestion times, not remote timestamps, PCM start times or
+reply identities. Equality is continuation. With no observed remote start, even
+an initial response is ignored by this source-compatible absence rule: passing
+absence does not prove literal silence. Conversely, a newer start already
+observed can cause an older queued response to fail. Local VAD starts do not
+count. Ignored events remain in bounded history and judge conversation. The
+text-mode alias `llm_response` and all other absent event types still reject
+any matching event. Audio epochs and resource limits are unchanged.
+
 ## Bounds and ownership
 
 The session retains its existing capture admission bounds: 8 MiB and 4,096 chunks

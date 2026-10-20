@@ -197,6 +197,8 @@ pub struct EvalSession {
     socket: Option<WebSocketSession>,
     stream: EventStream,
     matcher: ExpectationMatcher,
+    // Session-lifetime completion boundary, including non-response positive checks.
+    last_positive_match_at: Option<Instant>,
     result: ScriptResult,
     next_id: u64,
     active_turn: i64,
@@ -284,6 +286,7 @@ impl EvalSession {
             scenario,
             url,
             stream: EventStream::new(options.event_limits.clone()),
+            last_positive_match_at: None,
             matcher: ExpectationMatcher::new(
                 options.event_limits.max_text_bytes,
                 options.event_limits.max_events,
@@ -1381,6 +1384,32 @@ impl EvalSession {
         expectation: Expectation,
         deadline: Instant,
     ) -> Result<(MatchOutcome, Vec<JudgeVerdict>), EvalError> {
+        let positive = !expectation.absent;
+        let result = self.match_expectation_inner(expectation, deadline).await?;
+        // Record completion, not event arrival or preliminary text acceptance:
+        // the inner matcher may await a judge, including for buffered calls.
+        if positive && matches!(result.0, MatchOutcome::Passed(_)) {
+            self.last_positive_match_at = Some(Instant::now());
+        }
+        Ok(result)
+    }
+    fn reply_began_after_last_match(&self) -> bool {
+        // Pinned Python consults global ingestion times at consumption. This is
+        // deliberately not a per-response identity or original PCM timestamp.
+        ["llm_started", "bot_started_speaking"]
+            .iter()
+            .filter_map(|kind| self.stream.latest_event_times.get(*kind))
+            .any(|start| {
+                self.last_positive_match_at
+                    .is_none_or(|matched| *start > matched)
+            })
+    }
+    async fn match_expectation_inner(
+        &mut self,
+        expectation: Expectation,
+        deadline: Instant,
+    ) -> Result<(MatchOutcome, Vec<JudgeVerdict>), EvalError> {
+        let spoken_absence = expectation.absent && expectation.event == "response";
         let criterion = expectation.eval.clone();
         let is_call = expectation.is_call();
         let mut judgments = Vec::new();
@@ -1460,6 +1489,14 @@ impl EvalSession {
                     continue;
                 }
                 self.record_event(&event)?;
+                if spoken_absence
+                    && event["type"] == "response"
+                    && !self.reply_began_after_last_match()
+                {
+                    // Consume continuation without changing the deadline or
+                    // removing its already charged diagnostic/history event.
+                    continue;
+                }
                 outcome = self.matcher.feed(&mut check, event)?;
                 continue;
             }
@@ -3814,3 +3851,7 @@ mod timeline_session_tests {
         ));
     }
 }
+
+#[cfg(all(test, feature = "bot-audio-transcription"))]
+#[path = "spoken_absence_tests.rs"]
+mod spoken_absence_tests;
