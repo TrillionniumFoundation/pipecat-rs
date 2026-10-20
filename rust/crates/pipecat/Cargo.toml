@@ -19,6 +19,7 @@ pipecat-gladia = { path = "../pipecat-gladia", optional = true }
 pipecat-gradium = { path = "../pipecat-gradium", optional = true }
 pipecat-moonshine = { path = "../pipecat-moonshine", optional = true }
 pipecat-assemblyai = { path = "../pipecat-assemblyai", optional = true }
+pipecat-aws-agentcore = { path = "../pipecat-aws-agentcore", optional = true }
 pipecat-aws-nova-sonic = { path = "../pipecat-aws-nova-sonic", optional = true }
 pipecat-aws-bedrock = { path = "../pipecat-aws-bedrock", optional = true }
 pipecat-aws-speech = { path = "../pipecat-aws-speech", optional = true }
@@ -84,6 +85,7 @@ gladia = ["dep:pipecat-gladia"]
 gradium = ["dep:pipecat-gradium"]
 moonshine = ["dep:pipecat-moonshine"]
 assemblyai = ["dep:pipecat-assemblyai"]
+aws-agentcore = ["dep:pipecat-aws-agentcore"]
 aws-nova-sonic = ["dep:pipecat-aws-nova-sonic"]
 aws-bedrock = ["dep:pipecat-aws-bedrock"]
 aws-speech = ["dep:pipecat-aws-speech"]

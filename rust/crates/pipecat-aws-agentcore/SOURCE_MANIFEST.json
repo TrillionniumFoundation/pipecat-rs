@@ -1,0 +1,13 @@
+{
+  "python_repository": "ProfHepta/pipecat",
+  "python_commit": "af9f9da9d7afddaa8811c0e0251b32566c980bdf",
+  "source_path": "src/pipecat/services/aws/agent_core.py",
+  "git_blob": "b1a1dacadbfe539978ea0bcc198dd329402fcef6",
+  "wire_reference": {
+    "repository": "boto/botocore",
+    "version": "1.43.109",
+    "commit": "22be6841647761fb4ae0f8bef6b1a55e882039f5",
+    "is_python_resolved_lock": false
+  },
+  "scope": "bounded native default-schema context-to-text application, not whole AgentCore parity"
+}

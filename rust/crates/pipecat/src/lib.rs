@@ -5,6 +5,8 @@ pub use pipecat_agent_workers as agent_workers;
 #[cfg(feature = "assemblyai")]
 pub use pipecat_assemblyai as assemblyai;
 pub use pipecat_audio as audio;
+#[cfg(feature = "aws-agentcore")]
+pub use pipecat_aws_agentcore as aws_agentcore;
 #[cfg(feature = "aws-bedrock")]
 pub use pipecat_aws_bedrock as aws_bedrock;
 #[cfg(feature = "aws-nova-sonic")]

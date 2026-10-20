@@ -271,6 +271,200 @@ pub fn signed_post_headers(
     Ok(headers)
 }
 
+/// Signs an ordinary JSON POST using its actual body hash and extra headers.
+///
+/// This is a distinct profile from both [`signed_post_headers`] (which adds a
+/// content SHA header) and [`signed_event_stream_post_headers`] (empty payload).
+/// It emits JSON content type, host, date, optional security token, all supplied
+/// extra headers, and authorization. No content SHA or framing header is added.
+///
+/// `canonical_uri` must exactly match the single-encoded wire path encoded once
+/// more for SigV4, preserving `/` separators. The wire path must use uppercase
+/// RFC3986 escapes for reserved/non-ASCII bytes; malformed or redundant escapes,
+/// encoded percent/query/fragment/backslash/control bytes, dot segments, repeated
+/// slashes, userinfo, queries, fragments, and non-HTTP URLs are rejected. A parsed
+/// URL cannot reveal normalization performed before this call: callers must
+/// separately validate their original route and regional/loopback endpoint policy.
+/// Signing is not endpoint authorization.
+///
+/// Body bytes are limited to 16 MiB, URLs to 8192 bytes, and extra headers to 16,
+/// with 128-byte names, 4096-byte values, and 8192 total name/value bytes. Names
+/// are case-insensitive; duplicates, signing/framing overrides and SDK-excluded
+/// transport headers are rejected. Values must be printable ASCII; spaces are
+/// trimmed and collapsed before both signing and emission. Extra values, tokens,
+/// and authorization are marked sensitive to prevent HeaderMap Debug disclosure.
+#[allow(clippy::too_many_arguments)]
+pub fn signed_body_post_headers(
+    url: &url::Url,
+    region: &str,
+    credentials: &AwsCredentials,
+    body: &[u8],
+    timestamp: &str,
+    service: &str,
+    canonical_uri: &str,
+    extra_headers: &[(&str, &str)],
+) -> Result<reqwest::header::HeaderMap, AwsError> {
+    region_validate_service(region, service)?;
+    date(timestamp)?;
+    if body.len() > 16 * 1024 * 1024 || extra_headers.len() > 16 || canonical_uri.len() > 3 * 8192 {
+        return Err(AwsError::TooLarge);
+    }
+    if body_post_canonical_uri(url)? != canonical_uri {
+        return Err(AwsError::Invalid("SigV4 canonical URI"));
+    }
+    let mut values = BTreeMap::from([
+        ("content-type".to_string(), "application/json".to_string()),
+        ("host".to_string(), host(url)),
+        ("x-amz-date".to_string(), timestamp.to_string()),
+    ]);
+    if let Some(token) = &credentials.session_token {
+        values.insert("x-amz-security-token".into(), token.clone());
+    }
+    let mut extra_bytes = 0usize;
+    for &(name, value) in extra_headers {
+        if name.len() > 128 || value.len() > 4096 {
+            return Err(AwsError::TooLarge);
+        }
+        extra_bytes += name.len() + value.len();
+        if extra_bytes > 8192 {
+            return Err(AwsError::TooLarge);
+        }
+        let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+            .map_err(|_| AwsError::Invalid("AWS signed header name"))?;
+        let name = name.as_str();
+        if matches!(
+            name,
+            "authorization"
+                | "content-type"
+                | "host"
+                | "date"
+                | "x-amz-date"
+                | "x-amz-content-sha256"
+                | "x-amz-security-token"
+                | "content-length"
+                | "connection"
+                | "expect"
+                | "keep-alive"
+                | "proxy-authenticate"
+                | "proxy-authorization"
+                | "te"
+                | "trailer"
+                | "transfer-encoding"
+                | "upgrade"
+                | "user-agent"
+                | "x-amzn-trace-id"
+        ) || values.contains_key(name)
+        {
+            return Err(AwsError::Invalid("AWS reserved or duplicate signed header"));
+        }
+        if !value.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+            return Err(AwsError::Invalid("AWS signed header value"));
+        }
+        let value = value
+            .split(' ')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if value.is_empty() {
+            return Err(AwsError::Invalid("AWS signed header value"));
+        }
+        values.insert(name.to_string(), value);
+    }
+    let names = values
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(";");
+    let header_text = values
+        .iter()
+        .map(|(key, value)| format!("{key}:{value}\n"))
+        .collect::<String>();
+    let canonical = format!(
+        "POST\n{canonical_uri}\n\n{header_text}\n{names}\n{}",
+        hash(body)
+    );
+    let (scope, signature) = signature(credentials, region, service, timestamp, &canonical)?;
+    values.insert(
+        "authorization".into(),
+        format!(
+            "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={names}, Signature={signature}",
+            credentials.access_key
+        ),
+    );
+    let mut headers = reqwest::header::HeaderMap::new();
+    for (key, value) in values {
+        let mut value = reqwest::header::HeaderValue::from_str(&value)
+            .map_err(|_| AwsError::Invalid("AWS signed header"))?;
+        if !matches!(key.as_str(), "content-type" | "host" | "x-amz-date") {
+            value.set_sensitive(true);
+        }
+        let key = reqwest::header::HeaderName::from_bytes(key.as_bytes())
+            .map_err(|_| AwsError::Invalid("AWS signed header name"))?;
+        headers.insert(key, value);
+    }
+    Ok(headers)
+}
+
+fn body_post_canonical_uri(url: &url::Url) -> Result<String, AwsError> {
+    if url.as_str().len() > 8192 {
+        return Err(AwsError::TooLarge);
+    }
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.path().starts_with('/')
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(AwsError::Invalid("SigV4 body POST URI"));
+    }
+    let unreserved =
+        |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~');
+    let mut decoded = Vec::with_capacity(url.path().len());
+    let mut bytes = url.path().bytes();
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let high = bytes.next().and_then(uppercase_hex_digit);
+            let low = bytes.next().and_then(uppercase_hex_digit);
+            let value = match (high, low) {
+                (Some(high), Some(low)) => high * 16 + low,
+                _ => return Err(AwsError::Invalid("SigV4 body POST URI escape")),
+            };
+            if unreserved(value)
+                || value.is_ascii_control()
+                || matches!(value, b'%' | b'?' | b'#' | b'\\')
+            {
+                return Err(AwsError::Invalid("SigV4 body POST URI escape"));
+            }
+            decoded.push(value);
+        } else if byte == b'/' || unreserved(byte) {
+            decoded.push(byte);
+        } else {
+            return Err(AwsError::Invalid("SigV4 body POST URI byte"));
+        }
+    }
+    let decoded = std::str::from_utf8(&decoded)
+        .map_err(|_| AwsError::Invalid("SigV4 body POST URI UTF-8"))?;
+    if decoded.contains("//") || decoded.split('/').any(|part| matches!(part, "." | "..")) {
+        return Err(AwsError::Invalid("SigV4 body POST URI segments"));
+    }
+    Ok(url
+        .path()
+        .split('/')
+        .map(encode_component)
+        .collect::<Vec<_>>()
+        .join("/"))
+}
+
+fn uppercase_hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 // 16-byte frame overhead + the binary signature (52 bytes) and timestamp
 // (15 bytes) headers. This is independent of the nested message's size.
 const SIGNED_EVENT_OVERHEAD: usize = 83;

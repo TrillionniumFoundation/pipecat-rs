@@ -3460,6 +3460,7 @@ dependencies = [
  "pipecat-agent-workers",
  "pipecat-assemblyai",
  "pipecat-audio",
+ "pipecat-aws-agentcore",
  "pipecat-aws-bedrock",
  "pipecat-aws-nova-sonic",
  "pipecat-aws-speech",
@@ -3555,6 +3556,32 @@ name = "pipecat-audio"
 version = "0.1.0"
 dependencies = [
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "pipecat-aws-agentcore"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "hmac 0.12.1",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "libc",
+ "pipecat-aws-common",
+ "pipecat-core",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "url",
+ "uuid",
+ "webpki-roots 1.0.9",
 ]
 
 [[package]]
