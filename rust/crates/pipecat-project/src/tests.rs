@@ -48,7 +48,14 @@ fn names_reject_traversal_injection_and_reserved_identifiers() {
 }
 #[test]
 fn unsupported_integrations_are_explicit_errors() {
-    for transport in ["daily", "livekit", "smallwebrtc", "twilio", "eval"] {
+    for transport in [
+        "daily",
+        "livekit",
+        "webrtc",
+        "SmallWebRTC",
+        "twilio",
+        "eval",
+    ] {
         let mut config = ProjectConfig::new("test-bot");
         config.transport = transport.into();
         assert!(config
@@ -712,4 +719,96 @@ fn eval_source_paths_reject_non_unicode_and_controls_before_writes() {
         assert!(ProjectPlan::new(config, temp.path(), &source).is_err());
         assert!(!temp.path().join("eval-starter").exists());
     }
+}
+
+#[test]
+fn smallwebrtc_plan_selects_real_runtime_client_and_shared_constructor() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut config = ProjectConfig::new("rtc-example");
+    config.transport = "smallwebrtc".into();
+    config.client = "rust-wasm".into();
+    config.eval = "text".into();
+    let plan = ProjectPlan::new(config, temp.path(), &source()).unwrap();
+    let text = |name: &str| std::str::from_utf8(&plan.files[name]).unwrap();
+    assert!(text("Cargo.toml").contains("features = [\"webrtc\"]"));
+    assert!(text("Cargo.toml").contains("default-run = \"rtc-example\""));
+    assert!(!text("Cargo.toml").contains("[patch.crates-io]"));
+    assert!(text("src/main.rs").contains("rtc_example::run()"));
+    assert!(text("src/lib.rs").contains("NativeRunner::new_with_webrtc(config, providers, webrtc)"));
+    assert!(text("src/lib.rs").contains("run_webrtc_from_env(create_runner)"));
+    assert!(plan.files.contains_key("src/bin/eval-bot.rs"));
+    let client: serde_json::Value = serde_json::from_str(text("client/web/config.json")).unwrap();
+    assert_eq!(client["transports"], serde_json::json!(["smallwebrtc"]));
+    assert_eq!(client["start_endpoint"], "/api/start");
+    assert!(text("README.md").contains("Normal `cargo run` enables SmallWebRTC"));
+    assert!(text("README.md").contains("ICE is host-only"));
+    assert!(!text("README.md").contains("SmallWebRTC server sessions, telephony"));
+    let saved: ProjectConfig = serde_json::from_str(text("pipecat-project.json")).unwrap();
+    assert_eq!(saved, plan.config);
+    assert!(!plan.target.exists());
+    assert_eq!(
+        supported_options()["transport"],
+        serde_json::json!(["websocket", "smallwebrtc"])
+    );
+}
+
+#[test]
+fn smallwebrtc_api_only_docs_and_websocket_default_do_not_substitute() {
+    let temp = tempfile::tempdir().unwrap();
+    let default = plan(&temp, "default-bot");
+    assert!(!default.files.contains_key("src/lib.rs"));
+    assert_eq!(
+        default.files["src/main.rs"],
+        include_bytes!("../templates/main.rs")
+    );
+    assert!(!std::str::from_utf8(&default.files["Cargo.toml"])
+        .unwrap()
+        .contains("features = [\"webrtc\"]"));
+    let mut config = ProjectConfig::new("rtc-bot");
+    config.transport = "smallwebrtc".into();
+    let rtc = ProjectPlan::new(config, temp.path(), &source()).unwrap();
+    let readme = std::str::from_utf8(&rtc.files["README.md"]).unwrap();
+    assert!(readme.contains(r#"{"transport":"smallwebrtc"}"#));
+    assert!(!readme.contains(r#"{"transport":"websocket"}"#));
+}
+
+#[test]
+fn smallwebrtc_requires_local_native_and_vendored_sources_before_writing() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("Cargo.toml"), "[workspace]").unwrap();
+    for name in ["pipecat-runner", "pipecat-webrtc"] {
+        let path = source.join("crates").join(name);
+        fs::create_dir_all(path.join("src")).unwrap();
+        fs::write(path.join("Cargo.toml"), "[package]").unwrap();
+        fs::write(path.join("src/lib.rs"), "").unwrap();
+    }
+    let mut config = ProjectConfig::new("rtc-bot");
+    config.transport = "smallwebrtc".into();
+    assert!(ProjectPlan::new(config.clone(), temp.path(), &source).is_err());
+    let vendor = source.join("vendor/webrtc-0.14.0");
+    fs::create_dir_all(vendor.join("src")).unwrap();
+    fs::write(vendor.join("Cargo.toml"), "[package]").unwrap();
+    assert!(ProjectPlan::new(config.clone(), temp.path(), &source).is_err());
+    fs::write(vendor.join("src/lib.rs"), "").unwrap();
+    assert!(ProjectPlan::new(config, temp.path(), &source).is_ok());
+    assert!(!temp.path().join("rtc-bot").exists());
+}
+
+#[test]
+fn generated_library_rejects_std_and_core_without_changing_websocket_names() {
+    for name in ["std", "core"] {
+        let mut config = ProjectConfig::new(name);
+        config.validate().unwrap();
+        config.transport = "smallwebrtc".into();
+        assert!(config
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("standard library"));
+    }
+    let mut config = ProjectConfig::new("alloc");
+    config.transport = "smallwebrtc".into();
+    config.validate().unwrap();
 }

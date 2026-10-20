@@ -30,10 +30,35 @@ from the environment.
 
 The optional `rust-wasm` client embeds an explicit source allowlist from
 `rust/client-templates/`: Cargo manifest/lock, build script, Rust source, and
-public HTML/CSS. Its generated browser config advertises only WebSocket and the
+public HTML/CSS. Its generated browser config advertises the selected transport and the
 same-origin `/api/start` endpoint. It never copies `.env`, output bundles, caches,
 private files, Python fixtures, or an arbitrary source directory. Run its build
 script using `bash client/build.sh` as described in the generated README.
+
+## SmallWebRTC cascade
+
+`--transport websocket` remains the default. Select `--transport smallwebrtc`
+for a native RTC application: Cargo enables the runner's `webrtc` feature and
+normal `cargo run` enables SmallWebRTC without an extra flag. The generated
+`src/lib.rs::create_runner` is shared with production startup and accepts explicit
+provider and RTC settings for native integration tests. The host serves a
+SmallWebRTC-first client config while retaining WebSocket as an explicit option;
+negotiation failures never silently switch transport. API-only projects document
+the same selection. `webrtc` is a runtime protocol alias, not a generator choice.
+
+The generated independent workspace preserves the audited vendored WebRTC path.
+The checkout must include `pipecat-webrtc` and `vendor/webrtc-0.14.0`; these paths
+are validated before output. Real Opus compilation needs a native C/CMake toolchain.
+ICE remains host-only, with no public STUN/TURN service. Realtime providers,
+additional cascade providers, video, and deployment are not generated.
+
+The ignored `native_webrtc` acceptance test builds the actual independent app,
+checks vendored resolution, and reuses the runner's encrypted RTC/RTVI/PCM and
+lifecycle fixtures through the generated constructor with loopback STT/LLM/TTS
+peers. A separate compiled-main smoke checks help, credential validation,
+SmallWebRTC-first runtime config, unused offer creation, graceful shutdown and
+listener release. It never connects main to real providers. These are native
+local tests, not browser, WAN, real-account or physical-playback qualification.
 
 ## Optional text-eval starter
 
@@ -41,7 +66,7 @@ script using `bash client/build.sh` as described in the generated README.
 works with either client selection and adds exactly `src/bin/eval-bot.rs`,
 `src/eval_app.rs`, `evals/starter_text.yaml`, `evals/bot.json` and
 `evals/native-manifest.yaml`, plus documented Cargo dependencies and instructions.
-The existing voice main remains unchanged and is still Cargo's default run target.
+The selected voice main remains Cargo's default run target.
 These embedded templates never include source from the checkout's examples tree.
 
 The editable text factory uses the existing native `EvalBotHost`, real streaming
@@ -87,7 +112,7 @@ process grace; slow teardown may be forced, so reaped alone does not imply succe
 | --- | --- | --- |
 | `cli/config_validator.py`, `scaffold.py` | Strict config, CLI precedence, defaults, dry-run, options | Native schema is smaller; unknown Python-only options error |
 | `cli/generators/project.py` | Validated deterministic file plan, safe creation, rollback | No in-place merge or overwrite |
-| `templates/server/bot_cascade.py.jinja2` | Native `pipecat_runner::run_from_env` entrypoint | Implemented WebSocket + Deepgram/OpenAI/Cartesia cascade only |
+| `templates/server/bot_cascade.py.jinja2` | Native runner entrypoint, with shared library construction for SmallWebRTC | WebSocket or SmallWebRTC + Deepgram/OpenAI/Cartesia cascade only |
 | `templates/server/pyproject.toml.jinja2` | Cargo manifest with real local dependency | Rust 1.99+ and local source checkout required |
 | `templates/server/env.example.jinja2` | Empty provider secrets and supported non-secret defaults | No automatic dotenv load; no secret discovery |
 | `templates/README.md.jinja2`, `gitignore.jinja2` | Native build/run/setup/limitations docs and private-file ignores | No false live-provider or physical-device acceptance claims |
@@ -120,3 +145,14 @@ drives it through the existing release manifest against an owned synthetic local
 HTTP/SSE model, checking two turns and actual native tool continuation. Neither
 contacts live AI providers or exercises microphone/speaker hardware. Source-only
 inspection or an ignored test's presence is not evidence that it ran successfully.
+
+The independent SmallWebRTC acceptance is intentionally expensive and serialized:
+
+```sh
+cargo test -p pipecat-project --test native_webrtc --locked --offline -j 1 -- --ignored --test-threads=1
+```
+
+It requires cached dependencies and a C/CMake toolchain, retains source/lock/log
+artifacts, and removes its independently owned target directory. Its synthetic
+HTTP assets are startup fixtures only, not a compiled WASM bundle. Run one build
+owner at a time and reserve space above its 2.25 GiB free-disk guard.

@@ -55,8 +55,13 @@ impl ProjectConfig {
 
     pub fn validate(&self) -> Result<(), ProjectError> {
         validate_name(&self.name)?;
-        if self.transport != "websocket" {
-            return Err(ProjectError::Configuration("only websocket has an integrated native scaffold; Daily, LiveKit, SmallWebRTC, and telephony are unsupported"));
+        if !matches!(self.transport.as_str(), "websocket" | "smallwebrtc") {
+            return Err(ProjectError::Configuration("only websocket and smallwebrtc have integrated native scaffolds; Daily, LiveKit, and telephony are unsupported"));
+        }
+        if self.transport == "smallwebrtc" && matches!(self.name.as_str(), "std" | "core") {
+            return Err(ProjectError::Configuration(
+                "name conflicts with the generated library and Rust standard library",
+            ));
         }
         if self.mode != "cascade" {
             return Err(ProjectError::Configuration(
@@ -206,7 +211,7 @@ pub fn validate_name(name: &str) -> Result<(), ProjectError> {
 /// Machine-readable capabilities; absent integrations must never be substituted.
 pub fn supported_options() -> serde_json::Value {
     serde_json::json!({
-        "transport": ["websocket"], "mode": ["cascade"],
+        "transport": ["websocket", "smallwebrtc"], "mode": ["cascade"],
         "stt": ["deepgram"], "llm": ["openai"], "tts": ["cartesia"],
         "client": ["none", "rust-wasm"], "deploy_to_cloud": [false],
         "eval": ["none", "text"],

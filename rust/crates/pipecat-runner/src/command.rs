@@ -8,9 +8,39 @@ const HELP: &str = "pipecat-browser-agent [--bind 127.0.0.1:7860] [--assets DIRE
 /// `--help` does not read credentials. This owns the HTTP host and all sessions
 /// until SIGINT, then joins their cleanup.
 pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
+    run(CommandDefaults::default()).await
+}
+
+#[derive(Default)]
+struct CommandDefaults {
+    webrtc: bool,
+    #[cfg(feature = "webrtc")]
+    factory: Option<WebRtcFactory>,
+}
+
+#[cfg(feature = "webrtc")]
+type WebRtcFactory = fn(
+    RunnerConfig,
+    crate::ProviderConfig,
+    crate::WebRtcRunnerConfig,
+) -> Result<NativeRunner, crate::RunnerError>;
+
+/// Start a SmallWebRTC application using its shared constructor. The selected
+/// transport is enabled without flags and is the browser default. The constructor
+/// receives explicit configuration, permitting credential-free local integration.
+#[cfg(feature = "webrtc")]
+pub async fn run_webrtc_from_env(factory: WebRtcFactory) -> Result<(), Box<dyn std::error::Error>> {
+    run(CommandDefaults {
+        webrtc: true,
+        factory: Some(factory),
+    })
+    .await
+}
+
+async fn run(defaults: CommandDefaults) -> Result<(), Box<dyn std::error::Error>> {
     let mut options = Options::default();
     let mut assets = None;
-    let mut webrtc = false;
+    let mut webrtc = defaults.webrtc;
     let mut text_input = false;
     let mut args = std::env::args().skip(1);
     let mut vad = None;
@@ -18,7 +48,11 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                print!("{HELP}");
+                if defaults.webrtc {
+                    print!("{}", HELP.replace("WebSocket is the default; --webrtc also enables native SmallWebRTC (requires the webrtc Cargo feature).", "This application enables SmallWebRTC by default; WebSocket remains available."));
+                } else {
+                    print!("{HELP}");
+                }
                 return Ok(());
             }
             "--bind" => options.bind = args.next().ok_or("--bind requires address")?.parse()?,
@@ -94,7 +128,7 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "webrtc")]
             {
                 if webrtc {
-                    NativeRunner::new_with_webrtc(
+                    defaults.factory.unwrap_or(NativeRunner::new_with_webrtc)(
                         runner_config,
                         *providers,
                         crate::WebRtcRunnerConfig::default(),
@@ -113,7 +147,9 @@ pub async fn run_from_env() -> Result<(), Box<dyn std::error::Error>> {
             NativeRunner::new_soniox(runner_config, *providers)?
         }
     });
-    let transports = if webrtc {
+    let transports = if defaults.webrtc {
+        vec!["smallwebrtc", "websocket"]
+    } else if webrtc {
         vec!["websocket", "smallwebrtc"]
     } else {
         vec!["websocket"]

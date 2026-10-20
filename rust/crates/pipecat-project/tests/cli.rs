@@ -129,3 +129,43 @@ fn generated_application_builds_and_runs_without_credentials() {
     assert!(String::from_utf8_lossy(&output.stdout).contains("Native HTTP /api/start"));
     assert!(project.join("Cargo.lock").exists());
 }
+
+#[test]
+fn smallwebrtc_cli_dry_run_generation_and_no_clobber() {
+    let temp = tempfile::tempdir().unwrap();
+    let args = [
+        "rtc-bot",
+        "--transport",
+        "smallwebrtc",
+        "--client",
+        "rust-wasm",
+    ];
+    let invoke = |dry: bool| {
+        let mut cmd = command();
+        cmd.args(args)
+            .arg("--parent")
+            .arg(temp.path())
+            .arg("--source-rust")
+            .arg(source());
+        if dry {
+            cmd.arg("--dry-run");
+        }
+        cmd.output().unwrap()
+    };
+    let dry = invoke(true);
+    assert!(
+        dry.status.success(),
+        "{}",
+        String::from_utf8_lossy(&dry.stderr)
+    );
+    let summary: serde_json::Value = serde_json::from_slice(&dry.stdout).unwrap();
+    assert_eq!(summary["config"]["transport"], "smallwebrtc");
+    assert!(!temp.path().join("rtc-bot").exists());
+    assert!(invoke(false).status.success());
+    assert!(!invoke(false).status.success());
+    let config: serde_json::Value = serde_json::from_slice(
+        &fs::read(temp.path().join("rtc-bot/client/web/config.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(config["transports"], serde_json::json!(["smallwebrtc"]));
+}

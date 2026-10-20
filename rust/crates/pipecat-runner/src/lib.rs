@@ -12,6 +12,8 @@ pub use soniox::{SonioxSessionTools, SonioxToolsFactory, SonioxVoiceConfig};
 #[cfg(feature = "whisper")]
 mod whisper;
 pub use command::run_from_env;
+#[cfg(feature = "webrtc")]
+pub use command::run_webrtc_from_env;
 #[cfg(feature = "whisper")]
 pub use whisper::{LocalWhisperConfig, WhisperSegmentation};
 mod processors;

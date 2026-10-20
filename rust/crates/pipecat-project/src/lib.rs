@@ -77,8 +77,27 @@ impl ProjectPlan {
         } else {
             (String::new(), String::new(), "", "")
         };
+        let webrtc = config.transport == "smallwebrtc";
+        let runner_features = if webrtc {
+            dependency_literal(&source_rust, "pipecat-webrtc")?;
+            for relative in [
+                "vendor/webrtc-0.14.0/Cargo.toml",
+                "vendor/webrtc-0.14.0/src/lib.rs",
+            ] {
+                let path = source_rust.join(relative).canonicalize()?;
+                if !path.is_file() || !path.starts_with(&source_rust) {
+                    return Err(ProjectError::Configuration(
+                        "vendored WebRTC source must remain inside the selected workspace",
+                    ));
+                }
+                checked_source_string(&path)?;
+            }
+            ", features = [\"webrtc\"]"
+        } else {
+            ""
+        };
         let cargo = format!(
-            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nrust-version = \"1.99\"\npublish = false\n{package_options}\n# Independent application, even when generated beneath another workspace.\n[workspace]\n\n{eval_binary}[dependencies]\npipecat-runner = {{ path = {} }}\ntokio = {{ version = \"1\", features = [\"rt-multi-thread\", \"macros\"{signal_feature}] }}\n{eval_dependencies}\n[profile.dev]\ndebug = 1\nincremental = false\n\n[lints.rust]\nunsafe_code = \"forbid\"\n",
+            "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\nrust-version = \"1.99\"\npublish = false\n{package_options}\n# Independent application, even when generated beneath another workspace.\n[workspace]\n\n{eval_binary}[dependencies]\npipecat-runner = {{ path = {}{runner_features} }}\ntokio = {{ version = \"1\", features = [\"rt-multi-thread\", \"macros\"{signal_feature}] }}\n{eval_dependencies}\n[profile.dev]\ndebug = 1\nincremental = false\n\n[lints.rust]\nunsafe_code = \"forbid\"\n",
             config.name, runner_literal
         );
         let mut files = BTreeMap::new();
@@ -87,6 +106,17 @@ impl ProjectPlan {
             "src/main.rs".into(),
             include_bytes!("../templates/main.rs").to_vec(),
         );
+        if webrtc {
+            files.insert(
+                "src/lib.rs".into(),
+                include_bytes!("../templates/webrtc_lib.rs").to_vec(),
+            );
+            let main = include_str!("../templates/main.rs").replace(
+                "pipecat_runner::run_from_env()",
+                &format!("{}::run()", config.name.replace('-', "_")),
+            );
+            files.insert("src/main.rs".into(), main.into_bytes());
+        }
         files.insert(
             ".env.example".into(),
             include_bytes!("../templates/env.example").to_vec(),
@@ -96,14 +126,33 @@ impl ProjectPlan {
             include_bytes!("../templates/gitignore").to_vec(),
         );
         let client_instructions = if config.client == "rust-wasm" {
-            include_client(&mut files, &config.name)?;
+            include_client(&mut files, &config.name, &config.transport)?;
             "The included `client/` is a standalone Rust/WASM browser application. Install\nthe WASM target and matching wasm-bindgen tool once, then build its public assets:\n\n```sh\nrustup target add wasm32-unknown-unknown\ncargo install wasm-bindgen-cli --version 0.2.129 --locked\nbash client/build.sh\ncargo run -- --assets client/dist\n```\n\nOpen the printed URL and choose Connect. The server serves the five public build\nassets only; it never serves `.env` or arbitrary project files."
         } else {
             "```sh\ncargo run\n```\n\nThis API-only scaffold has no browser assets. Its `/api/start` accepts a same-origin\nPOST with `{\"transport\":\"websocket\"}` from a compatible RTVI 2.2/protobuf client.\nTo serve the existing Rust browser bundle, build that bundle and pass\n`--assets /absolute/path/to/client/dist`; or generate a new project with\n`--client rust-wasm` for the complete client source. A bare static file server\ndoes not supply the native `/api/start` endpoint."
         };
+        let client_instructions =
+            client_instructions.replace("\"websocket\"", &format!("\"{}\"", config.transport));
         let mut readme = include_str!("../templates/README.md")
             .replace("{{name}}", &config.name)
-            .replace("{{client_instructions}}", client_instructions);
+            .replace("{{client_instructions}}", &client_instructions);
+        if webrtc {
+            readme = readme
+                .replace(
+                    "WebSocket/RTVI 2.2 protobuf audio",
+                    "SmallWebRTC encrypted audio + RTVI 2.2",
+                )
+                .replace("RTVI 2.2/protobuf client", "SmallWebRTC/RTVI 2.2 client")
+                .replace(
+                    "selected `websocket` transport using native RTVI/protobuf",
+                    "selected `smallwebrtc` transport using native encrypted RTC audio and RTVI",
+                )
+                .replace(
+                    "Daily, LiveKit, SmallWebRTC server sessions, telephony",
+                    "Daily, LiveKit, telephony",
+                );
+            readme.push_str(include_str!("../templates/webrtc_README.md"));
+        }
         if config.eval == "text" {
             include_eval(&mut files);
             readme.push_str(include_str!("../templates/eval/README.md"));
@@ -203,7 +252,11 @@ fn include_eval(files: &mut BTreeMap<String, Vec<u8>>) {
     files.insert("evals/native-manifest.yaml".into(), manifest.into_bytes());
 }
 
-fn include_client(files: &mut BTreeMap<String, Vec<u8>>, name: &str) -> Result<(), ProjectError> {
+fn include_client(
+    files: &mut BTreeMap<String, Vec<u8>>,
+    name: &str,
+    transport: &str,
+) -> Result<(), ProjectError> {
     // Only reviewed source files are embedded. Never recursively copy a working
     // checkout, .env files, cached builds, credentials, or downloaded artifacts.
     macro_rules! source {
@@ -225,7 +278,7 @@ fn include_client(files: &mut BTreeMap<String, Vec<u8>>, name: &str) -> Result<(
     source!("web/index.html");
     source!("web/style.css");
     let mut config = serde_json::to_vec_pretty(&serde_json::json!({
-        "project_name":name,"start_endpoint":"/api/start","transports":["websocket"]
+        "project_name":name,"start_endpoint":"/api/start","transports":[transport]
     }))
     .map_err(|_| ProjectError::Serialization)?;
     config.push(b'\n');
