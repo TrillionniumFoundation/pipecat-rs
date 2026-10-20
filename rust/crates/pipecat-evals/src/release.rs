@@ -229,6 +229,26 @@ impl ReleaseManifest {
         }
         Ok(manifest)
     }
+    /// Explicitly combine synthesized/recorded user input with locally
+    /// transcribed bot responses. Runtime settings and immutable source plans
+    /// are retained; all jobs are revalidated before native model preflight.
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    pub fn load_audio_to_audio(
+        path: impl AsRef<Path>,
+        speech_settings: CartesiaUserSpeechSettings,
+        transcription_settings: BotTranscriptionSettings,
+    ) -> Result<Self, EvalError> {
+        let mut manifest = Self::load_mode(
+            path.as_ref(),
+            UserInputMode::Speech(Arc::new(speech_settings)),
+            ResponseParseMode::AudioResponse,
+        )?;
+        let settings = Arc::new(transcription_settings);
+        for job in &mut manifest.jobs {
+            job.audio_response = Some(settings.clone());
+        }
+        Ok(manifest)
+    }
     fn load_mode(
         path: &Path,
         input_mode: UserInputMode,
@@ -389,6 +409,7 @@ impl ReleaseManifest {
                                 &clips,
                                 voice.is_some(),
                                 input.repeat,
+                                response_mode,
                             )?;
                             let frozen = Arc::<[u8]>::from(serde_json::to_vec(&scenario)?);
                             Ok(LoadedScenario {
@@ -466,17 +487,16 @@ impl ReleaseManifest {
                     if !is_speech {
                         if let Some(clips) = &recordings {
                             audio_budget.admit(&scenario, clips, input.repeat)?;
+                        } else {
+                            #[cfg(feature = "bot-audio-transcription")]
+                            if matches!(response_mode, ResponseParseMode::AudioResponse) {
+                                audio_budget.admit_scenario(
+                                    &scenario,
+                                    input.repeat,
+                                    "release audio response scenario bytes",
+                                )?;
+                            }
                         }
-                    }
-                    #[cfg(feature = "bot-audio-transcription")]
-                    if recordings.is_none()
-                        && matches!(response_mode, ResponseParseMode::AudioResponse)
-                    {
-                        audio_budget.admit_scenario(
-                            &scenario,
-                            input.repeat,
-                            "release audio response scenario bytes",
-                        )?;
                     }
                     if !pairs.insert((name.clone(), scenario.name.clone())) {
                         return Err(invalid("duplicate entry label/scenario pair"));
@@ -594,6 +614,7 @@ impl AudioBudget {
         clips: &[(usize, RecordedAudio)],
         has_voice: bool,
         repeat: usize,
+        response_mode: ResponseParseMode,
     ) -> Result<(), EvalError> {
         // Structural limits and bounded serialization precede validate(), which
         // otherwise allocates a JSON copy of a caller-mutated public scenario.
@@ -646,7 +667,13 @@ impl AudioBudget {
         }
         let bytes =
             bounded_serialized_size(scenario, (4 * 1024 * 1024 - self.scenario_bytes) / repeat)?;
-        scenario.validate()?;
+        match response_mode {
+            ResponseParseMode::Text => scenario.validate()?,
+            #[cfg(feature = "bot-audio-transcription")]
+            ResponseParseMode::AudioResponse => {
+                scenario.audio_response_validation_copy()?;
+            }
+        }
         let pcm = clips
             .iter()
             .try_fold(0usize, |sum, (_, clip)| {
@@ -748,6 +775,14 @@ impl ReleaseJob {
             return 16;
         }
         32
+    }
+    #[cfg(feature = "user-speech")]
+    fn response_mode(&self) -> ResponseParseMode {
+        #[cfg(feature = "bot-audio-transcription")]
+        if self.audio_response.is_some() {
+            return ResponseParseMode::AudioResponse;
+        }
+        ResponseParseMode::Text
     }
     fn validation_scenario(&self) -> Result<ScriptScenario, EvalError> {
         #[cfg(feature = "bot-audio-transcription")]
@@ -901,7 +936,13 @@ pub async fn run_release_with_budget(
     #[cfg(feature = "user-speech")]
     let has_speech = manifest.jobs.iter().any(|job| job.user_speech.is_some());
     #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
-    if has_speech && drain_loaders {
+    if has_speech
+        && drain_loaders
+        && manifest
+            .jobs
+            .iter()
+            .any(|job| job.user_speech.is_some() != job.audio_response.is_some())
+    {
         return Err(EvalError::Unsupported(
             "hosted user speech cannot combine with audio response jobs".into(),
         ));
@@ -920,6 +961,7 @@ pub async fn run_release_with_budget(
                 job.recordings.as_deref().unwrap_or_default(),
                 plan.voice.is_some(),
                 1,
+                job.response_mode(),
             )?;
             // Allocation is bounded by the just-validated remaining allowance.
             if serde_json::to_vec(&job.scenario)?.as_slice() != plan.scenario.as_ref() {
@@ -957,15 +999,27 @@ pub async fn run_release_with_budget(
         if !is_speech {
             if let Some(clips) = &job.recordings {
                 audio_budget.admit(&job.scenario, clips, 1)?;
+            } else {
+                #[cfg(feature = "bot-audio-transcription")]
+                if job.audio_response.is_some() {
+                    audio_budget.admit_scenario(
+                        &job.scenario,
+                        1,
+                        "release audio response scenario bytes",
+                    )?;
+                }
             }
         }
-        #[cfg(feature = "bot-audio-transcription")]
-        if job.recordings.is_none() && job.audio_response.is_some() {
-            audio_budget.admit_scenario(
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if let (Some(_), Some(settings)) = (&job.user_speech, &job.audio_response) {
+            settings.validate_audio_to_audio()?;
+            EvalSession::validate_audio_to_audio_plan(
                 &job.scenario,
-                1,
-                "release audio response scenario bytes",
+                &format!("ws://127.0.0.1:{}", job.port),
+                &session,
+                job.recordings.as_deref().unwrap_or_default(),
             )?;
+            continue;
         }
         let prepared = EvalSession::new(
             job.validation_scenario()?,
@@ -1538,6 +1592,719 @@ mod native_loader_tests {
             gate.assert_joined();
             controller_result.unwrap();
             assert!(!temp.marker().exists());
+        }
+    }
+    #[cfg(feature = "user-speech")]
+    mod joint {
+        use super::*;
+        use serde_json::json;
+
+        fn speech() -> CartesiaUserSpeechSettings {
+            let mut config = pipecat_speech::SpeechConfig::cartesia("synthetic-joint-plan-key");
+            config.base_url = "http://127.0.0.1:1".into();
+            CartesiaUserSpeechSettings::new(config, crate::UserSpeechCachePolicy::Disabled).unwrap()
+        }
+        fn counters() -> (BotTranscriptionSettings, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+            let preflights = Arc::new(AtomicUsize::new(0));
+            let attempts = Arc::new(AtomicUsize::new(0));
+            let preflight = preflights.clone();
+            let attempt = attempts.clone();
+            (
+                BotTranscriptionSettings::for_native_loader_test(
+                    move || {
+                        preflight.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    },
+                    move || {
+                        attempt.fetch_add(1, Ordering::SeqCst);
+                        Err(invalid("synthetic attempt model boundary"))
+                    },
+                ),
+                preflights,
+                attempts,
+            )
+        }
+        fn freeze(job: &mut ReleaseJob) {
+            job.user_speech = Some(Arc::new(HostedSpeechPlan {
+                settings: speech(),
+                voice: Some(CartesiaUserSpeechVoice::new("fixture-voice", None, None).unwrap()),
+                scenario: Arc::from(serde_json::to_vec(&job.scenario).unwrap()),
+            }));
+        }
+        fn manifest(temp: &Temp, settings: BotTranscriptionSettings) -> ReleaseManifest {
+            let mut manifest = temp.manifest(settings);
+            for job in &mut manifest.jobs {
+                job.recordings = Some(Vec::new());
+                freeze(job);
+            }
+            manifest
+        }
+        fn source() -> Value {
+            json!({"name":"joint source", "user":{"modality":"audio", "speech":{
+                "service":"cartesia", "voice":"fixture-voice"
+            }}, "turns":[
+                {"user":"first", "expect":[{"event":"response", "text_contains":"spoken"}]},
+                {"user":"second", "send_after":{"event":"response"}}
+            ]})
+        }
+        fn file(temp: &Temp, source: Value, repeat: usize) -> PathBuf {
+            let executable = ["/usr/bin/touch", "/bin/touch"]
+                .into_iter()
+                .find_map(|path| Path::new(path).canonicalize().ok())
+                .unwrap();
+            std::fs::write(
+                temp.0.join("source.json"),
+                serde_json::to_vec(&source).unwrap(),
+            )
+            .unwrap();
+            let path = temp.0.join("manifest.json");
+            std::fs::write(
+                &path,
+                serde_json::to_vec(&json!({
+                    "native_version":1,"concurrency":1,"repeat":repeat,
+                    "suite":[{"bot":executable,"scenarios":["source.json"]}]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            path
+        }
+        fn assert_zero(preflights: &AtomicUsize, attempts: &AtomicUsize, temp: &Temp) {
+            assert_eq!(preflights.load(Ordering::SeqCst), 0);
+            assert_eq!(attempts.load(Ordering::SeqCst), 0);
+            assert!(!temp.marker().exists());
+        }
+
+        #[test]
+        fn explicit_joint_loader_freezes_original_response_and_preserves_text_alias() {
+            let temp = Temp::new();
+            let (settings, preflights, attempts) = counters();
+            let path = file(&temp, source(), 2);
+            let loaded = ReleaseManifest::load_audio_to_audio(&path, speech(), settings).unwrap();
+            assert_eq!(loaded.jobs.len(), 2);
+            for job in &loaded.jobs {
+                assert_eq!(job.scenario.turns[0].expect[0].event, "response");
+                assert_eq!(
+                    job.scenario.turns[1]
+                        .send_after
+                        .as_ref()
+                        .unwrap()
+                        .event
+                        .as_deref(),
+                    Some("response")
+                );
+                assert_eq!(
+                    job.user_speech.as_ref().unwrap().scenario.as_ref(),
+                    serde_json::to_vec(&job.scenario).unwrap()
+                );
+            }
+            assert!(Arc::ptr_eq(
+                loaded.jobs[0].audio_response.as_ref().unwrap(),
+                loaded.jobs[1].audio_response.as_ref().unwrap()
+            ));
+            assert!(ReleaseManifest::load_user_speech(&path, speech()).is_err());
+            let mut legacy = source();
+            legacy["turns"][1]["send_after"]["event"] = "llm_response".into();
+            let path = file(&temp, legacy, 1);
+            let ordinary = ReleaseManifest::load_user_speech(path, speech()).unwrap();
+            assert_eq!(
+                ordinary.jobs[0].scenario.turns[0].expect[0].event,
+                "llm_response"
+            );
+            assert_zero(&preflights, &attempts, &temp);
+        }
+
+        #[test]
+        fn original_joint_scenario_and_logical_pcm_have_exact_exclusive_budgets() {
+            let temp = Temp::new();
+            let (settings, _, _) = counters();
+            let mut scenario = manifest(&temp, settings).jobs.remove(0).scenario;
+            scenario.turns.push(
+                serde_json::from_value(json!({"user":"second", "send_after":{"event":"response"}}))
+                    .unwrap(),
+            );
+            let original = serde_json::to_vec(&scenario).unwrap();
+            let validation = scenario.audio_response_validation_copy().unwrap();
+            assert!(serialized_size(&validation).unwrap() > original.len());
+            let mut bytes = AudioBudget {
+                scenario_bytes: 4 * 1024 * 1024 - original.len(),
+                ..Default::default()
+            };
+            bytes
+                .admit_speech(&scenario, &[], true, 1, ResponseParseMode::AudioResponse)
+                .unwrap();
+            assert_eq!(bytes.scenario_bytes, 4 * 1024 * 1024);
+            assert_eq!(serde_json::to_vec(&scenario).unwrap(), original);
+            assert!(bytes
+                .admit_speech(&scenario, &[], true, 1, ResponseParseMode::AudioResponse)
+                .is_err());
+            let mut references = AudioBudget::default();
+            references
+                .admit_speech(&scenario, &[], true, 64, ResponseParseMode::AudioResponse)
+                .unwrap();
+            assert_eq!(references.references, 128);
+            assert!(references
+                .admit_speech(&scenario, &[], true, 1, ResponseParseMode::AudioResponse)
+                .is_err());
+            let clips = vec![(0, RecordedAudio::from_pcm16(&vec![0; 1_920_000]).unwrap())];
+            scenario.turns.truncate(1);
+            let mut pcm = AudioBudget::default();
+            pcm.admit_speech(
+                &scenario,
+                &clips,
+                false,
+                8,
+                ResponseParseMode::AudioResponse,
+            )
+            .unwrap();
+            assert_eq!(pcm.pcm_bytes, crate::recorded_audio::MAX_TOTAL_BYTES);
+            assert_eq!(pcm.references, 8);
+            assert_eq!(pcm.scenario_bytes, 8 * serialized_size(&scenario).unwrap());
+            assert!(UserSpeechBudget::new(pcm.pcm_bytes).is_ok());
+            assert!(pcm
+                .admit(
+                    &scenario,
+                    &[(0, RecordedAudio::from_pcm16(&[0, 0]).unwrap())],
+                    1
+                )
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn joint_speech_without_recordings_is_not_double_charged_as_response_only() {
+            let temp = Temp::new();
+            let (settings, preflights, attempts) = counters();
+            let mut manifest = manifest(&temp, settings);
+            manifest.jobs.truncate(1);
+            let job = &mut manifest.jobs[0];
+            job.recordings = None;
+            job.scenario.context = vec![Map::from_iter([(
+                "content".into(),
+                Value::String("x".repeat(5 * 1024 * 1024 / 2)),
+            )])];
+            freeze(job);
+            let cancel = Cancellation::new();
+            cancel.cancel();
+            let result = run_release(
+                manifest,
+                SessionOptions::default(),
+                ProcessOptions::default(),
+                cancel,
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.runs[0].hosted.result.failures[0].kind, "cancelled");
+            assert_zero(&preflights, &attempts, &temp);
+        }
+
+        #[tokio::test]
+        async fn every_late_joint_source_identity_coverage_and_summary_failure_precedes_models() {
+            for mutation in 0..9 {
+                let temp = Temp::new();
+                let (settings, preflights, attempts) = counters();
+                let mut manifest = manifest(&temp, settings);
+                let last = manifest.jobs.last_mut().unwrap();
+                let mut max_bytes = MAX_BYTES;
+                match mutation {
+                    0 => last.scenario.turns[0].user = Some("changed reference".into()),
+                    1 => last.scenario.turns[0].expect[0].event = "llm_response".into(),
+                    2 => {
+                        last.scenario.context = vec![Map::from_iter([(
+                            "content".into(),
+                            Value::String("x".repeat(4 * 1024 * 1024)),
+                        )])]
+                    }
+                    3 => {
+                        last.scenario.turns[0].expect[0].event = "unsupported".into();
+                        freeze(last);
+                    }
+                    4 => {
+                        last.scenario.turns[0].expect[0].eval = Some("answers reference".into());
+                        freeze(last);
+                    }
+                    5 => last.port = 0,
+                    6 => last.attempt = 0,
+                    7 => {
+                        last.user_speech = Some(Arc::new(HostedSpeechPlan {
+                            settings: speech(),
+                            voice: None,
+                            scenario: Arc::from(serde_json::to_vec(&last.scenario).unwrap()),
+                        }));
+                    }
+                    8 => max_bytes = 1024,
+                    _ => unreachable!(),
+                }
+                let result = run_release_with_budget(
+                    manifest,
+                    SessionOptions::default(),
+                    ProcessOptions::default(),
+                    Cancellation::new(),
+                    max_bytes,
+                )
+                .await;
+                assert!(result.is_err(), "mutation {mutation}: {result:?}");
+                if mutation == 8 {
+                    assert!(matches!(
+                        result,
+                        Err(EvalError::Limit("release summary budget"))
+                    ));
+                }
+                assert_zero(&preflights, &attempts, &temp);
+            }
+        }
+
+        #[tokio::test]
+        async fn joint_finite_options_and_late_smart_turn_reject_before_any_native_entry() {
+            let expansions: [fn(&mut SessionOptions); 15] = [
+                |o| o.transport.queue_capacity += 1,
+                |o| o.transport.max_message_bytes += 1,
+                |o| o.max_wire_messages += 1,
+                |o| o.max_wire_bytes += 1,
+                |o| o.event_limits.max_events += 1,
+                |o| o.event_limits.max_event_bytes += 1,
+                |o| o.event_limits.max_text_bytes += 1,
+                |o| o.handshake_timeout += Duration::from_secs(1),
+                |o| o.default_timeout += Duration::from_secs(1),
+                |o| o.send_after_timeout += Duration::from_secs(1),
+                |o| o.bot_quiet_timeout += Duration::from_secs(1),
+                |o| o.max_duration += Duration::from_secs(1),
+                |o| o.transport.connect_timeout += Duration::from_secs(1),
+                |o| o.transport.write_timeout += Duration::from_secs(1),
+                |o| o.transport.close_timeout += Duration::from_secs(1),
+            ];
+            for expand in expansions {
+                let temp = Temp::new();
+                let (settings, preflights, attempts) = counters();
+                let mut options = SessionOptions::default();
+                expand(&mut options);
+                let result = run_release(
+                    manifest(&temp, settings),
+                    options,
+                    ProcessOptions::default(),
+                    Cancellation::new(),
+                )
+                .await;
+                assert!(
+                    matches!(result, Err(EvalError::Scenario(message)) if message == "audio-to-audio options exceed the finite profile")
+                );
+                assert_zero(&preflights, &attempts, &temp);
+            }
+            let temp = Temp::new();
+            let (settings, preflights, attempts) = counters();
+            let mut manifest = manifest(&temp, settings);
+            let (late, late_preflights, late_attempts) = counters();
+            manifest.jobs.last_mut().unwrap().audio_response =
+                Some(Arc::new(late.with_smart_turn_for_test()));
+            let result = run_release(
+                manifest,
+                SessionOptions::default(),
+                ProcessOptions::default(),
+                Cancellation::new(),
+            )
+            .await;
+            assert!(
+                matches!(result, Err(EvalError::Unsupported(message)) if message.contains("Smart Turn"))
+            );
+            assert_zero(&preflights, &attempts, &temp);
+            assert_zero(&late_preflights, &late_attempts, &temp);
+        }
+
+        #[tokio::test]
+        async fn joint_mixing_keeps_standalone_rejection_and_allows_plain_with_own_cap() {
+            for standalone in [false, true] {
+                let temp = Temp::new();
+                let (settings, preflights, attempts) = counters();
+                let mut manifest = manifest(&temp, settings);
+                let last = manifest.jobs.last_mut().unwrap();
+                if standalone {
+                    last.user_speech = None;
+                    last.recordings = None;
+                } else {
+                    last.audio_response = None;
+                    last.scenario.turns[0].expect[0].event = "llm_response".into();
+                    freeze(last);
+                }
+                assert!(matches!(
+                    run_release(
+                        manifest,
+                        SessionOptions::default(),
+                        ProcessOptions::default(),
+                        Cancellation::new()
+                    )
+                    .await,
+                    Err(EvalError::Unsupported(_))
+                ));
+                assert_zero(&preflights, &attempts, &temp);
+            }
+            for recorded in [false, true] {
+                let temp = Temp::new();
+                let (settings, preflights, attempts) = counters();
+                let mut manifest = manifest(&temp, settings);
+                manifest.concurrency = 16;
+                let last = manifest.jobs.last_mut().unwrap();
+                last.user_speech = None;
+                last.audio_response = None;
+                last.concurrency = 32;
+                last.scenario.turns[0].expect[0].event = "llm_response".into();
+                last.recordings =
+                    recorded.then(|| vec![(0, RecordedAudio::from_pcm16(&[0, 0]).unwrap())]);
+                let cancel = Cancellation::new();
+                cancel.cancel();
+                let result = run_release(
+                    manifest,
+                    SessionOptions::default(),
+                    ProcessOptions::default(),
+                    cancel,
+                )
+                .await
+                .unwrap();
+                assert_cancelled(&result, &temp);
+                assert_zero(&preflights, &attempts, &temp);
+            }
+        }
+
+        #[tokio::test]
+        async fn independent_joint_plans_preflight_distinct_settings_once_then_each_attempt() {
+            let temp = Temp::new();
+            let (settings, preflights, attempts) = counters();
+            let mut manifest = manifest(&temp, settings);
+            let (other, other_preflights, other_attempts) = counters();
+            manifest.jobs.last_mut().unwrap().audio_response = Some(Arc::new(other));
+            let result = run_release(
+                manifest,
+                SessionOptions::default(),
+                ProcessOptions::default(),
+                Cancellation::new(),
+            )
+            .await
+            .unwrap();
+            assert!(!result.passed);
+            assert_eq!(
+                result
+                    .runs
+                    .iter()
+                    .map(|run| run.attempt)
+                    .collect::<Vec<_>>(),
+                [1, 2, 3]
+            );
+            assert_eq!(preflights.load(Ordering::SeqCst), 1);
+            assert_eq!(other_preflights.load(Ordering::SeqCst), 1);
+            assert_eq!(attempts.load(Ordering::SeqCst), 2);
+            assert_eq!(other_attempts.load(Ordering::SeqCst), 1);
+            assert!(!temp.marker().exists());
+        }
+
+        // Only the compiled unit-test harness can select this synthetic child.
+        #[tokio::test]
+        async fn overflow_child() {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
+            let Some(directory) = std::env::var_os("PIPECAT_JOINT_OVERFLOW_DIRECTORY") else {
+                return;
+            };
+            let directory = PathBuf::from(directory);
+            let role = std::env::var("PIPECAT_JOINT_OVERFLOW_ROLE").unwrap();
+            let port: u16 = std::env::args().next_back().unwrap().parse().unwrap();
+            std::fs::write(
+                directory.join(format!("pid-{role}")),
+                std::process::id().to_string(),
+            )
+            .unwrap();
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
+                .await
+                .unwrap();
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = WebSocketSession::accept(
+                stream,
+                SessionConfig {
+                    close_timeout: Duration::from_millis(200),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            let mut emitted = false;
+            let mut cancelled = false;
+            let serving = async {
+                while let Some(packet) = socket.recv().await {
+                    let bytes = match packet {
+                        Packet::Text(text) => text.into_bytes(),
+                        Packet::Binary(bytes) => bytes.to_vec(),
+                    };
+                    let message: Value = serde_json::from_slice(&bytes).unwrap();
+                    if message["type"] == "client-ready" {
+                        socket
+                            .sender()
+                            .send(Packet::Text(
+                                json!({"label":"rtvi-ai", "type":"bot-ready", "data":{}})
+                                    .to_string(),
+                            ))
+                            .await
+                            .unwrap();
+                    } else if message["type"] == "client-message"
+                        && message["data"]["t"] == "eval-cancel"
+                    {
+                        cancelled = true;
+                    } else if message["type"] == "raw-audio" && !emitted {
+                        let pcm = STANDARD
+                            .decode(message["data"]["base64Audio"].as_str().unwrap())
+                            .unwrap();
+                        if pcm.iter().all(|byte| *byte == 0) {
+                            continue;
+                        }
+                        assert_eq!(&pcm[..2], &[7, 0]);
+                        assert!(pcm[2..].iter().all(|byte| *byte == 0));
+                        emitted = true;
+                        // Emit both pipes while the attempt is demonstrably
+                        // active. Cancellation may kill the child immediately
+                        // after socket cleanup; a normal child epilogue is not
+                        // part of the process owner's cleanup guarantee.
+                        use std::io::Write;
+                        writeln!(std::io::stdout().lock(), "duplex stdout active").unwrap();
+                        std::io::stdout().lock().flush().unwrap();
+                        writeln!(std::io::stderr().lock(), "duplex stderr active").unwrap();
+                        std::io::stderr().lock().flush().unwrap();
+                        let sender = socket.sender();
+                        sender
+                            .send(Packet::Text(
+                                json!({"label":"rtvi-ai", "type":"bot-llm-started", "data":{}})
+                                    .to_string(),
+                            ))
+                            .await
+                            .unwrap();
+                        if role == "0" {
+                            // The large result cannot exist before the other
+                            // attempt's real multipart STT request is held.
+                            while !directory.join("held-stt-entered").exists() {
+                                tokio::time::sleep(Duration::from_millis(2)).await;
+                            }
+                            sender.send(Packet::Text(json!({"label":"rtvi-ai", "type":"bot-llm-text", "data":{"text":format!("overflow-ready {}", "x".repeat(128 * 1024))}}).to_string())).await.unwrap();
+                        } else {
+                            let pcm = &include_bytes!(
+                                "../../pipecat-vad/tests/fixtures/smart_turn_speech.pcm16"
+                            )[..30_720];
+                            sender.send(Packet::Text(json!({"label":"rtvi-ai", "type":"eval-bot-audio", "data":{"audio":STANDARD.encode(pcm), "sampleRate":16000}}).to_string())).await.unwrap();
+                        }
+                        sender
+                            .send(Packet::Text(
+                                json!({"label":"rtvi-ai", "type":"bot-llm-stopped", "data":{}})
+                                    .to_string(),
+                            ))
+                            .await
+                            .unwrap();
+                    }
+                }
+            };
+            let served = tokio::time::timeout(Duration::from_secs(20), serving).await;
+            let joined = socket.cancel_and_join().await;
+            assert!(served.is_ok());
+            assert!(joined.is_ok());
+            assert!(emitted && cancelled);
+        }
+
+        #[tokio::test(flavor = "current_thread")]
+        async fn retention_overflow_drains_active_stt_and_child_pipes_before_queued_model_admission(
+        ) {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let temp = Temp::new();
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}/v1", listener.local_addr().unwrap());
+            let stop = Cancellation::new();
+            let server_stop = stop.clone();
+            let entered = Arc::new(AtomicBool::new(false));
+            let eof = Arc::new(AtomicBool::new(false));
+            let server_entered = entered.clone();
+            let server_eof = eof.clone();
+            let directory = temp.0.clone();
+            let mut server = tokio::spawn(async move {
+                let accepted = tokio::select! {
+                    _ = server_stop.cancelled() => return Ok::<_, std::io::Error>(()),
+                    accepted = listener.accept() => accepted?,
+                };
+                let (mut stream, _) = accepted;
+                let request = async {
+                    let mut request = Vec::new();
+                    let body_at = loop {
+                        let mut bytes = [0; 4096];
+                        let count = stream.read(&mut bytes).await?;
+                        if count == 0 || request.len() + count > 2 * 1024 * 1024 {
+                            return Err(std::io::Error::other(
+                                "bounded multipart request incomplete",
+                            ));
+                        }
+                        request.extend_from_slice(&bytes[..count]);
+                        if let Some(at) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n")
+                        {
+                            break at + 4;
+                        }
+                    };
+                    let header = String::from_utf8_lossy(&request[..body_at]).to_ascii_lowercase();
+                    let length: usize = header
+                        .lines()
+                        .find_map(|line| line.strip_prefix("content-length:"))
+                        .unwrap()
+                        .trim()
+                        .parse()
+                        .unwrap();
+                    while request.len() < body_at + length {
+                        let mut bytes = [0; 4096];
+                        let count = stream.read(&mut bytes).await?;
+                        if count == 0 || request.len() + count > 2 * 1024 * 1024 {
+                            return Err(std::io::Error::other("multipart body incomplete"));
+                        }
+                        request.extend_from_slice(&bytes[..count]);
+                    }
+                    assert!(header.contains("multipart/form-data; boundary="));
+                    assert!(header.contains("authorization: bearer synthetic-joint-owner-stt-key"));
+                    assert!(request[body_at..].windows(4).any(|bytes| bytes == b"RIFF"));
+                    server_entered.store(true, Ordering::SeqCst);
+                    std::fs::write(directory.join("held-stt-entered"), b"complete request")?;
+                    let mut byte = [0; 1];
+                    if stream.read(&mut byte).await? == 0 {
+                        server_eof.store(true, Ordering::SeqCst);
+                    }
+                    stream.shutdown().await?;
+                    Ok::<_, std::io::Error>(())
+                };
+                tokio::select! { result = request => result, _ = server_stop.cancelled() => Ok(()) }
+            });
+            let preflights = Arc::new(AtomicUsize::new(0));
+            let attempts = Arc::new(AtomicUsize::new(0));
+            let preflight_count = preflights.clone();
+            let attempt_count = attempts.clone();
+            let preflight_base = base.clone();
+            let settings = BotTranscriptionSettings::for_native_loader_test(
+                move || {
+                    preflight_count.fetch_add(1, Ordering::SeqCst);
+                    drop(crate::process::hosted_speech_attempt_tests::transcription(
+                        &preflight_base,
+                    ));
+                    Ok(())
+                },
+                move || {
+                    attempt_count.fetch_add(1, Ordering::SeqCst);
+                    Ok(crate::process::hosted_speech_attempt_tests::transcription(
+                        &base,
+                    ))
+                },
+            );
+            let mut manifest = manifest(&temp, settings);
+            manifest.concurrency = 2;
+            // Reserve distinct ephemeral ports only during fixture assembly;
+            // no parent listener survives into the direct-child launch.
+            let reservations = (0..3)
+                .map(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap())
+                .collect::<Vec<_>>();
+            for (index, job) in manifest.jobs.iter_mut().enumerate() {
+                job.name = format!("overflow role {index}");
+                job.concurrency = 1;
+                job.port = reservations[index].local_addr().unwrap().port();
+                job.bot = std::env::current_exe().unwrap();
+                job.command = NativeCommand {
+                    executable: job.bot.clone(),
+                    args: vec![
+                        "--exact".into(),
+                        "release::native_loader_tests::joint::overflow_child".into(),
+                        "--nocapture".into(),
+                        "--test-threads=1".into(),
+                        "--skip".into(),
+                        "{port}".into(),
+                    ],
+                    cwd: temp.0.clone(),
+                    env: BTreeMap::from([
+                        (
+                            "PIPECAT_JOINT_OVERFLOW_DIRECTORY".into(),
+                            temp.0.to_string_lossy().into_owned(),
+                        ),
+                        ("PIPECAT_JOINT_OVERFLOW_ROLE".into(), index.to_string()),
+                    ]),
+                };
+                job.recordings = Some(vec![(0, RecordedAudio::from_pcm16(&[7, 0]).unwrap())]);
+                job.scenario.turns[0].expect[0].within_ms = Some(10_000);
+                if index == 0 {
+                    job.scenario.turns[0].expect[0].event = "llm_response".into();
+                    job.scenario.turns[0].expect[0].text_contains = Some("overflow-ready".into());
+                }
+                freeze(job);
+            }
+            drop(reservations);
+            let cancel = Cancellation::new();
+            let mut run = Box::pin(run_release_with_budget(
+                manifest,
+                SessionOptions {
+                    default_timeout: Duration::from_secs(10),
+                    bot_quiet_timeout: Duration::from_secs(10),
+                    max_duration: Duration::from_secs(15),
+                    ..Default::default()
+                },
+                ProcessOptions {
+                    startup_timeout: Duration::from_secs(5),
+                    shutdown_grace: Duration::from_secs(1),
+                    output_drain_timeout: Duration::from_secs(2),
+                    ..Default::default()
+                },
+                cancel.clone(),
+                32 * 1024,
+            ));
+            let first = tokio::time::timeout(Duration::from_secs(20), &mut run).await;
+            let timed_out = first.is_err();
+            let result = match first {
+                Ok(result) => result,
+                Err(_) => {
+                    cancel.cancel();
+                    run.await
+                }
+            };
+            // Permit scheduling the peer EOF observer while leaving its fixture
+            // stop token untouched. A fixture-induced close cannot count here.
+            let peer = tokio::time::timeout(Duration::from_secs(2), &mut server).await;
+            let eof_before_fixture_stop = eof.load(Ordering::SeqCst);
+            stop.cancel();
+            let peer = match peer {
+                Ok(peer) => peer,
+                Err(_) => server.await,
+            };
+            assert!(!timed_out);
+            assert!(peer.unwrap().is_ok());
+            assert!(entered.load(Ordering::SeqCst));
+            assert!(eof_before_fixture_stop);
+            let result = result.unwrap();
+            assert!(!result.passed);
+            assert_eq!(
+                result.runs[0].hosted.result.failures[0].kind,
+                "limit_exceeded"
+            );
+            let active = &result.runs[1].hosted;
+            assert!(active
+                .result
+                .failures
+                .iter()
+                .any(|failure| failure.kind == "cancelled"));
+            assert!(active.process.reaped);
+            assert!(!active.process.output_incomplete);
+            assert!(active.process.stdout.contains("duplex stdout active"));
+            assert!(active.process.stderr.contains("duplex stderr active"));
+            assert_eq!(result.runs[2].hosted.result.failures[0].kind, "cancelled");
+            assert!(result.runs[2].hosted.process.pid.is_none());
+            assert!(!temp.0.join("pid-2").exists());
+            assert_eq!(preflights.load(Ordering::SeqCst), 1);
+            assert_eq!(attempts.load(Ordering::SeqCst), 2);
+            for role in [0, 1] {
+                let pid: i32 = std::fs::read_to_string(temp.0.join(format!("pid-{role}")))
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                // Release has already returned after its actual direct-child
+                // waits; verify neither completed PID remains waitable here.
+                assert_eq!(
+                    rustix::process::waitpid(
+                        Some(rustix::process::Pid::from_raw(pid).unwrap()),
+                        rustix::process::WaitOptions::NOHANG,
+                    )
+                    .unwrap_err(),
+                    rustix::io::Errno::CHILD,
+                );
+            }
         }
     }
 }

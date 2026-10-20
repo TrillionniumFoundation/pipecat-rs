@@ -1,5 +1,6 @@
 //! Real suite CLI -> per-attempt compiled child -> EvalBotHost -> full PCM -> assertions.
-//! Synthetic local provider only. This target never loads a model or paid service.
+//! Synthetic loopback providers only; no paid service. The combined-feature
+//! joint module loads the already-installed local Silero model; speech-only tests do not.
 #![cfg(unix)]
 #[path = "support/hosted_user_speech.rs"]
 mod fixture;
@@ -15,7 +16,7 @@ async fn user_speech_suite_bot() {
 }
 
 #[tokio::test]
-async fn suite_flag_errors_reject_before_child_provider_or_cache_work() {
+async fn suite_flag_or_missing_joint_configuration_rejects_before_child_provider_or_cache_work() {
     let b = Bundle::new();
     let provider = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let cache = b.cache();
@@ -36,6 +37,7 @@ async fn suite_flag_errors_reject_before_child_provider_or_cache_work() {
         vec!["--unknown"],
         vec!["--user-speech", "other.json"],
         vec!["--recorded-audio"],
+        // With both features, this is missing joint configuration, not an illegal flag pair.
         vec!["--bot-audio-response", "other.json"],
     ] {
         let mut args = base.clone();
@@ -65,7 +67,13 @@ async fn feature_disabled_suite_cli_rejects_before_runtime_or_credential_access(
     );
     // Neither runtime nor credential resolution may supersede the feature rejection.
     let runtime = b.put("runtime.json", b"this must never be parsed as runtime JSON");
-    let output = cli(&arguments(&manifest, &runtime), &b.0).await;
+    let config = b.put(
+        "stt-runtime.json",
+        b"this must never be parsed as transcription JSON",
+    );
+    let mut args = arguments(&manifest, &runtime);
+    args.extend(["--bot-audio-response".into(), config.display().to_string()]);
+    let output = cli(&args, &b.0).await;
     assert_exit(&output, 2);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("user-speech"));
@@ -1153,5 +1161,974 @@ mod enabled {
             assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists());
         }
         no_parent_tasks().await;
+    }
+}
+
+#[cfg(all(feature = "user-speech", not(feature = "bot-audio-transcription")))]
+#[tokio::test]
+async fn missing_transcription_feature_precedes_both_invalid_joint_runtime_files() {
+    let b = Bundle::new();
+    let provider = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let cache = b.cache();
+    b.json("one.json", &source("one", &["reference"]));
+    let manifest = b.json(
+        "manifest.json",
+        &manifest(vec![entry(&b, "one", "one.json", "unused")], 1, 1),
+    );
+    let speech = b.put("speech.json", b"invalid speech JSON must not be parsed");
+    let stt = b.put("stt.json", b"invalid transcription JSON must not be parsed");
+    let mut args = arguments(&manifest, &speech);
+    args.extend(["--bot-audio-response".into(), stt.display().to_string()]);
+    let output = cli(&args, &b.0).await;
+    assert_exit(&output, 2);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("bot-audio-transcription"));
+    assert!(output.stdout.is_empty());
+    assert!(b.markers("started-").is_empty());
+    assert_eq!(std::fs::read_dir(cache).unwrap().count(), 0);
+    assert_idle(&provider).await;
+}
+
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+#[path = "support/hosted_audio_to_audio.rs"]
+mod duplex_fixture;
+
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+#[tokio::test]
+async fn audio_to_audio_suite_bot() {
+    duplex_fixture::child().await;
+}
+
+#[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+mod joint {
+    use super::{
+        duplex_fixture as duplex,
+        fixture::{self, enabled as input, Bundle},
+    };
+    use duplex::{Http, Kind, Reply, LLM, REFERENCE, SPOKEN};
+    use pipecat_evals::{
+        release::{run_release_with_budget, ReleaseManifest, ReleaseResult},
+        BotTranscriptionSettings, Cancellation, CartesiaUserSpeechSettings, EvalError,
+        SessionOptions,
+    };
+    use serde_json::{json, Value};
+    use std::{
+        path::{Path, PathBuf},
+        sync::atomic::Ordering,
+        time::Duration,
+    };
+
+    async fn run_path(
+        path: &Path,
+        speech: CartesiaUserSpeechSettings,
+        stt: BotTranscriptionSettings,
+        options: SessionOptions,
+        cancel: Cancellation,
+    ) -> Result<ReleaseResult, EvalError> {
+        duplex::run(
+            ReleaseManifest::load_audio_to_audio(path, speech, stt)?,
+            options,
+            cancel,
+        )
+        .await
+    }
+    fn value(result: &ReleaseResult) -> Value {
+        serde_json::to_value(result).unwrap()
+    }
+    fn failures(result: &ReleaseResult) -> Vec<&str> {
+        result
+            .runs
+            .iter()
+            .flat_map(|run| {
+                run.hosted
+                    .result
+                    .failures
+                    .iter()
+                    .map(|failure| failure.kind.as_str())
+            })
+            .collect()
+    }
+    fn runtime_files(b: &Bundle, tts: &str, stt: &str, cache: Option<&Path>) -> (PathBuf, PathBuf) {
+        let mut runtime = fixture::runtime(tts, cache);
+        runtime["request_timeout_ms"] = 10000.into();
+        (
+            b.json("joint-speech-runtime.json", &runtime),
+            b.json("joint-stt-runtime.json", &duplex::stt_runtime(stt)),
+        )
+    }
+    fn release_tail_gates(b: &Bundle) {
+        for marker in b.markers("started-") {
+            let name = marker.file_name().unwrap().to_string_lossy();
+            b.put(&name.replace("started-", "release-"), b"go");
+        }
+    }
+
+    #[tokio::test]
+    async fn both_cli_flag_orders_run_joint_attempt_major_complete_pcm_and_spoken_send_after() {
+        for reverse in [false, true] {
+            let b = Bundle::new();
+            let speech = input::pcm(21);
+            let recording = input::pcm(41);
+            b.put("override.wav", input::wav(&recording));
+            let mut entries = vec![];
+            for (name, wait_delta) in [("slow", 1), ("fast", 0)] {
+                let mut scenario = duplex::source(name);
+                scenario["turns"] = json!([
+                    {"user":REFERENCE,"expect":[duplex::expectation("llm_response",LLM)]},
+                    {"user":"WAV reference never synthesized","audio":"override.wav","send_after":{"event":"response"},"expect":[duplex::expectation("response",SPOKEN)]}
+                ]);
+                b.json(&format!("{name}.json"), &scenario);
+                input::profile(
+                    &b,
+                    name,
+                    &[speech.clone(), recording.clone()],
+                    &format!("isolated {name}"),
+                    "normal",
+                    wait_delta,
+                );
+                entries.push(duplex::entry(&b, name, &format!("{name}.json"), name));
+            }
+            let spec = fixture::manifest(entries, 2, 2);
+            let base = spec["base_port"].as_u64().unwrap();
+            let manifest = b.json("manifest.json", &spec);
+            let tts = Http::start(Kind::Tts, vec![Reply::Pcm(speech.clone()); 4]).await;
+            let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN); 8]).await;
+            let (speech_runtime, stt_runtime) = runtime_files(&b, &tts.url, &stt.url, None);
+            let output = duplex::cli(
+                &duplex::arguments(&manifest, &speech_runtime, &stt_runtime, reverse),
+                &b.0,
+            )
+            .await;
+            let tts = tts.finish().await;
+            let stt = stt.finish().await;
+            let result = duplex::result(&output, 0);
+            tts.checked(4);
+            stt.checked(8);
+            assert_eq!(result["passed"], true);
+            let runs = result["runs"].as_array().unwrap();
+            assert_eq!(
+                runs.iter()
+                    .map(|r| (r["attempt"].as_u64().unwrap(), r["name"].as_str().unwrap()))
+                    .collect::<Vec<_>>(),
+                vec![(1, "slow"), (1, "fast"), (2, "slow"), (2, "fast")]
+            );
+            assert!(runs
+                .iter()
+                .all(|run| duplex::responses(run) == [SPOKEN, SPOKEN]));
+            input::assert_consumed(
+                &b,
+                &result,
+                &vec![vec![speech.clone(), recording.clone()]; 4],
+            );
+            assert!(tts.gates.iter().all(|gate| duplex::request_json(
+                &gate.request.lock().unwrap()
+            )["transcript"]
+                == REFERENCE));
+            let order = std::fs::read_to_string(b.0.join("completion-order"))
+                .unwrap()
+                .lines()
+                .map(|line| line.parse::<u64>().unwrap())
+                .collect::<Vec<_>>();
+            for offset in [0, 2] {
+                assert!(
+                    order.iter().position(|port| *port == base + offset + 1)
+                        < order.iter().position(|port| *port == base + offset)
+                );
+            }
+            assert_eq!(b.markers("started-").len(), 4);
+            assert!(b.markers("cache").is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn joint_cli_cannot_succeed_before_child_consumes_complete_user_pcm() {
+        let b = Bundle::new();
+        let bytes = input::pcm(61);
+        let path = duplex::one(&b, "tail", std::slice::from_ref(&bytes), "gated");
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN)]).await;
+        let (speech, transcription) = runtime_files(&b, &tts.url, &stt.url, None);
+        let args = duplex::arguments(&path, &speech, &transcription, false);
+        let cwd = b.0.clone();
+        let task = tokio::spawn(async move { duplex::cli(&args, &cwd).await });
+        let tail = duplex::observed(|| !b.markers("tail-1-").is_empty()).await;
+        let prematurely_finished = task.is_finished();
+        let consumed = b.markers("consumed-").len();
+        let stt_before_complete = stt.gates[0].request.lock().unwrap().len();
+        release_tail_gates(&b);
+        let output = task.await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        assert!(tail);
+        assert!(!prematurely_finished);
+        assert_eq!(consumed, 0);
+        assert_eq!(stt_before_complete, 0);
+        let result = duplex::result(&output.unwrap(), 0);
+        tts.checked(1);
+        stt.checked(1);
+        input::assert_consumed(&b, &result, &[vec![bytes]]);
+    }
+
+    #[tokio::test]
+    async fn joint_cold_warm_cache_and_wav_override_preserve_per_child_pcm() {
+        let b = Bundle::new();
+        let cache = b.cache();
+        let speech = input::pcm(81);
+        let recorded = input::pcm(101);
+        b.put("override.wav", input::wav(&recorded));
+        let mut entries = vec![];
+        for name in ["first", "second"] {
+            let mut scenario = duplex::source(name);
+            scenario["turns"].as_array_mut().unwrap().push(json!({"user":"WAV reference must stay context","audio":"override.wav","expect":[duplex::expectation("response",SPOKEN)]}));
+            b.json(&format!("{name}.json"), &scenario);
+            input::profile(
+                &b,
+                name,
+                &[speech.clone(), recorded.clone()],
+                &format!("isolated {name}"),
+                "normal",
+                0,
+            );
+            entries.push(duplex::entry(&b, name, &format!("{name}.json"), name));
+        }
+        let mut spec = fixture::manifest(entries, 1, 2);
+        let path = b.json("manifest.json", &spec);
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(speech.clone())]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN); 8]).await;
+        let (speech_runtime, stt_runtime) = runtime_files(&b, &tts.url, &stt.url, Some(&cache));
+        let cold = duplex::cli(
+            &duplex::arguments(&path, &speech_runtime, &stt_runtime, false),
+            &b.0,
+        )
+        .await;
+        let tts = tts.finish().await;
+        // The warm CLI retains a closed TTS URL: successful input must use the cache.
+        spec["base_port"] = fixture::manifest(vec![], 1, 1)["base_port"].clone();
+        b.json("manifest.json", &spec);
+        let warm = duplex::cli(
+            &duplex::arguments(&path, &speech_runtime, &stt_runtime, true),
+            &b.0,
+        )
+        .await;
+        let stt = stt.finish().await;
+        tts.checked(1);
+        stt.checked(8);
+        for output in [cold, warm] {
+            let result = duplex::result(&output, 0);
+            input::assert_consumed(
+                &b,
+                &result,
+                &vec![vec![speech.clone(), recorded.clone()]; 2],
+            );
+        }
+        let files = input::cache_wavs(&cache);
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            pipecat_evals::RecordedAudio::from_wav(&std::fs::read(&files[0]).unwrap())
+                .unwrap()
+                .pcm_bytes(),
+            speech
+        );
+        input::assert_no_temporaries(&cache);
+        input::assert_cache_unlocked(&cache);
+    }
+
+    #[tokio::test]
+    async fn joint_all_wav_with_unused_voice_never_creates_tts_or_cache_work() {
+        let b = Bundle::new();
+        let cache = b.cache();
+        let bytes = input::pcm(121);
+        let path = duplex::one(&b, "all-wav", std::slice::from_ref(&bytes), "normal");
+        b.put("only.wav", input::wav(&bytes));
+        let mut scenario = duplex::source("all-wav");
+        // Keep the valid inherited voice to exercise the actual all-WAV joint branch.
+        scenario["turns"][0]["audio"] = "only.wav".into();
+        b.json("all-wav.json", &scenario);
+        let tts = Http::start(Kind::Tts, vec![]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN)]).await;
+        let result = run_path(
+            &path,
+            input::settings(&tts.url, Some(&cache)),
+            duplex::stt_settings(&b, &stt.url),
+            duplex::options(),
+            Cancellation::new(),
+        )
+        .await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        let retired = duplex::retired().await;
+        let result = result.unwrap();
+        assert!(result.passed, "{result:?}");
+        tts.checked(0);
+        stt.checked(1);
+        input::assert_consumed(&b, &value(&result), &[vec![bytes]]);
+        assert_eq!(std::fs::read_dir(cache).unwrap().count(), 0);
+        assert!(retired);
+    }
+
+    #[tokio::test]
+    async fn joint_judge_receives_reference_and_spoken_response_while_exact_uses_no_judge() {
+        for semantic in [false, true] {
+            let b = Bundle::new();
+            let bytes = input::pcm(141);
+            let path = duplex::one(&b, "judge", std::slice::from_ref(&bytes), "normal");
+            let judge = Http::start(
+                Kind::Judge,
+                if semantic { vec![Reply::Judge] } else { vec![] },
+            )
+            .await;
+            let mut scenario = duplex::source("judge");
+            scenario["judge"] = duplex::judge_settings(&judge.url);
+            if semantic {
+                scenario["turns"][0]["expect"] = json!([{"event":"response","eval":"satisfies the spoken criterion","within_ms":7000}]);
+            }
+            b.json("judge.json", &scenario);
+            let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+            let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN)]).await;
+            let (speech_runtime, stt_runtime) = runtime_files(&b, &tts.url, &stt.url, None);
+            let output = duplex::cli(
+                &duplex::arguments(&path, &speech_runtime, &stt_runtime, false),
+                &b.0,
+            )
+            .await;
+            let tts = tts.finish().await;
+            let stt = stt.finish().await;
+            let judge = judge.finish().await;
+            tts.checked(1);
+            stt.checked(1);
+            judge.checked(usize::from(semantic));
+            let result = duplex::result(&output, 0);
+            input::assert_consumed(&b, &result, &[vec![bytes]]);
+            if semantic {
+                let body = duplex::request_json(&judge.gates[0].request.lock().unwrap());
+                assert_eq!(
+                    body["state"],
+                    json!({"conversation":[{"speaker":"user","text":REFERENCE}],"latest_bot_reply":SPOKEN})
+                );
+                assert!(!body.to_string().contains(LLM));
+                assert!(!body.to_string().contains(duplex::TTS));
+                assert_eq!(
+                    result["runs"][0]["hosted"]["result"]["turns"][0]["expectations"][0]
+                        ["judgments"][0]["decision"],
+                    "yes"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn joint_matching_reference_llm_and_tts_decoys_cannot_replace_bot_pcm() {
+        for decoy in [LLM, duplex::TTS] {
+            let b = Bundle::new();
+            let bytes = input::pcm(161);
+            let path = duplex::one(&b, "silent", std::slice::from_ref(&bytes), "silent");
+            let mut scenario = duplex::source("silent");
+            scenario["turns"][0]["user"] = decoy.into();
+            scenario["turns"][0]["expect"] =
+                json!([{"event":"response","text_contains":decoy,"within_ms":500}]);
+            b.json("silent.json", &scenario);
+            let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+            let stt = Http::start(Kind::Stt, vec![]).await;
+            let result = run_path(
+                &path,
+                input::settings(&tts.url, None),
+                duplex::stt_settings(&b, &stt.url),
+                duplex::options(),
+                Cancellation::new(),
+            )
+            .await;
+            let tts = tts.finish().await;
+            let stt = stt.finish().await;
+            tts.checked(1);
+            stt.checked(0);
+            let result = result.unwrap();
+            assert!(!result.passed);
+            assert!(duplex::responses(&value(&result)["runs"][0]).is_empty());
+            input::assert_consumed(&b, &value(&result), &[vec![bytes]]);
+        }
+    }
+
+    #[tokio::test]
+    async fn joint_final_llm_success_still_waits_for_admitted_stt_prefix() {
+        let b = Bundle::new();
+        let bytes = input::pcm(181);
+        let path = duplex::one(&b, "settle", std::slice::from_ref(&bytes), "normal");
+        let mut scenario = duplex::source("settle");
+        scenario["turns"][0]["expect"] = json!([duplex::expectation("llm_response", LLM)]);
+        b.json("settle.json", &scenario);
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Gate(SPOKEN)]).await;
+        let speech = input::settings(&tts.url, None);
+        let transcription = duplex::stt_settings(&b, &stt.url);
+        let cancel = Cancellation::new();
+        let c = cancel.clone();
+        let task = tokio::spawn(async move {
+            run_path(&path, speech, transcription, duplex::options(), c).await
+        });
+        let entered = duplex::observed(|| !stt.gates[0].request.lock().unwrap().is_empty()).await;
+        let emitted = duplex::observed(|| !b.markers("emitted-").is_empty()).await;
+        let finished_before_stt = task.is_finished();
+        stt.gates[0].released.add_permits(1);
+        if !entered || !emitted {
+            cancel.cancel();
+        }
+        let result = task.await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        assert!(entered && emitted);
+        assert!(
+            !finished_before_stt,
+            "reported LLM success skipped held STT settlement"
+        );
+        tts.checked(1);
+        stt.checked(1);
+        let result = result.unwrap().unwrap();
+        assert!(result.passed, "{result:?}");
+        assert_eq!(duplex::responses(&value(&result)["runs"][0]), [SPOKEN]);
+        input::assert_consumed(&b, &value(&result), &[vec![bytes]]);
+    }
+
+    #[tokio::test]
+    async fn joint_fixed_final_settlement_timeout_closes_stt_before_fixture_cleanup() {
+        let b = Bundle::new();
+        let bytes = input::pcm(201);
+        let path = duplex::one(&b, "timeout", std::slice::from_ref(&bytes), "normal");
+        let mut scenario = duplex::source("timeout");
+        scenario["turns"][0]["expect"] = json!([duplex::expectation("llm_response", LLM)]);
+        b.json("timeout.json", &scenario);
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Hold]).await;
+        let mut options = duplex::options();
+        options.bot_quiet_timeout = Duration::from_millis(2500);
+        let result = run_path(
+            &path,
+            input::settings(&tts.url, None),
+            duplex::stt_settings(&b, &stt.url),
+            options,
+            Cancellation::new(),
+        )
+        .await;
+        let eof = duplex::observed(|| stt.gates[0].closed.load(Ordering::SeqCst)).await;
+        let reaped_before_cleanup = duplex::child_pids_gone(&b);
+        let pipes_before_cleanup = duplex::retired_except_fixtures(2).await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        let retired = duplex::retired().await;
+        assert!(eof && reaped_before_cleanup && pipes_before_cleanup && retired);
+        tts.checked(1);
+        stt.checked(1);
+        let result = result.unwrap();
+        assert!(!result.passed);
+        assert!(
+            failures(&result).contains(&"bot_transcription_timeout"),
+            "{result:?}"
+        );
+        input::assert_reaped(&value(&result));
+    }
+
+    #[tokio::test]
+    async fn joint_borrowed_owner_cancel_closes_held_tts_and_stt_before_fixture_cleanup() {
+        for hold_tts in [true, false] {
+            let b = Bundle::new();
+            let cache = b.cache();
+            let bytes = input::pcm(221);
+            let path = duplex::one(&b, "cancel", std::slice::from_ref(&bytes), "normal");
+            let mut spec: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            spec["repeat"] = 2.into();
+            b.json("cancel-manifest.json", &spec);
+            let tts = Http::start(
+                Kind::Tts,
+                vec![if hold_tts {
+                    Reply::Hold
+                } else {
+                    Reply::Pcm(bytes.clone())
+                }],
+            )
+            .await;
+            let stt =
+                Http::start(Kind::Stt, if hold_tts { vec![] } else { vec![Reply::Hold] }).await;
+            let mut speech = pipecat_speech::SpeechConfig::cartesia(fixture::SECRET);
+            speech.base_url = tts.url.clone();
+            speech.timeout = Duration::from_secs(10);
+            let speech = CartesiaUserSpeechSettings::new(
+                speech,
+                pipecat_evals::UserSpeechCachePolicy::Private {
+                    directory: cache.clone(),
+                    max_entries: 8,
+                    max_bytes: 16 * 1024 * 1024,
+                },
+            )
+            .unwrap();
+            let transcription = duplex::stt_settings(&b, &stt.url);
+            let cancel = Cancellation::new();
+            let future = run_path(
+                &path,
+                speech,
+                transcription,
+                duplex::options(),
+                cancel.clone(),
+            );
+            tokio::pin!(future);
+            let gate = if hold_tts {
+                tts.gates[0].clone()
+            } else {
+                stt.gates[0].clone()
+            };
+            // Poll the exact pinned release alongside a real provider-entry barrier.
+            let entry =
+                tokio::select! {result=&mut future=>Err(result),_=gate.received.notified()=>Ok(())};
+            let mut premature = None;
+            let (entered, timed_out) = match entry {
+                Ok(()) => {
+                    match tokio::time::timeout(Duration::from_millis(25), &mut future).await {
+                        Err(_) => (true, true),
+                        Ok(result) => {
+                            premature = Some(result);
+                            (true, false)
+                        }
+                    }
+                }
+                Err(result) => {
+                    premature = Some(result);
+                    (false, false)
+                }
+            };
+            cancel.cancel();
+            let result = match premature {
+                Some(result) => result,
+                None => future.await,
+            };
+            let eof = duplex::observed(|| gate.closed.load(Ordering::SeqCst)).await;
+            let reaped_before_cleanup = duplex::child_pids_gone(&b);
+            let pipes_before_cleanup = duplex::retired_except_fixtures(2).await;
+            let tts = tts.finish().await;
+            let stt = stt.finish().await;
+            let retired = duplex::retired().await;
+            assert!(
+                entered
+                    && timed_out
+                    && eof
+                    && reaped_before_cleanup
+                    && pipes_before_cleanup
+                    && retired,
+                "hold_tts={hold_tts} entered={entered} timed_out={timed_out} eof={eof} reaped={reaped_before_cleanup} pipes={pipes_before_cleanup} retired={retired} result={result:?}"
+            );
+            tts.checked(1);
+            stt.checked(usize::from(!hold_tts));
+            let result = result.unwrap();
+            assert!(!result.passed);
+            input::assert_reaped(&value(&result));
+            assert_eq!(b.markers("started-").len(), 1);
+            if hold_tts {
+                input::assert_no_audio(&b);
+                assert!(input::cache_wavs(&cache).is_empty());
+            }
+            input::assert_no_temporaries(&cache);
+            input::assert_cache_unlocked(&cache);
+        }
+    }
+
+    #[tokio::test]
+    async fn joint_concurrent_retention_overflow_drains_active_stt_and_keeps_queued_child_unstarted(
+    ) {
+        let b = Bundle::new();
+        let bytes = input::pcm(241);
+        let mut entries = vec![];
+        for (name, mode) in [
+            ("large", "large"),
+            ("active", "normal"),
+            ("queued", "normal"),
+        ] {
+            input::profile(
+                &b,
+                name,
+                std::slice::from_ref(&bytes),
+                &format!("isolated {name}"),
+                mode,
+                0,
+            );
+            let mut scenario = duplex::source(name);
+            if name == "large" {
+                scenario["turns"][0]["user"] = "large result waits for active STT".into();
+            }
+            b.json(&format!("{name}.json"), &scenario);
+            entries.push(duplex::entry(&b, name, &format!("{name}.json"), name));
+        }
+        let path = b.json("manifest.json", &fixture::manifest(entries, 1, 2));
+        let tts = Http::start(
+            Kind::Tts,
+            vec![
+                Reply::PcmAfterMarker {
+                    bytes: bytes.clone(),
+                    transcript: "large result waits for active STT",
+                    marker: b.0.join("stt-held"),
+                };
+                2
+            ],
+        )
+        .await;
+        // Hold large input at HTTP, before playback. Blocking the child's input
+        // actor here would fill its lane with synthetic silence before STT entry.
+        // Active's inspected STT request must be held before large input arrives.
+        let stt = Http::with_marker(
+            Kind::Stt,
+            vec![Reply::Hold, Reply::Text(SPOKEN)],
+            Some(b.0.join("stt-held")),
+        )
+        .await;
+        let mut speech = pipecat_speech::SpeechConfig::cartesia(fixture::SECRET);
+        speech.base_url = tts.url.clone();
+        // This HTTP request intentionally waits for the other attempt's PCM/VAD;
+        // the ordinary 600ms fixture TTS deadline is not a valid causal hold.
+        speech.timeout = Duration::from_secs(10);
+        let speech =
+            CartesiaUserSpeechSettings::new(speech, pipecat_evals::UserSpeechCachePolicy::Disabled)
+                .unwrap();
+        let plan =
+            ReleaseManifest::load_audio_to_audio(&path, speech, duplex::stt_settings(&b, &stt.url));
+        let cancel = Cancellation::new();
+        let result = match plan {
+            Ok(plan) => {
+                let future = run_release_with_budget(
+                    plan,
+                    duplex::options(),
+                    duplex::process_options(),
+                    cancel.clone(),
+                    8192,
+                );
+                tokio::pin!(future);
+                match tokio::time::timeout(duplex::WAIT * 2, &mut future).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        cancel.cancel();
+                        let _actual = future.await;
+                        Err(EvalError::Timeout("joint overflow fixture deadline"))
+                    }
+                }
+            }
+            Err(error) => Err(error),
+        };
+        let eof = duplex::observed(|| stt.gates[0].closed.load(Ordering::SeqCst)).await;
+        let gone_before_cleanup = duplex::child_pids_gone(&b);
+        let pipes_before_cleanup = duplex::retired_except_fixtures(2).await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        let retired = duplex::retired().await;
+        assert!(eof && gone_before_cleanup && pipes_before_cleanup && retired,
+            "eof={eof} gone={gone_before_cleanup} pipes={pipes_before_cleanup} retired={retired} result={result:?}");
+        assert_eq!(b.markers("started-").len(), 2, "result={result:?}");
+        assert!(
+            tts.problems.is_empty(),
+            "TTS {:?}; result={result:?}",
+            tts.problems
+        );
+        assert!(
+            stt.problems.is_empty(),
+            "STT {:?}; result={result:?}",
+            stt.problems
+        );
+        tts.checked(2);
+        stt.checked(2);
+        assert_eq!(b.markers("started-").len(), 2);
+        let result = result.unwrap();
+        assert!(!result.passed);
+        assert!(failures(&result).contains(&"limit_exceeded"));
+        // Overflow intentionally retains summaries. /proc and runtime quiescence
+        // independently establish child and pipe retirement; no invented reap report.
+        // Queued zero-model evidence belongs to the private loader-counter test.
+    }
+
+    fn precharged(
+        b: &Bundle,
+        name: &str,
+        bytes: &[u8],
+        wav_bytes: usize,
+        repeat: usize,
+        admitted: bool,
+    ) -> PathBuf {
+        let mut scenario = duplex::source(name);
+        if admitted {
+            scenario["turns"][0]["expect"] = json!([{"event":"response","text_contains":"intentionally unmatched stops before prepaid filler","within_ms":3000}]);
+        }
+        let mut remaining = wav_bytes;
+        let mut n = 0;
+        while remaining != 0 {
+            let size = remaining.min(1_920_000);
+            let file = format!("{name}-future-{n}.wav");
+            b.put(&file, input::wav(&[9, 1].repeat(size / 2)));
+            scenario["turns"].as_array_mut().unwrap().push(json!({"user":"future WAV conservatively prepaid","audio":file,"expect":[duplex::expectation("response","never played filler")]}));
+            remaining -= size;
+            n += 1;
+        }
+        b.json(&format!("{name}.json"), &scenario);
+        input::profile(
+            b,
+            name,
+            &[bytes.to_vec()],
+            &format!("isolated {name}"),
+            "normal",
+            0,
+        );
+        b.json(
+            &format!("{name}-manifest.json"),
+            &fixture::manifest(
+                vec![duplex::entry(b, name, &format!("{name}.json"), name)],
+                repeat,
+                1,
+            ),
+        )
+    }
+
+    #[tokio::test]
+    async fn joint_shared_cache_hit_budget_exact_boundary_repeat_and_independent_plans() {
+        let prime = Bundle::new();
+        let cache = prime.cache();
+        let bytes = input::pcm(151);
+        let path = duplex::one(&prime, "prime", std::slice::from_ref(&bytes), "normal");
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes.clone())]).await;
+        let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN)]).await;
+        let configured = input::settings(&tts.url, Some(&cache));
+        let result = run_path(
+            &path,
+            configured.clone(),
+            duplex::stt_settings(&prime, &stt.url),
+            duplex::options(),
+            Cancellation::new(),
+        )
+        .await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        tts.checked(1);
+        stt.checked(1);
+        let result = result.unwrap();
+        assert!(result.passed, "{result:?}");
+        input::assert_consumed(&prime, &value(&result), &[vec![bytes.clone()]]);
+        let cached = std::fs::read(&input::cache_wavs(&cache)[0]).unwrap();
+        for mode in ["exact", "repeat", "combined"] {
+            let b = Bundle::new();
+            let admitted = mode == "exact";
+            let prepaid = input::PCM_BUDGET - bytes.len() + if admitted { 0 } else { 2 };
+            let stt = Http::start(
+                Kind::Stt,
+                if admitted {
+                    vec![Reply::Text(SPOKEN)]
+                } else {
+                    vec![]
+                },
+            )
+            .await;
+            let transcriber = duplex::stt_settings(&b, &stt.url);
+            let plan = if mode == "combined" {
+                let first = ReleaseManifest::load_audio_to_audio(
+                    precharged(&b, "first", &bytes, prepaid / 2, 1, false),
+                    configured.clone(),
+                    duplex::stt_settings(&b, &stt.url),
+                );
+                let second = ReleaseManifest::load_audio_to_audio(
+                    precharged(&b, "second", &bytes, prepaid / 2, 1, false),
+                    configured.clone(),
+                    transcriber,
+                );
+                match (first, second) {
+                    (Ok(mut first), Ok(second)) => {
+                        first.jobs.extend(second.jobs);
+                        Ok(first)
+                    }
+                    (Err(error), _) | (_, Err(error)) => Err(error),
+                }
+            } else {
+                let repeat = if admitted { 1 } else { 2 };
+                ReleaseManifest::load_audio_to_audio(
+                    precharged(&b, mode, &bytes, prepaid / repeat, repeat, admitted),
+                    configured.clone(),
+                    transcriber,
+                )
+            };
+            let result = match plan {
+                Ok(plan) => duplex::run(plan, duplex::options(), Cancellation::new()).await,
+                Err(error) => Err(error),
+            };
+            let stt = stt.finish().await;
+            let retired = duplex::retired().await;
+            stt.checked(usize::from(admitted));
+            let result = result.unwrap();
+            assert!(!result.passed);
+            input::assert_reaped(&value(&result));
+            assert!(retired);
+            if admitted {
+                input::assert_consumed(&b, &value(&result), &[vec![bytes.clone()]]);
+                assert!(
+                    !failures(&result).contains(&"limit_exceeded"),
+                    "exact logical boundary rejected: {result:?}"
+                );
+            } else {
+                input::assert_no_audio(&b);
+                assert_eq!(b.markers("started-").len(), 2);
+                assert!(
+                    result.runs.iter().all(|run| run
+                        .hosted
+                        .result
+                        .failures
+                        .iter()
+                        .any(|failure| failure.kind == "limit_exceeded"
+                            && failure.reason.contains("PCM budget"))),
+                    "{mode}: {result:?}"
+                );
+            }
+            assert_eq!(
+                std::fs::read(&input::cache_wavs(&cache)[0]).unwrap(),
+                cached
+            );
+            input::assert_no_temporaries(&cache);
+            input::assert_cache_unlocked(&cache);
+        }
+    }
+
+    #[tokio::test]
+    async fn joint_bad_last_job_public_mutation_options_and_summary_floor_start_no_child_http_or_cache(
+    ) {
+        let b = Bundle::new();
+        let cache = b.cache();
+        let tts = Http::start(Kind::Tts, vec![]).await;
+        let stt = Http::start(Kind::Stt, vec![]).await;
+        b.json("good.json", &duplex::source("good"));
+        let path = b.json(
+            "manifest.json",
+            &fixture::manifest(vec![duplex::entry(&b, "good", "good.json", "unused")], 1, 1),
+        );
+        let configured = input::settings(&tts.url, Some(&cache));
+        let mut errors = vec![];
+        for mutation in ["last", "public", "expanded", "judge", "summary"] {
+            let loaded = ReleaseManifest::load_audio_to_audio(
+                &path,
+                configured.clone(),
+                duplex::stt_settings(&b, &stt.url),
+            );
+            let result = match loaded {
+                Ok(mut plan) => {
+                    let mut options = duplex::options();
+                    match mutation {
+                        "last" => {
+                            let mut last = plan.jobs[0].clone();
+                            last.name = "bad-later-job".into();
+                            last.port += 1;
+                            last.scenario.turns[0].user = Some("mutated later input".into());
+                            plan.jobs.push(last);
+                            plan.concurrency = 2;
+                        }
+                        "public" => {
+                            plan.jobs[0].scenario.turns[0].expect[1].text_contains =
+                                Some("mutated spoken expectation".into())
+                        }
+                        "expanded" => {
+                            options.max_wire_messages =
+                                SessionOptions::default().max_wire_messages + 1
+                        }
+                        "judge" => {
+                            plan.jobs[0].scenario.turns[0].expect[1].eval =
+                                Some("missing judge must fail".into())
+                        }
+                        "summary" => {
+                            for attempt in 2..=4 {
+                                let mut cloned = plan.jobs[0].clone();
+                                cloned.attempt = attempt;
+                                cloned.port += (attempt - 1) as u16;
+                                plan.jobs.push(cloned);
+                            }
+                        }
+                        _ => {}
+                    }
+                    if mutation == "summary" {
+                        run_release_with_budget(
+                            plan,
+                            options,
+                            duplex::process_options(),
+                            Cancellation::new(),
+                            1024,
+                        )
+                        .await
+                    } else {
+                        duplex::run(plan, options, Cancellation::new()).await
+                    }
+                }
+                Err(error) => Err(error),
+            };
+            errors.push((mutation, result.err()));
+        }
+        let mut bad = duplex::source("bad");
+        bad["turns"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"dtmf":"1"}));
+        b.json("bad.json", &bad);
+        let invalid = b.json(
+            "invalid.json",
+            &fixture::manifest(
+                vec![
+                    duplex::entry(&b, "good", "good.json", "unused"),
+                    duplex::entry(&b, "bad", "bad.json", "unused"),
+                ],
+                1,
+                2,
+            ),
+        );
+        let (speech_runtime, stt_runtime) = runtime_files(&b, &tts.url, &stt.url, Some(&cache));
+        let invalid_cli = duplex::cli(
+            &duplex::arguments(&invalid, &speech_runtime, &stt_runtime, false),
+            &b.0,
+        )
+        .await;
+        let mut missing_judge = duplex::source("missing-judge");
+        missing_judge["turns"][0]["expect"] =
+            json!([{"event":"response","eval":"must have an explicit judge","within_ms":7000}]);
+        b.json("missing-judge.json", &missing_judge);
+        let judge_path = b.json(
+            "missing-judge-manifest.json",
+            &fixture::manifest(
+                vec![duplex::entry(
+                    &b,
+                    "missing-judge",
+                    "missing-judge.json",
+                    "unused",
+                )],
+                1,
+                1,
+            ),
+        );
+        let judge_cli = duplex::cli(
+            &duplex::arguments(&judge_path, &speech_runtime, &stt_runtime, false),
+            &b.0,
+        )
+        .await;
+        let mut smart = duplex::stt_runtime(&stt.url);
+        // Reuse the existing authorized local file only for static asset validation.
+        // Joint validation must reject Smart Turn before any model is loaded.
+        smart["smart_turn_model"] = smart["silero_model"].clone();
+        b.json("joint-stt-runtime.json", &smart);
+        let smart_cli = duplex::cli(
+            &duplex::arguments(&path, &speech_runtime, &stt_runtime, true),
+            &b.0,
+        )
+        .await;
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        tts.checked(0);
+        stt.checked(0);
+        assert!(
+            errors.iter().all(|(_, error)| error.is_some()),
+            "{errors:?}"
+        );
+        let invalid_cli = invalid_cli.unwrap();
+        let smart_cli = smart_cli.unwrap();
+        let judge_cli = judge_cli.unwrap();
+        assert!(String::from_utf8_lossy(&smart_cli.stderr).contains("Smart Turn"));
+        assert!(String::from_utf8_lossy(&judge_cli.stderr).contains("judge"));
+        for output in [invalid_cli, smart_cli, judge_cli] {
+            fixture::assert_exit(&output, 2);
+            assert!(output.stdout.is_empty());
+        }
+        assert!(b.markers("started-").is_empty());
+        assert_eq!(std::fs::read_dir(cache).unwrap().count(), 0);
+        // These observations prove zero child/HTTP/cache activity, not zero model loads.
+        // The private lib tests independently instrument model preflight and attempts.
     }
 }

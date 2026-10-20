@@ -382,6 +382,36 @@ pub(crate) async fn run_hosted_prepared(
     let address = validate_local_url(&bot_url)?;
     session_options.stop_bot = true;
     let name = scenario.name.clone();
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    let (transcription, speech) = match (transcription, speech) {
+        (Some(config), Some(prepared)) => {
+            let clips = recordings.unwrap_or_default();
+            let needs_synthesis = scenario.turns.iter().enumerate().any(|(index, turn)| {
+                turn.user.is_some() && !clips.iter().any(|(recorded, _)| *recorded == index)
+            });
+            // A legal unused voice must not construct a synthesis/cache owner
+            // for an all-WAV plan. The shared budget still owns every WAV use.
+            let synthesis = if needs_synthesis {
+                prepared.voice.map(|voice| (prepared.settings, voice))
+            } else {
+                None
+            };
+            let session = EvalSession::from_audio_to_audio_plan(
+                scenario,
+                &bot_url,
+                session_options,
+                config,
+                synthesis,
+                clips,
+                prepared.budget,
+            )?;
+            // Keep the joint state selected: the generic hosted builder refuses
+            // this composition and would mask the joint shutdown branch.
+            return run_selected_hosted_speech(command, session, name, address, options, cancel)
+                .await;
+        }
+        other => other,
+    };
     #[cfg(feature = "bot-audio-transcription")]
     let mut session = match transcription {
         Some(config) => {
@@ -1263,7 +1293,7 @@ mod tests {
 }
 
 #[cfg(all(test, feature = "user-speech"))]
-mod hosted_speech_attempt_tests {
+pub(crate) mod hosted_speech_attempt_tests {
     use super::*;
     use crate::user_speech::{CartesiaUserSpeechSettings, PreparedHostedSpeech, UserSpeechBudget};
     use pipecat_speech::SpeechConfig;
@@ -1288,8 +1318,149 @@ mod hosted_speech_attempt_tests {
         std::thread::sleep(WAIT + WAIT);
     }
 
+    #[cfg(feature = "bot-audio-transcription")]
+    pub(crate) fn transcription(base: &str) -> crate::BotTranscriptionConfig {
+        use pipecat_vad::{RuntimeOptions, SileroModel, SileroVadAnalyzer, VadParams};
+        let runtime = std::env::var_os("PIPECAT_ONNX_RUNTIME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| "/usr/lib/x86_64-linux-gnu/libonnxruntime.so.1.21.0".into());
+        let model = std::env::var_os("PIPECAT_SILERO_MODEL")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../src/pipecat/audio/vad/data/silero_vad.onnx")
+            });
+        let mut model = SileroModel::load(
+            &RuntimeOptions {
+                library_path: runtime,
+            },
+            model,
+        )
+        .expect("preinstalled native fixture assets must load");
+        model.predict_pcm16(&[0; 512], 16_000).unwrap();
+        model.reset();
+        let analyzer = SileroVadAnalyzer::new(
+            model,
+            16_000,
+            VadParams {
+                stop_secs: 0.4,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        crate::BotTranscriptionConfig::new(
+            analyzer,
+            SpeechConfig {
+                base_url: base.into(),
+                api_key: "synthetic-joint-owner-stt-key".into(),
+                timeout: Duration::from_secs(10),
+                max_audio_bytes: 2 * 1024 * 1024,
+                max_json_bytes: 64 * 1024,
+                queue_capacity: 1,
+            },
+            pipecat_speech::TranscriptionRequest::default(),
+        )
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn post_spawn_adapter_status_and_wait_errors_keep_the_actual_owned_tail() {
+        post_spawn_errors(false).await;
+    }
+
+    #[cfg(feature = "bot-audio-transcription")]
+    #[tokio::test]
+    async fn joint_post_spawn_errors_keep_the_original_prepared_session_and_child_pipes() {
+        post_spawn_errors(true).await;
+    }
+
+    #[cfg(all(unix, feature = "bot-audio-transcription"))]
+    #[tokio::test]
+    async fn joint_pre_run_cancel_and_spawn_error_start_no_provider_cache_or_child_work() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        struct Temp(PathBuf);
+        impl Drop for Temp {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let temp = Temp(std::env::temp_dir().join(format!(
+            "pipecat-joint-pre-run-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        )));
+        std::fs::create_dir(&temp.0).unwrap();
+        let provider = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        provider.set_nonblocking(true).unwrap();
+        let endpoint = format!("http://{}", provider.local_addr().unwrap());
+        let cache = temp.0.join("never-open-cache");
+        for already_cancelled in [true, false] {
+            for all_wav in [false, true] {
+                let reservation = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                let url = format!("ws://{}", reservation.local_addr().unwrap());
+                drop(reservation);
+                let scenario = serde_json::from_value(json!({"name":"prepared joint owner", "turns":[{
+                    "user":"reference", "expect":[{"event":"response", "text_contains":"spoken"}]
+                }]})).unwrap();
+                let mut config = SpeechConfig::cartesia("synthetic-pre-run-tts-key");
+                config.base_url = endpoint.clone();
+                let prepared = PreparedHostedSpeech {
+                    settings: CartesiaUserSpeechSettings::new(
+                        config,
+                        crate::UserSpeechCachePolicy::private_directory(&cache).unwrap(),
+                    )
+                    .unwrap(),
+                    voice: Some(
+                        crate::CartesiaUserSpeechVoice::new("unused-or-dormant", None, None)
+                            .unwrap(),
+                    ),
+                    budget: UserSpeechBudget::new(if all_wav { 2 } else { 0 }).unwrap(),
+                };
+                let command = NativeCommand {
+                    executable: temp.0.join("missing-native-executable"),
+                    args: Vec::new(),
+                    cwd: temp.0.clone(),
+                    env: BTreeMap::new(),
+                };
+                let cancel = Cancellation::new();
+                if already_cancelled {
+                    cancel.cancel();
+                }
+                // Configuration owns only an initialized analyzer and unused
+                // HTTP client here. No PCM worker exists until drive starts.
+                let result = run_hosted_prepared(
+                    command,
+                    scenario,
+                    url,
+                    SessionOptions::default(),
+                    ProcessOptions::default(),
+                    cancel,
+                    all_wav.then(|| vec![(0, RecordedAudio::from_pcm16(&[7, 0]).unwrap())]),
+                    Some(transcription(&format!("{endpoint}/v1"))),
+                    Some(prepared),
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    result.result.failures[0].kind,
+                    if already_cancelled {
+                        "cancelled"
+                    } else {
+                        "spawn_failed"
+                    }
+                );
+                assert!(result.process.pid.is_none());
+                assert!(!cache.exists());
+                assert_eq!(
+                    provider.accept().unwrap_err().kind(),
+                    std::io::ErrorKind::WouldBlock
+                );
+            }
+        }
+    }
+
+    async fn post_spawn_errors(joint: bool) {
         for fault in [
             HostedSpeechFault::StdoutAdapter,
             HostedSpeechFault::PostReadinessStatus,
@@ -1351,16 +1522,11 @@ mod hosted_speech_attempt_tests {
                     .remove(0);
             let mut config = SpeechConfig::cartesia("synthetic-process-tail-key");
             config.base_url = "http://127.0.0.1:1".into();
-            let session = EvalSession::new(
-                scenario,
-                &url,
-                SessionOptions {
-                    stop_bot: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-            .with_hosted_user_speech(PreparedHostedSpeech {
+            let options = SessionOptions {
+                stop_bot: true,
+                ..Default::default()
+            };
+            let prepared = PreparedHostedSpeech {
                 settings: CartesiaUserSpeechSettings::new(
                     config,
                     crate::UserSpeechCachePolicy::Disabled,
@@ -1368,8 +1534,29 @@ mod hosted_speech_attempt_tests {
                 .unwrap(),
                 voice: None,
                 budget: UserSpeechBudget::new(0).unwrap(),
-            })
-            .unwrap();
+            };
+            let session = if joint {
+                #[cfg(feature = "bot-audio-transcription")]
+                {
+                    EvalSession::from_audio_to_audio_plan(
+                        scenario,
+                        &url,
+                        options,
+                        transcription("http://127.0.0.1:1/v1"),
+                        None,
+                        Vec::new(),
+                        prepared.budget,
+                    )
+                    .unwrap()
+                }
+                #[cfg(not(feature = "bot-audio-transcription"))]
+                unreachable!("joint fixture requires both features")
+            } else {
+                EvalSession::new(scenario, &url, options)
+                    .unwrap()
+                    .with_hosted_user_speech(prepared)
+                    .unwrap()
+            };
             let command = NativeCommand {
                 executable: std::env::current_exe().unwrap(),
                 args: vec![

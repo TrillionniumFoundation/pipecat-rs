@@ -128,7 +128,7 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --recording-wav NEW.wav] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json | --user-speech RUNTIME.json]\n       --recording-wav requires --recorded-audio or --user-speech and exactly one direct scenario".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --recording-wav NEW.wav] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json] [--user-speech RUNTIME.json]\n       --recording-wav requires --recorded-audio or --user-speech and exactly one direct scenario".into()));
     }
     // Reject unsupported recording compositions before loading any scenario,
     // runtime configuration or model, or creating an output temporary.
@@ -175,11 +175,6 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             "--user-speech cannot combine with --recorded-audio or --bot-audio-wav".into(),
         ));
     }
-    if suite && user_speech.is_some() && bot_audio_response.is_some() {
-        return Err(pipecat_evals::EvalError::Unsupported(
-            "suite --user-speech cannot combine with --bot-audio-response".into(),
-        ));
-    }
     #[cfg(not(feature = "user-speech"))]
     if user_speech.is_some() {
         return Err(pipecat_evals::EvalError::Unsupported(
@@ -209,30 +204,54 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
         // once, before either standalone branch, and can never be overwritten.
         // The signal owner is already installed for owned model preparation.
         let manifest = if suite {
-            #[cfg(feature = "user-speech")]
-            let speech_manifest = user_speech.map(|runtime| {
-                ReleaseManifest::load_user_speech(
-                    &args[1], pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?,
-                )
-            }).transpose()?;
-            #[cfg(not(feature = "user-speech"))]
-            let speech_manifest: Option<ReleaseManifest> = None;
-            #[cfg(feature = "bot-audio-transcription")]
-            let audio_manifest = bot_audio_response
-                .map(|config| {
-                    ReleaseManifest::load_audio_response(
+            Some(if let (Some(runtime), Some(response)) = (user_speech, bot_audio_response) {
+                #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+                {
+                    ReleaseManifest::load_audio_to_audio(
                         &args[1],
-                        pipecat_evals::BotTranscriptionSettings::load(config)?,
-                        recorded,
-                    )
-                })
-                .transpose()?;
-            #[cfg(not(feature = "bot-audio-transcription"))]
-            let audio_manifest: Option<ReleaseManifest> = None;
-            Some(match speech_manifest.or(audio_manifest) {
-                Some(manifest) => manifest,
-                None if recorded => ReleaseManifest::load_recorded(&args[1])?,
-                None => ReleaseManifest::load(&args[1])?,
+                        pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?,
+                        pipecat_evals::BotTranscriptionSettings::load(response)?,
+                    )?
+                }
+                #[cfg(not(all(feature = "user-speech", feature = "bot-audio-transcription")))]
+                {
+                    let _ = (runtime, response);
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "audio-to-audio requires user-speech and bot-audio-transcription build features".into(),
+                    ));
+                }
+            } else if let Some(runtime) = user_speech {
+                #[cfg(feature = "user-speech")]
+                {
+                    ReleaseManifest::load_user_speech(
+                        &args[1], pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?,
+                    )?
+                }
+                #[cfg(not(feature = "user-speech"))]
+                {
+                    let _ = runtime;
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "--user-speech requires the user-speech build feature".into(),
+                    ));
+                }
+            } else if let Some(response) = bot_audio_response {
+                #[cfg(feature = "bot-audio-transcription")]
+                {
+                    ReleaseManifest::load_audio_response(
+                        &args[1], pipecat_evals::BotTranscriptionSettings::load(response)?, recorded,
+                    )?
+                }
+                #[cfg(not(feature = "bot-audio-transcription"))]
+                {
+                    let _ = response;
+                    return Err(pipecat_evals::EvalError::Unsupported(
+                        "--bot-audio-response requires the bot-audio-transcription build feature".into(),
+                    ));
+                }
+            } else if recorded {
+                ReleaseManifest::load_recorded(&args[1])?
+            } else {
+                ReleaseManifest::load(&args[1])?
             })
         } else {
             None

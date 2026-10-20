@@ -79,9 +79,12 @@ The current flat queue, minimum per-label concurrency caps, separate per-attempt
 context and attempt-major result order are retained; this is not Python's
 coalesced repeated-label queue implementation.
 
-The selected profile rejects DTMF, images, hosted bot-audio/duplex and recording.
-`--user-speech` cannot combine with suite `--recorded-audio` or
-`--bot-audio-response`; per-turn WAV overrides remain supported. Missing,
+This standalone profile rejects DTMF, images and recording.
+`--user-speech` cannot combine with suite `--recorded-audio`; per-turn WAV
+overrides remain supported. With both audio features, adding
+`--bot-audio-response` instead selects the separate explicit
+[joint hosted profile](HOSTED_AUDIO_TO_AUDIO.md), preserving spoken responses.
+It does not relax the standalone session builders' combination refusal. Missing,
 unknown and duplicate flags are invalid input. A binary without `user-speech`
 rejects the flag before reading the runtime/credential or launching a child.
 Manifest `record: true` and `cache_dir` remain unsupported: cache configuration
@@ -102,7 +105,7 @@ files, not authenticated or snapshot-frozen assets.
 
 Jobs may be reordered, cloned with valid new identities, or combined from
 independently loaded plans. Selected speech may mix with ordinary text/recorded
-jobs. Any selected job mixed with any audio-response job is rejected before
+jobs. A standalone speech job mixed with any audio-response job is rejected before
 model preparation. Each by-value invocation revalidates and charges every logical
 use, then creates exactly one shared execution budget:
 

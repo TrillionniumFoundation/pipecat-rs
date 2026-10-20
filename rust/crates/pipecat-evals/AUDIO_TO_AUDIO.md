@@ -16,9 +16,14 @@ pipecat-eval run scenarios.yaml ws://127.0.0.1:8765 \
 Both features must be compiled in. The command selects one combined branch before
 either standalone loader. A missing feature, duplicate/missing/unknown flag or
 incompatible selection fails before runtime-file/model/network preparation.
-`--stop-bot` requires exactly one scenario. `suite`, `--recorded-audio`,
+`--stop-bot` requires exactly one direct scenario. `--recorded-audio`,
 `--bot-audio-wav`, `--user-images`, DTMF and optional Smart Turn are unsupported
 in this selected route. Per-turn `audio` already supplies WAV overrides.
+
+For independently launched compiled bot children, the explicit joint suite
+entry is documented in [HOSTED_AUDIO_TO_AUDIO.md](HOSTED_AUDIO_TO_AUDIO.md).
+It reuses this joint session's settlement and cleanup, with separate hosted
+preparation/startup timing and invocation-level repeat accounting.
 
 ```yaml
 name: spoken-conversation

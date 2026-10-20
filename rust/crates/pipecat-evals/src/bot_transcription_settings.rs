@@ -266,6 +266,12 @@ impl BotTranscriptionSettings {
         }
     }
 
+    #[cfg(all(test, feature = "user-speech"))]
+    pub(crate) fn with_smart_turn_for_test(mut self) -> Self {
+        self.smart_turn_model = Some(PathBuf::from("never-open-smart-turn.onnx"));
+        self
+    }
+
     /// Build fresh models with checked inference and clean recurrent state.
     /// Native loading/inference is synchronous and has no hard deadline. The
     /// caller owns the result; no background loader or analyzer is started here.

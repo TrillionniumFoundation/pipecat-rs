@@ -628,6 +628,13 @@ deadlines and cleanup policy. See [AUDIO_TO_AUDIO.md](AUDIO_TO_AUDIO.md) for the
 finite direct-run scope, bounds, privacy, cancellation exit codes and evidence
 limits. Standalone constructors and defaults remain unchanged.
 
+The explicit hosted counterpart is
+`suite MANIFEST --user-speech TTS.json --bot-audio-response STT.json` and
+`ReleaseManifest::load_audio_to_audio`. It combines per-attempt independent
+Silero/STT owners with the existing compiled-child suite runner and one shared
+logical input budget. See [HOSTED_AUDIO_TO_AUDIO.md](HOSTED_AUDIO_TO_AUDIO.md)
+for preflight, repeated/cache-hit accounting, cancellation and finite scope.
+
 ## Explicit plain-request user images
 
 The `user-images` feature adds trusted-local image scenario sidecars and the

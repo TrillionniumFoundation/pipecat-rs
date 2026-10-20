@@ -178,8 +178,10 @@ For synthesized user input, enable both audio features and use the separate
 `AudioToAudioScenarioFile`/`--user-speech ... --bot-audio-response ...` direct
 entry described in [AUDIO_TO_AUDIO.md](AUDIO_TO_AUDIO.md). It uses one immutable
 audio-response plan, frozen WAV overrides and joint owned cleanup, including
-all-WAV input. This finite profile rejects Smart Turn, WAV export, images, DTMF
-and hosted suites; the standalone response/recorded/suite/Smart Turn entries
+all-WAV input. This finite profile rejects Smart Turn, WAV export, images and DTMF.
+Its hosted counterpart is documented in
+[HOSTED_AUDIO_TO_AUDIO.md](HOSTED_AUDIO_TO_AUDIO.md). The standalone
+response/recorded/suite/Smart Turn entries
 documented here retain their existing behavior.
 
 ## Explicit hosted suite configuration
