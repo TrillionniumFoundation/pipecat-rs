@@ -21,7 +21,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -43,6 +43,40 @@ pub const JUDGE_ENV: &str = "PIPECAT_HOSTED_DUPLEX_JUDGE_KEY_129";
 const PCM: &[u8] = include_bytes!("../../../pipecat-vad/tests/fixtures/smart_turn_speech.pcm16");
 const CLIP_BYTES: usize = 30_720;
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
+// Process-local monotonic evidence; PID identifies independent clock origins.
+fn elapsed_us() -> u128 {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_micros()
+}
+pub fn stage(label: &str) {
+    eprintln!(
+        "joint-stage pid={} us={} {label}",
+        std::process::id(),
+        elapsed_us()
+    );
+}
+pub fn snapshot(b: &Bundle, label: &str) {
+    stage(label);
+    for prefix in [
+        "trace-",
+        "tail-",
+        "consumed-",
+        "emitted-",
+        "complete-",
+        "invalid-",
+        "cleaned-",
+        "started-",
+    ] {
+        for path in b.markers(prefix) {
+            eprintln!(
+                "joint-marker {} {:?}",
+                path.file_name().unwrap().to_string_lossy(),
+                std::fs::read_to_string(&path).unwrap()
+            );
+        }
+    }
+}
 
 pub fn source(name: &str) -> Value {
     let mut value = fixture::source(name, &[REFERENCE]);
@@ -310,7 +344,14 @@ struct Profile {
     mode: String,
     wait_delta: i32,
 }
-struct Consumer {
+struct Consumer(Arc<ResponseState>);
+impl std::ops::Deref for Consumer {
+    type Target = ResponseState;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+struct ResponseState {
     directory: PathBuf,
     port: u16,
     profile: Profile,
@@ -319,7 +360,77 @@ struct Consumer {
     in_clip: AtomicBool,
     number: AtomicUsize,
 }
-impl Consumer {
+// A marker witnesses cancellation dropping the tracked response future before
+// processor cleanup. The marker is evidence only, never a lifetime mechanism.
+struct FinalResponseOwner(Arc<ResponseState>);
+impl Drop for FinalResponseOwner {
+    fn drop(&mut self) {
+        let _ = self.0.trace("response_owner_dropped");
+        let _ = self.0.mark("response-owner-dropped", b"done");
+    }
+}
+impl ResponseState {
+    async fn finish_response(
+        &self,
+        n: usize,
+        last_clip: bool,
+        ctx: &ProcessorContext,
+    ) -> Result<(), ProcessorError> {
+        if self.profile.mode == "gated"
+            && !observed(|| {
+                self.directory
+                    .join(format!("release-{}", self.port))
+                    .exists()
+            })
+            .await
+        {
+            return Err(ProcessorError::fatal("tail gate deadline"));
+        }
+        if self.profile.wait_delta != 0 && last_clip {
+            self.trace("peer_gate_enter")?;
+            self.mark("peer-enter", b"waiting")?;
+            let peer = i32::from(self.port) + self.profile.wait_delta;
+            if !observed(|| {
+                self.directory.join(format!("complete-{peer}")).exists()
+                    && (!self.directory.join("controlled-peer-hold").exists()
+                        || self.directory.join("controlled-peer-release").exists())
+            })
+            .await
+            {
+                return Err(ProcessorError::fatal("peer completion gate deadline"));
+            }
+            self.trace("peer_gate_exit")?;
+        }
+        self.mark("consumed", n.to_string())?;
+        self.answer(ctx).await?;
+        if last_clip {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(self.directory.join("completion-order"))
+                .and_then(|mut file| writeln!(file, "{}", self.port))
+                .map_err(|error| ProcessorError::new(error.to_string()))?;
+            self.mark("complete", b"done")?;
+        }
+        Ok(())
+    }
+
+    fn trace(&self, label: &str) -> Result<(), ProcessorError> {
+        let line = format!(
+            "pid={} us={} port={} turn={} {label}\n",
+            std::process::id(),
+            elapsed_us(),
+            self.port,
+            self.number.load(Ordering::SeqCst)
+        );
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.directory.join(format!("trace-{}", self.port)))
+            .and_then(|mut f| f.write_all(line.as_bytes()))
+            .map_err(|e| ProcessorError::new(e.to_string()))
+    }
+
     fn mark(&self, prefix: &str, bytes: impl AsRef<[u8]>) -> Result<(), ProcessorError> {
         std::fs::write(
             self.directory.join(format!("{prefix}-{}", self.port)),
@@ -349,6 +460,7 @@ impl Consumer {
             ctx.push(Frame::new(data), Direction::Downstream).await?;
         }
         if self.profile.mode != "silent" {
+            self.trace("output_pcm_enqueue")?;
             ctx.push(
                 Frame::new(FrameData::OutputAudio(
                     AudioRawFrame::new(PCM[..CLIP_BYTES].to_vec(), 16_000, 1).unwrap(),
@@ -367,9 +479,11 @@ impl Consumer {
             Direction::Downstream,
         )
         .await?;
+        self.trace("flush_wait")?;
         tokio::time::timeout(WAIT, delivered.wait())
             .await
             .map_err(|_| ProcessorError::fatal("bot PCM flush deadline"))?;
+        self.trace("flush_complete")?;
         ctx.push(Frame::new(FrameData::LlmResponseEnd), Direction::Downstream)
             .await?;
         self.mark("emitted", b"captured")
@@ -445,34 +559,22 @@ impl FrameProcessor for Consumer {
                     }
                     let n = self.number.fetch_add(1, Ordering::SeqCst) + 1;
                     self.mark(&format!("tail-{n}"), b"arrived")?;
-                    if self.profile.mode == "gated"
-                        && !observed(|| {
-                            self.directory
-                                .join(format!("release-{}", self.port))
-                                .exists()
-                        })
-                        .await
-                    {
-                        return Err(ProcessorError::fatal("tail gate deadline"));
-                    }
-                    if self.profile.wait_delta != 0 && self.clips.lock().unwrap().is_empty() {
-                        let peer = i32::from(self.port) + self.profile.wait_delta;
-                        if !observed(|| self.directory.join(format!("complete-{peer}")).exists())
-                            .await
-                        {
-                            return Err(ProcessorError::fatal("peer completion gate deadline"));
-                        }
-                    }
-                    self.mark("consumed", n.to_string())?;
-                    self.answer(ctx).await?;
-                    if self.clips.lock().unwrap().is_empty() {
-                        std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open(self.directory.join("completion-order"))
-                            .and_then(|mut file| writeln!(file, "{}", self.port))
-                            .map_err(|error| ProcessorError::new(error.to_string()))?;
-                        self.mark("complete", b"done")?;
+                    self.trace("final_pcm")?;
+                    let last_clip = self.clips.lock().unwrap().is_empty();
+                    if self.profile.wait_delta != 0 && last_clip {
+                        // Only the final peer-ordered response can wait for another
+                        // child. Keep input draining while it waits. The pipeline
+                        // owns this task: Cancel aborts it and cleanup joins it.
+                        // Earlier responses completed inline, so no response can
+                        // overtake this final one or reorder the PCM contract.
+                        let owner = FinalResponseOwner(self.0.clone());
+                        let response_ctx = ctx.clone();
+                        ctx.spawn("joint-final-peer-response", false, async move {
+                            let response_owner = owner;
+                            response_owner.0.finish_response(n, true, &response_ctx).await
+                        })?;
+                    } else {
+                        self.finish_response(n, last_clip, ctx).await?;
                     }
                 }
             }
@@ -484,9 +586,75 @@ impl FrameProcessor for Consumer {
         ctx.push(frame, direction).await
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        self.trace("cleanup")?;
         self.mark("cleaned", b"done")
     }
 }
+pub async fn cancel_held_peer_pipeline(b: &Bundle) {
+    let text = "isolated native peer cancellation";
+    let context = SharedContext::default();
+    context
+        .append_rich(ContextMessage {
+            role: ChatRole::System,
+            content: MessageContent::Text(text.into()),
+            name: None,
+            tool_call_id: None,
+            tool_calls: vec![],
+            extra: Default::default(),
+        })
+        .unwrap();
+    let packets = input::packets(&input::pcm(223));
+    let state = Arc::new(ResponseState {
+        directory: b.0.clone(),
+        port: 1,
+        profile: Profile {
+            clips: vec![],
+            context: text.into(),
+            mode: "normal".into(),
+            wait_delta: 1,
+        },
+        context,
+        clips: Mutex::new(VecDeque::from([packets.clone().into()])),
+        in_clip: AtomicBool::new(false),
+        number: AtomicUsize::new(0),
+    });
+    let weak = Arc::downgrade(&state);
+    let mut worker = Pipeline::new(vec![Arc::new(Consumer(state)), Arc::new(IdentityProcessor)])
+        .start(EvalBotHostConfig::default().pipeline)
+        .await
+        .unwrap();
+    for packet in packets {
+        worker
+            .sender()
+            .send(
+                Frame::new(FrameData::InputAudio(
+                    AudioRawFrame::new(packet, 16_000, 1).unwrap(),
+                )),
+                Direction::Downstream,
+            )
+            .await
+            .unwrap();
+    }
+    let entered = observed(|| b.0.join("peer-enter-1").exists()).await;
+    let cancel = worker.cancel("cancel held final peer response").await;
+    let joined = worker.join().await;
+    drop(worker);
+    snapshot(b, "native_peer_cancel_joined");
+    assert!(entered, "{joined:?}");
+    cancel.unwrap();
+    joined.unwrap();
+    assert!(
+        weak.upgrade().is_none(),
+        "response owner remains alive after pipeline join"
+    );
+    assert!(b.0.join("response-owner-dropped-1").exists());
+    assert!(b.0.join("cleaned-1").exists());
+    assert!(b.markers("complete-").is_empty());
+    assert!(b.markers("emitted-").is_empty());
+    let trace = std::fs::read_to_string(b.0.join("trace-1")).unwrap();
+    assert!(trace.find("response_owner_dropped").unwrap() < trace.find("cleanup").unwrap());
+}
+
 struct Factory {
     directory: PathBuf,
     port: u16,
@@ -509,7 +677,7 @@ impl EvalBotFactory for Factory {
             .collect();
         Ok(EvalBotPipeline {
             context: context.clone(),
-            processors: vec![Arc::new(Consumer {
+            processors: vec![Arc::new(Consumer(Arc::new(ResponseState {
                 directory: self.directory.clone(),
                 port: self.port,
                 profile: self.profile.clone(),
@@ -517,7 +685,7 @@ impl EvalBotFactory for Factory {
                 clips: Mutex::new(clips),
                 in_clip: AtomicBool::new(false),
                 number: AtomicUsize::new(0),
-            })],
+            })))],
             assistant: Arc::new(IdentityProcessor),
             introduction: None,
         })
@@ -578,7 +746,7 @@ pub async fn child() {
     assert_eq!(report.last_exit, Some(EvalBotExit::EvalCancel));
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Kind {
     Tts,
     Stt,
@@ -721,6 +889,7 @@ async fn serve(
     let request = read_request(&mut stream).await?;
     validate_request(kind, &request)?;
     *gate.request.lock().unwrap() = request;
+    stage(&format!("http_enter kind={kind:?}"));
     gate.received.notify_one();
     if let Some(marker) = marker {
         if matches!(reply, Reply::Hold) {
@@ -769,6 +938,7 @@ async fn serve(
     stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: {content}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len()).as_bytes()).await?;
     stream.write_all(&body).await?;
     stream.shutdown().await?;
+    stage(&format!("http_reply kind={kind:?}"));
     gate.done.store(true, Ordering::SeqCst);
     Ok(())
 }

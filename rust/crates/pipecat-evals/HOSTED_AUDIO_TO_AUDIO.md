@@ -126,3 +126,40 @@ semantics, not recognition accuracy. Feature-specific compile/lint checks and
 runtime targets are reported separately; no unexecuted configuration is counted
 as a runtime pass. This profile does not claim complete Python suite parity,
 paid-provider validation or production deployment readiness.
+
+### Fixture peer-order barrier diagnostic
+
+The joint compiled-child fixture must keep consuming idle input while waiting
+for another child to complete. A controlled one-second hold of its final peer
+barrier reproduced input-lane backpressure when that barrier awaited inside
+`Consumer::process`: valid final PCM was observed, but the slow child never
+exited the barrier or emitted its second response. The repaired fixture uses
+`ProcessorContext::spawn` only for that final peer-ordered response. Earlier
+responses remain inline; complete-PCM validation precedes task admission, and
+peer completion still precedes response emission and completion-order recording.
+Pipeline cancellation cancels the tracked task and joins it before processor
+cleanup. No production queue capacity, timeout, or completion contract changed.
+
+`joint_controlled_peer_lag_keeps_input_draining` retains the original CLI-order,
+complete-PCM, response, and child-reaping assertions. Its global hold guarantees
+one deliberately delayed slow peer, not a one-second delay for every attempt.
+`joint_cancel_joins_held_final_peer_response` cancels while that task is pending
+and requires child reaping and owner retirement without a response. A canceled
+outer process token may intentionally force-kill a child before native cleanup;
+it does not promise a natural exit. The direct native-pipeline case
+`joint_native_cancel_joins_held_peer_before_cleanup` separately witnesses the
+tracked future being dropped before processor cleanup, joins the pipeline, and
+checks that no response state remains alive. An initial over-strong hosted
+natural-exit assertion passed in isolation but failed in a joint regression;
+that failure is retained as test-design evidence, not a fixed production race.
+Fixture stage logs use process-local monotonic clocks; timestamps from different
+PIDs must not be directly subtracted. STT admission/reply logs and returned
+response events complement child PCM/barrier/flush markers.
+
+This establishes the controlled callback-pressure mechanism, not a complete
+explanation of the historical batch129 failures. The exact all-WAV case and both
+held-provider cancellation branches passed the diagnostic invocations; their
+historical failures remain unresolved non-reproductions, not claimed fixes.
+The original batch129 support source is reconstructable, but the original suite
+test-file bytes are unavailable, so a complete old-source reproduction is not
+claimed. All original failure evidence is retained separately from later passes.

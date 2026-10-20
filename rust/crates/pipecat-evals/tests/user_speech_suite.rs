@@ -1264,7 +1264,16 @@ mod joint {
 
     #[tokio::test]
     async fn both_cli_flag_orders_run_joint_attempt_major_complete_pcm_and_spoken_send_after() {
-        for reverse in [false, true] {
+        joint_cli_orders(false).await;
+    }
+
+    #[tokio::test]
+    async fn joint_controlled_peer_lag_keeps_input_draining() {
+        joint_cli_orders(true).await;
+    }
+
+    async fn joint_cli_orders(controlled: bool) {
+        for reverse in [false, true].into_iter().take(if controlled { 1 } else { 2 }) {
             let b = Bundle::new();
             let speech = input::pcm(21);
             let recording = input::pcm(41);
@@ -1293,6 +1302,19 @@ mod joint {
             let tts = Http::start(Kind::Tts, vec![Reply::Pcm(speech.clone()); 4]).await;
             let stt = Http::start(Kind::Stt, vec![Reply::Text(SPOKEN); 8]).await;
             let (speech_runtime, stt_runtime) = runtime_files(&b, &tts.url, &stt.url, None);
+            let controller = if controlled {
+                b.put("controlled-peer-hold", b"hold");
+                let directory = b.0.clone();
+                Some(tokio::spawn(async move {
+                    let entered = duplex::observed(|| std::fs::read_dir(&directory).unwrap()
+                        .any(|p| p.unwrap().file_name().to_string_lossy().starts_with("peer-enter-"))).await;
+                    duplex::stage(&format!("controlled_peer_entered={entered}"));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    std::fs::write(directory.join("controlled-peer-release"), b"go").unwrap();
+                    duplex::stage("controlled_peer_released");
+                    entered
+                }))
+            } else { None };
             let output = duplex::cli(
                 &duplex::arguments(&manifest, &speech_runtime, &stt_runtime, reverse),
                 &b.0,
@@ -1300,6 +1322,10 @@ mod joint {
             .await;
             let tts = tts.finish().await;
             let stt = stt.finish().await;
+            let controlled_entered = match controller { Some(t) => t.await.unwrap(), None => true };
+            duplex::snapshot(&b, "cli_joined");
+            eprintln!("joint-cli-output {output:?}");
+            assert!(controlled_entered);
             let result = duplex::result(&output, 0);
             tts.checked(4);
             stt.checked(8);
@@ -1456,6 +1482,8 @@ mod joint {
         let tts = tts.finish().await;
         let stt = stt.finish().await;
         let retired = duplex::retired().await;
+        duplex::snapshot(&b, "all_wav_joined");
+        eprintln!("joint-all-wav result={result:?} stt_admitted={}", stt.gates.iter().filter(|g| !g.request.lock().unwrap().is_empty()).count());
         let result = result.unwrap();
         assert!(result.passed, "{result:?}");
         tts.checked(0);
@@ -1700,6 +1728,8 @@ mod joint {
             let eof = duplex::observed(|| gate.closed.load(Ordering::SeqCst)).await;
             let reaped_before_cleanup = duplex::child_pids_gone(&b);
             let pipes_before_cleanup = duplex::retired_except_fixtures(2).await;
+            duplex::stage(&format!("cancel hold_tts={hold_tts} entered={entered} timed_out={timed_out} eof={eof} reaped={reaped_before_cleanup} pipes={pipes_before_cleanup} alive_tasks={} closed={} done={} result={result:?}", tokio::runtime::Handle::current().metrics().num_alive_tasks(), gate.closed.load(Ordering::SeqCst), gate.done.load(Ordering::SeqCst)));
+            duplex::snapshot(&b, "cancel_before_cleanup");
             let tts = tts.finish().await;
             let stt = stt.finish().await;
             let retired = duplex::retired().await;
@@ -1725,6 +1755,57 @@ mod joint {
             input::assert_no_temporaries(&cache);
             input::assert_cache_unlocked(&cache);
         }
+    }
+
+    #[tokio::test]
+    async fn joint_cancel_joins_held_final_peer_response() {
+        let b = Bundle::new();
+        let bytes = input::pcm(222);
+        let path = duplex::one(&b, "peer-cancel", std::slice::from_ref(&bytes), "normal");
+        // No peer exists: cancellation must retire the tracked final response
+        // while its original 30-second peer barrier is still pending.
+        input::profile(&b, "peer-cancel", std::slice::from_ref(&bytes),
+            "isolated peer-cancel", "normal", 1);
+        let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes)]).await;
+        let stt = Http::start(Kind::Stt, vec![]).await;
+        let cancel = Cancellation::new();
+        let future = run_path(&path, input::settings(&tts.url, None),
+            duplex::stt_settings(&b, &stt.url), duplex::options(), cancel.clone());
+        tokio::pin!(future);
+        let entry = tokio::select! {
+            result = &mut future => Err(result),
+            entered = duplex::observed(|| !b.markers("peer-enter-").is_empty()) => Ok(entered),
+        };
+        cancel.cancel();
+        let (entered, result) = match entry {
+            Ok(entered) => (entered, future.await),
+            Err(result) => (false, result),
+        };
+        let reaped = duplex::child_pids_gone(&b);
+        let owners_retired = duplex::retired_except_fixtures(2).await;
+        duplex::snapshot(&b, "peer_cancel_before_cleanup");
+        duplex::stage(&format!("peer_cancel entered={entered} reaped={reaped} owners_retired={owners_retired} result={result:?}"));
+        let tts = tts.finish().await;
+        let stt = stt.finish().await;
+        let retired = duplex::retired().await;
+        assert!(entered && reaped && owners_retired && retired);
+        tts.checked(1);
+        stt.checked(0);
+        let result = result.unwrap();
+        assert!(!result.passed);
+        input::assert_reaped(&value(&result));
+        // The canceled outer process token may force-kill after sending eval-cancel.
+        // Hosted cancellation promises reap/retirement, not natural child cleanup.
+        // The separate native test proves coordinator drop/join before cleanup.
+        assert!(b.markers("complete-").is_empty());
+        assert!(b.markers("emitted-").is_empty());
+    }
+
+    #[tokio::test]
+    async fn joint_native_cancel_joins_held_peer_before_cleanup() {
+        let b = Bundle::new();
+        duplex::cancel_held_peer_pipeline(&b).await;
+        assert!(duplex::retired().await);
     }
 
     #[tokio::test]
