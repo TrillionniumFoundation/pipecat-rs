@@ -17,6 +17,7 @@ use fixture::*;
 use input_fixture::{Http as TtsHttp, Reply as TtsReply};
 use pipecat_evals::{
     AudioToAudioScenarioFile, Cancellation, EvalError, EvalSession, RecordedAudio, SessionOptions,
+    TimelineRecordingLimits, TimelineRecordingRun,
 };
 use serde_json::{json, Value};
 use std::{path::Path, sync::atomic::Ordering, time::Duration};
@@ -69,6 +70,248 @@ impl Case {
             }
         }
     }
+}
+
+// Keep the run future owned on timeout, then await cooperative cleanup before
+// reporting failure. A dropped recording future would not prove owner retirement.
+async fn timeline_run(
+    session: EvalSession,
+    limits: TimelineRecordingLimits,
+) -> TimelineRecordingRun {
+    let cancel = Cancellation::new();
+    let mut task = tokio::spawn(session.run_with_timeline_recording(cancel.clone(), limits));
+    match tokio::time::timeout(WAIT, &mut task).await {
+        Ok(result) => result.unwrap().unwrap(),
+        Err(_) => {
+            cancel.cancel();
+            let result = task.await;
+            panic!("recording deadline; actual cooperative join: {result:?}");
+        }
+    }
+}
+fn assert_wav_contains(wav: &[u8], pcm: &[u8]) {
+    assert_eq!(&wav[..4], b"RIFF");
+    assert_eq!(&wav[8..12], b"WAVE");
+    assert!(
+        wav[44..].windows(pcm.len()).any(|window| window == pcm),
+        "timeline omitted an admitted PCM signal ({} bytes)",
+        pcm.len()
+    );
+}
+
+#[tokio::test]
+async fn joint_timeline_on_and_off_keep_identical_spoken_assertions_and_both_pcm_signals() {
+    let b = Bundle::new();
+    // Distinct from the native bot fixture, including its leading silence.
+    let bytes: Vec<u8> = (0..1957)
+        .flat_map(|i| (12000_i16 + i % 301).to_le_bytes())
+        .collect();
+    let mut value = source();
+    value["turns"][0]["expect"] = json!([
+        expectation("llm_response", LLM),
+        expectation("response", "stale forbidden transcript")
+    ]);
+    let mut outcomes = vec![];
+    for recording in [false, true] {
+        let Case {
+            host,
+            tts,
+            stt,
+            session,
+        } = Case::new(
+            &b,
+            &value,
+            vec![bytes.clone()],
+            Mode::Normal,
+            vec![TtsReply::pcm(bytes.clone())],
+            vec![Reply::Hold],
+            None,
+            options(),
+        )
+        .await;
+        let cancel = Cancellation::new();
+        let c = cancel.clone();
+        let mut task = tokio::spawn(async move {
+            if recording {
+                let run = session
+                    .run_with_timeline_recording(c, TimelineRecordingLimits::default())
+                    .await
+                    .unwrap();
+                let wav = run.to_wav().unwrap().unwrap();
+                (run.result, Some(wav))
+            } else {
+                (session.run(c).await, None)
+            }
+        });
+        let reached = tokio::time::timeout(WAIT, stt.trace.received.notified()).await;
+        // Wait beyond the queued 960 ms bot clip before releasing recognition:
+        // this checks both full signals without assuming native STT latency.
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        let returned_before_stt = task.is_finished();
+        stt.trace.released.add_permits(1);
+        let joined = match tokio::time::timeout(WAIT, &mut task).await {
+            Ok(result) => result,
+            Err(_) => {
+                cancel.cancel();
+                task.await
+            }
+        };
+        let (host_result, trace) = host.finish().await;
+        let tts_trace = tts.finish().await;
+        let (stt_result, stt_trace) = stt.finish().await;
+        reached.unwrap();
+        host_result.unwrap();
+        stt_result.unwrap();
+        assert!(!returned_before_stt);
+        let (result, wav) = joined.unwrap();
+        assert!(result.passed, "recording={recording}: {result:?}");
+        assert_eq!(responses(&result), ["stale forbidden transcript"]);
+        assert_consumed(&trace, std::slice::from_ref(&bytes));
+        assert_eq!(tts_trace.active.load(Ordering::SeqCst), 0);
+        assert_eq!(stt_trace.requests.lock().unwrap().len(), 1);
+        assert_eq!(stt_trace.joined.load(Ordering::SeqCst), 1);
+        if let Some(wav) = wav {
+            assert_wav_contains(&wav, &bytes);
+            assert_wav_contains(&wav, &PCM[..CLIP_BYTES]);
+        }
+        outcomes.push((
+            result.passed,
+            result.failures.len(),
+            responses(&result)
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        ));
+    }
+    assert_eq!(outcomes[0], outcomes[1]);
+}
+
+#[tokio::test]
+async fn joint_timeline_interrupts_queued_suffix_and_rejects_held_old_stt() {
+    let b = Bundle::new();
+    let bytes = input_pcm();
+    let mut value = source();
+    value["turns"][0]["expect"] = json!([expectation("response", SPOKEN)]);
+    let Case {
+        host,
+        tts,
+        stt,
+        session,
+    } = Case::new(
+        &b,
+        &value,
+        vec![bytes.clone()],
+        Mode::InterruptOutput,
+        vec![TtsReply::pcm(bytes.clone())],
+        vec![Reply::Hold, Reply::Stt(SPOKEN)],
+        None,
+        options(),
+    )
+    .await;
+    let cancel = Cancellation::new();
+    let mut task = tokio::spawn(
+        session.run_with_timeline_recording(cancel.clone(), TimelineRecordingLimits::default()),
+    );
+    let requested = tokio::time::timeout(WAIT, stt.trace.received.notified()).await;
+    host.trace.release.add_permits(1);
+    let interrupted = tokio::time::timeout(WAIT, host.trace.interrupted.notified()).await;
+    // If the old HTTP reply races cancellation, the interruption fence must
+    // still reject its epoch. It must never satisfy or appear in response.
+    stt.trace.released.add_permits(1);
+    let joined = match tokio::time::timeout(WAIT, &mut task).await {
+        Ok(result) => result,
+        Err(_) => {
+            cancel.cancel();
+            task.await
+        }
+    };
+    let (host_result, trace) = host.finish().await;
+    let tts_trace = tts.finish().await;
+    let (stt_result, stt_trace) = stt.finish().await;
+    assert!(
+        requested.is_ok(),
+        "first STT absent; run={joined:?}; host={host_result:?}; STT={stt_result:?}"
+    );
+    assert!(
+        interrupted.is_ok(),
+        "interruption absent; run={joined:?}; host={host_result:?}; STT={stt_result:?}"
+    );
+    host_result.unwrap();
+    stt_result.unwrap();
+    let recording = joined.unwrap().unwrap();
+    assert!(recording.result.passed, "{:?}", recording.result);
+    assert_eq!(responses(&recording.result), [SPOKEN]);
+    assert_consumed(&trace, std::slice::from_ref(&bytes));
+    assert_eq!(tts_trace.active.load(Ordering::SeqCst), 0);
+    assert_eq!(stt_trace.requests.lock().unwrap().len(), 2);
+    assert_eq!(stt_trace.joined.load(Ordering::SeqCst), 1);
+    let wav = recording.to_wav().unwrap().unwrap();
+    assert_wav_contains(&wav, &bytes);
+    // The first STT request proves this paced prefix was consumed before
+    // interruption; do not require the fresh response to finish playout.
+    assert_wav_contains(&wav, &PCM[..25_600]);
+    let suffix = interrupted_suffix();
+    assert!(
+        !wav[44..]
+            .windows(256)
+            .any(|window| window == &suffix[..256]),
+        "unplayed interrupted suffix leaked into recording"
+    );
+}
+
+#[tokio::test]
+async fn joint_timeline_budget_failure_keeps_bounded_user_prefix_and_joins_transcription() {
+    let b = Bundle::new();
+    let bytes = input_pcm();
+    let Case {
+        host,
+        tts,
+        stt,
+        session,
+    } = Case::new(
+        &b,
+        &source(),
+        vec![bytes.clone()],
+        Mode::Normal,
+        vec![TtsReply::pcm(bytes.clone())],
+        vec![],
+        None,
+        options(),
+    )
+    .await;
+    let run = timeline_run(
+        session,
+        TimelineRecordingLimits {
+            max_raw_bytes: bytes.len() + 2,
+            ..TimelineRecordingLimits::default()
+        },
+    )
+    .await;
+    let (host_result, trace) = host.finish().await;
+    let tts_trace = tts.finish().await;
+    let (stt_result, stt_trace) = stt.finish().await;
+    host_result.unwrap();
+    stt_result.unwrap();
+    assert!(!run.result.passed, "{:?}", run.result);
+    assert!(
+        run.result
+            .failures
+            .iter()
+            .any(|failure| failure.reason.contains("timeline")),
+        "{:?}",
+        run.result
+    );
+    assert!(responses(&run.result).is_empty());
+    assert_consumed(&trace, std::slice::from_ref(&bytes));
+    assert_eq!(tts_trace.active.load(Ordering::SeqCst), 0);
+    assert_eq!(stt_trace.joined.load(Ordering::SeqCst), 1);
+    let wav = run.to_wav().unwrap().unwrap();
+    assert_wav_contains(&wav, &bytes);
+    assert_eq!(
+        wav.len(),
+        44 + bytes.len(),
+        "failed bot admission must not publish an invented complete track"
+    );
 }
 
 #[tokio::test]
@@ -252,7 +495,7 @@ async fn cold_then_warm_session_uses_cache_and_recording_override_without_second
         )
         .await;
         let result = match prepared {
-            Ok(session) => Some(run(session).await),
+            Ok(session) => Some(timeline_run(session, TimelineRecordingLimits::default()).await),
             Err(_) => None,
         };
         let (host_result, trace) = host.finish().await;
@@ -262,7 +505,10 @@ async fn cold_then_warm_session_uses_cache_and_recording_override_without_second
         }
         host_result.unwrap();
         stt_result.unwrap();
-        let result = result.expect("valid cache joint preparation");
+        let recording = result.expect("valid cache joint preparation");
+        let wav = recording.to_wav().unwrap().unwrap();
+        assert_wav_contains(&wav, &bytes);
+        let result = recording.result;
         assert!(result.passed, "warm={warm}; {result:?}");
         assert_consumed(&trace, &[bytes.clone(), recorded.clone()]);
         assert_eq!(stt_trace.requests.lock().unwrap().len(), 2);
@@ -298,7 +544,10 @@ async fn all_wav_joint_plan_needs_no_speech_owner_and_freezes_recordings() {
         options(),
     )
     .await;
-    let result = run(session).await;
+    let recording = timeline_run(session, TimelineRecordingLimits::default()).await;
+    let wav = recording.to_wav().unwrap().unwrap();
+    assert_wav_contains(&wav, &bytes);
+    let result = recording.result;
     let (host_result, trace) = host.finish().await;
     let tts_trace = tts.finish().await;
     let (stt_result, _) = stt.finish().await;

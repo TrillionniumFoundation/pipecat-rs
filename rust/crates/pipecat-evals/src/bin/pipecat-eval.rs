@@ -128,14 +128,14 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
 
     if !suite && !single {
         return Err(pipecat_evals::EvalError::Scenario(
-            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json | --recording-wav NEW.wav] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json] [--user-speech RUNTIME.json]\n       --recording-wav requires --recorded-audio or --user-speech and exactly one direct scenario".into()));
+            "Usage: pipecat-eval run SCENARIOS.yaml ws://HOST:PORT[/PATH] [--stop-bot] [--recorded-audio] [--bot-audio-wav NEW.wav | --bot-audio-response CONFIG.json] [--recording-wav NEW.wav] [--user-speech RUNTIME.json | --user-images]\n       pipecat-eval suite NATIVE-MANIFEST.yaml [--recorded-audio] [--bot-audio-response CONFIG.json] [--user-speech RUNTIME.json]\n       --recording-wav requires --recorded-audio or --user-speech and exactly one direct scenario; with --bot-audio-response it requires --user-speech; it cannot combine with --bot-audio-wav".into()));
     }
     // Reject unsupported recording compositions before loading any scenario,
     // runtime configuration or model, or creating an output temporary.
     if recording_wav.is_some() {
-        if bot_audio_response.is_some() {
+        if bot_audio_response.is_some() && (user_speech.is_none() || recorded) {
             return Err(pipecat_evals::EvalError::Unsupported(
-                "--recording-wav cannot combine with --bot-audio-response".into(),
+                "--recording-wav with --bot-audio-response requires direct --user-speech without --recorded-audio".into(),
             ));
         }
         if bot_audio_wav.is_some() {
@@ -264,10 +264,15 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
             if let (Some(runtime), Some(response)) = (user_speech, bot_audio_response) {
                 #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
                 {
+                    let file = pipecat_evals::AudioToAudioScenarioFile::load(&args[1])?;
+                    if recording_wav.is_some() && file.len() != 1 {
+                        return Err(pipecat_evals::EvalError::Scenario(
+                            "--recording-wav requires exactly one scenario".into(),
+                        ));
+                    }
                     let speech = pipecat_evals::CartesiaUserSpeechSettings::load(runtime)?;
                     let transcription = pipecat_evals::BotTranscriptionSettings::load(response)?;
-                    pipecat_evals::AudioToAudioScenarioFile::load(&args[1])?
-                        .into_sessions_with_cancellation(
+                    file.into_sessions_with_cancellation(
                             &args[2], options, speech, transcription, cancel.clone(),
                         )
                         .await?

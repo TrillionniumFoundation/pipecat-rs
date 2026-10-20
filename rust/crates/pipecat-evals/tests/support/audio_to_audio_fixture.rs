@@ -39,6 +39,11 @@ pub const PCM: &[u8] =
     include_bytes!("../../../pipecat-vad/tests/fixtures/smart_turn_speech.pcm16");
 pub const CLIP_BYTES: usize = 30_720;
 
+pub fn interrupted_suffix() -> Vec<u8> {
+    (0..16_000)
+        .flat_map(|i| (24_000_i16 + i % 997).to_le_bytes())
+        .collect()
+}
 pub fn input_pcm() -> Vec<u8> {
     // A non-silent native fixture excerpt, three packets plus an uneven tail.
     PCM[25_600..29_514].to_vec()
@@ -171,6 +176,7 @@ pub enum Mode {
     Silent,
     Early,
     InterruptInput,
+    InterruptOutput,
 }
 pub struct Trace {
     pub audio: Mutex<Vec<Vec<u8>>>,
@@ -183,6 +189,7 @@ pub struct Trace {
     pub first: Notify,
     pub tail: Notify,
     pub output: Notify,
+    pub interrupted: Notify,
     pub gated: AtomicBool,
     pub release: Semaphore,
 }
@@ -199,6 +206,7 @@ impl Default for Trace {
             first: Notify::new(),
             tail: Notify::new(),
             output: Notify::new(),
+            interrupted: Notify::new(),
             gated: AtomicBool::new(false),
             release: Semaphore::new(0),
         }
@@ -208,6 +216,7 @@ struct Consumer {
     trace: Arc<Trace>,
     clips: Mutex<VecDeque<VecDeque<Vec<u8>>>>,
     in_clip: AtomicBool,
+    pending_interrupt: AtomicBool,
     mode: Mode,
 }
 impl Drop for Consumer {
@@ -222,6 +231,7 @@ async fn response(
     ctx: &ProcessorContext,
     trace: &Trace,
     silent: bool,
+    queued_suffix: bool,
 ) -> Result<(), ProcessorError> {
     for data in [
         FrameData::LlmResponseStart,
@@ -241,6 +251,22 @@ async fn response(
             ),
         )
         .await?;
+    }
+    if queued_suffix {
+        // A finite tail far beyond the first locally segmented STT request.
+        // Individual packets retain the real engine's one-second wire bound.
+        for pcm in [
+            vec![0; 32_000],
+            vec![0; 32_000],
+            vec![0; 32_000],
+            interrupted_suffix(),
+        ] {
+            push(
+                ctx,
+                FrameData::OutputAudio(AudioRawFrame::new(pcm, 16_000, 1).unwrap()),
+            )
+            .await?;
+        }
     }
     // A real root flush follows the same normal frame queue as bot PCM. A
     // remote stopped-speaking event is deliberately sent before that PCM.
@@ -274,6 +300,23 @@ impl FrameProcessor for Consumer {
         direction: Direction,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        // Keep consuming ordinary user/idle input while STT is held. Blocking
+        // this processor on the test gate would fill the real ingress queue.
+        if self.pending_interrupt.load(Ordering::SeqCst) {
+            if let Ok(permit) = self.trace.release.try_acquire() {
+                permit.forget();
+                self.pending_interrupt.store(false, Ordering::SeqCst);
+                push(
+                    ctx,
+                    FrameData::OutputTransportMessageUrgent(
+                        json!({"label":"rtvi-ai", "type":"bot-interrupted", "data":{}}),
+                    ),
+                )
+                .await?;
+                self.trace.interrupted.notify_one();
+                response(ctx, &self.trace, false, false).await?;
+            }
+        }
         match &frame.data {
             FrameData::InputAudio(audio) => {
                 self.trace.audio.lock().unwrap().push(audio.audio.clone());
@@ -307,7 +350,7 @@ impl FrameProcessor for Consumer {
                     if first {
                         self.trace.first.notify_one();
                         if matches!(self.mode, Mode::Early) {
-                            response(ctx, &self.trace, false).await?;
+                            response(ctx, &self.trace, false, false).await?;
                         }
                         if matches!(self.mode, Mode::InterruptInput) {
                             push(
@@ -333,8 +376,16 @@ impl FrameProcessor for Consumer {
                         if self.trace.errors.lock().unwrap().is_empty() {
                             self.trace.completed.fetch_add(1, Ordering::SeqCst);
                             if !matches!(self.mode, Mode::Early) {
-                                response(ctx, &self.trace, matches!(self.mode, Mode::Silent))
-                                    .await?;
+                                response(
+                                    ctx,
+                                    &self.trace,
+                                    matches!(self.mode, Mode::Silent),
+                                    matches!(self.mode, Mode::InterruptOutput),
+                                )
+                                .await?;
+                                if matches!(self.mode, Mode::InterruptOutput) {
+                                    self.pending_interrupt.store(true, Ordering::SeqCst);
+                                }
                             }
                         }
                     }
@@ -371,6 +422,7 @@ impl EvalBotFactory for Factory {
                 trace: self.trace.clone(),
                 clips: Mutex::new(self.clips.iter().map(|c| packets(c).into()).collect()),
                 in_clip: AtomicBool::new(false),
+                pending_interrupt: AtomicBool::new(false),
                 mode: self.mode,
             })],
             assistant: Arc::new(IdentityProcessor),

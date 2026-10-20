@@ -766,14 +766,18 @@ impl EvalSession {
             ));
         }
         #[cfg(feature = "bot-audio-transcription")]
-        if self.transcription_config.is_some() || self.transcription.is_some() {
+        if !self.is_audio_to_audio()
+            && (self.transcription_config.is_some() || self.transcription.is_some())
+        {
             return Err(EvalError::Unsupported(
                 "timeline recording with bot audio response or transcription".into(),
             ));
         }
-        if self.is_audio_to_audio() || self.capture.is_some() {
+        // Joint construction installs the bounded capture consumed by STT. It
+        // is not an independently requested bot-only export.
+        if !self.is_audio_to_audio() && self.capture.is_some() {
             return Err(EvalError::Unsupported(
-                "timeline recording with joint or existing bot-only capture".into(),
+                "timeline recording with existing bot-only capture".into(),
             ));
         }
         #[cfg(feature = "user-speech")]
@@ -1758,15 +1762,33 @@ impl EvalSession {
             return Ok(true);
         }
         if envelope.message_type == "eval-bot-audio" {
+            let data = envelope.data.as_ref().unwrap_or(&Value::Null);
+            // Joint STT and recording share the narrow mono 16 kHz contract.
+            // Validate it before either consumer can admit this packet.
+            if self.is_audio_to_audio() {
+                if data.get("sampleRate").and_then(Value::as_u64) != Some(16_000) {
+                    return Err(EvalError::Unsupported(
+                        "audio response requires 16 kHz PCM".into(),
+                    ));
+                }
+                for key in ["numChannels", "channels"] {
+                    if data
+                        .get(key)
+                        .is_some_and(|channels| channels.as_u64() != Some(1))
+                    {
+                        return Err(EvalError::Unsupported(
+                            "audio response requires mono PCM16".into(),
+                        ));
+                    }
+                }
+            }
             if let Some(state) = &self.timeline {
-                ingest_timeline_bot(
-                    &state.recorder,
-                    envelope.data.as_ref().unwrap_or(&Value::Null),
-                )?;
-                return Ok(false);
+                ingest_timeline_bot(&state.recorder, data)?;
+                // Recording is an additional bounded consumer, not a terminal
+                // route: joint capture and STT must receive the same packet.
             }
             if let Some(capture) = &mut self.capture {
-                capture.ingest(envelope.data.as_ref().unwrap_or(&Value::Null))?;
+                capture.ingest(data)?;
                 #[cfg(feature = "bot-audio-transcription")]
                 if let Some(engine) = &mut self.transcription {
                     let chunk = capture
@@ -1786,6 +1808,9 @@ impl EvalSession {
                         )?;
                     }
                 }
+                return Ok(false);
+            }
+            if self.timeline.is_some() {
                 return Ok(false);
             }
         }
@@ -1910,6 +1935,7 @@ impl EvalSession {
     }
     #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
     async fn shutdown_audio_to_audio(&mut self) {
+        self.close_timeline_recording();
         // Phase A has no await or native join. Revoke every producer before a
         // held model/cache call can delay any owner's stop signal.
         self.audio_to_audio.as_mut().unwrap().admission_open = false;
@@ -2217,6 +2243,13 @@ impl EvalSession {
         self.user_speech.take();
     }
     pub(crate) async fn shutdown(&mut self) {
+        // Joint cleanup owns transcription as well as Playback and speech.
+        // Its stop-once state remains authoritative when recording is enabled.
+        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+        if self.is_audio_to_audio() {
+            self.shutdown_audio_to_audio().await;
+            return;
+        }
         if self.timeline.is_some() {
             self.shutdown_timeline_recording().await;
             return;
@@ -2224,11 +2257,6 @@ impl EvalSession {
         #[cfg(feature = "user-speech")]
         if self.hosted_speech.is_some() {
             self.shutdown_hosted_speech().await;
-            return;
-        }
-        #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
-        if self.is_audio_to_audio() {
-            self.shutdown_audio_to_audio().await;
             return;
         }
         #[cfg(feature = "user-speech")]
@@ -3034,10 +3062,34 @@ mod hosted_speech_lifecycle_tests {
     }
     #[tokio::test]
     async fn timeline_cutoff_survives_cancelled_real_socket_join_and_reentry() {
+        timeline_cutoff_reentry(false).await;
+    }
+    #[cfg(feature = "bot-audio-transcription")]
+    #[tokio::test]
+    async fn joint_timeline_cutoff_survives_cancelled_socket_join_and_reentry() {
+        timeline_cutoff_reentry(true).await;
+    }
+    async fn timeline_cutoff_reentry(joint: bool) {
         let (socket, mut peer) = held_socket().await;
         let sender = socket.sender();
         let mut session = session();
         session.hosted_speech = None;
+        #[cfg(feature = "bot-audio-transcription")]
+        if joint {
+            session.audio_to_audio = Some(AudioToAudioState {
+                run: None,
+                admission_open: true,
+                stop_bot_attempted: false,
+            });
+            session.transcription = Some(BotTranscription::lifecycle_test_engine(
+                false,
+                None,
+                None,
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            ));
+        }
+        #[cfg(not(feature = "bot-audio-transcription"))]
+        assert!(!joint);
         session.options.transport.write_timeout = Duration::from_millis(250);
         session.options.transport.close_timeout = Duration::from_millis(250);
         session.socket = Some(socket);
@@ -3079,7 +3131,16 @@ mod hosted_speech_lifecycle_tests {
         let upper_cutoff = origin.elapsed().as_nanos();
         let retained = session.socket.is_some();
         let state = session.timeline.as_ref().unwrap();
-        assert!(state.closed && state.stop_bot_attempted);
+        assert!(state.closed);
+        if !joint {
+            assert!(state.stop_bot_attempted);
+        }
+        #[cfg(feature = "bot-audio-transcription")]
+        if joint {
+            assert!(session.audio_to_audio.as_ref().unwrap().stop_bot_attempted);
+            assert!(!session.audio_to_audio.as_ref().unwrap().admission_open);
+            assert!(session.transcription.is_some());
+        }
         tokio::time::sleep(Duration::from_millis(50)).await;
         session.options.stop_bot = true;
         session.options.transport.write_timeout = Duration::from_millis(1);
@@ -3091,6 +3152,8 @@ mod hosted_speech_lifecycle_tests {
             session.socket.is_none() && session.playback.is_none() && session.user_speech.is_none()
         );
         assert!(peer_joined.is_ok(), "peer actual join: {peer_joined:?}");
+        #[cfg(feature = "bot-audio-transcription")]
+        assert!(session.transcription.is_none());
         assert_eq!(session.result.failures[0].kind, "original_error");
         let state = session.timeline.take().unwrap();
         let run = Arc::try_unwrap(state.recorder.capture)
@@ -3356,7 +3419,27 @@ mod audio_to_audio_lifecycle_tests {
     }
     #[tokio::test]
     async fn joint_stop_reaches_native_before_socket_and_playback_join_precede_native_wait() {
+        joint_stop_with_recording(false).await;
+    }
+    #[tokio::test]
+    async fn joint_recording_stop_reaches_native_and_freezes_before_held_native_join() {
+        joint_stop_with_recording(true).await;
+    }
+    async fn joint_stop_with_recording(recording: bool) {
         let mut session = session();
+        let origin = Instant::now() - Duration::from_millis(50);
+        if recording {
+            let mut capture = TimelineCapture::new(TimelineRecordingLimits::default()).unwrap();
+            capture.ingest_bot(0, vec![1; 32_000], 16_000, 1).unwrap();
+            session.timeline = Some(TimelineRecordingState {
+                recorder: TimelineRecorder {
+                    origin,
+                    capture: Arc::new(Mutex::new(capture)),
+                },
+                closed: false,
+                stop_bot_attempted: false,
+            });
+        }
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let url = format!("ws://{}", listener.local_addr().unwrap());
@@ -3422,10 +3505,25 @@ mod audio_to_audio_lifecycle_tests {
         let observer = std::thread::spawn(move || {
             let stopped = stopped_rx.recv_timeout(WAIT).is_ok();
             let peer_joined = peer_closed_rx.recv_timeout(WAIT).is_ok();
+            // Keep the actual native owner held well beyond the semantic cutoff.
+            std::thread::sleep(Duration::from_millis(100));
             let _ = release_tx.send(());
             (stopped, peer_joined)
         });
+        let cutoff_upper = origin.elapsed().as_nanos() + 10_000_000;
         session.shutdown().await;
+        if recording {
+            let state = session.timeline.take().unwrap();
+            assert!(state.closed && !state.stop_bot_attempted);
+            let run = Arc::try_unwrap(state.recorder.capture)
+                .unwrap()
+                .into_inner()
+                .unwrap()
+                .into_run(session.result.clone());
+            let wav = run.to_wav().unwrap().unwrap();
+            let pcm = pipecat_audio::read_pcm16_wav(&wav).unwrap().pcm;
+            assert!(pcm.len() as u128 / 2 <= cutoff_upper * 16_000 / 1_000_000_000);
+        }
         let peer_outcome = peer_thread.join();
         let observer_outcome = observer.join();
         let (stop_observed, peer_joined_before_native_release) = observer_outcome.unwrap();
@@ -3628,6 +3726,78 @@ mod timeline_session_tests {
             ingest_timeline_bot(recorder, &admitted),
             Err(EvalError::Limit("timeline recording raw bytes"))
         ));
+    }
+
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    fn joint() -> EvalSession {
+        let mut session = recorded();
+        session.audio_to_audio = Some(AudioToAudioState {
+            run: None,
+            admission_open: true,
+            stop_bot_attempted: false,
+        });
+        session.capture = Some(Capture::new(BotAudioLimits::default()));
+        session
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    fn audio(data: Value) -> Packet {
+        Packet::Text(
+            json!({"label": "rtvi-ai", "type": "eval-bot-audio", "data": data}).to_string(),
+        )
+    }
+    #[cfg(all(feature = "user-speech", feature = "bot-audio-transcription"))]
+    #[test]
+    fn joint_shared_pcm_admission_and_independent_capture_limits() {
+        let limits = TimelineRecordingLimits::default();
+        for recording in [false, true] {
+            for data in [
+                json!({"audio": STANDARD.encode([1, 0]), "sampleRate": 24000}),
+                json!({"audio": STANDARD.encode([1, 0]), "sampleRate": 16000, "channels": 2}),
+                json!({"audio": STANDARD.encode([1, 0]), "sampleRate": 16000, "numChannels": 0}),
+            ] {
+                let mut session = joint();
+                assert!(session.validate_timeline_recording(limits).is_ok());
+                if recording {
+                    select(&mut session, limits);
+                }
+                assert!(matches!(
+                    session.ingest(audio(data)),
+                    Err(EvalError::Unsupported(_))
+                ));
+                assert!(session.capture.as_ref().unwrap().chunks.is_empty());
+                if let Some(state) = &session.timeline {
+                    assert_eq!(
+                        state.recorder.lock().unwrap().remaining_raw_bytes(),
+                        limits.max_raw_bytes
+                    );
+                }
+            }
+        }
+        // The second consumer may fail after recording has admitted a prefix.
+        // Preserve that bounded diagnostic, without pretending atomic success.
+        let mut session = joint();
+        session.capture = Some(Capture::new(BotAudioLimits {
+            max_bytes: 2,
+            ..Default::default()
+        }));
+        select(&mut session, limits);
+        let data = json!({"audio": STANDARD.encode([1, 0, 2, 0]), "sampleRate": 16000});
+        assert!(matches!(
+            session.ingest(audio(data)),
+            Err(EvalError::Limit("bot audio capture"))
+        ));
+        assert!(session.capture.as_ref().unwrap().chunks.is_empty());
+        assert_eq!(
+            session
+                .timeline
+                .as_ref()
+                .unwrap()
+                .recorder
+                .lock()
+                .unwrap()
+                .remaining_raw_bytes(),
+            limits.max_raw_bytes - 4
+        );
     }
 
     #[cfg(feature = "user-speech")]

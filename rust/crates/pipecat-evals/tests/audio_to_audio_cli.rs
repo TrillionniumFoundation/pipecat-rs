@@ -293,12 +293,10 @@ mod enabled {
         let stt = Http::start(vec![Reply::Stt(SPOKEN)], false).await;
         let config = b.json("stt.json", &stt_runtime(&stt.url));
         let host = Host::start(vec![bytes.clone()], Mode::Normal).await;
-        let out = cli(
-            &args(&source_path, &host.url, &tts_config, &config, true),
-            &b.0,
-            CancelAt::Never,
-        )
-        .await;
+        let destination = b.0.join("joint.wav");
+        let mut arguments = args(&source_path, &host.url, &tts_config, &config, true);
+        arguments.extend(["--recording-wav".into(), destination.display().to_string()]);
+        let out = cli(&arguments, &b.0, CancelAt::Never).await;
         let (host_result, trace) = host.finish().await;
         let (stt_result, _) = stt.finish().await;
         let no_tts = no_connection(&tts).await;
@@ -308,7 +306,10 @@ mod enabled {
         assert_exit(&out, 0);
         assert!(results(&out)[0].passed);
         assert!(no_tts);
-        assert_consumed(&trace, &[bytes]);
+        assert_consumed(&trace, std::slice::from_ref(&bytes));
+        let wav = std::fs::read(destination).unwrap();
+        assert_eq!(&wav[..4], b"RIFF");
+        assert!(wav[44..].windows(bytes.len()).any(|window| window == bytes));
     }
 
     #[tokio::test]
@@ -353,12 +354,10 @@ mod enabled {
         let host = Host::start(vec![bytes], Mode::Normal).await;
         let tts_config = b.json("tts.json", &tts_runtime(&tts.url, None));
         let config = b.json("stt.json", &stt_runtime(&stt.url));
-        let out = cli(
-            &args(&source_path, &host.url, &tts_config, &config, true),
-            &b.0,
-            CancelAt::Http(&stt.trace.received),
-        )
-        .await;
+        let destination = b.0.join("cancelled-joint.wav");
+        let mut arguments = args(&source_path, &host.url, &tts_config, &config, true);
+        arguments.extend(["--recording-wav".into(), destination.display().to_string()]);
+        let out = cli(&arguments, &b.0, CancelAt::Http(&stt.trace.received)).await;
         let closed = tokio::time::timeout(Duration::from_secs(2), async {
             while stt.trace.closed.load(Ordering::SeqCst) == 0 {
                 tokio::task::yield_now().await;
@@ -385,6 +384,67 @@ mod enabled {
         assert_eq!(tts_trace.active.load(Ordering::SeqCst), 0);
         assert_eq!(stt_trace.closed.load(Ordering::SeqCst), 1);
         assert_eq!(stt_trace.joined.load(Ordering::SeqCst), 1);
+        assert_eq!(&std::fs::read(destination).unwrap()[..4], b"RIFF");
+    }
+
+    #[tokio::test]
+    async fn joint_timeline_multiple_scenarios_reject_before_runtime_model_or_output_work() {
+        let b = Bundle::new();
+        let ws = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut second = source();
+        second["name"] = "second valid joint scenario".into();
+        let path = b.json(
+            "multiple.json",
+            &json!({"name":"collection", "scenarios":[source(), second]}),
+        );
+        let destination = b.0.join("never.wav");
+        let mut arguments = args(
+            &path,
+            &format!("ws://{}", ws.local_addr().unwrap()),
+            &b.0.join("missing-tts.json"),
+            &b.0.join("missing-stt.json"),
+            false,
+        );
+        arguments.extend(["--recording-wav".into(), destination.display().to_string()]);
+        let mut before: Vec<_> = std::fs::read_dir(&b.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        let out = cli(&arguments, &b.0, CancelAt::Never).await.unwrap();
+        assert_exit(&out, 2);
+        assert!(String::from_utf8_lossy(&out.stderr).contains("exactly one scenario"));
+        assert!(out.stdout.is_empty());
+        assert!(no_connection(&ws).await);
+        let mut after: Vec<_> = std::fs::read_dir(&b.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        before.sort();
+        after.sort();
+        assert_eq!(before, after, "rejection created an output temporary");
+    }
+
+    #[tokio::test]
+    async fn joint_timeline_existing_destination_does_not_connect_or_clobber() {
+        let b = Bundle::new();
+        let ws = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let source_path = b.json("case.json", &source());
+        let tts_config = b.json("tts.json", &tts_runtime("http://127.0.0.1:9", None));
+        let config = b.json("stt.json", &stt_runtime("http://127.0.0.1:9"));
+        let destination = b.put("existing.wav", b"keep original bytes");
+        let mut arguments = args(
+            &source_path,
+            &format!("ws://{}", ws.local_addr().unwrap()),
+            &tts_config,
+            &config,
+            true,
+        );
+        arguments.extend(["--recording-wav".into(), destination.display().to_string()]);
+        let out = cli(&arguments, &b.0, CancelAt::Never).await.unwrap();
+        assert_exit(&out, 2);
+        assert!(out.stdout.is_empty());
+        assert!(no_connection(&ws).await);
+        assert_eq!(std::fs::read(destination).unwrap(), b"keep original bytes");
     }
 
     #[tokio::test]

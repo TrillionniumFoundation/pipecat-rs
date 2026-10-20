@@ -20,6 +20,12 @@ incompatible selection fails before runtime-file/model/network preparation.
 `--bot-audio-wav`, `--user-images`, DTMF and optional Smart Turn are unsupported
 in this selected route. Per-turn `audio` already supplies WAV overrides.
 
+For a two-sided diagnostic WAV alongside the spoken assertions, add
+`--recording-wav new.wav` to exactly one direct scenario. This also supports
+all-WAV plans and the `AudioToAudioScenarioFile` library session path. See
+[TIMELINE_RECORDING.md](TIMELINE_RECORDING.md) for bounds, simulated playout,
+independent artifact failures and no-clobber publication.
+
 For independently launched compiled bot children, the explicit joint suite
 entry is documented in [HOSTED_AUDIO_TO_AUDIO.md](HOSTED_AUDIO_TO_AUDIO.md).
 It reuses this joint session's settlement and cleanup, with separate hosted
@@ -217,8 +223,8 @@ The reference is `ProfHepta/pipecat` at
 - [base_driver.py, lines 98–124](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/evals/base_driver.py#L98-L124)
   gives recordings precedence over synthesis and text.
 
-This is a finite direct scripted profile. Hosted/repeated user-speech suites,
-two-sided timeline recording/mixing, images, DTMF, new synthesis providers,
+This is a finite direct scripted profile. Hosted/suite timeline recording,
+images, DTMF, new synthesis providers,
 Smart Turn composition, new codecs/rates, production-provider acceptance and
 full Python evaluation/framework parity remain outside it. Existing WAV+STT
 support is not new to this entry.

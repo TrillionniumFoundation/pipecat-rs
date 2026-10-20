@@ -57,8 +57,12 @@ connection; the run method repeats it. It cannot undo model/configuration work a
 caller performed earlier. Existing public option/scenario struct literals are
 unchanged.
 
-Only direct recorded/user-speech sessions are supported. Recording rejects pure
-text input, bot-response transcription, joint audio-to-audio, hosted/release/suite
+Direct recorded/user-speech sessions and direct joint audio-to-audio sessions are
+supported. With both audio features enabled, select one joint scenario using
+`--user-speech runtime.json --bot-audio-response stt.json --recording-wav new.wav`.
+The `AudioToAudioScenarioFile` library path also accepts
+`run_with_timeline_recording`, including all-WAV input plans. Recording rejects
+pure text input, standalone bot-response transcription, hosted/release/suite
 runs, images and DTMF. `--recording-wav` also conflicts with `--bot-audio-wav`.
 CLI flag conflicts are rejected before reading scenario/runtime/model files or
 creating an output temporary. Selected scenarios and destination are preflighted
@@ -126,7 +130,7 @@ silently reported as a complete truncated recording. Zero surviving samples on
 both sides yields `Ok(None)` and no destination file. One-sided audio is valid.
 
 Cooperative cancellation followed by awaiting the run retires the actual input,
-transport and optional speech/cache owners before returning the recording. A
+transport and optional speech/cache/transcription owners before returning the recording. A
 dropped/aborted future, panic or killed process does not promise an artifact or a
 completed asynchronous join. No additional recorder task or owner is introduced.
 
@@ -168,5 +172,23 @@ bounded no-clobber output. Its continuous bot simulation does not reproduce
 Python asyncio scheduling. The native sinc resampler is not byte-identical to
 Python SOXR/resampy. Qualification uses deterministic native sample expectations
 and synthetic loopback HTTP/WebSocket input and bot PCM; it does not qualify live
-providers, microphones, speakers, audio quality, SmartTurn, unsupported joint
+providers, microphones, speakers, audio quality, SmartTurn, hosted/suite
 recording or full Python parity.
+
+## Joint spoken-response evaluation
+
+In a direct joint run, each bot packet first satisfies the shared 16 kHz mono
+PCM16 contract, then reaches the bounded timeline and existing bounded
+capture/transcription consumers once. Their limits remain independent. A later
+consumer failure fails the evaluation and may retain an earlier admitted
+diagnostic prefix; the WAV is not a claim of atomic consumer success. Generated
+LLM text still cannot satisfy a spoken `response`, and interruption keeps the
+existing recognition epoch fence while cropping simulated bot playout.
+
+Successful final spoken-prefix settlement retains its original deadline. At
+terminal outcome, the bot cutoff freezes before cleanup awaits, while admitted
+user-source receipts remain writable until Playback joins. Joint cleanup stops
+and actually joins speech, Playback, socket and transcription owners, using its
+existing stop-bot-once state. Slow native/STT retirement cannot extend the tail.
+The snapshot is taken only after those owners retire. No hosted or suite
+recording mode is added.
