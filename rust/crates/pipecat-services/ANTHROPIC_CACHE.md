@@ -120,3 +120,23 @@ fixtures observe outgoing requests, active/queued snapshots, no-request controls
 recoverable errors, cancellation peer EOF and joined worker/server cleanup.
 No live Anthropic cache hit, price, token savings, account/model eligibility,
 Bedrock/Vertex implementation, browser or physical audio is established.
+
+## Single-media ordering before caching
+
+At pinned Python `anthropic_adapter.py:475–489`, an ordinary message containing
+exactly one image/document and at least one text block moves that media block
+immediately before its first text block. Native conversion now applies this
+stable move before same-role merging, trailing-user normalization and cache
+placement. The last text block, not the moved media, therefore receives a user
+cache marker. Multiple-media, media-only and text-only messages retain order;
+content never moves across original message boundaries and stored context is
+unchanged. URL/base64 payloads and PDF titles remain intact.
+
+The source tool-result and tool-call branches return before normalization
+(`:362–392`), so nested tool content and existing native tool-call content policy
+are unchanged. Source provider-specific history bypasses standard conversion
+(`:272–318`). Native signed/redacted thinking identifies that history and keeps
+its block order. Native context has no arbitrary raw provider-message envelope;
+this does not claim broader provider-passthrough parity. Body fixtures, loopback
+HTTP, and the real RTVI uploaded-PDF-to-context fixture cover ordering; no live
+provider execution or quality improvement is asserted.

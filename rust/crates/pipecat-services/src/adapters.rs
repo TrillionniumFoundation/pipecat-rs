@@ -291,6 +291,11 @@ fn anthropic(request: &CompletionRequest) -> Result<Value, ServiceError> {
         } else {
             if message.content.is_some() {
                 content.extend(anthropic_content(message.content.as_ref())?);
+                // Pinned Python standard-message normalization precedes role merging.
+                // Tool-call messages return early there; preserve their existing policy.
+                if message.tool_calls.is_empty() {
+                    anthropic_single_media_first(&mut content);
+                }
             }
             for call in &message.tool_calls {
                 content.push(
@@ -331,6 +336,35 @@ fn anthropic(request: &CompletionRequest) -> Result<Value, ServiceError> {
     }
     Ok(body)
 }
+// Source: anthropic_adapter.py:272–318, 362–392, 475–489 at
+// af9f9da9d7afddaa8811c0e0251b32566c980bdf. Native signed/redacted parts
+// represent provider-specific history, which bypasses standard conversion.
+fn anthropic_single_media_first(content: &mut Vec<Value>) {
+    if content.iter().any(|part| {
+        matches!(
+            part["type"].as_str(),
+            Some("thinking" | "redacted_thinking")
+        )
+    }) {
+        return;
+    }
+    let mut media = content.iter().enumerate().filter_map(|(index, part)| {
+        matches!(part["type"].as_str(), Some("image" | "document")).then_some(index)
+    });
+    let Some(media_index) = media.next() else {
+        return;
+    };
+    if media.next().is_some() {
+        return;
+    }
+    if let Some(text_index) = content.iter().position(|part| part["type"] == "text") {
+        if media_index > text_index {
+            let part = content.remove(media_index);
+            content.insert(text_index, part);
+        }
+    }
+}
+
 fn anthropic_content(content: Option<&Content>) -> Result<Vec<Value>, ServiceError> {
     match content {
         None => Ok(vec![]),

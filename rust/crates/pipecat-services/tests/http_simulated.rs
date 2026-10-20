@@ -639,3 +639,45 @@ async fn simulated_anthropic_trailing_user_is_in_outgoing_cached_body() {
     );
     fake.task.await.unwrap();
 }
+
+#[tokio::test]
+async fn simulated_anthropic_single_pdf_precedes_text_and_cache_in_outgoing_body() {
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        vec![record(json!({"type":"message_stop"}))],
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let mut message = Message::text(Role::User, "unused");
+    message.content = Some(Content::Parts(vec![
+        ContentPart::Text {
+            text: "read".into(),
+        },
+        ContentPart::File {
+            data: "JVBERi0xLjQ=".into(),
+            mime_type: "application/pdf".into(),
+            filename: Some("original.pdf".into()),
+        },
+    ]));
+    let request = CompletionRequest::new("synthetic-fixture", Context::new(vec![message]))
+        .with_anthropic_prompt_cache(AnthropicPromptCachePolicy {
+            enabled: true,
+            system_ttl: None,
+        });
+    let mut stream = LlmClient::new(config(Provider::Anthropic, fake.url))
+        .unwrap()
+        .stream(request)
+        .unwrap();
+    assert!(collect(&mut stream).await.iter().all(Result::is_ok));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body["messages"],
+        json!([{"role":"user","content":[
+            {"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBERi0xLjQ="},"title":"original.pdf"},
+            {"type":"text","text":"read","cache_control":{"type":"ephemeral"}}
+        ]}])
+    );
+    fake.task.await.unwrap();
+}

@@ -2683,3 +2683,40 @@ async fn busy_pdf_unsigned_so_far_native_owner_still_rejects() {
         assert_eq!(before.unwrap(), after.unwrap());
     }
 }
+
+#[tokio::test]
+async fn actual_rtvi_pdf_reaches_anthropic_media_first_without_mutating_context() {
+    let frame = rtvi_pdf_upload(PDF_BASE64, "read", Some("document.pdf"))
+        .await
+        .expect("RTVI fixture failed after cleanup");
+    let context = SharedContext::default();
+    let assistant = LLMAssistantAggregator::new(context.clone(), Default::default());
+    let accepted = assistant.process_at(frame, Direction::Downstream, Duration::ZERO);
+    let native = context.snapshot();
+    let rich = context.snapshot_rich();
+    let cleaned = assistant.cleanup().await;
+    drop(assistant);
+    cleaned.unwrap();
+    silent(accepted.unwrap());
+    assert_eq!(rich.unwrap(), expected_rich());
+    assert_eq!(native.as_ref().unwrap(), &expected_native());
+    let request = CompletionRequest::new("wire-fixture", native.unwrap());
+    let before = serde_json::to_value(&request).unwrap();
+    let body = request_body(Provider::Anthropic, &request).unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "model":"wire-fixture","stream":true,"max_tokens":4096,
+            "messages":[{"role":"user","content":[
+                {"type":"document","source":{"type":"base64","media_type":"application/pdf","data":PDF_BASE64},"title":"document.pdf"},
+                {"type":"text","text":"read"}
+            ]}]
+        })
+    );
+    assert_eq!(request_body(Provider::Anthropic, &request).unwrap(), body);
+    assert_eq!(serde_json::to_value(&request).unwrap(), before);
+    assert_eq!(
+        request_body(Provider::OpenAi, &request).unwrap(),
+        expected_openai()
+    );
+}
