@@ -1069,3 +1069,63 @@ async fn simulated_gemini_invalid_tool_history_fails_before_http() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn simulated_anthropic_tool_results_preserve_empty_and_json_text_with_cache() {
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        vec![record(json!({"type":"message_stop"}))],
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let request = CompletionRequest::new(
+        "synthetic-model",
+        Context::new(vec![
+            Message::assistant_tool_calls(vec![
+                ToolCall {
+                    id: "first".into(),
+                    name: "lookup".into(),
+                    arguments: json!({}),
+                },
+                ToolCall {
+                    id: "second".into(),
+                    name: "search".into(),
+                    arguments: json!({}),
+                },
+            ]),
+            Message::tool_result("first", ""),
+            Message::tool_result("second", r#"{"ok":true}"#),
+        ]),
+    )
+    .with_anthropic_prompt_cache(AnthropicPromptCachePolicy {
+        enabled: true,
+        system_ttl: None,
+    });
+    let before = serde_json::to_value(&request).unwrap();
+    let client = LlmClient::new(config(Provider::Anthropic, fake.url)).unwrap();
+    let logged = client.request_body(&request).unwrap();
+    assert_eq!(client.request_body(&request).unwrap(), logged);
+    let mut stream = client.stream(request.clone()).unwrap();
+    let events = collect(&mut stream).await;
+    assert!(events.iter().all(Result::is_ok));
+    assert!(matches!(
+        events.last(),
+        Some(Ok(StreamEvent::Finished { .. }))
+    ));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "model":"synthetic-model","stream":true,"max_tokens":4096,
+            "messages":[
+                {"role":"assistant","content":[{"type":"tool_use","id":"first","name":"lookup","input":{}},{"type":"tool_use","id":"second","name":"search","input":{}}]},
+                {"role":"user","content":[{"type":"tool_result","tool_use_id":"first","content":""},{"type":"tool_result","tool_use_id":"second","content":"{\"ok\":true}","cache_control":{"type":"ephemeral"}}]}
+            ]
+        })
+    );
+    assert_eq!(body, logged);
+    assert_eq!(serde_json::to_value(&request).unwrap(), before);
+    fake.task.await.unwrap();
+}

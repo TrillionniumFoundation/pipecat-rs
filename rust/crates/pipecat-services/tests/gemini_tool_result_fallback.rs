@@ -149,8 +149,10 @@ fn fallback_does_not_change_other_provider_results() {
         request_body(Provider::OpenAi, &request).unwrap()["messages"],
         json!([{"role":"tool","content":"{}","tool_call_id":"old-call"}])
     );
+    // Pinned Anthropic tool-role early return preserves raw text, unlike
+    // Gemini's JSON response conversion (anthropic_adapter.py:362–377).
     assert_eq!(
         request_body(Provider::Anthropic, &request).unwrap()["messages"],
-        json!([{"role":"user","content":[{"type":"tool_result","tool_use_id":"old-call","content":[{"type":"text","text":"{}"}]}]}])
+        json!([{"role":"user","content":[{"type":"tool_result","tool_use_id":"old-call","content":"{}"}]}])
     );
 }

@@ -138,9 +138,12 @@ fn tool_results_are_user_breakpoints_and_signed_assistant_is_unchanged() {
         result["messages"][2]["content"][0]["cache_control"],
         json!({"type":"ephemeral"})
     );
-    assert!(result["messages"][2]["content"][0]["content"][0]
-        .get("cache_control")
-        .is_none());
+    // Pinned tool-role early return preserves the nested string; caching marks
+    // only the outer block (anthropic_adapter.py:362–377, 504–521).
+    assert_eq!(
+        result["messages"][2]["content"][0]["content"],
+        json!("result")
+    );
 }
 #[test]
 fn absent_system_zero_users_and_empty_content_stay_well_defined() {
@@ -271,19 +274,14 @@ fn settings_omission_retains_ttl_null_clears_and_failed_proposals_are_atomic() {
     assert_eq!(body(&before)["system"][0]["cache_control"]["ttl"], "1h");
 }
 
-// Normalize only the existing native adapter's string-content representation to
-// typed text-block arrays. No marker, role, ordering or literal text is changed.
+// Normalize only outer ordinary-message strings to native text-block arrays.
+// Pinned anthropic_adapter.py:362–377 preserves nested tool-result strings;
+// the source oracle already contains their exact wire representation.
 fn block_arrays(value: &mut Value) {
-    match value {
-        Value::Array(values) => values.iter_mut().for_each(block_arrays),
-        Value::Object(object) => {
-            if let Some(Value::String(text)) = object.get("content") {
-                let text = text.clone();
-                object.insert("content".into(), json!([{"type":"text","text":text}]));
-            }
-            object.values_mut().for_each(block_arrays);
+    for message in value.as_array_mut().unwrap() {
+        if let Some(text) = message["content"].as_str() {
+            message["content"] = json!([{"type":"text","text":text}]);
         }
-        _ => {}
     }
 }
 fn from_source_wire(input: &Value) -> Context {

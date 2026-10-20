@@ -305,7 +305,15 @@ fn anthropic(request: &CompletionRequest) -> Result<Value, ServiceError> {
         };
         let mut content = vec![];
         if message.role == Role::Tool {
-            content.push(json!({"type":"tool_result","tool_use_id":message.tool_call_id,"content":anthropic_content(message.content.as_ref())?}));
+            // Pinned anthropic_adapter.py:362–377 returns tool content before
+            // ordinary empty-text normalization. Preserve text, including "".
+            let result = match message.content.as_ref() {
+                Some(Content::Text(text)) => json!(text),
+                content => json!(anthropic_content(content)?),
+            };
+            content.push(
+                json!({"type":"tool_result","tool_use_id":message.tool_call_id,"content":result}),
+            );
         } else {
             if message.content.is_some() {
                 content.extend(anthropic_content(message.content.as_ref())?);

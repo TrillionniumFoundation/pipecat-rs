@@ -140,3 +140,21 @@ its block order. Native context has no arbitrary raw provider-message envelope;
 this does not claim broader provider-passthrough parity. Body fixtures, loopback
 HTTP, and the real RTVI uploaded-PDF-to-context fixture cover ordering; no live
 provider execution or quality improvement is asserted.
+
+## Plain-text tool results
+
+Pinned Python `anthropic_adapter.py:362–377` at
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf` returns tool-role content
+before ordinary-message normalization. Native `Content::Text` tool results now
+retain the exact nested JSON string, including empty strings, whitespace,
+Unicode and JSON-looking text. They are not parsed, wrapped in text arrays,
+trimmed, or replaced with `(empty)`. Adjacent results retain their IDs/order
+under user-role merging. Prompt caching still marks the outer final tool-result
+block, never its nested string (`:504–521`).
+
+This change is bounded to plain-text tool results. Existing `Content::Parts`
+and absent-content array conversion, ordinary empty-message sentinels,
+initial-system handling, model-dependent trailing-user normalization, and
+OpenAI/Gemini behavior remain unchanged. Exact body fixtures and synthetic
+loopback HTTP/SSE exercise the normal `LlmClient::stream` request route;
+these are not live-provider acceptance or cache-hit claims.

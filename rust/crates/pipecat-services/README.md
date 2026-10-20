@@ -133,7 +133,10 @@ limits. OpenAI prepends a configured system instruction; Anthropic/Gemini extrac
 the initial system message and allow a configured replacement. Initial system
 text parts are joined with spaces. A sole system message stays as a user turn
 to avoid an empty provider history. Gemini call and result IDs are preserved.
-Adjacent Anthropic/Gemini roles are merged. Empty Anthropic content becomes `(empty)`.
+Adjacent Anthropic/Gemini roles are merged. Empty ordinary Anthropic message text becomes `(empty)`.
+Plain-text tool results preserve their exact nested JSON string, including empty
+strings and JSON-looking text; caching marks only the outer result block
+([scope and source](ANTHROPIC_CACHE.md#plain-text-tool-results)).
 
 Anthropic maps calls/results to `tool_use`/`tool_result`; Gemini maps them to
 `functionCall`/`functionResponse`. Tools use the provider's actual schema, not a
