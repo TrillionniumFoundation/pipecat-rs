@@ -561,11 +561,9 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                         .as_deref()
                         .and_then(|id| names.get(id).copied())
                 })
-                .ok_or_else(|| {
-                    ServiceError::InvalidRequest(
-                        "Gemini tool result needs matching call or name".into(),
-                    )
-                })?;
+                // Pinned Python fallback for pruned/restored call history. Keep
+                // explicit names and the existing whole-context lookup first.
+                .unwrap_or("tool_call_result");
             let content = match &message.content {
                 Some(Content::Text(text)) => {
                     serde_json::from_str::<Value>(text).unwrap_or_else(|_| json!({"value":text}))

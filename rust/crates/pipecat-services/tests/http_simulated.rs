@@ -998,3 +998,74 @@ async fn simulated_invalid_image_details_reject_before_http() {
         "invalid detail must not issue HTTP"
     );
 }
+
+#[tokio::test]
+async fn simulated_gemini_orphan_tool_result_reaches_http_with_fallback_name() {
+    let fake = server(
+        "200 OK", "text/event-stream",
+        vec![record(json!({"candidates":[{"content":{"parts":[{"text":"accepted fixture"}]},"finishReason":"STOP"}]}))],
+        Duration::ZERO, Duration::ZERO,
+    ).await;
+    let request = CompletionRequest::new(
+        "synthetic-model",
+        Context::new(vec![Message::tool_result("old-call", r#"{"ok":true}"#)]),
+    );
+    let mut stream = LlmClient::new(config(Provider::Gemini, fake.url))
+        .unwrap()
+        .stream(request)
+        .unwrap();
+    let events = collect(&mut stream).await;
+    assert!(events.iter().all(Result::is_ok));
+    assert!(events.iter().any(
+        |event| matches!(event, Ok(StreamEvent::TextDelta(text)) if text == "accepted fixture")
+    ));
+    assert_eq!(
+        events.last().unwrap().as_ref().unwrap(),
+        &StreamEvent::Finished {
+            reason: Some(FinishReason::Stop)
+        }
+    );
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body,
+        json!({"contents":[{"role":"user","parts":[{"functionResponse":{"id":"old-call","name":"tool_call_result","response":{"ok":true}}}]}]})
+    );
+    fake.task.await.unwrap();
+}
+
+#[tokio::test]
+async fn simulated_gemini_invalid_tool_history_fails_before_http() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/stream", listener.local_addr().unwrap());
+    let client = LlmClient::new(config(Provider::Gemini, endpoint)).unwrap();
+    let mut missing_id = Message::tool_result("old-call", "{}");
+    missing_id.tool_call_id = None;
+    let mut signed = Message::assistant_tool_calls(vec![ToolCall {
+        id: "signed-call".into(),
+        name: "echo".into(),
+        arguments: json!({}),
+    }]);
+    signed.content = Some(Content::Parts(vec![ContentPart::GeminiToolMetadata {
+        tool_call_id: "signed-call".into(),
+        signature: Some("fixture-signature".into()),
+    }]));
+    for messages in [
+        vec![missing_id],
+        vec![Message::tool_result("", "{}")],
+        vec![signed.clone(), Message::tool_result("unrelated", "{}")],
+        vec![signed.clone(), signed],
+    ] {
+        assert!(matches!(
+            client.stream(CompletionRequest::new(
+                "gemini-3-pro",
+                Context::new(messages)
+            )),
+            Err(ServiceError::InvalidRequest(_))
+        ));
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), listener.accept())
+            .await
+            .is_err()
+    );
+}

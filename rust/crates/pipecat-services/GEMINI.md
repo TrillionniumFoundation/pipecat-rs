@@ -127,3 +127,17 @@ Source references:
 - https://github.com/python/cpython/blob/v3.11.0/Lib/mimetypes.py
 - https://github.com/python/cpython/blob/v3.12.0/Lib/mimetypes.py
 - https://github.com/python/cpython/blob/v3.13.0/Lib/mimetypes.py
+
+## Tool-result name fallback
+
+A text tool result with a nonempty call ID but no explicit name or retained
+matching call uses the pinned adapter's literal `tool_call_result` fallback
+(`gemini_adapter.py:522–539`). This supports restored or pruned history without
+inventing an assistant call or tool definition. IDs and existing object/scalar
+response normalization are unchanged. Explicit result names still take precedence,
+then the existing whole-context call-ID map; the pinned Python adapter's historical
+map and lack of explicit-name precedence are separate, unchanged differences.
+Missing/empty IDs, unsupported non-text results and invalid native signed groups
+remain rejected. Adjacent-role grouping, startup system seeds, trailing-user rules
+and context immutability are unchanged. Direct fixtures and a real loopback SSE
+stream verify conversion and HTTP reachability, not live Gemini acceptance.
