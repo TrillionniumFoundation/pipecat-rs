@@ -3,18 +3,9 @@ use crate::{processors::*, transport::BrowserSession, RunnerConfig, RunnerError,
 use pipecat_cli::config::ProviderConfig;
 use pipecat_core::*;
 use pipecat_rtvi::{RtviConfig, RtviEvent, RtviObserver, RtviObserverParams, RtviProcessor};
-use pipecat_services::{
-    ClientConfig, CompletionRequest, Context, LlmClient, LlmProcessor, Message, Provider, Role,
-};
-use pipecat_streaming_speech::{
-    CartesiaClient, CartesiaConfig, CartesiaTtsProcessor, DeepgramClient, DeepgramConfig,
-    DeepgramSttProcessor,
-};
+use pipecat_services::{CompletionRequest, Context, LlmClient, LlmProcessor, Message, Role};
 use pipecat_transports::{SessionConfig, WebSocketSession};
-use pipecat_turns::{
-    AssistantAggregatorConfig, AssistantTextMode, LLMContextAggregatorPair, UserAggregatorConfig,
-    UserTurnConfig,
-};
+use pipecat_turns::{AssistantAggregatorConfig, AssistantTextMode, LLMContextAggregatorPair};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::{net::TcpListener, sync::watch, time::Instant};
@@ -198,53 +189,24 @@ async fn run_cascade(
         model,
         system_prompt,
     } = match providers {
-        crate::cascade::SessionProviders::Default(providers) => {
-            let stt: Arc<dyn FrameProcessor> = match &config.stt {
-                SttProvider::Deepgram => {
-                    let mut stt = DeepgramConfig::new(providers.deepgram_key.clone());
-                    stt.endpoint = providers.deepgram_endpoint.clone();
-                    stt.sample_rate = providers.input_rate;
-                    stt.channels = 1;
-                    Arc::new(DeepgramSttProcessor::new(
-                        DeepgramClient::new(stt).map_err(|_| RunnerError::Provider)?,
-                    ))
-                }
-                #[cfg(feature = "whisper")]
-                SttProvider::Whisper(local) => {
-                    let processor = tokio::select! {
-                        biased;
-                        _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
-                        result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
-                    };
-                    Arc::new(processor)
-                }
-            };
-            let mut tts =
-                CartesiaConfig::new(providers.cartesia_key.clone(), providers.voice_id.clone());
-            tts.endpoint = providers.cartesia_endpoint.clone();
-            tts.sample_rate = providers.output_rate;
-            let mut llm = ClientConfig::new(Provider::OpenAi, providers.openai_key.clone());
-            llm.endpoint = providers.openai_endpoint.clone();
-            let tts: Arc<dyn FrameProcessor> = Arc::new(CartesiaTtsProcessor::new(
-                CartesiaClient::new(tts).map_err(|_| RunnerError::Provider)?,
-            ));
-            crate::cascade::SessionParts {
-                stt,
-                tts,
-                llm,
-                user_config: UserAggregatorConfig {
-                    turn: UserTurnConfig {
-                        speech_timeout: config.options.turn_timeout,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                initial_context: Context::default(),
-                tools: vec![],
-                model: providers.model.clone(),
-                system_prompt: providers.system_prompt.clone(),
+        crate::cascade::SessionProviders::Default(providers) => match &config.stt {
+            SttProvider::Deepgram => {
+                crate::cascade::hosted_parts(providers, config.options.turn_timeout)?
             }
-        }
+            #[cfg(feature = "whisper")]
+            SttProvider::Whisper(local) => {
+                let processor = tokio::select! {
+                    biased;
+                    _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
+                    result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
+                };
+                crate::cascade::hosted_parts_with_stt(
+                    providers,
+                    config.options.turn_timeout,
+                    Arc::new(processor),
+                )?
+            }
+        },
         #[cfg(feature = "soniox")]
         crate::cascade::SessionProviders::Soniox(providers) => providers.build_session()?,
     };

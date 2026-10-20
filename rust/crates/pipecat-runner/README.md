@@ -505,3 +505,11 @@ cases validate ownership and classification. Simultaneous session/registry error
 combinations use explicitly injected typed registry outcomes, not a claim of a
 reproduced native peer-close fault. No new public fault-injection API is added.
 The inner request handler's separate invalid-offer cleanup behavior is unchanged.
+
+## Separate Twilio inbound entry
+
+The explicitly enabled `pipecat-twilio-agent` binary and shared `TwilioApp`
+constructor provide a bounded native phone cascade without browser RTVI.
+They do not change this browser host's defaults or transport allowlist.
+See [TWILIO.md](TWILIO.md) for configuration, exact signature/URL assumptions,
+synthetic loopback validation, lifecycle and opt-in hangup boundaries.

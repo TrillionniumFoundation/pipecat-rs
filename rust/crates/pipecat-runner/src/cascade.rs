@@ -101,6 +101,59 @@ impl SessionProviders {
     }
 }
 
+/// Shared hosted provider construction; transport-specific readiness and output
+/// remain outside the cascade. Construction does not connect provider sockets.
+pub(crate) fn hosted_parts(
+    providers: &ProviderConfig,
+    turn_timeout: std::time::Duration,
+) -> Result<SessionParts, RunnerError> {
+    use pipecat_streaming_speech::{DeepgramClient, DeepgramConfig, DeepgramSttProcessor};
+    let mut stt = DeepgramConfig::new(providers.deepgram_key.clone());
+    stt.endpoint = providers.deepgram_endpoint.clone();
+    stt.sample_rate = providers.input_rate;
+    stt.channels = 1;
+    hosted_parts_with_stt(
+        providers,
+        turn_timeout,
+        std::sync::Arc::new(DeepgramSttProcessor::new(
+            DeepgramClient::new(stt).map_err(|_| RunnerError::Provider)?,
+        )),
+    )
+}
+pub(crate) fn hosted_parts_with_stt(
+    providers: &ProviderConfig,
+    turn_timeout: std::time::Duration,
+    stt: std::sync::Arc<dyn pipecat_core::FrameProcessor>,
+) -> Result<SessionParts, RunnerError> {
+    use pipecat_services::{ClientConfig, Context, Provider};
+    use pipecat_streaming_speech::{CartesiaClient, CartesiaConfig, CartesiaTtsProcessor};
+    use pipecat_turns::{UserAggregatorConfig, UserTurnConfig};
+    use std::sync::Arc;
+    let mut tts = CartesiaConfig::new(providers.cartesia_key.clone(), providers.voice_id.clone());
+    tts.endpoint = providers.cartesia_endpoint.clone();
+    tts.sample_rate = providers.output_rate;
+    let mut llm = ClientConfig::new(Provider::OpenAi, providers.openai_key.clone());
+    llm.endpoint = providers.openai_endpoint.clone();
+    Ok(SessionParts {
+        stt,
+        tts: Arc::new(CartesiaTtsProcessor::new(
+            CartesiaClient::new(tts).map_err(|_| RunnerError::Provider)?,
+        )),
+        llm,
+        user_config: UserAggregatorConfig {
+            turn: UserTurnConfig {
+                speech_timeout: turn_timeout,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        initial_context: Context::default(),
+        tools: vec![],
+        model: providers.model.clone(),
+        system_prompt: providers.system_prompt.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

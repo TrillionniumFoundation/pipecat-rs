@@ -1,5 +1,6 @@
 [package]
 name = "pipecat-runner"
+default-run = "pipecat-browser-agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,11 +14,23 @@ path = "src/main.rs"
 default = []
 webrtc = ["dep:pipecat-webrtc"]
 whisper = ["dep:pipecat-whisper"]
-soniox = ["dep:pipecat-soniox", "dep:pipecat-processors"]
+soniox = ["dep:pipecat-soniox"]
+
+[[bin]]
+name = "pipecat-twilio-agent"
+path = "src/twilio_main.rs"
 
 [dependencies]
+base64 = "0.22"
+hmac = "0.12"
+sha1 = "0.10"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 pipecat-soniox = { path = "../pipecat-soniox", optional = true }
-pipecat-processors = { path = "../pipecat-processors", optional = true }
+pipecat-processors = { path = "../pipecat-processors" }
 pipecat-whisper = { path = "../pipecat-whisper", optional = true }
 pipecat-webrtc = { path = "../pipecat-webrtc", optional = true }
 async-trait.workspace = true
@@ -40,9 +53,7 @@ pipecat-turns = { path = "../pipecat-turns" }
 pipecat-vad = { path = "../pipecat-vad" }
 
 [dev-dependencies]
-base64 = "0.22"
 pipecat-browser-client = { path = "../../client-templates" }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [lints]
 workspace = true

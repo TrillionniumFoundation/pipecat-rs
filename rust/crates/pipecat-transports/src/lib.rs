@@ -80,6 +80,14 @@ impl Default for SessionConfig {
         }
     }
 }
+impl SessionConfig {
+    /// Validated framing and finite automatic-control/write-buffer policy for
+    /// an externally authenticated upgrade that will be adopted by a session.
+    pub fn websocket_config(&self) -> Result<WebSocketConfig, TransportError> {
+        validate(self)?;
+        Ok(websocket_config(self))
+    }
+}
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
     #[error("invalid transport configuration")]
@@ -223,6 +231,33 @@ impl WebSocketSession {
         .map_err(|_| TransportError::Timeout("accept"))??;
         Self::from_stream(stream, config)
     }
+    /// Adopt an already authenticated WebSocket upgrade. The caller owns HTTP
+    /// authentication; this session owns bounded I/O and joined cleanup.
+    /// Build the supplied stream with `SessionConfig::websocket_config`.
+    /// Frame/message and write-buffer limits larger than that policy are rejected.
+    pub fn from_websocket<S>(
+        stream: WebSocketStream<S>,
+        config: SessionConfig,
+    ) -> Result<Self, TransportError>
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
+        let expected = config.websocket_config()?;
+        let limits = stream.get_config();
+        if limits
+            .max_message_size
+            .is_none_or(|max| max > config.max_message_bytes)
+            || limits
+                .max_frame_size
+                .is_none_or(|max| max > config.max_message_bytes)
+            || limits.write_buffer_size > expected.write_buffer_size
+            || limits.max_write_buffer_size > expected.max_write_buffer_size
+        {
+            return Err(TransportError::InvalidConfig);
+        }
+        Self::from_stream(stream, config)
+    }
+
     fn from_stream<S>(
         stream: WebSocketStream<S>,
         config: SessionConfig,
@@ -390,8 +425,8 @@ impl Drop for WebSocketSession {
         }
     }
 }
+const WRITE_BUFFER_BYTES: usize = 128 * 1024;
 fn websocket_config(config: &SessionConfig) -> WebSocketConfig {
-    const WRITE_BUFFER_BYTES: usize = 128 * 1024;
     WebSocketConfig::default()
         .write_buffer_size(WRITE_BUFFER_BYTES)
         // Automatic pong responses share this buffer while the peer is not reading.
@@ -436,6 +471,9 @@ async fn wait_for_cancel(rx: &mut watch::Receiver<u8>) {
 fn validate(c: &SessionConfig) -> Result<(), TransportError> {
     if c.queue_capacity == 0
         || c.max_message_bytes == 0
+        || c.max_message_bytes
+            .checked_add(WRITE_BUFFER_BYTES)
+            .is_none_or(|max| max == usize::MAX)
         || c.connect_timeout.is_zero()
         || c.write_timeout.is_zero()
         || c.close_timeout.is_zero()

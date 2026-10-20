@@ -23,6 +23,7 @@ mod transport;
 mod webrtc;
 #[cfg(feature = "webrtc")]
 pub use webrtc::WebRtcRunnerConfig;
+pub mod twilio;
 pub mod wire;
 
 pub use pipecat_cli::config::{Options, ProviderConfig};
