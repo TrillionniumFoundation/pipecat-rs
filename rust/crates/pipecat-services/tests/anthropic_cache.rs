@@ -94,16 +94,19 @@ fn markers_follow_actual_role_merging_and_only_last_two_user_blocks() {
     ];
     let result = body(&request);
     let messages = result["messages"].as_array().unwrap();
-    assert_eq!(messages.len(), 6);
+    assert_eq!(messages.len(), 7);
+    assert_eq!(cache_count(&messages[2]), 0);
+    assert_eq!(
+        messages[6],
+        json!({"role":"user","content":[{"type":"text","text":".","cache_control":{"type":"ephemeral"}}]})
+    );
     assert!(messages[0]["content"][0].get("cache_control").is_none());
-    for i in [2, 4] {
-        assert_eq!(messages[i]["content"].as_array().unwrap().len(), 2);
-        assert!(messages[i]["content"][0].get("cache_control").is_none());
-        assert_eq!(
-            messages[i]["content"][1]["cache_control"],
-            json!({"type":"ephemeral"})
-        );
-    }
+    assert_eq!(messages[4]["content"].as_array().unwrap().len(), 2);
+    assert!(messages[4]["content"][0].get("cache_control").is_none());
+    assert_eq!(
+        messages[4]["content"][1]["cache_control"],
+        json!({"type":"ephemeral"})
+    );
     for i in [1, 3, 5] {
         assert_eq!(cache_count(&messages[i]), 0);
     }
@@ -151,7 +154,7 @@ fn absent_system_zero_users_and_empty_content_stay_well_defined() {
         .context
         .messages
         .push(Message::text(Role::Assistant, "prefill"));
-    assert_eq!(cache_count(&body(&request)), 0);
+    assert_eq!(cache_count(&body(&request)), 1);
     request.context.messages.push(Message::text(Role::User, ""));
     let result = body(&request);
     assert_eq!(result["messages"][1]["content"][0]["text"], "(empty)");
@@ -338,8 +341,10 @@ fn original_source_oracle_matches_twelve_supported_message_cases_and_system_ttl(
     for case in oracle["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
         if case.get("merged_wire").is_some() && !name.starts_with("malformed_") {
-            let request = CompletionRequest::new("fixture", from_source_wire(&case["input"]))
-                .with_anthropic_prompt_cache(policy(None));
+            // This oracle tests cache helpers without service-level padding.
+            let request =
+                CompletionRequest::new("claude-3-fixture", from_source_wire(&case["input"]))
+                    .with_anthropic_prompt_cache(policy(None));
             let actual = body(&request)["messages"].clone();
             let mut expected = case["output"].clone();
             block_arrays(&mut expected);

@@ -595,3 +595,47 @@ async fn simulated_pipeline_interruption_cancels_http_without_stalling_control()
     while worker.recv().await.is_some() {}
     assert_eq!(worker.join().await.unwrap().state, WorkerState::Ended);
 }
+
+#[tokio::test]
+async fn simulated_anthropic_trailing_user_is_in_outgoing_cached_body() {
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        vec![record(json!({"type":"message_stop"}))],
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let mut request = CompletionRequest::new(
+        "unknown-synthetic-model",
+        Context::new(vec![
+            Message::text(Role::User, "hello"),
+            Message::text(Role::Assistant, "prefill"),
+        ]),
+    )
+    .with_anthropic_prompt_cache(AnthropicPromptCachePolicy {
+        enabled: true,
+        system_ttl: Some(AnthropicCacheTtl::OneHour),
+    });
+    request.system_instruction = Some("system".into());
+    request.max_tokens = Some(17);
+    let mut stream = LlmClient::new(config(Provider::Anthropic, fake.url))
+        .unwrap()
+        .stream(request)
+        .unwrap();
+    assert!(collect(&mut stream).await.iter().all(Result::is_ok));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "model":"unknown-synthetic-model","stream":true,"max_tokens":17,
+            "system":[{"type":"text","text":"system","cache_control":{"type":"ephemeral","ttl":"1h"}}],
+            "messages":[
+                {"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]},
+                {"role":"assistant","content":[{"type":"text","text":"prefill"}]},
+                {"role":"user","content":[{"type":"text","text":".","cache_control":{"type":"ephemeral"}}]}
+            ]
+        })
+    );
+    fake.task.await.unwrap();
+}

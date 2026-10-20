@@ -2,7 +2,7 @@
 
 `AnthropicPromptCachePolicy` is an opt-in native implementation of the fixed
 Python Anthropic adapter's explicit cache breakpoints, not a cache-hit guarantee.
-Default requests remain unchanged. No SDK or live-provider call is required to
+The cache policy does not change ordinary unmarked request behavior. No SDK or live-provider call is required to
 prepare a request.
 
 ```rust
@@ -26,8 +26,8 @@ Baseline: ProfHepta/pipecat `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
 `anthropic_adapter.py` blob `b9d154dea65cb88b332eae706192df728e853227` and
 `anthropic/llm.py` blob `fc776b26925758ccd2c901acf80b17900bcd690c` define the policy.
 
-After ordinary typed context conversion and consecutive-role merging, enabled
-policy marks the last content block of the **two most recent user-role wire
+After ordinary typed context conversion, consecutive-role merging and the
+model-aware trailing-user normalization described below, enabled policy marks the last content block of the **two most recent user-role wire
 messages** with `cache_control: {type: "ephemeral"}`. Tool-result messages become
 user-role content and participate in this selection. Earlier user messages and
 all assistant content, including signed thinking and tool calls, stay unchanged.
@@ -44,7 +44,24 @@ Disabling the policy returns to ordinary string-system/unmarked-message output.
 Existing native conversion conventions remain intact: content strings are typed
 text-block arrays, empty user content becomes `(empty)`, and empty explicit
 system strings follow existing `split_system` fallback rules. This is not a port
-of every source SDK passthrough or model-specific final-user padding rule.
+of every source SDK passthrough.
+
+## Model-aware trailing-user normalization
+
+The same pinned `anthropic/llm.py:479–514` and
+`anthropic_adapter.py:254–269` define a frozen, case-sensitive prefix test.
+Models starting with `claude-2`, `claude-instant`, `claude-3`,
+`claude-opus-4-0`, `claude-opus-4-1`, `claude-sonnet-4-0`,
+`claude-sonnet-4-5`, or `claude-haiku-4-5` keep assistant-ending histories.
+All other model identifiers append exactly a user text block containing `.`
+when the converted, merged history ends in assistant. Empty histories and
+user/tool-result endings are unchanged. This applies independently of caching,
+only to fresh wire data; repeated serialization never mutates stored context.
+
+When caching is enabled, that injected turn becomes the newest user breakpoint,
+displacing the formerly second-newest user breakpoint. System TTL is unchanged.
+These are pinned Python runtime/body semantics, not claims about current model
+availability or live-provider acceptance. OpenAI and Gemini are unaffected.
 
 ## Configuration and runtime updates
 

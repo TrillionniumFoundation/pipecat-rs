@@ -259,6 +259,23 @@ fn split_system(request: &CompletionRequest) -> Result<(Option<String>, &[Messag
     ))
 }
 
+// Frozen case-sensitive prefixes from pinned Python anthropic/llm.py at
+// af9f9da9d7afddaa8811c0e0251b32566c980bdf; not a live model-support claim.
+fn anthropic_supports_prefill(model: &str) -> bool {
+    [
+        "claude-2",
+        "claude-instant",
+        "claude-3",
+        "claude-opus-4-0",
+        "claude-opus-4-1",
+        "claude-sonnet-4-0",
+        "claude-sonnet-4-5",
+        "claude-haiku-4-5",
+    ]
+    .iter()
+    .any(|prefix| model.starts_with(prefix))
+}
+
 fn anthropic(request: &CompletionRequest) -> Result<Value, ServiceError> {
     let (system, input) = split_system(request)?;
     let mut messages = vec![];
@@ -285,6 +302,14 @@ fn anthropic(request: &CompletionRequest) -> Result<Value, ServiceError> {
             content.push(json!({"type":"text","text":"(empty)"}));
         }
         merge_message(&mut messages, role, "content", content);
+    }
+    // Normalize converted wire history, before request_body applies cache markers.
+    if !anthropic_supports_prefill(&request.model)
+        && messages
+            .last()
+            .is_some_and(|message| message["role"] == "assistant")
+    {
+        messages.push(json!({"role":"user","content":[{"type":"text","text":"."}]}));
     }
     let mut body = json!({"model":request.model,"messages":messages,"stream":true,"max_tokens":request.max_tokens.unwrap_or(4096)});
     if let Some(system) = system {
