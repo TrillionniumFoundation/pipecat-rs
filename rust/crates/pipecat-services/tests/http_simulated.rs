@@ -877,3 +877,124 @@ async fn simulated_gemini_remote_image_is_serialized_without_local_fetch() {
         "the client must not connect to the media URI"
     );
 }
+
+async fn simulated_normalized_image_detail(provider: Provider) {
+    let media = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let uri = format!("http://{}/photo.jpg", media.local_addr().unwrap());
+    let chunks = match provider {
+        Provider::Gemini => vec![record(
+            json!({"candidates":[{"content":{"parts":[{"text":"seen"}]},"finishReason":"STOP"}]}),
+        )],
+        Provider::Anthropic => vec![
+            record(
+                json!({"type":"message_start","message":{"usage":{"input_tokens":4,"output_tokens":0}}}),
+            ),
+            record(
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+            ),
+            record(
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"seen"}}),
+            ),
+            record(json!({"type":"content_block_stop","index":0})),
+            record(
+                json!({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}),
+            ),
+            record(json!({"type":"message_stop"})),
+        ],
+        _ => unreachable!(),
+    };
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        chunks,
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let mut request = request();
+    request.context.messages[0].content = Some(Content::Parts(vec![
+        ContentPart::Text {
+            text: "Describe".into(),
+        },
+        ContentPart::ImageUrlDetailed {
+            url: uri.clone(),
+            detail: "high".into(),
+        },
+    ]));
+    let before = serde_json::to_value(&request).unwrap();
+    let mut stream = LlmClient::new(config(provider, fake.url))
+        .unwrap()
+        .stream(request.clone())
+        .unwrap();
+    let events = collect(&mut stream).await;
+    assert!(events.iter().all(Result::is_ok));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, Ok(StreamEvent::TextDelta(text)) if text == "seen")));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        Ok(StreamEvent::Finished {
+            reason: Some(FinishReason::Stop)
+        })
+    )));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(body, adapters::request_body(provider, &request).unwrap());
+    match provider {
+        Provider::Gemini => assert_eq!(
+            body["contents"],
+            json!([{"role":"user","parts":[{"text":"Describe"},{"fileData":{"fileUri":uri,"mimeType":"image/jpeg"}}]}])
+        ),
+        Provider::Anthropic => assert_eq!(
+            body["messages"],
+            json!([{"role":"user","content":[{"type":"image","source":{"type":"url","url":uri}},{"type":"text","text":"Describe"}]}])
+        ),
+        _ => unreachable!(),
+    }
+    assert_eq!(serde_json::to_value(&request).unwrap(), before);
+    fake.task.await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), media.accept())
+            .await
+            .is_err(),
+        "detail normalization must not fetch media"
+    );
+}
+#[tokio::test]
+async fn simulated_gemini_high_detail_streams_native_image_without_fetch() {
+    simulated_normalized_image_detail(Provider::Gemini).await;
+}
+#[tokio::test]
+async fn simulated_anthropic_high_detail_streams_native_image_without_fetch() {
+    simulated_normalized_image_detail(Provider::Anthropic).await;
+}
+#[tokio::test]
+async fn simulated_invalid_image_details_reject_before_http() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    for provider in [Provider::Gemini, Provider::Anthropic] {
+        let client = LlmClient::new(config(provider, endpoint.clone())).unwrap();
+        for detail in ["", "HIGH", "unexpected"] {
+            for url in [
+                "https://example.com/photo.jpg",
+                "data:image/png;base64,YQ==",
+            ] {
+                let mut request = request();
+                request.context.messages[0].content =
+                    Some(Content::Parts(vec![ContentPart::ImageUrlDetailed {
+                        url: url.into(),
+                        detail: detail.into(),
+                    }]));
+                assert!(matches!(
+                    client.stream(request),
+                    Err(ServiceError::Unsupported(_))
+                ));
+            }
+        }
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), listener.accept())
+            .await
+            .is_err(),
+        "invalid detail must not issue HTTP"
+    );
+}

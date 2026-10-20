@@ -90,7 +90,7 @@ or behavior is claimed.
 
 ## Bounded remote image URI conversion
 
-Normal `ImageUrl` and `ImageUrlDetailed` with `detail="auto"` now support a
+Normal `ImageUrl` and `ImageUrlDetailed` with valid `detail="auto"`, `"low"` or `"high"` support a
 conservative HTTP(S) subset: literal, case-insensitive `.jpg`, `.jpeg`, `.jpe`,
 `.png` and `.gif` filename extensions produce `fileData` with `fileUri` equal to
 the exact original URI and `mimeType` equal to `image/jpeg`, `image/png` or
@@ -103,8 +103,9 @@ URI queries/fragments (even empty), literal semicolons (Python-version-dependent
 path parameter inference), userinfo (even empty), controls, ASCII
 whitespace, backslashes, missing authorities, invalid hosts/ports, bare dotfile
 suffixes and non-HTTP(S) schemes are rejected. Unknown/absent or encoded suffixes,
-WEBP, compressed filenames, opaque Files API URIs and non-auto detail remain
-unsupported. Existing data URL conversion and other providers are unchanged.
+WEBP, compressed filenames and opaque Files API URIs remain unsupported.
+Valid OpenAI-specific detail is discarded, not translated into a resolution
+hint; invalid detail is rejected. Existing data URL conversion is unchanged.
 Diagnostics continue retaining public media URIs while redacting inline payloads
 and thought signatures; rejection messages never echo rejected URIs.
 

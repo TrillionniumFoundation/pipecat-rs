@@ -408,7 +408,9 @@ fn anthropic_content(content: Option<&Content>) -> Result<Vec<Value>, ServiceErr
                     Err(ServiceError::Unsupported("image URL scheme".into()))
                 }
                 ContentPart::InlineData { mime_type, data } => anthropic_data(mime_type, data),
-                ContentPart::ImageUrlDetailed { url, detail } if detail == "auto" => {
+                ContentPart::ImageUrlDetailed { url, detail }
+                    if matches!(detail.as_str(), "auto" | "low" | "high") =>
+                {
                     anthropic_content(Some(&Content::Parts(vec![ContentPart::ImageUrl {
                         url: url.clone(),
                     }])))
@@ -621,12 +623,15 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                             }
                             ContentPart::ImageUrl { url } => gemini_remote_image(url)?,
                             ContentPart::ImageUrlDetailed { url, detail }
-                                if detail == "auto" && url.starts_with("data:") =>
+                                if matches!(detail.as_str(), "auto" | "low" | "high")
+                                    && url.starts_with("data:") =>
                             {
                                 let (mime, data) = data_url(url)?;
                                 json!({"inlineData":{"mimeType":mime,"data":data}})
                             }
-                            ContentPart::ImageUrlDetailed { url, detail } if detail == "auto" => {
+                            ContentPart::ImageUrlDetailed { url, detail }
+                                if matches!(detail.as_str(), "auto" | "low" | "high") =>
+                            {
                                 gemini_remote_image(url)?
                             }
                             ContentPart::File {

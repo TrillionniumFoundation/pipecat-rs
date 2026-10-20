@@ -137,10 +137,15 @@ Adjacent Anthropic/Gemini roles are merged. Empty Anthropic content becomes `(em
 
 Anthropic maps calls/results to `tool_use`/`tool_result`; Gemini maps them to
 `functionCall`/`functionResponse`. Tools use the provider's actual schema, not a
-common serialized shape. Gemini remote image URLs are rejected; callers may
-supply inline bytes. Rich core text/image/tool parts are retained. OpenAI image
+common serialized shape. Gemini supports a [bounded remote image URI subset](GEMINI.md#bounded-remote-image-uri-conversion)
+or inline bytes. Rich core text/image/tool parts are retained. OpenAI image
 detail, WAV/MP3 input audio, files, and assistant refusals have explicit wire
-forms. Gemini audio/files use typed inline data. Anthropic supports images/PDFs
+forms. Gemini and Anthropic accept `auto`/`low`/`high` image detail but discard
+this OpenAI-only field, reusing their undetailed URL conversion without changing
+media acceptance boundaries or the stored context. Invalid detail stays rejected.
+This follows the pinned Python converters (`af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`gemini_adapter.py:547–561` and `anthropic_adapter.py:402–421`) for valid universal
+inputs; it does not claim malformed-detail or live-model parity. Gemini audio/files use typed inline data. Anthropic supports images/PDFs
 and caller-provided signed thinking. Unsupported provider/part combinations,
 opaque message extensions, and non-text initial system content return errors
 instead of being dropped. `extra` forwards provider parameters but cannot replace

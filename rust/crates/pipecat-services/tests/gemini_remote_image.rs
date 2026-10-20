@@ -10,11 +10,11 @@ fn request(parts: Vec<ContentPart>) -> CompletionRequest {
     message.content = Some(Content::Parts(parts));
     CompletionRequest::new("gemini-3.8-flash", Context::new(vec![message]))
 }
-fn image(url: &str, detailed: bool) -> ContentPart {
-    if detailed {
+fn image(url: &str, detail: Option<&str>) -> ContentPart {
+    if let Some(detail) = detail {
         ContentPart::ImageUrlDetailed {
             url: url.into(),
-            detail: "auto".into(),
+            detail: detail.into(),
         }
     } else {
         ContentPart::ImageUrl { url: url.into() }
@@ -39,7 +39,7 @@ fn literal_remote_image_suffixes_preserve_exact_uri_and_order() {
         ("HTTPS://EXAMPLE.com:443/photo.PNG", "image/png"),
         ("https://example.com/photo%20one.jpg", "image/jpeg"),
     ] {
-        for detailed in [false, true] {
+        for detailed in [None, Some("auto"), Some("low"), Some("high")] {
             let body = wire(&request(vec![
                 ContentPart::Text {
                     text: "Describe".into(),
@@ -96,7 +96,7 @@ fn unsupported_remote_boundaries_are_not_normalized_or_leaked() {
         "https://[broken/photo.jpg",
         "https://example.com:bad/photo.jpg",
     ] {
-        for detailed in [false, true] {
+        for detailed in [None, Some("auto"), Some("low"), Some("high")] {
             let request = request(vec![image(url, detailed)]);
             let before = serde_json::to_value(&request).unwrap();
             let error = request_body(Provider::Gemini, &request).unwrap_err();
@@ -111,8 +111,8 @@ fn unsupported_remote_boundaries_are_not_normalized_or_leaked() {
     }
 }
 #[test]
-fn explicit_detail_remains_unsupported_and_data_urls_remain_inline() {
-    for detail in ["low", "high", "unexpected"] {
+fn invalid_detail_remains_unsupported_and_data_urls_remain_inline() {
+    for detail in ["", "HIGH", "unexpected"] {
         assert!(matches!(
             request_body(
                 Provider::Gemini,
@@ -124,7 +124,7 @@ fn explicit_detail_remains_unsupported_and_data_urls_remain_inline() {
             Err(ServiceError::Unsupported(_))
         ));
     }
-    for detailed in [false, true] {
+    for detailed in [None, Some("auto"), Some("low"), Some("high")] {
         let body = wire(&request(vec![image(
             "data:image/png;base64,cGF5bG9hZA==",
             detailed,
@@ -150,7 +150,7 @@ fn media_with_service_system_seed_keeps_distinct_ordered_content() {
         ContentPart::Text {
             text: "Describe".into(),
         },
-        image("https://example.com/photo.jpg", false),
+        image("https://example.com/photo.jpg", None),
     ]);
     request.system_instruction = Some("Be precise".into());
     let body = wire(&request);
@@ -169,8 +169,8 @@ fn media_with_service_system_seed_keeps_distinct_ordered_content() {
 #[test]
 fn diagnostics_preserve_public_uri_but_redact_payload_and_signature_without_mutation() {
     let mut request = request(vec![
-        image("https://example.com/photo.jpg", false),
-        image("data:image/png;base64,cGF5bG9hZA==", false),
+        image("https://example.com/photo.jpg", None),
+        image("data:image/png;base64,cGF5bG9hZA==", None),
         ContentPart::GeminiText {
             text: "visible".into(),
             thought: true,
@@ -193,7 +193,7 @@ fn diagnostics_preserve_public_uri_but_redact_payload_and_signature_without_muta
 }
 #[test]
 fn other_providers_keep_their_existing_remote_image_shapes() {
-    let request = request(vec![image("https://example.com/photo.jpg", false)]);
+    let request = request(vec![image("https://example.com/photo.jpg", None)]);
     assert_eq!(
         request_body(Provider::OpenAi, &request).unwrap()["messages"][0]["content"],
         json!([{"type":"image_url","image_url":{"url":"https://example.com/photo.jpg"}}])
