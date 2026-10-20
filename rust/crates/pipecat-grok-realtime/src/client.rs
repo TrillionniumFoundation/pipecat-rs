@@ -9,7 +9,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt,
     future::Future,
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -152,6 +152,19 @@ impl RealtimeConfig {
             limits: RealtimeLimits::default(),
             api_key: api_key.into(),
         }
+    }
+    pub(crate) fn app_credential_capacity(&self) -> usize {
+        self.api_key.capacity()
+    }
+    pub(crate) fn compact_app_credential(
+        &mut self,
+        max_retained_bytes: usize,
+    ) -> Result<(), RealtimeError> {
+        if self.api_key.capacity() > max_retained_bytes || self.api_key.len() > 4096 {
+            return Err(RealtimeError::TooLarge);
+        }
+        self.api_key.shrink_to_fit();
+        Ok(())
     }
     pub fn validate(&self) -> Result<(), RealtimeError> {
         self.limits.validate()?;
@@ -311,6 +324,8 @@ fn transport(e: tungstenite::Error) -> RealtimeError {
 #[derive(Debug, Clone)]
 pub struct RealtimeClient {
     config: RealtimeConfig,
+    app: Option<Arc<crate::app_state::AppState>>,
+    resolved: Option<SocketAddr>,
 }
 impl RealtimeClient {
     pub fn config(&self) -> &RealtimeConfig {
@@ -318,7 +333,20 @@ impl RealtimeClient {
     }
     pub fn new(config: RealtimeConfig) -> Result<Self, RealtimeError> {
         config.validate()?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            app: None,
+            resolved: None,
+        })
+    }
+    pub(crate) fn for_app(
+        mut self,
+        state: Arc<crate::app_state::AppState>,
+        address: SocketAddr,
+    ) -> Self {
+        self.app = Some(state);
+        self.resolved = Some(address);
+        self
     }
     /// Opens a single authenticated connection. Redirects and automatic retries
     /// are deliberately unsupported, so credentials and audio are never replayed.
@@ -337,13 +365,33 @@ impl RealtimeClient {
         let ws_config = WebSocketConfig::default()
             .max_message_size(Some(c.limits.max_message_bytes))
             .max_frame_size(Some(c.limits.max_message_bytes));
-        let (mut socket, _) = timeout(
-            c.limits.connect_timeout,
-            tokio_tungstenite::connect_async_with_config(req, Some(ws_config), true),
-        )
-        .await
-        .map_err(|_| RealtimeError::Timeout("connect"))?
-        .map_err(transport)?;
+        let connecting = async {
+            if let Some(address) = self.resolved {
+                let stream = TcpStream::connect(address)
+                    .await
+                    .map_err(|_| RealtimeError::Transport)?;
+                stream
+                    .set_nodelay(true)
+                    .map_err(|_| RealtimeError::Transport)?;
+                tokio_tungstenite::client_async_tls_with_config(req, stream, Some(ws_config), None)
+                    .await
+                    .map_err(transport)
+            } else {
+                tokio_tungstenite::connect_async_with_config(req, Some(ws_config), true)
+                    .await
+                    .map_err(transport)
+            }
+        };
+        let (mut socket, _) = if let Some(app) = &self.app {
+            tokio::select! { biased;
+                _ = app.cancelled() => return Err(RealtimeError::Closed),
+                result = timeout(c.limits.connect_timeout, connecting) => result.map_err(|_| RealtimeError::Timeout("connect"))??,
+            }
+        } else {
+            timeout(c.limits.connect_timeout, connecting)
+                .await
+                .map_err(|_| RealtimeError::Timeout("connect"))??
+        };
         let (tx, rx) = mpsc::channel(c.limits.queue_capacity);
         let (events_tx, events_rx) = mpsc::channel(c.limits.queue_capacity);
         let (control_tx, control_rx) = watch::channel(Control::default());
@@ -363,6 +411,7 @@ impl RealtimeClient {
             projected_session: Arc::new(Mutex::new(c.session.clone())),
             connection_model: Arc::from(c.model.as_str()),
             terminal: terminal_rx,
+            app: self.app.clone(),
         };
         let mut actor = Actor::new(
             c.clone(),
@@ -372,8 +421,15 @@ impl RealtimeClient {
             health_gate,
             emission_gate,
         );
+        actor.app = self.app.clone();
+        let owner = Arc::new(SessionCompletion::default());
+        let diagnostics = owner.clone();
         let task = tokio::spawn(async move {
             let result = actor.run(&mut socket, rx, control_rx).await;
+            *diagnostics
+                .primary
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = result.clone().err();
             let result = if result.is_err() && !actor.tools.is_empty() {
                 Err(RealtimeError::UnsettledTools)
             } else {
@@ -381,13 +437,33 @@ impl RealtimeClient {
             };
             terminal_tx.send_replace(Some(result.clone()));
             actor.shared_ready.store(false, Ordering::Release);
-            let _ = timeout(actor.config.limits.close_timeout, socket.close(None)).await;
-            result
+            let cleanup = match timeout(actor.config.limits.close_timeout, socket.close(None)).await
+            {
+                Ok(Ok(())) => None,
+                Ok(Err(_)) => Some(RealtimeError::Transport),
+                Err(_) => Some(RealtimeError::Timeout("socket close")),
+            };
+            *diagnostics
+                .cleanup
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = cleanup.clone();
+            if actor.app.is_some() {
+                result.and_then(|()| cleanup.map_or(Ok(()), Err))
+            } else {
+                result
+            }
         });
+        *owner
+            .task
+            .try_lock()
+            .expect("new session owner has no waiter") = Some(task);
+        if let Some(app) = &self.app {
+            app.retain_session(owner.clone());
+        }
         Ok(RealtimeSession {
             sender,
             rx: events_rx,
-            task: Some(task),
+            owner,
             ended: false,
         })
     }
@@ -403,6 +479,14 @@ enum QueuedAction {
     Context {
         actions: Vec<Action>,
         fence: pipecat_core::InvocationFence,
+        source: Option<pipecat_core::ProcessorContext>,
+    },
+    AppCheckpoint(oneshot::Sender<crate::app_state::ActorCheckpoint>),
+    AppVadAck(u64),
+    AppClose {
+        revision: u64,
+        emitted: u64,
+        reply: oneshot::Sender<bool>,
     },
     ToolPolicy(FunctionCallInProgressFrame),
     ToolOutcome {
@@ -441,6 +525,7 @@ pub struct RealtimeSender {
     projected_session: Arc<Mutex<SessionProperties>>,
     connection_model: Arc<str>,
     terminal: watch::Receiver<Option<Result<(), RealtimeError>>>,
+    app: Option<Arc<crate::app_state::AppState>>,
 }
 impl fmt::Debug for RealtimeSender {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -566,10 +651,11 @@ impl RealtimeSender {
 
     /// Admit durable context edits atomically to the local bounded queue. Only
     /// inference uses the original invocation fence; this is not a provider ack.
-    pub(crate) fn try_send_context(
+    pub(crate) fn try_send_context_source(
         &self,
         actions: Vec<Action>,
         fence: pipecat_core::InvocationFence,
+        source: Option<pipecat_core::ProcessorContext>,
     ) -> Result<(), RealtimeError> {
         if !health_current(&self.health_gate) {
             self.close();
@@ -600,7 +686,11 @@ impl RealtimeSender {
             mpsc::error::TrySendError::Closed(_) => RealtimeError::Closed,
         })?;
         permit.send(Command {
-            action: QueuedAction::Context { actions, fence },
+            action: QueuedAction::Context {
+                actions,
+                fence,
+                source,
+            },
             generation: self.generation(),
             reply: None,
         });
@@ -692,12 +782,57 @@ impl RealtimeSender {
     /// Invalidates already queued output immediately. Cancellation uses a
     /// separate watch lane and cannot wait behind queued audio or tool work.
     pub fn interrupt(&self, playback: Option<PlaybackPosition>) {
+        self.interrupt_source(playback, None);
+    }
+    pub(crate) fn register_app_scope(&self, context: &pipecat_core::ProcessorContext) {
+        let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(app) = &self.app {
+            app.register_provider_scope(self.generation(), context.clone());
+        }
+    }
+    pub(crate) fn interrupt_source(
+        &self,
+        playback: Option<PlaybackPosition>,
+        source: Option<&pipecat_core::ProcessorContext>,
+    ) {
         let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        if let (Some(app), Some(source)) = (&self.app, source) {
+            app.register_provider_scope(generation, source.clone());
+        }
         self.control.send_modify(|c| {
             c.generation = generation;
             c.playback = playback;
         });
+    }
+    pub(crate) fn app_vad_ack(&self, sequence: u64) -> Result<(), RealtimeError> {
+        self.enqueue_native(QueuedAction::AppVadAck(sequence))
+    }
+    pub(crate) async fn app_checkpoint(
+        &self,
+    ) -> Result<crate::app_state::ActorCheckpoint, RealtimeError> {
+        let (tx, rx) = oneshot::channel();
+        self.enqueue_native(QueuedAction::AppCheckpoint(tx))?;
+        timeout(self.limits.operation_timeout, rx)
+            .await
+            .map_err(|_| RealtimeError::Timeout("application checkpoint"))?
+            .map_err(|_| RealtimeError::Closed)
+    }
+    pub(crate) async fn app_close(
+        &self,
+        revision: u64,
+        emitted: u64,
+    ) -> Result<bool, RealtimeError> {
+        let (reply, rx) = oneshot::channel();
+        self.enqueue_native(QueuedAction::AppClose {
+            revision,
+            emitted,
+            reply,
+        })?;
+        timeout(self.limits.operation_timeout, rx)
+            .await
+            .map_err(|_| RealtimeError::Timeout("application close"))?
+            .map_err(|_| RealtimeError::Closed)
     }
     /// Ordered graceful end, unlike immediate `close`. Continue draining events.
     pub async fn finish(&self) -> Result<(), RealtimeError> {
@@ -751,11 +886,70 @@ impl RealtimeSender {
 pub(crate) struct FencedEvent {
     pub event: RealtimeEvent,
     pub fence: Option<pipecat_core::InvocationFence>,
+    pub source: Option<pipecat_core::ProcessorContext>,
+    pub sequence: u64,
+}
+#[derive(Default)]
+pub(crate) struct SessionCompletion {
+    task: tokio::sync::Mutex<Option<JoinHandle<Result<(), RealtimeError>>>>,
+    primary: Mutex<Option<RealtimeError>>,
+    cleanup: Mutex<Option<RealtimeError>>,
+    joined: AtomicBool,
+    forced: AtomicBool,
+    result: Mutex<Option<Result<(), RealtimeError>>>,
+}
+impl SessionCompletion {
+    pub(crate) async fn join(&self, limit: Duration) -> Result<(), RealtimeError> {
+        let mut slot = self.task.lock().await;
+        if let Some(task) = slot.as_mut() {
+            let result = match timeout(limit, &mut *task).await {
+                Ok(result) => result
+                    .map_err(|_| RealtimeError::Transport)
+                    .and_then(|result| result),
+                Err(_) => {
+                    self.forced.store(true, Ordering::Release);
+                    task.abort();
+                    let _ = (&mut *task).await;
+                    Err(RealtimeError::Timeout("close"))
+                }
+            };
+            *self
+                .result
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(result.clone());
+            slot.take();
+            self.joined.store(true, Ordering::Release);
+            return result;
+        }
+        self.result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+            .unwrap_or(Err(RealtimeError::Closed))
+    }
+    pub(crate) fn joined(&self) -> bool {
+        self.joined.load(Ordering::Acquire)
+    }
+    pub(crate) fn forced(&self) -> bool {
+        self.forced.load(Ordering::Acquire)
+    }
+    pub(crate) fn cleanup(&self) -> Option<RealtimeError> {
+        self.cleanup
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+    pub(crate) fn primary(&self) -> Option<RealtimeError> {
+        self.primary
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
 }
 pub struct RealtimeSession {
     sender: RealtimeSender,
     rx: mpsc::Receiver<FencedEvent>,
-    task: Option<JoinHandle<Result<(), RealtimeError>>>,
+    owner: Arc<SessionCompletion>,
     ended: bool,
 }
 impl RealtimeSession {
@@ -763,9 +957,14 @@ impl RealtimeSession {
         self.sender.clone()
     }
     pub async fn next_event(&mut self) -> Option<Result<RealtimeEvent, RealtimeError>> {
-        self.next_event_fenced()
-            .await
-            .map(|result| result.map(|event| event.event))
+        self.next_event_fenced().await.map(|result| {
+            result.map(|event| {
+                if let Some(app) = &self.sender.app {
+                    app.mapped_through(event.sequence);
+                }
+                event.event
+            })
+        })
     }
     pub(crate) async fn next_event_fenced(&mut self) -> Option<Result<FencedEvent, RealtimeError>> {
         if self.ended {
@@ -779,38 +978,29 @@ impl RealtimeSession {
                     .as_ref()
                     .is_some_and(|fence| !fence.is_current())
             {
+                if let Some(app) = &self.sender.app {
+                    app.mapped_through(event.sequence);
+                }
                 continue;
             }
             return Some(Ok(event));
         }
+        let result = self
+            .owner
+            .join(self.sender.limits.close_timeout + self.sender.limits.operation_timeout)
+            .await;
         self.ended = true;
-        match self.task.take()?.await {
-            Ok(Ok(())) => None,
-            Ok(Err(e)) => Some(Err(e)),
-            Err(_) => Some(Err(RealtimeError::Transport)),
-        }
+        result.err().map(Err)
     }
     pub async fn shutdown(&mut self) -> Result<(), RealtimeError> {
         self.sender.close();
         self.rx.close();
+        let result = self
+            .owner
+            .join(self.sender.limits.close_timeout + self.sender.limits.operation_timeout)
+            .await;
         self.ended = true;
-        if let Some(mut task) = self.task.take() {
-            match timeout(
-                self.sender.limits.close_timeout + self.sender.limits.operation_timeout,
-                &mut task,
-            )
-            .await
-            {
-                Ok(result) => result.map_err(|_| RealtimeError::Transport)?,
-                Err(_) => {
-                    task.abort();
-                    let _ = task.await;
-                    Err(RealtimeError::Timeout("close"))
-                }
-            }
-        } else {
-            Ok(())
-        }
+        result
     }
 }
 impl Drop for RealtimeSession {
@@ -820,12 +1010,21 @@ impl Drop for RealtimeSession {
 }
 #[derive(Clone)]
 struct ResponseContext {
+    source: Option<pipecat_core::ProcessorContext>,
     generation: u64,
     fence: Option<pipecat_core::InvocationFence>,
     context_id: Option<String>,
     allowed_tools: Arc<HashSet<String>>,
 }
+struct DeferredResponse {
+    options: ResponseOptions,
+    generation: u64,
+    fence: Option<pipecat_core::InvocationFence>,
+    unconditional: bool,
+    source: Option<pipecat_core::ProcessorContext>,
+}
 struct ToolState {
+    source: Option<pipecat_core::ProcessorContext>,
     name: String,
     fence: Option<pipecat_core::InvocationFence>,
     item_id: String,
@@ -907,14 +1106,12 @@ struct Actor {
     seen_calls: HashSet<String>,
     initial_update_sent: bool,
     results_awaiting_response: bool,
-    deferred_response: Option<(
-        ResponseOptions,
-        u64,
-        Option<pipecat_core::InvocationFence>,
-        bool,
-    )>,
+    deferred_response: Option<DeferredResponse>,
+    app_vad_pending: Option<(u64, Instant)>,
     discarded_calls: HashSet<String>,
     inference_fence: Option<pipecat_core::InvocationFence>,
+    inference_source: Option<pipecat_core::ProcessorContext>,
+    app: Option<Arc<crate::app_state::AppState>>,
 }
 impl Actor {
     fn new(
@@ -952,8 +1149,11 @@ impl Actor {
             initial_update_sent: false,
             results_awaiting_response: false,
             deferred_response: None,
+            app_vad_pending: None,
             discarded_calls: HashSet::new(),
             inference_fence: None,
+            inference_source: None,
+            app: None,
         }
     }
     fn allowed_tools(&self) -> Arc<HashSet<String>> {
@@ -986,13 +1186,20 @@ impl Actor {
         if wire.len() > self.config.limits.max_message_bytes {
             return Err(RealtimeError::TooLarge);
         }
-        timeout(
-            self.config.limits.operation_timeout,
-            socket.send(Message::Text(wire.into())),
-        )
-        .await
-        .map_err(|_| RealtimeError::Timeout("write"))?
-        .map_err(transport)
+        let send = socket.send(Message::Text(wire.into()));
+        #[cfg(test)]
+        let send = async {
+            if value["type"] == "input_audio_buffer.append" {
+                if let Some(hooks) = self.app.as_ref().and_then(|app| app.test_hooks()) {
+                    return hooks.observe_audio_write(send).await;
+                }
+            }
+            send.await
+        };
+        timeout(self.config.limits.operation_timeout, send)
+            .await
+            .map_err(|_| RealtimeError::Timeout("write"))?
+            .map_err(transport)
     }
     async fn write_response(
         &mut self,
@@ -1147,18 +1354,33 @@ impl Actor {
                         .values()
                         .any(|tool| tool.pending_outcome.is_some())
                     {
-                        self.deferred_response =
-                            Some((options, generation, self.inference_fence.clone(), false));
+                        self.deferred_response = Some(DeferredResponse {
+                            options,
+                            generation,
+                            fence: self.inference_fence.clone(),
+                            unconditional: false,
+                            source: self.inference_source.clone(),
+                        });
                     }
                     return Ok(());
                 }
                 if self.active.is_some() || self.pending.is_some() {
-                    self.deferred_response =
-                        Some((options, generation, self.inference_fence.clone(), false));
+                    self.deferred_response = Some(DeferredResponse {
+                        options,
+                        generation,
+                        fence: self.inference_fence.clone(),
+                        unconditional: false,
+                        source: self.inference_source.clone(),
+                    });
                     return Ok(());
                 }
-                self.deferred_response =
-                    Some((options, generation, self.inference_fence.clone(), false));
+                self.deferred_response = Some(DeferredResponse {
+                    options,
+                    generation,
+                    fence: self.inference_fence.clone(),
+                    unconditional: false,
+                    source: self.inference_source.clone(),
+                });
                 return self.maybe_continue(socket).await;
             }
             Action::CreateResponse(response) => {
@@ -1172,8 +1394,13 @@ impl Actor {
                     ));
                 }
                 if self.active.is_some() || self.pending.is_some() {
-                    self.deferred_response =
-                        Some((response, generation, self.inference_fence.clone(), true));
+                    self.deferred_response = Some(DeferredResponse {
+                        options: response,
+                        generation,
+                        fence: self.inference_fence.clone(),
+                        unconditional: true,
+                        source: self.inference_source.clone(),
+                    });
                     return Ok(());
                 }
                 let fence = self.inference_fence.clone();
@@ -1185,6 +1412,7 @@ impl Actor {
                 }
                 self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
                 self.pending = Some(ResponseContext {
+                    source: self.inference_source.clone(),
                     fence: self.inference_fence.clone(),
                     allowed_tools: self.allowed_tools(),
                     generation,
@@ -1290,7 +1518,62 @@ impl Actor {
     ) -> Result<(), RealtimeError> {
         match action {
             QueuedAction::Public(action) => self.write_action(socket, action, generation).await,
-            QueuedAction::Context { actions, fence } => {
+            QueuedAction::AppVadAck(sequence) => {
+                if self.app.is_none() || self.app_vad_pending.map(|value| value.0) != Some(sequence)
+                {
+                    return Err(RealtimeError::Protocol(
+                        "application VAD acknowledgment identity",
+                    ));
+                }
+                self.app_vad_pending = None;
+                Ok(())
+            }
+            QueuedAction::AppCheckpoint(reply) => {
+                let app = self
+                    .app
+                    .as_ref()
+                    .ok_or(RealtimeError::Invalid("application profile required"))?;
+                for id in app.discarded_calls() {
+                    self.tools.remove(&id);
+                    self.discarded_calls.insert(id);
+                }
+                let _ = reply.send(crate::app_state::ActorCheckpoint {
+                    revision: app.actor_revision(),
+                    emitted: app.emitted(),
+                    idle: self.active.is_none()
+                        && self.pending.is_none()
+                        && self.deferred_response.is_none()
+                        && self.app_vad_pending.is_none()
+                        && self.tools.is_empty(),
+                });
+                Ok(())
+            }
+            QueuedAction::AppClose {
+                revision,
+                emitted,
+                reply,
+            } => {
+                let app = self
+                    .app
+                    .as_ref()
+                    .ok_or(RealtimeError::Invalid("application profile required"))?;
+                let idle = self.active.is_none()
+                    && self.pending.is_none()
+                    && self.deferred_response.is_none()
+                    && self.app_vad_pending.is_none()
+                    && self.tools.is_empty();
+                let close = idle
+                    && app.try_commit_close(revision, emitted, || {
+                        self.finishing = true;
+                    });
+                let _ = reply.send(close);
+                Ok(())
+            }
+            QueuedAction::Context {
+                actions,
+                fence,
+                source,
+            } => {
                 for action in actions {
                     let inference = matches!(
                         action,
@@ -1301,15 +1584,12 @@ impl Actor {
                     }
                     if inference {
                         self.inference_fence = Some(fence.clone());
+                        self.inference_source = source.clone();
                     }
                     let result = self.write_action(socket, action, generation).await;
                     self.inference_fence = None;
+                    self.inference_source = None;
                     result?;
-                    if inference {
-                        if let Some((_, _, existing_fence, _)) = self.deferred_response.as_mut() {
-                            *existing_fence = Some(fence.clone());
-                        }
-                    }
                 }
                 Ok(())
             }
@@ -1400,7 +1680,12 @@ impl Actor {
             true,
             cancellation.then_some(run_llm),
         )
-        .await
+        .await?;
+        if let Some(app) = &self.app {
+            app.note_wire_outcome(&outcome)
+                .map_err(|_| RealtimeError::Protocol("application native settlement identity"))?;
+        }
+        Ok(())
     }
 
     async fn maybe_continue(&mut self, socket: &mut Socket) -> Result<(), RealtimeError> {
@@ -1408,9 +1693,18 @@ impl Actor {
             && self.active.is_none()
             && self.pending.is_none()
             && (self.results_awaiting_response
-                || self.deferred_response.as_ref().is_some_and(|value| value.3))
+                || self
+                    .deferred_response
+                    .as_ref()
+                    .is_some_and(|value| value.unconditional))
         {
-            let (options, generation, fence, unconditional) = self
+            let DeferredResponse {
+                options,
+                generation,
+                fence,
+                unconditional,
+                source,
+            } = self
                 .deferred_response
                 .take()
                 .expect("checked deferred response");
@@ -1429,6 +1723,7 @@ impl Actor {
             }
             self.pending_event_id = Some(format!("pc_evt_{}", self.sequence));
             self.pending = Some(ResponseContext {
+                source,
                 fence: fence.clone(),
                 allowed_tools: self.allowed_tools(),
                 generation,
@@ -1471,6 +1766,28 @@ impl Actor {
         self.results_awaiting_response = false;
         Ok(())
     }
+    fn reconcile_app_unentered_tools(&mut self) -> Result<(), RealtimeError> {
+        let Some(app) = &self.app else {
+            return Ok(());
+        };
+        let mut discarded = Vec::new();
+        for (id, tool) in &self.tools {
+            let source = tool.source.as_ref().ok_or(RealtimeError::Protocol(
+                "application tool has no original source",
+            ))?;
+            if app
+                .reconcile_unentered_call(id, tool.generation, source)
+                .map_err(|_| RealtimeError::Protocol("application tool admission reconciliation"))?
+            {
+                discarded.push(id.clone());
+            }
+        }
+        for id in discarded {
+            self.tools.remove(&id);
+            self.discarded_calls.insert(id);
+        }
+        Ok(())
+    }
     async fn run(
         &mut self,
         socket: &mut Socket,
@@ -1478,25 +1795,43 @@ impl Actor {
         mut control: watch::Receiver<Control>,
     ) -> Result<(), RealtimeError> {
         loop {
-            if self.finishing && self.active.is_none() && self.pending.is_none() {
+            // Ordinary interruption/fresh-turn progress cannot depend on End
+            // sending a checkpoint. Only provably unentered stale declarations
+            // are retired; entered leases still require native final receipts.
+            self.reconcile_app_unentered_tools()?;
+            if self.finishing
+                && self.active.is_none()
+                && self.pending.is_none()
+                && self.app_vad_pending.is_none()
+            {
                 return Ok(());
             }
             let deadline = self
                 .deadline
+                .unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400));
+            let vad_deadline = self
+                .app_vad_pending
+                .map(|value| value.1)
                 .unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400));
             tokio::select! { biased;
                 changed = control.changed() => {
                     if changed.is_err() { return Ok(()); }
                     let value = control.borrow_and_update().clone();
                     if value.close { return Ok(()); }
+                    if let Some(app) = &self.app { app.note_actor_change(); }
                     self.interrupt(socket, value).await?;
                 }
                 _ = tokio::time::sleep_until(self.ready_deadline), if !self.ready => return Err(RealtimeError::Timeout("session readiness")),
                 _ = tokio::time::sleep_until(deadline), if self.deadline.is_some() => return Err(RealtimeError::Timeout("response")),
-                item = socket.next() => {
+                _ = tokio::time::sleep_until(vad_deadline), if self.app_vad_pending.is_some() => return Err(RealtimeError::Timeout("application VAD boundary")),
+                // The real user start can interrupt and clear queued Normal stop/transcript
+                // frames. Do not read ahead until its exact System roundtrip crosses the
+                // actual user and provider. Control and commands remain independently live.
+                item = socket.next(), if self.app_vad_pending.is_none() => {
                     match item {
                         Some(Ok(Message::Text(text))) => {
                             let wire = parse_wire(&text, self.config.limits.max_audio_chunk_bytes)?;
+                            if let Some(app) = &self.app { app.note_actor_change(); }
                             self.event(socket, wire).await?;
                         }
                         Some(Ok(Message::Ping(p))) => { timeout(self.config.limits.operation_timeout, socket.send(Message::Pong(p))).await.map_err(|_| RealtimeError::Timeout("pong"))?.map_err(transport)?; }
@@ -1515,6 +1850,9 @@ impl Actor {
                     if !persistent && command.reply.as_ref().is_some_and(|r| r.is_closed()) { continue; }
                     if !persistent && command.generation != self.epoch() {
                         if let Some(reply) = command.reply { let _ = reply.send(Err(RealtimeError::Interrupted)); } continue;
+                    }
+                    if !matches!(command.action, QueuedAction::AppCheckpoint(_) | QueuedAction::AppClose { .. }) {
+                        if let Some(app) = &self.app { app.note_actor_change(); }
                     }
                     let result = self.write_command(socket, command.action, command.generation).await;
                     let fatal = matches!(result, Err(RealtimeError::Transport | RealtimeError::Closed | RealtimeError::Timeout(_)));
@@ -1579,6 +1917,10 @@ impl Actor {
                 self.results_awaiting_response = false;
                 self.pending_event_id = None;
                 let context = self.pending.take().unwrap_or_else(|| ResponseContext {
+                    source: self
+                        .app
+                        .as_ref()
+                        .and_then(|app| app.provider_scope(self.epoch())),
                     fence: self.inference_fence.clone(),
                     allowed_tools: self.allowed_tools(),
                     generation: self.epoch(),
@@ -1641,6 +1983,7 @@ impl Actor {
             Event::FunctionArgumentsDone { call_id, .. }
             | Event::FunctionArgumentsDelta { call_id, .. } => {
                 self.tools.get(call_id).map(|t| ResponseContext {
+                    source: t.source.clone(),
                     fence: t.fence.clone(),
                     generation: t.generation,
                     context_id: t.context_id.clone(),
@@ -1704,6 +2047,13 @@ impl Actor {
                         || self.cancelled_tools.contains(call_id)
                         || self.discarded_calls.contains(call_id)
                     {
+                        // This is a fresh, current function-item declaration, not
+                        // a late argument/result event. The restricted app never
+                        // grants a settled call identity a second admission. Keep
+                        // the legacy lower-level duplicate suppression unchanged.
+                        if self.app.is_some() {
+                            return Err(RealtimeError::Protocol("reused tool call identity"));
+                        }
                         return Ok(());
                     }
                     let response_id = self
@@ -1747,6 +2097,7 @@ impl Actor {
                         self.tools.insert(
                             call_id.clone(),
                             ToolState {
+                                source: response_context.source.clone(),
                                 fence: response_context.fence.clone(),
                                 name: name.clone(),
                                 item_id: id.clone(),
@@ -1820,12 +2171,37 @@ impl Actor {
             return Ok(());
         }
         let fence = context.as_ref().and_then(|context| context.fence.clone());
+        let source = context.as_ref().and_then(|context| context.source.clone());
+        if self.app.is_some() && event.response_id().is_some() && source.is_none() {
+            return Err(RealtimeError::Protocol(
+                "application response has no original scope",
+            ));
+        }
         let context_id = context
             .and_then(|c| c.context_id)
             .or_else(|| self.config.context_id.clone());
         redact_event(&mut event, &self.config.api_key);
+        let sequence = match &self.app {
+            Some(app) => app.note_emitted().map_err(|_| RealtimeError::TooLarge)?,
+            None => 0,
+        };
+        if self.app.is_some() && matches!(event, Event::SpeechStarted { .. }) {
+            if self.app_vad_pending.is_some() {
+                return Err(RealtimeError::Protocol(
+                    "overlapping application VAD boundary",
+                ));
+            }
+            // Install before publishing the start. The marker proves ordering only;
+            // response authority still comes from the actual Start/Interruption scope.
+            self.app_vad_pending = Some((
+                sequence,
+                Instant::now() + self.config.limits.operation_timeout,
+            ));
+        }
         self.tx
             .try_send(FencedEvent {
+                source,
+                sequence,
                 fence,
                 event: RealtimeEvent {
                     event_id: wire.event_id,

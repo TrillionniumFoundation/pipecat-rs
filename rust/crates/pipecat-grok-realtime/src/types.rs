@@ -47,6 +47,9 @@ impl Default for TurnDetection {
     }
 }
 impl TurnDetection {
+    pub(crate) fn app_kind_capacity(&self) -> usize {
+        self.kind.capacity()
+    }
     pub fn server_vad() -> Self {
         Self {
             kind: vad_type(),
@@ -115,6 +118,9 @@ fn function_type() -> String {
     "function".into()
 }
 impl FunctionTool {
+    pub(crate) fn app_kind_capacity(&self) -> usize {
+        self.kind.capacity()
+    }
     pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Value) -> Self {
         Self {
             kind: function_type(),

@@ -80,6 +80,10 @@ struct ConversationState {
 /// turns commit on UserStoppedSpeaking, while server VAD commits remotely.
 /// Tool execution belongs to the application's tool processor.
 pub struct GrokRealtimeProcessor {
+    app: Option<Arc<crate::app_state::AppState>>,
+    app_failure: Mutex<Option<RealtimeError>>,
+    app_mapping_failure: Arc<Mutex<Option<RealtimeError>>>,
+    pending_app_receive: Mutex<Option<(RealtimeSession, StartFrame, ProcessorContext)>>,
     client: RealtimeClient,
     sender: Arc<Mutex<Option<RealtimeSender>>>,
     result_tag: LocalFrameTag,
@@ -122,6 +126,10 @@ impl GrokRealtimeProcessor {
             .as_ref()
             .is_none_or(Option::is_none);
         Ok(Self {
+            app: None,
+            app_failure: Mutex::new(None),
+            app_mapping_failure: Arc::new(Mutex::new(None)),
+            pending_app_receive: Mutex::new(None),
             client,
             sender: Arc::new(Mutex::new(None)),
             result_tag: LocalFrameTag::new(),
@@ -139,6 +147,30 @@ impl GrokRealtimeProcessor {
             health: pipecat_core::ProcessorHealth::default(),
             health_admission: Arc::new(Mutex::new(None)),
         })
+    }
+    pub(crate) fn app_primary(&self) -> Option<RealtimeError> {
+        self.app_failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    pub(crate) fn app_mapping_primary(&self) -> Option<RealtimeError> {
+        self.app_mapping_failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    fn record_app_failure(&self, error: RealtimeError) {
+        if self.app.is_some() {
+            self.app_failure
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get_or_insert(error);
+        }
+    }
+    pub(crate) fn for_app(mut self, app: Arc<crate::app_state::AppState>) -> Self {
+        self.app = Some(app);
+        self
     }
     /// Place this after the native ToolExecutor and before the assistant
     /// aggregator so every result reaches Grok before an inference request.
@@ -304,6 +336,7 @@ impl GrokRealtimeProcessor {
         direction: Direction,
         cause: Option<Arc<pipecat_core::NativeRealtimeContextCause>>,
         fence: Option<pipecat_core::InvocationFence>,
+        source: Option<ProcessorContext>,
     ) -> Result<(), ProcessorError> {
         crate::client::bounded_serialized(context, self.client.config().limits.max_message_bytes)
             .map_err(processor_error)?;
@@ -436,7 +469,9 @@ impl GrokRealtimeProcessor {
             actions.push(Action::CreateResponse(ResponseOptions::default()));
         }
         match fence {
-            Some(fence) => self.sender()?.try_send_context(actions, fence),
+            Some(fence) => self
+                .sender()?
+                .try_send_context_source(actions, fence, source),
             None => self.sender()?.try_send_batch(actions),
         }
         .map_err(processor_error)?;
@@ -457,6 +492,218 @@ impl GrokRealtimeProcessor {
                 state.admission.commit(cause);
             }
         }
+        Ok(())
+    }
+    fn start_receive(
+        &self,
+        mut session: RealtimeSession,
+        config: &StartFrame,
+        ctx: &ProcessorContext,
+        admission: pipecat_core::ProcessorHealthGeneration,
+    ) -> Result<(), ProcessorError> {
+        let sender = session.sender();
+        let output = ctx.clone();
+        let user_id = self.user_id.clone();
+        let playback = self.playback.clone();
+        let conversation = self.conversation.clone();
+        let output_rate = self.output_rate;
+        let manual_turns = self.manual_turns;
+        let enable_usage_metrics = config.enable_usage_metrics;
+        let health = self.health.clone();
+        let app = self.app.clone();
+        let mapping_failure = self.app_mapping_failure.clone();
+        let mut health_changes = health.watch();
+        ctx.spawn("grok-realtime-receive", false, async move {
+            let mapping_error = |error: RealtimeError| {
+                if let Some(app) = &app {
+                    app.note_failure_stage(crate::GrokAppFailureStage::Mapping);
+                    mapping_failure.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(error.clone());
+                }
+                processor_error(error)
+            };
+            let received: Result<(), ProcessorError> = async {
+            let mut mapper = RealtimeFrameMapper::with_sample_rate(user_id, output_rate)?;
+            let mut generation = sender.generation();
+            let mut response_has_pcm = false;
+            loop {
+                let result = tokio::select! { biased;
+                    _ = async { match &app { Some(app) => app.cancelled().await, None => std::future::pending::<()>().await } } => { sender.close(); break; }
+                    _ = health_changes.changed() => { sender.close(); break; }
+                    result = session.next_event_fenced() => result,
+                };
+                if health.generation() != admission {
+                    sender.close();
+                    break;
+                }
+                let Some(result) = result else {
+                    break;
+                };
+                let (event, original_fence, original_source, event_sequence) = match result {
+                    Ok(event) => (event.event, event.fence, event.source, event.sequence),
+                    Err(e) => {
+                        if let Some(app) = &app { app.note_failure_stage(crate::GrokAppFailureStage::Receive); }
+                        let fatal = e == RealtimeError::UnsettledTools;
+                        let mut error = error_frame(e);
+                        error.fatal = fatal;
+                        output
+                            .push_error_if_health_generation(error, false, admission)
+                            .await?;
+                        break;
+                    }
+                };
+                #[cfg(test)]
+                if let Some(app) = &app {
+                    if let Some(hooks) = app.test_hooks() { hooks.panic_after_receive_event(); }
+                }
+                let interrupted = generation != sender.generation();
+                if interrupted {
+                    mapper.reset();
+                    response_has_pcm = false;
+                    generation = sender.generation();
+                }
+                if manual_turns
+                    && matches!(
+                        event.event,
+                        Event::SpeechStarted { .. } | Event::SpeechStopped { .. }
+                    )
+                {
+                    continue;
+                }
+                {
+                    let mut playback = playback
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?;
+                    playback.observe(&event).map_err(mapping_error)?;
+                }
+                if matches!(
+                    event.event,
+                    Event::ResponseCreated { .. }
+                        | Event::InputTranscriptionCompleted { .. }
+                        | Event::SpeechStarted { .. }
+                ) {
+                    let mut state = conversation
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
+                    if state.binding == ContextBinding::Unbound {
+                        state.binding = ContextBinding::Live;
+                    }
+                }
+                if let Some(app) = &app { if matches!(&event.event, Event::ResponseDone { .. }) { app.wait_declarations().await?; } }
+                if matches!(&event.event, Event::ResponseCreated { .. }) { response_has_pcm = false; }
+                let frames = mapper.frames(&event).map_err(mapping_error)?;
+                response_has_pcm |= frames.iter().any(|frame| matches!(&frame.data, FrameData::TtsAudio(audio) if audio.audio.len() >= 2));
+                let speech_complete = matches!(&event.event, Event::ResponseDone { response, .. } if response.status == ResponseStatus::Completed)
+                    && response_has_pcm && frames.iter().any(|frame| matches!(frame.data, FrameData::TtsStopped(_)));
+                for mut frame in frames {
+                    if health.generation() != admission {
+                        sender.close();
+                        break;
+                    }
+                    if event.event.response_id().is_some()
+                        && event.generation != sender.generation()
+                    {
+                        break;
+                    }
+                    // Usage admission is separate from the public raw mapper.
+                    // Provider zero totals are not usage observations.
+                    if let FrameData::Metrics(metrics) = &frame.data {
+                        if let [Metric::LlmUsage { total_tokens, .. }] = metrics.as_slice() {
+                            if !enable_usage_metrics || *total_tokens == 0 {
+                                continue;
+                            }
+                        }
+                    }
+                    if matches!(frame.data, FrameData::Error(_)) {
+                        if let Some(app) = &app { app.note_failure_stage(crate::GrokAppFailureStage::Mapping); }
+                        if let FrameData::Error(error) = frame.data {
+                            output
+                                .push_error_if_health_generation(error, false, admission)
+                                .await?;
+                        }
+                    } else {
+                        let direction = if matches!(
+                            frame.data,
+                            FrameData::Transcription(_)
+                                | FrameData::InterimTranscription(_)
+                                | FrameData::ProposedUserStartedSpeaking
+                                | FrameData::ProposedUserStoppedSpeaking
+                                | FrameData::InputDtmf(_)
+                        ) {
+                            Direction::Upstream
+                        } else {
+                            Direction::Downstream
+                        };
+                        let generation = if event.event.response_id().is_some() {
+                            event.generation
+                        } else {
+                            sender.generation()
+                        };
+                        let token = frame.observation_token();
+                        if let Some(app) = &app {
+                            if let FrameData::FunctionCallsStarted(calls) = &mut frame.data {
+                                for call in calls {
+                                    let limit = app.argument_limit();
+                                    if call.tool_call_id.is_empty() || call.function_name.is_empty()
+                                        || call.tool_call_id.capacity() > limit
+                                        || call.function_name.capacity() > limit {
+                                        app.note_failure_stage(crate::GrokAppFailureStage::Mapping);
+                                        return Err(mapping_error(RealtimeError::TooLarge));
+                                    }
+                                    crate::app_config::compact_json(&mut call.arguments, limit).map_err(|_| mapping_error(RealtimeError::TooLarge))?;
+                                }
+                            }
+                            let source = original_source.clone().or_else(|| app.provider_scope(generation))
+                                .ok_or_else(|| ProcessorError::fatal("application event has no original provider scope"))?;
+                            app.register_mapped_frame(event_sequence, &mut frame, source, event.generation)?;
+                        }
+                        #[cfg(test)]
+                        if matches!(frame.data, FrameData::FunctionCallsStarted(_)) {
+                            if let Some(app) = &app {
+                                if let Some(hooks) = app.test_hooks() { hooks.declaration.pause(app).await; }
+                            }
+                        }
+                        let delivered = sender
+                            .while_current(generation, async {
+                                match &original_fence {
+                                    Some(fence) => output
+                                        .try_push_with_invocation_fence(frame, direction, fence),
+                                    None => output.push(frame, direction).await,
+                                }
+                            })
+                            .await;
+                        match delivered {
+                            Some(result) => { if result.is_err() { if let Some(app) = &app { app.discard_mapped_token(&token)?; } } result?; }
+                            None => if let Some(app) = &app { app.discard_mapped_token(&token)?; },
+                        }
+                    }
+                }
+                if let Some(app) = &app {
+                    if matches!(&event.event, Event::SpeechStarted { .. }) {
+                        output.push(app.make_vad_cut(event_sequence)?, Direction::Upstream).await?;
+                    }
+                    if speech_complete {
+                        sender.while_current(event.generation, async {
+                            if let Some(fence) = &original_fence {
+                                app.note_speech_complete_fenced(fence);
+                            } else if let Some(source) = &original_source {
+                                if let Ok(fence) = source.invocation_fence() {
+                                    app.note_speech_complete_fenced(&fence);
+                                }
+                            }
+                        }).await;
+                    }
+                    app.mapped_through(event_sequence);
+                }
+            }
+            Ok(())
+            }.await;
+            // Keep the receive owner live through socket actor join on every exit,
+            // including mapping/push errors. No early `?` can detach the actor.
+            if received.is_err() { if let Some(app) = &app { app.note_failure_stage(crate::GrokAppFailureStage::Receive); } }
+            let shutdown = session.shutdown().await.map_err(processor_error);
+            if received.is_err() || shutdown.is_err() { if let Some(app) = &app { app.fail(); } }
+            received.and(shutdown)
+        })?;
         Ok(())
     }
     /// A forced line is server-driven: no response.create is sent.
@@ -553,9 +800,20 @@ impl FrameProcessor for GrokRealtimeProcessor {
             return Err(ProcessorError::new("Grok processors are single-session; construct a new processor to reconnect without replay"));
         }
         let admission = self.health.generation();
-        let mut session = self.client.connect().await.map_err(processor_error)?;
+        let mut session = self.client.connect().await.map_err(|error| {
+            self.record_app_failure(error.clone());
+            processor_error(error)
+        })?;
         loop {
-            match session.next_event().await {
+            let next = if let Some(app) = &self.app {
+                tokio::select! { biased;
+                    _ = app.cancelled() => { session.shutdown().await.map_err(processor_error)?; return Err(ProcessorError::new("application cancelled during readiness")); }
+                    next = session.next_event() => next,
+                }
+            } else {
+                session.next_event().await
+            };
+            match next {
                 Some(Ok(RealtimeEvent {
                     event: Event::SessionUpdated { .. },
                     ..
@@ -564,12 +822,19 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     event: Event::Error { .. },
                     ..
                 })) => {
+                    self.record_app_failure(RealtimeError::Protocol("initial session rejected"));
                     return Err(ProcessorError::new(
                         "Grok rejected initial session settings",
-                    ))
+                    ));
                 }
-                Some(Err(error)) => return Err(processor_error(error)),
-                None => return Err(ProcessorError::new("Grok closed before readiness")),
+                Some(Err(error)) => {
+                    self.record_app_failure(error.clone());
+                    return Err(processor_error(error));
+                }
+                None => {
+                    self.record_app_failure(RealtimeError::Protocol("closed before readiness"));
+                    return Err(ProcessorError::new("Grok closed before readiness"));
+                }
                 Some(Ok(_)) => {}
             }
         }
@@ -588,136 +853,18 @@ impl FrameProcessor for GrokRealtimeProcessor {
             .lock()
             .map_err(|_| ProcessorError::fatal("realtime state lock poisoned"))? =
             Some(sender.clone());
-        let output = ctx.clone();
-        let user_id = self.user_id.clone();
-        let playback = self.playback.clone();
-        let conversation = self.conversation.clone();
-        let output_rate = self.output_rate;
-        let manual_turns = self.manual_turns;
-        let enable_usage_metrics = config.enable_usage_metrics;
-        let health = self.health.clone();
-        let mut health_changes = health.watch();
-        ctx.spawn("grok-realtime-receive", false, async move {
-            let mut mapper = RealtimeFrameMapper::with_sample_rate(user_id, output_rate)?;
-            let mut generation = sender.generation();
-            loop {
-                let result = tokio::select! { biased;
-                    _ = health_changes.changed() => { sender.close(); break; }
-                    result = session.next_event_fenced() => result,
-                };
-                if health.generation() != admission {
-                    sender.close();
-                    break;
-                }
-                let Some(result) = result else {
-                    break;
-                };
-                let (event, original_fence) = match result {
-                    Ok(event) => (event.event, event.fence),
-                    Err(e) => {
-                        let fatal = e == RealtimeError::UnsettledTools;
-                        let mut error = error_frame(e);
-                        error.fatal = fatal;
-                        output
-                            .push_error_if_health_generation(error, false, admission)
-                            .await?;
-                        break;
-                    }
-                };
-                let interrupted = generation != sender.generation();
-                if interrupted {
-                    mapper.reset();
-                    generation = sender.generation();
-                }
-                if manual_turns
-                    && matches!(
-                        event.event,
-                        Event::SpeechStarted { .. } | Event::SpeechStopped { .. }
-                    )
-                {
-                    continue;
-                }
-                {
-                    let mut playback = playback
-                        .lock()
-                        .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?;
-                    playback.observe(&event).map_err(processor_error)?;
-                }
-                if matches!(
-                    event.event,
-                    Event::ResponseCreated { .. }
-                        | Event::InputTranscriptionCompleted { .. }
-                        | Event::SpeechStarted { .. }
-                ) {
-                    let mut state = conversation
-                        .lock()
-                        .map_err(|_| ProcessorError::fatal("context lock poisoned"))?;
-                    if state.binding == ContextBinding::Unbound {
-                        state.binding = ContextBinding::Live;
-                    }
-                }
-                let frames = mapper.frames(&event).map_err(processor_error)?;
-                for frame in frames {
-                    if health.generation() != admission {
-                        sender.close();
-                        break;
-                    }
-                    if event.event.response_id().is_some()
-                        && event.generation != sender.generation()
-                    {
-                        break;
-                    }
-                    // Usage admission is separate from the public raw mapper.
-                    // Provider zero totals are not usage observations.
-                    if let FrameData::Metrics(metrics) = &frame.data {
-                        if let [Metric::LlmUsage { total_tokens, .. }] = metrics.as_slice() {
-                            if !enable_usage_metrics || *total_tokens == 0 {
-                                continue;
-                            }
-                        }
-                    }
-                    if matches!(frame.data, FrameData::Error(_)) {
-                        if let FrameData::Error(error) = frame.data {
-                            output
-                                .push_error_if_health_generation(error, false, admission)
-                                .await?;
-                        }
-                    } else {
-                        let direction = if matches!(
-                            frame.data,
-                            FrameData::Transcription(_)
-                                | FrameData::InterimTranscription(_)
-                                | FrameData::ProposedUserStartedSpeaking
-                                | FrameData::ProposedUserStoppedSpeaking
-                                | FrameData::InputDtmf(_)
-                        ) {
-                            Direction::Upstream
-                        } else {
-                            Direction::Downstream
-                        };
-                        let generation = if event.event.response_id().is_some() {
-                            event.generation
-                        } else {
-                            sender.generation()
-                        };
-                        if let Some(result) = sender
-                            .while_current(generation, async {
-                                match &original_fence {
-                                    Some(fence) => output
-                                        .try_push_with_invocation_fence(frame, direction, fence),
-                                    None => output.push(frame, direction).await,
-                                }
-                            })
-                            .await
-                        {
-                            result?;
-                        }
-                    }
-                }
-            }
-            session.shutdown().await.map_err(processor_error)
-        })?;
-        Ok(())
+        if self.app.is_some() {
+            // The app cannot let a network failure finish the pipeline between
+            // supervisor spawn and its initial Start queue admission. Keep this
+            // session owned, and activate receive only at the actual Start.
+            *self
+                .pending_app_receive
+                .lock()
+                .map_err(|_| ProcessorError::fatal("pending receive lock poisoned"))? =
+                Some((session, config.clone(), ctx.clone()));
+            return Ok(());
+        }
+        self.start_receive(session, config, ctx, admission)
     }
     async fn process(
         &self,
@@ -737,16 +884,51 @@ impl FrameProcessor for GrokRealtimeProcessor {
                 .validate_direction(direction)
                 .map_err(fatal_context_error)?;
         }
+        if let Some(app) = &self.app {
+            if let Some(sequence) = app.take_vad_provider_ack(&frame, direction)? {
+                self.sender()?
+                    .app_vad_ack(sequence)
+                    .map_err(processor_error)?;
+                return Ok(());
+            }
+            if app.provider_boundary(&frame, ctx).await? {
+                return Ok(());
+            }
+        }
         if frame.data.is_start() {
+            if self.app.is_some() {
+                self.sender()?.register_app_scope(ctx);
+                let pending = self
+                    .pending_app_receive
+                    .lock()
+                    .map_err(|_| ProcessorError::fatal("pending receive lock poisoned"))?
+                    .take();
+                if let Some((session, config, receive_owner)) = pending {
+                    let admission = self
+                        .health_admission
+                        .lock()
+                        .map_err(|_| ProcessorError::fatal("health lock poisoned"))?
+                        .ok_or_else(|| ProcessorError::fatal("missing receive health admission"))?;
+                    // The setup context owns long-lived emission only; actual
+                    // response authority remains the separate Start/Interruption
+                    // witness registered above, never this generation-free owner.
+                    self.start_receive(session, &config, &receive_owner, admission)?;
+                }
+            }
             ctx.push(frame, direction).await?;
             if !self
                 .metadata_sent
                 .swap(true, std::sync::atomic::Ordering::AcqRel)
             {
-                ctx.broadcast(Frame::new(FrameData::LlmServiceMetadata(
-                    self.service_metadata(),
-                )))
-                .await?;
+                let metadata = Frame::new(FrameData::LlmServiceMetadata(self.service_metadata()));
+                if let Some(app) = &self.app {
+                    let (down, up) = metadata.broadcast_pair();
+                    ctx.push(down, Direction::Downstream).await?;
+                    ctx.push(app.admit_provider_metadata(up)?, Direction::Upstream)
+                        .await?;
+                } else {
+                    ctx.broadcast(metadata).await?;
+                }
             }
             return Ok(());
         }
@@ -772,6 +954,9 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     state.binding = ContextBinding::Live;
                 }
             }
+            if self.app.is_some() && direction == Direction::Upstream {
+                return Ok(());
+            }
             return ctx.push(frame, direction).await;
         }
         if direction == Direction::Upstream
@@ -783,6 +968,18 @@ impl FrameProcessor for GrokRealtimeProcessor {
             && !self.legacy_context_requests
         {
             return Err(fatal_context_error(ProcessorError::new("native upstream context requires AssistantContinuation; caller-owned compatibility requires with_legacy_context_requests")));
+        }
+        #[cfg(test)]
+        if direction == Direction::Upstream
+            && cause.as_ref().is_some_and(|cause| {
+                cause.intent() == pipecat_core::RealtimeContextIntent::AssistantContinuation
+            })
+        {
+            if let Some(app) = &self.app {
+                if let Some(hooks) = app.test_hooks() {
+                    hooks.continuation.pause(app).await;
+                }
+            }
         }
         let fence = match &cause {
             Some(cause) => Some(cause.inference_fence().cloned().ok_or_else(|| {
@@ -810,7 +1007,14 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     .lock()
                     .map_err(|_| ProcessorError::fatal("realtime playback lock poisoned"))?
                     .take_position();
-                self.sender()?.interrupt(position);
+                self.sender()?
+                    .interrupt_source(position, self.app.as_ref().map(|_| ctx));
+                #[cfg(test)]
+                if let Some(app) = &self.app {
+                    if let Some(hooks) = app.test_hooks() {
+                        hooks.interruption.pause(app).await;
+                    }
+                }
             }
             FrameData::BotStoppedSpeaking => {
                 self.playback
@@ -825,15 +1029,29 @@ impl FrameProcessor for GrokRealtimeProcessor {
             }
             _ => {}
         }
+        let source = if cause.is_some() {
+            self.app
+                .as_ref()
+                .map(|app| app.take_context_source(&frame))
+                .transpose()?
+        } else {
+            None
+        };
         if let FrameData::LlmContext(context) = &frame.data {
-            self.handle_context(context, direction, cause.clone(), fence.clone())
-                .map_err(|error| {
-                    if cause.is_some() {
-                        fatal_context_error(error)
-                    } else {
-                        error
-                    }
-                })?;
+            self.handle_context(
+                context,
+                direction,
+                cause.clone(),
+                fence.clone(),
+                source.clone(),
+            )
+            .map_err(|error| {
+                if cause.is_some() {
+                    fatal_context_error(error)
+                } else {
+                    error
+                }
+            })?;
         }
         if let FrameData::LlmContextDetailed(context) = &frame.data {
             let result: Result<(), ProcessorError> = (|| {
@@ -900,6 +1118,7 @@ impl FrameProcessor for GrokRealtimeProcessor {
                     direction,
                     cause.clone(),
                     fence,
+                    source,
                 )?;
                 Ok(())
             })();
@@ -912,7 +1131,17 @@ impl FrameProcessor for GrokRealtimeProcessor {
             })?;
         }
         if cause.is_some() {
+            if let Some(app) = &self.app {
+                app.retire_context_source(&frame)?;
+            }
             frame.take_native_realtime_context_cause()?;
+            // The restricted app has already reconciled this exact sealed
+            // assistant request and enqueued its actor action. Do not downgrade
+            // it into an unauthenticated upstream context at the user boundary.
+            // Legacy lower-level forwarding remains unchanged.
+            if self.app.is_some() && direction == Direction::Upstream {
+                return Ok(());
+            }
         }
         if direction == Direction::Downstream {
             self.tool_result_relay().relay(&mut frame)?;
@@ -1161,8 +1390,10 @@ impl FrameProcessor for GrokRealtimeProcessor {
         ctx.push(frame, direction).await
     }
     async fn prepare_end(&self, _ctx: &ProcessorContext) -> Result<(), ProcessorError> {
-        if let Ok(sender) = self.sender() {
-            sender.finish().await.map_err(processor_error)?;
+        if self.app.is_none() {
+            if let Ok(sender) = self.sender() {
+                sender.finish().await.map_err(processor_error)?;
+            }
         }
         Ok(())
     }
@@ -1176,6 +1407,14 @@ impl FrameProcessor for GrokRealtimeProcessor {
         // close takes the emission gate; never retain the sender-state mutex.
         if let Some(sender) = sender {
             sender.close();
+        }
+        let pending = self
+            .pending_app_receive
+            .lock()
+            .map_err(|_| ProcessorError::fatal("pending receive lock poisoned"))?
+            .take();
+        if let Some((mut session, _, _)) = pending {
+            session.shutdown().await.map_err(processor_error)?;
         }
         let mut state = self
             .conversation

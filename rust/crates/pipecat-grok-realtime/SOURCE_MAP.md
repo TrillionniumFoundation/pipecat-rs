@@ -144,3 +144,33 @@ limited to a new never-bound surviving-terminal reason at assistant admission,
 with inherited scopes preserved. Replay and previously scheduled causes cannot
 renew. Native false cancellation reevaluates already owed intent without creating
 new intent, preserving shared group/null/result policy as the single authority.
+
+## Finite final-tool application (batch150)
+
+The selected app composition follows pinned `examples/realtime/realtime-grok.py`
+lines 142–225, with explicit run/cancel correspondence at 227–251. Its original
+SHA-256 is `57e964cedeaa38fe894d3b722ff01f53259bad2d010614facf23ab2207ba2b0a`.
+`app.rs`, `app_config.rs`, `app_state.rs` and `bin/grok_pcm.rs` add native ownership,
+restricted typed admission, original-source executor guards, finite causal End,
+and the actual recorded-PCM entry. They do not replace the Grok protocol or real
+standard aggregator/native executor implementations.
+
+Final results versus independent assistant inference derive from xAI
+`realtime/llm.py` lines 630–709 and 1204–1346. Intermediate-result and durable async
+behavior remains in the existing lower-level provider, outside this selected
+final-only app. Adapter lines 116–202 determine leading system extraction and
+single-message/packed seed behavior. No Voice Live inference/finish rule is used.
+
+The hosted connector uses a supplied numeric TCP address with original fixed
+`api.x.ai` TLS/SNI/Host and `/v1/realtime` identity, avoiding resolver ownership.
+Only local synthetic peers qualify the new app corpus; real-provider TLS, keys,
+model/voice acceptance and physical output remain unqualified. The separate
+`function-calling-grok.py` HTTP/Deepgram/xAI-TTS cascade is not evidence for this
+realtime app.
+
+The app-only server-VAD ordering acknowledgment addresses the native System-start /
+Normal-stop lane boundary: the real user start may broadcast interruption before
+queued stop/transcript processing. A process-local marker crosses the actual user
+and provider System path before the actor reads later server events. This is native
+ordering/ownership machinery, not a new Python wire event or inference cause; the
+standard pair still decides every speaking transition and context request.

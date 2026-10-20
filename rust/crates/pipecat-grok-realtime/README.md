@@ -264,3 +264,108 @@ Pipeline token usage requires `StartFrame.enable_usage_metrics` (default false)
 and a nonzero provider total. This corrects earlier unconditional emission;
 the low-level mapper remains unchanged. See [USAGE_METRICS.md](USAGE_METRICS.md)
 for exact source precedence, zero/null behavior, and base-only RTVI output.
+
+## Opt-in finite final-tool application
+
+`GrokRealtimeApp::new(config, seed, tools, output)` prepares the same production
+composition used by `grok_pcm`: standard realtime user, private source-context
+observer, Grok provider, guarded **real** native `ToolExecutor`, existing result
+relay, trusted bounded output, and standard generated-history assistant. `start`
+seeds once without inference after provider readiness. Typed `append_pcm`,
+`append_text(text, run)`, `run`, `interrupt`, `end`, and `cancel` do not expose raw
+frame ingress or a mutable shared context. Read-only `history()` and `outcomes()`
+are explicitly conversation/lease data, never included in terminal diagnostics.
+
+This profile is mono PCM16 at 24 kHz, JSON audio, server VAD, one fixed connection,
+ordinary text seed, and immutable final-returning interruptible local tools.
+Hosted tools, runtime settings/schema replacement, speculative/progressive tools,
+noninterruptible callbacks, historical tool messages and playback-history mode
+are not admitted. Existing lower-level progressive/intermediate/manual/G.711 and
+legacy behavior remains separate and available.
+
+The app retains exact process-local mapped declarations and original invocation
+contexts. Serialized wrappers bracket real standard-aggregator invocations; only
+real sealed requests inherit those contexts. The actual executor receives a
+forwarding context from that original source. An immutable callback adapter checks
+again at first poll before constructing the user's future. This is an admission
+observation, not an atomic prohibition on every instruction after a concurrent
+interruption, and not proof that effects were undone. Native receipts alone
+settle entered leases. Proven stale unentered proposals are separate local
+record dispositions, never invented cancellation receipts.
+
+End seals ordinary input, then the manager owns the complete barrier operation,
+so a cancelled End waiter cannot abandon it. Actual provider command/event cuts,
+normal/system lane acknowledgments, native outcomes at both wire and assistant,
+real output media fences and observed speech gates precede conditional actor
+close. A tool output does not request inference: the real assistant's sealed
+continuation remains the only tool-follow-on inference authority. A null final
+result can legitimately owe no follow-on. There is no quiet-period heuristic.
+One absolute session/drain deadline bounds accepted follow-on tool cycles.
+
+Server-VAD start uses one private System-lane ordering acknowledgment through the
+actual user and provider. The actor temporarily pauses only socket reads until that
+roundtrip completes, so the start's real interruption cannot discard a queued stop
+or transcript from the same rapid server burst. Commands, cancellation and absolute
+deadlines remain live; duplicate/no-op starts acknowledge without inventing another
+interruption. The marker never supplies response authority or clears speaking gates.
+
+Retain `app.completion()` before starting when dropping/cancelling the startup or
+running handle. `completion.wait()` retains and awaits the manager handle;
+cancelling one waiter never takes the handle. Manager publication acquires that
+retained slot before spawning, so a concurrent pre-start observer cannot detach
+an unpublished task. A wait before publication can return "application not started";
+retain the observer and wait again after start. Reports distinguish primary
+provider/mapping classifications, first operational failure stage, independent output
+cleanup failure, observed drain blockers, typed pipeline failure/cleanup classifications, positively
+observed forced cleanup and actual owner joins. A joined failure remains a failure;
+`UnknownAfterFailure` does not claim that every secondary forced cleanup was observable. Drop signals cancellation and does not itself certify any join.
+No outcome journal or local close certifies remote cancellation or rollback.
+
+The session timer stops admitted work; it is not a hard wall-clock bound on joined
+completion. The shared pipeline applies its finite startup budget separately to
+processor setup and Start readiness. Each budget is capped at the session limit,
+but the manager intentionally retains startup after cancellation or expiry, then
+awaits finite cleanup budgets. A blocked asynchronous trusted-output setup can
+therefore finish abort/join after the session timer; this reports failure, not a
+successful session or an unobserved detached cleanup.
+
+The caller's output processor is trusted, not sandboxed. It must implement its
+own bounded, cancellation-safe side effects. Its setup must return normally or
+return an error, not independently terminate the not-yet-started pipeline. App-only
+network receive starts at the real provider Start, after registering its original
+scope, and pending sessions remain owned through cleanup. The output must forward real flow flushes only
+after its preceding media reaches the chosen delivery boundary. Configuration
+and retained-capacity checks apply before cloning; typed admission and conservative
+history/output counters continue for the entire session. Configuration/seed/schema
+backing storage has one aggregate `max_retained_bytes` limit; compact, live private
+input-authentication copies have a separate aggregate limit of the same size.
+Bounded queues, call ledgers, history and media retain their separately documented
+count/byte limits; this is not one process-wide allocator cap. Arbitrary callback
+captures and output implementation allocations remain caller responsibilities.
+
+### Recorded PCM executable (Linux)
+
+Run `grok_pcm --help` for exact finite arguments. No arguments, `--help` and
+`--check` are inert/offline and never read the credential. Active execution needs
+`--enable`, regular aligned finite `--input`, create-new `--output`, and required
+`--responses N`. It reads only `GROK_PCM_API_KEY` and one of
+`GROK_PCM_CONNECT_ADDRESS` (numeric IP:443, fixed xAI TLS/Host identity) or explicit
+`GROK_PCM_LOOPBACK_ADDRESS` (literal loopback fixtures). `--run` explicitly requests
+inference; `--echo-tool` registers one bounded deterministic final echo callback.
+No shell, external I/O or hosted tool callback is offered.
+
+The binary verifies retained directory/file identities with Linux directory-FD
+and `O_NOFOLLOW` operations. Input reading, output create-new and exact bounded
+PCM-buffer reservation happen **before** networking. During the live pipeline,
+recording only copies into this bounded buffer; it never writes/fsyncs a file or
+claims `Played`. Only after the completion observer proves the application owners
+joined does final/partial PCM persist through the retained output FD. Filesystem
+preflight/final persistence is outside network cancellation deadlines; no hard
+real-time or durability guarantee is made. Path replacement cannot redirect a
+write. App success, persistence success and actual partial bytes are distinct;
+exit zero requires both the app and final recording condition.
+
+A completed tool-only response never satisfies the required generated-speech
+count. Missing speech times out. PCM EOF is not a remote commit acknowledgment
+and does not prove every supplied sample was interpreted. Synthetic loopback
+coverage is not live xAI/TLS/model/voice acceptance or physical playback.
