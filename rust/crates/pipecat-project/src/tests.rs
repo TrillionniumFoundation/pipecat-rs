@@ -48,14 +48,7 @@ fn names_reject_traversal_injection_and_reserved_identifiers() {
 }
 #[test]
 fn unsupported_integrations_are_explicit_errors() {
-    for transport in [
-        "daily",
-        "livekit",
-        "webrtc",
-        "SmallWebRTC",
-        "twilio",
-        "eval",
-    ] {
+    for transport in ["daily", "livekit", "webrtc", "SmallWebRTC", "eval"] {
         let mut config = ProjectConfig::new("test-bot");
         config.transport = transport.into();
         assert!(config
@@ -748,7 +741,7 @@ fn smallwebrtc_plan_selects_real_runtime_client_and_shared_constructor() {
     assert!(!plan.target.exists());
     assert_eq!(
         supported_options()["transport"],
-        serde_json::json!(["websocket", "smallwebrtc"])
+        serde_json::json!(["websocket", "smallwebrtc", "twilio"])
     );
 }
 
@@ -811,4 +804,170 @@ fn generated_library_rejects_std_and_core_without_changing_websocket_names() {
     let mut config = ProjectConfig::new("alloc");
     config.transport = "smallwebrtc".into();
     config.validate().unwrap();
+}
+
+fn twilio_config(name: &str) -> ProjectConfig {
+    let mut config = ProjectConfig::new(name);
+    config.transport = "twilio".into();
+    config
+}
+
+#[test]
+fn twilio_plan_uses_real_shared_constructor_and_explicit_standalone_features() {
+    let temp = tempfile::tempdir().unwrap();
+    let plan = ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &source()).unwrap();
+    let same = ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &source()).unwrap();
+    assert_eq!(plan.files, same.files);
+    assert_eq!(
+        plan.files.keys().map(String::as_str).collect::<Vec<_>>(),
+        [
+            ".env.example",
+            ".gitignore",
+            "Cargo.toml",
+            "README.md",
+            "pipecat-project.json",
+            "src/lib.rs",
+            "src/main.rs"
+        ]
+    );
+    let text = |path: &str| std::str::from_utf8(&plan.files[path]).unwrap();
+    assert!(text("src/main.rs").contains("phone_bot::run()"));
+    assert!(!text("src/main.rs").contains("pipecat_runner::run_from_env"));
+    assert!(text("src/lib.rs").contains("TwilioApp::new(listener, config, providers)"));
+    assert!(text("src/lib.rs").contains("twilio::command::run_from_env(create_app)"));
+    assert!(!text("src/lib.rs").contains("NativeRunner"));
+    assert!(text("Cargo.toml").contains("[workspace]"));
+    assert!(text("Cargo.toml").contains("\"net\", \"signal\""));
+    assert!(!text("Cargo.toml").contains("\"webrtc\""));
+    assert!(!text("Cargo.toml").contains("[dev-dependencies]"));
+    assert!(text(".env.example").contains("TWILIO_AUTH_TOKEN=\n"));
+    assert!(text(".env.example").contains("TWILIO_ACCOUNT_SID=\n"));
+    assert!(text(".env.example").contains("PIPECAT_TWILIO_HANGUP=disabled"));
+    for contract in [
+        "POST /twilio/voice",
+        "GET /twilio/media/{capability}",
+        "default-off",
+        "not proof of spoken playback",
+        "Ctrl-C",
+    ] {
+        assert!(text("README.md").contains(contract), "missing {contract}");
+    }
+    assert!(!plan.target.exists());
+    let saved: ProjectConfig = serde_json::from_str(text("pipecat-project.json")).unwrap();
+    assert_eq!(saved, plan.config);
+}
+
+#[test]
+fn twilio_rejects_browser_eval_profiles_and_library_collisions_without_writes() {
+    let temp = tempfile::tempdir().unwrap();
+    for (client, eval) in [
+        ("rust-wasm", "none"),
+        ("none", "text"),
+        ("rust-wasm", "text"),
+    ] {
+        let mut config = twilio_config("phone-bot");
+        config.client = client.into();
+        config.eval = eval.into();
+        assert!(ProjectPlan::new(config, temp.path(), &source()).is_err());
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+    for name in ["std", "core", "tokio", "pipecat-runner", "pipecat_runner"] {
+        assert!(ProjectPlan::new(twilio_config(name), temp.path(), &source()).is_err());
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+    assert_eq!(
+        supported_options()["transport_constraints"]["twilio"],
+        serde_json::json!({"client":["none"], "eval":["none"]})
+    );
+    assert!(crate::cli::HELP.contains("websocket|smallwebrtc|twilio"));
+}
+
+#[test]
+fn twilio_cli_overrides_json_in_both_orders_without_writing() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("input.json");
+    fs::write(
+        &path,
+        r#"{"name":"phone-bot","transport":"smallwebrtc","client":"rust-wasm","eval":"text"}"#,
+    )
+    .unwrap();
+    for first in [true, false] {
+        let mut args = strings(&[
+            "--transport",
+            "twilio",
+            "--client",
+            "none",
+            "--eval",
+            "none",
+            "--dry-run",
+            "--source-rust",
+        ]);
+        args.push(source().display().to_string());
+        args.extend(strings(&["--parent"]));
+        args.push(temp.path().display().to_string());
+        let pair = ["--config".into(), path.display().to_string()];
+        if first {
+            args.splice(0..0, pair);
+        } else {
+            args.extend(pair);
+        }
+        let Command::Generate { plan, dry_run } = Command::parse(args).unwrap() else {
+            panic!("expected plan")
+        };
+        assert!(dry_run);
+        assert_eq!(plan.config, twilio_config("phone-bot"));
+        assert!(!plan.target.exists());
+    }
+    assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn twilio_source_prerequisites_and_every_cancellation_boundary_are_checked() {
+    let temp = tempfile::tempdir().unwrap();
+    let fixture = temp.path().join("source");
+    make_source_fixture(&fixture);
+    let dir = fixture.join("crates/pipecat-runner/src/twilio");
+    fs::create_dir(&dir).unwrap();
+    for required in ["mod.rs", "command.rs"] {
+        assert!(ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &fixture).is_err());
+        fs::write(dir.join(required), "").unwrap();
+    }
+    let plan = ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &fixture).unwrap();
+    for cancel_call in 0..plan.files.len() + 2 {
+        let mut calls = 0;
+        assert!(matches!(
+            generate_cancellable(&plan, |_| {
+                let cancel = calls == cancel_call;
+                calls += 1;
+                cancel
+            }),
+            Err(ProjectError::Cancelled)
+        ));
+        assert!(!plan.target.exists());
+    }
+    let root = generate(&plan).unwrap();
+    assert!(root.join("src/lib.rs").is_file());
+    assert!(matches!(generate(&plan), Err(ProjectError::Exists)));
+}
+
+#[cfg(unix)]
+#[test]
+fn twilio_command_source_symlink_escape_and_destination_symlink_are_rejected() {
+    use std::os::unix::fs::symlink;
+    let temp = tempfile::tempdir().unwrap();
+    let fixture = temp.path().join("source");
+    make_source_fixture(&fixture);
+    let dir = fixture.join("crates/pipecat-runner/src/twilio");
+    fs::create_dir(&dir).unwrap();
+    fs::write(dir.join("mod.rs"), "").unwrap();
+    let outside = temp.path().join("external.rs");
+    fs::write(&outside, "keep").unwrap();
+    symlink(&outside, dir.join("command.rs")).unwrap();
+    assert!(ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &fixture).is_err());
+    symlink(temp.path().join("absent"), temp.path().join("phone-bot")).unwrap();
+    assert!(matches!(
+        ProjectPlan::new(twilio_config("phone-bot"), temp.path(), &source()),
+        Err(ProjectError::Exists)
+    ));
+    assert_eq!(fs::read_to_string(outside).unwrap(), "keep");
 }

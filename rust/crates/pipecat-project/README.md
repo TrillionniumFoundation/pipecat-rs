@@ -1,6 +1,6 @@
 # pipecat-project
 
-Native Rust project generation for the implemented browser voice runner. The
+Native Rust project generation for the implemented native voice runners. The
 `pipecat-init` binary and reusable `ProjectPlan`/`generate_cancellable` library
 write a Cargo application with Rust source, `.env.example`, `.gitignore`, README,
 and reproducible generation choices in `pipecat-project.json`.
@@ -60,10 +60,36 @@ SmallWebRTC-first runtime config, unused offer creation, graceful shutdown and
 listener release. It never connects main to real providers. These are native
 local tests, not browser, WAN, real-account or physical-playback qualification.
 
+## Twilio inbound cascade
+
+Select `--transport twilio --client none --eval none` to generate an independent
+native inbound phone application. Its production main and explicit test/embedding
+constructor share `src/lib.rs::create_app`, which calls the existing `TwilioApp`.
+The standalone and generated entries use one runner command, not duplicated CLI
+or phone pipeline implementations. WebSocket remains the generator default.
+
+`cargo run -- --help` needs no credentials; ordinary execution is disabled until
+`--enable`. The generated README and `.env.example` explain explicit credentials,
+literal-loopback bind, canonical signed `/twilio/voice` and one-use
+`/twilio/media/{capability}` routes, external proxy boundary, sanitized Ctrl-C
+cleanup, generated-text-not-spoken history, and default-disabled hangup. Browser
+clients and text/phone eval are rejected for this profile before writing files.
+No caller lookup, phone-number logging, account modification, deployment or real
+calls occur during generation. See the runner's [Twilio contract](../pipecat-runner/TWILIO.md).
+
+The ignored `native_twilio` test first compiles the pristine generated package
+without fixture dev-dependencies, checks actual production startup and shutdown,
+then adapts the real signed phone/provider fixtures through that exact generated
+constructor. It exercises two isolated calls, audio/STT/LLM/TTS, DTMF, admission
+and lifecycle failures, and repeats the two-call case on the frozen source.
+Synthetic credentials and literal-loopback peers are not live-PSTN, public proxy,
+account or physical-playback qualification. Presence of an ignored test alone
+is not passing evidence.
+
 ## Optional text-eval starter
 
 `--eval none` is the default and adds no eval files or dependencies. `--eval text`
-works with either client selection and adds exactly `src/bin/eval-bot.rs`,
+works with either browser transport/client selection and adds exactly `src/bin/eval-bot.rs`,
 `src/eval_app.rs`, `evals/starter_text.yaml`, `evals/bot.json` and
 `evals/native-manifest.yaml`, plus documented Cargo dependencies and instructions.
 The selected voice main remains Cargo's default run target.
@@ -112,13 +138,13 @@ process grace; slow teardown may be forced, so reaped alone does not imply succe
 | --- | --- | --- |
 | `cli/config_validator.py`, `scaffold.py` | Strict config, CLI precedence, defaults, dry-run, options | Native schema is smaller; unknown Python-only options error |
 | `cli/generators/project.py` | Validated deterministic file plan, safe creation, rollback | No in-place merge or overwrite |
-| `templates/server/bot_cascade.py.jinja2` | Native runner entrypoint, with shared library construction for SmallWebRTC | WebSocket or SmallWebRTC + Deepgram/OpenAI/Cartesia cascade only |
+| `templates/server/bot_cascade.py.jinja2` | Native runner entrypoint, with shared library construction for SmallWebRTC and Twilio | WebSocket, SmallWebRTC or inbound Twilio + Deepgram/OpenAI/Cartesia cascade only |
 | `templates/server/pyproject.toml.jinja2` | Cargo manifest with real local dependency | Rust 1.99+ and local source checkout required |
 | `templates/server/env.example.jinja2` | Empty provider secrets and supported non-secret defaults | No automatic dotenv load; no secret discovery |
 | `templates/README.md.jinja2`, `gitignore.jinja2` | Native build/run/setup/limitations docs and private-file ignores | No false live-provider or physical-device acceptance claims |
 | Client templates | Optional existing native Rust/WASM source scaffold | Not a React, Next.js, or JS SDK compatibility layer |
 | `generators/project.py` eval option and `server/evals/starter_text.yaml.jinja2` | Explicit separate native text bot, two-turn/tool scenario and compiled-bot manifest | No audio/realtime eval, implicit local model or implicit judge; independent voice composition |
-| Cloud/Daily/LiveKit/telephony/realtime templates | Explicit unsupported configuration error | Never silently replaced or emitted as a broken project |
+| Cloud/Daily/LiveKit/other-carrier/realtime templates | Explicit unsupported configuration error | Never silently replaced or emitted as a broken project |
 
 The Python CLI/templates remain available as reference and are not modified.
 Generation is not a claim of full CLI feature parity, native provider coverage,
@@ -156,3 +182,16 @@ It requires cached dependencies and a C/CMake toolchain, retains source/lock/log
 artifacts, and removes its independently owned target directory. Its synthetic
 HTTP assets are startup fixtures only, not a compiled WASM bundle. Run one build
 owner at a time and reserve space above its 2.25 GiB free-disk guard.
+
+The independent Twilio acceptance is also expensive and must run serially:
+
+```sh
+cargo test -p pipecat-project --test native_twilio --locked --offline -j 1 -- --ignored --test-threads=1
+```
+
+It retains pristine and adapted generated sources, locks, command logs and source
+identities; fixture dependencies are test-only. The compiled production main is
+not sent a valid phone start and never connects to hosted providers. Full media
+acceptance instead uses the same generated constructor with explicit loopback
+ProviderConfig. The owned target is isolated and removed after child processes
+are reaped. Reserve room above the 2.25 GiB disk guard before starting.

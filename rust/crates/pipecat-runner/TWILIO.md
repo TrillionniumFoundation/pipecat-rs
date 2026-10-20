@@ -1,7 +1,8 @@
 # Native Twilio inbound cascade
 
 `pipecat-twilio-agent` is a separate, explicitly enabled entry point. The default
-browser WebSocket/SmallWebRTC host and project-generator allowlist are unchanged.
+browser WebSocket/SmallWebRTC host is unchanged. The project generator also
+offers an explicit `--transport twilio` independent application profile.
 It composes the existing native Deepgram STT, user turns and DTMF aggregation,
 OpenAI LLM, generated-text context, Cartesia TTS, telephony state machine,
 streaming resampler and μ-law codec. No Python runtime, RTVI handshake, browser
@@ -27,8 +28,10 @@ also reads no credentials. Browser CLI flags are not silently accepted. The
 usual hosted-provider model, voice, system instruction and sample-rate settings
 from `ProviderConfig` apply. This entry selects only Deepgram/OpenAI/Cartesia.
 
-The main calls `TwilioApp::new(listener, TwilioConfig, ProviderConfig)`, exactly the
-same public constructor used by the loopback integration tests. Typed callers
+The standalone main delegates to `twilio::command::run_from_env(TwilioApp::new)`.
+Generated Twilio applications pass their shared `create_app` constructor to the
+same command, which invokes it with the listener, TwilioConfig and ProviderConfig.
+Both ultimately use `TwilioApp::new`, the public loopback-test constructor. Typed callers
 can inject explicit endpoints and limits without any ambient-environment lookup.
 `TwilioConfig::new` supplies conservative defaults; `from_lookup` reads the four
 required Twilio settings above plus these optional values:
@@ -158,8 +161,8 @@ canonical request signatures and one-use call binding rather than only optional
 session-token/Origin checks; strict bounded form/start/sequence profile; hangup
 opt-in rather than Python serializer auto-hangup default; generated-text context,
 not spoken evidence. No outgoing calls, recording, transfer/SIP, other carriers,
-region/edge convenience options, project-generator Twilio scaffold, or broad
-Python dynamic-route compatibility are provided.
+region/edge convenience options, generated phone eval, or broad Python
+dynamic-route compatibility are provided.
 
 Focused commands (run from `rust/`, using an installed supported Rust toolchain):
 

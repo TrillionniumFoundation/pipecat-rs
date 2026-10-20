@@ -1,0 +1,10 @@
+# Twilio inbound transport. Empty credentials must be supplied explicitly.
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+# Replace these placeholders with your independently managed canonical proxy URLs.
+# They must have exactly these paths, no query, fragment, userinfo or URL aliases.
+PIPECAT_TWILIO_WEBHOOK_URL=https://your-host.example/twilio/voice
+PIPECAT_TWILIO_MEDIA_URL=wss://your-host.example/twilio/media
+# Keep disabled unless you deliberately authorize an authenticated hangup request.
+PIPECAT_TWILIO_HANGUP=disabled
+# PIPECAT_TWILIO_API_BASE=https://api.twilio.com/2010-04-01

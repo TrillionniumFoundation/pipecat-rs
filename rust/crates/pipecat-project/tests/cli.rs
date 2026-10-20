@@ -169,3 +169,56 @@ fn smallwebrtc_cli_dry_run_generation_and_no_clobber() {
     .unwrap();
     assert_eq!(config["transports"], serde_json::json!(["smallwebrtc"]));
 }
+
+#[test]
+fn twilio_cli_options_generation_and_secret_free_environment() {
+    let temp = tempfile::tempdir().unwrap();
+    let options = command().arg("--list-options").output().unwrap();
+    assert!(options.status.success());
+    let options: serde_json::Value = serde_json::from_slice(&options.stdout).unwrap();
+    assert!(options["transport"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("twilio")));
+    let invoke = |extra: &[&str]| {
+        command()
+            .args(["phone-bot", "--transport", "twilio"])
+            .args(extra)
+            .arg("--parent")
+            .arg(temp.path())
+            .arg("--source-rust")
+            .arg(source())
+            .env("TWILIO_AUTH_TOKEN", "SYNTHETIC_GENERATOR_NOT_COPIED_147")
+            .env("TWILIO_ACCOUNT_SID", "SYNTHETIC_GENERATOR_NOT_COPIED_147")
+            .output()
+            .unwrap()
+    };
+    for rejected in [["--client", "rust-wasm"], ["--eval", "text"]] {
+        let output = invoke(&rejected);
+        assert!(!output.status.success());
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+    let dry = invoke(&["--dry-run"]);
+    assert!(dry.status.success());
+    let summary: serde_json::Value = serde_json::from_slice(&dry.stdout).unwrap();
+    assert_eq!(summary["config"]["transport"], "twilio");
+    assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    assert!(invoke(&[]).status.success());
+    assert!(!invoke(&[]).status.success());
+    let project = temp.path().join("phone-bot");
+    assert!(project.join("src/lib.rs").is_file());
+    assert!(!project.join("client").exists());
+    assert!(!project.join("evals").exists());
+    for path in [
+        "Cargo.toml",
+        "README.md",
+        ".env.example",
+        "src/main.rs",
+        "src/lib.rs",
+        "pipecat-project.json",
+    ] {
+        assert!(!fs::read_to_string(project.join(path))
+            .unwrap()
+            .contains("SYNTHETIC_GENERATOR_NOT_COPIED_147"));
+    }
+}

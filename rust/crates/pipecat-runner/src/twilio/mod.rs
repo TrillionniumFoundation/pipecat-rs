@@ -1,4 +1,5 @@
 //! Explicit native Twilio inbound application. No browser RTVI readiness or wire frames.
+pub mod command;
 mod config;
 mod security;
 mod session;

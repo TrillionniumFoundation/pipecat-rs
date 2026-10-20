@@ -78,6 +78,28 @@ impl ProjectPlan {
             (String::new(), String::new(), "", "")
         };
         let webrtc = config.transport == "smallwebrtc";
+        let twilio = config.transport == "twilio";
+        if twilio {
+            // The public shared command is a required source prerequisite, not a
+            // test-only entry point or a copied second telephony implementation.
+            for relative in ["src/twilio/mod.rs", "src/twilio/command.rs"] {
+                let path = source_rust
+                    .join("crates/pipecat-runner")
+                    .join(relative)
+                    .canonicalize()?;
+                if !path.is_file() || !path.starts_with(&source_rust) {
+                    return Err(ProjectError::Configuration(
+                        "Twilio command source must remain inside the selected workspace",
+                    ));
+                }
+                checked_source_string(&path)?;
+            }
+        }
+        let signal_feature = if twilio {
+            ", \"net\", \"signal\""
+        } else {
+            signal_feature
+        };
         let runner_features = if webrtc {
             dependency_literal(&source_rust, "pipecat-webrtc")?;
             for relative in [
@@ -106,15 +128,25 @@ impl ProjectPlan {
             "src/main.rs".into(),
             include_bytes!("../templates/main.rs").to_vec(),
         );
-        if webrtc {
-            files.insert(
-                "src/lib.rs".into(),
-                include_bytes!("../templates/webrtc_lib.rs").to_vec(),
-            );
+        if webrtc || twilio {
+            let library = if twilio {
+                include_bytes!("../templates/twilio_lib.rs").as_slice()
+            } else {
+                include_bytes!("../templates/webrtc_lib.rs").as_slice()
+            };
+            files.insert("src/lib.rs".into(), library.to_vec());
             let main = include_str!("../templates/main.rs").replace(
                 "pipecat_runner::run_from_env()",
                 &format!("{}::run()", config.name.replace('-', "_")),
             );
+            let main = if twilio {
+                main.replace(
+                    "Native browser voice agent",
+                    "Native Twilio inbound voice agent",
+                )
+            } else {
+                main
+            };
             files.insert("src/main.rs".into(), main.into_bytes());
         }
         files.insert(
@@ -156,6 +188,16 @@ impl ProjectPlan {
         if config.eval == "text" {
             include_eval(&mut files);
             readme.push_str(include_str!("../templates/eval/README.md"));
+        }
+        if twilio {
+            readme =
+                include_str!("../templates/twilio_README.md").replace("{{name}}", &config.name);
+            let environment = format!(
+                "{}\n{}",
+                include_str!("../templates/env.example"),
+                include_str!("../templates/twilio_env.example")
+            );
+            files.insert(".env.example".into(), environment.into_bytes());
         }
         files.insert("README.md".into(), readme.into_bytes());
         let mut config_json =

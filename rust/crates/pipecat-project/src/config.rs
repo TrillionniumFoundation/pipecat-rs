@@ -2,7 +2,7 @@
 use crate::ProjectError;
 use serde::{Deserialize, Serialize};
 
-/// Configuration of the supported native browser-agent scaffold.
+/// Configuration of the supported native voice-agent scaffold.
 /// Unknown fields are rejected, including credential values and unsupported features.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -55,10 +55,15 @@ impl ProjectConfig {
 
     pub fn validate(&self) -> Result<(), ProjectError> {
         validate_name(&self.name)?;
-        if !matches!(self.transport.as_str(), "websocket" | "smallwebrtc") {
-            return Err(ProjectError::Configuration("only websocket and smallwebrtc have integrated native scaffolds; Daily, LiveKit, and telephony are unsupported"));
+        if !matches!(
+            self.transport.as_str(),
+            "websocket" | "smallwebrtc" | "twilio"
+        ) {
+            return Err(ProjectError::Configuration("only websocket, smallwebrtc and twilio have integrated native scaffolds; Daily, LiveKit and other carriers are unsupported"));
         }
-        if self.transport == "smallwebrtc" && matches!(self.name.as_str(), "std" | "core") {
+        if matches!(self.transport.as_str(), "smallwebrtc" | "twilio")
+            && matches!(self.name.as_str(), "std" | "core")
+        {
             return Err(ProjectError::Configuration(
                 "name conflicts with the generated library and Rust standard library",
             ));
@@ -83,6 +88,11 @@ impl ProjectConfig {
         }
         if self.eval != "none" && self.eval != "text" {
             return Err(ProjectError::Configuration("eval must be none or text"));
+        }
+        if self.transport == "twilio" && (self.client != "none" || self.eval != "none") {
+            return Err(ProjectError::Configuration(
+                "twilio requires client=none and eval=none; browser clients and phone eval are not generated",
+            ));
         }
         if self.eval == "text" && EVAL_RESERVED.contains(&self.name.replace('-', "_").as_str()) {
             return Err(ProjectError::Configuration(
@@ -211,10 +221,11 @@ pub fn validate_name(name: &str) -> Result<(), ProjectError> {
 /// Machine-readable capabilities; absent integrations must never be substituted.
 pub fn supported_options() -> serde_json::Value {
     serde_json::json!({
-        "transport": ["websocket", "smallwebrtc"], "mode": ["cascade"],
+        "transport": ["websocket", "smallwebrtc", "twilio"], "mode": ["cascade"],
         "stt": ["deepgram"], "llm": ["openai"], "tts": ["cartesia"],
         "client": ["none", "rust-wasm"], "deploy_to_cloud": [false],
         "eval": ["none", "text"],
+        "transport_constraints": {"twilio": {"client": ["none"], "eval": ["none"]}},
         "source": "existing local Rust workspace (--source-rust)",
         "overwrite": false
     })
