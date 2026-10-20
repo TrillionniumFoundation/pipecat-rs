@@ -11,6 +11,8 @@ pub use pipecat_aws_bedrock as aws_bedrock;
 pub use pipecat_aws_speech as aws_speech;
 #[cfg(feature = "azure-realtime")]
 pub use pipecat_azure_realtime as azure_realtime;
+#[cfg(feature = "azure-voice-live")]
+pub use pipecat_azure_voice_live as azure_voice_live;
 #[cfg(feature = "classifiers")]
 pub use pipecat_classifiers as classifiers;
 #[cfg(feature = "client-server")]
@@ -131,5 +133,20 @@ mod azure_feature_tests {
             )
             .is_ok());
         }
+    }
+}
+
+#[cfg(all(test, feature = "azure-voice-live"))]
+mod azure_voice_live_tests {
+    #[test]
+    fn distinct_voice_live_profile_is_exposed() {
+        let config = super::azure_voice_live::VoiceLiveConfig::new(
+            "wss://synthetic.invalid/voice-live/realtime",
+            "model",
+            super::azure_voice_live::VoiceLiveCredentials::ApiKey("synthetic-key".into()),
+            "voice",
+        );
+        assert!(config.validate().is_ok());
+        assert!(config.session.is_manual());
     }
 }

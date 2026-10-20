@@ -10,6 +10,7 @@ pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 pipecat-deepgram-flux = { path = "../pipecat-deepgram-flux", optional = true }
 pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
 pipecat-azure-realtime = { path = "../pipecat-azure-realtime", optional = true }
+pipecat-azure-voice-live = { path = "../pipecat-azure-voice-live", optional = true }
 pipecat-inworld-realtime = { path = "../pipecat-inworld-realtime", optional = true }
 pipecat-images = { path = "../pipecat-images", optional = true }
 pipecat-speechmatics = { path = "../pipecat-speechmatics", optional = true }
@@ -71,6 +72,7 @@ classifiers = ["dep:pipecat-classifiers"]
 deepgram-flux = ["dep:pipecat-deepgram-flux"]
 grok-realtime = ["dep:pipecat-grok-realtime"]
 azure-realtime = ["dep:pipecat-azure-realtime"]
+azure-voice-live = ["dep:pipecat-azure-voice-live"]
 inworld-realtime = ["dep:pipecat-inworld-realtime"]
 images = ["dep:pipecat-images"]
 speechmatics = ["dep:pipecat-speechmatics", "pipecat-speech/speechmatics"]

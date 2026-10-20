@@ -3463,6 +3463,7 @@ dependencies = [
  "pipecat-aws-bedrock",
  "pipecat-aws-speech",
  "pipecat-azure-realtime",
+ "pipecat-azure-voice-live",
  "pipecat-classifiers",
  "pipecat-client-server",
  "pipecat-core",
@@ -3631,6 +3632,24 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
+]
+
+[[package]]
+name = "pipecat-azure-voice-live"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "pipecat-core",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
 ]
 
 [[package]]
