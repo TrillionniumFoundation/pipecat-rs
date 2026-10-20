@@ -681,3 +681,113 @@ async fn simulated_anthropic_single_pdf_precedes_text_and_cache_in_outgoing_body
     );
     fake.task.await.unwrap();
 }
+
+#[tokio::test]
+async fn simulated_openai_detailed_image_files_keep_native_identity_and_use_image_wire() {
+    use pipecat_core::{self as core, Direction, Frame, FrameData, Pipeline, PipelineConfig};
+    use std::sync::Arc;
+
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        vec![
+            record(json!({"choices":[{"delta":{"content":"seen"},"finish_reason":"stop"}]})),
+            b"data: [DONE]\n\n".to_vec(),
+        ],
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let mut message: core::ContextMessage = core::ChatMessage::new(core::ChatRole::User, "").into();
+    message.content = core::MessageContent::Parts(vec![
+        core::MessagePart::Text {
+            text: "look".into(),
+        },
+        core::MessagePart::File {
+            data: "YQ==".into(),
+            mime_type: "image/png".into(),
+            filename: Some("original.png".into()),
+        },
+        core::MessagePart::Text {
+            text: "then".into(),
+        },
+        core::MessagePart::File {
+            data: "/9j/+w==".into(),
+            mime_type: "image/jpeg".into(),
+            filename: None,
+        },
+        core::MessagePart::File {
+            data: "JVBERg==".into(),
+            mime_type: "application/pdf".into(),
+            filename: Some("note.pdf".into()),
+        },
+    ]);
+    let context = core::LlmContextData {
+        messages: vec![message],
+        tools: core::ToolSet::NotGiven,
+        tool_choice: None,
+    };
+    let original = context.clone();
+    let expected_native = frame_context::context(&context).unwrap();
+    assert!(
+        matches!(&expected_native.messages[0].content, Some(Content::Parts(parts)) if matches!(&parts[1], ContentPart::File { filename: Some(name), .. } if name == "original.png"))
+    );
+    let processor = Arc::new(LlmProcessor::new(
+        LlmClient::new(config(Provider::OpenAi, fake.url)).unwrap(),
+        request(),
+    ));
+    let mut worker = Pipeline::new(vec![processor.clone()])
+        .start(PipelineConfig::default())
+        .await
+        .unwrap();
+    worker
+        .sender()
+        .send(
+            Frame::new(FrameData::LlmContextDetailed(
+                core::DetailedLlmContextFrame {
+                    context: context.clone(),
+                    speculation: false,
+                },
+            )),
+            Direction::Downstream,
+        )
+        .await
+        .unwrap();
+    worker.end().await.unwrap();
+    let frames = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut frames = vec![];
+        while let Some(frame) = worker.recv().await {
+            frames.push(frame);
+        }
+        frames
+    })
+    .await
+    .unwrap();
+    worker.join().await.unwrap();
+    assert!(frames
+        .iter()
+        .any(|f| matches!(&f.frame.data, FrameData::LlmText(t) if t.text == "seen")));
+    assert_eq!(
+        processor.request_snapshot().unwrap().context,
+        expected_native
+    );
+    assert_eq!(context, original);
+    let (_, body) = tokio::time::timeout(Duration::from_secs(3), fake.request)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "model":"synthetic-model","stream":true,"stream_options":{"include_usage":true},
+            "messages":[{"role":"user","content":[
+                {"type":"text","text":"look"},
+                {"type":"image_url","image_url":{"url":"data:image/png;base64,YQ=="}},
+                {"type":"text","text":"then"},
+                {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,/9j/+w=="}},
+                {"type":"file","file":{"filename":"note.pdf","file_data":"data:application/pdf;base64,JVBERg=="}}
+            ]}]
+        })
+    );
+    fake.task.await.unwrap();
+}

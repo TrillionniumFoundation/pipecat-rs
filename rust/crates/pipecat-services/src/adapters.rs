@@ -126,6 +126,18 @@ pub fn request_body_for_logging(
                     ) {
                         *value = json!("[redacted]");
                     } else {
+                        // Inline images carry payloads in a URL, not a data field.
+                        // Redact only the diagnostics copy; public URLs stay useful.
+                        if key == "image_url" {
+                            if let Some(url) = value.get_mut("url") {
+                                if url
+                                    .as_str()
+                                    .is_some_and(|url| url.starts_with("data:image/"))
+                                {
+                                    *url = json!("[redacted]");
+                                }
+                            }
+                        }
                         redact(value);
                     }
                 }
@@ -201,6 +213,8 @@ fn openai_content(content: &Content) -> Result<Value, ServiceError> {
             }
             ContentPart::InputAudio { data, format } if matches!(format.as_str(), "wav" | "mp3") => Ok(json!({"type":"input_audio","input_audio":{"data":data,"format":format}})),
             ContentPart::InputAudio { .. } => Err(ServiceError::Unsupported("OpenAI input audio must use wav or mp3".into())),
+            // Match the pinned Python adapter at the wire boundary only.
+            ContentPart::File { data, mime_type, .. } if mime_type.starts_with("image/") => Ok(json!({"type":"image_url","image_url":{"url":format!("data:{mime_type};base64,{data}")}})),
             ContentPart::File { data, mime_type, filename } => {
                 let mut file = json!({"file_data":format!("data:{mime_type};base64,{data}")});
                 if let Some(filename) = filename { file["filename"] = json!(filename); }
