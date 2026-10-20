@@ -484,6 +484,45 @@ fn data_url(url: &str) -> Result<(&str, &str), ServiceError> {
     Ok((mime, data))
 }
 
+/// Classify a bounded remote media URI, not the client's service endpoint.
+/// Parse only to validate syntax; infer from and serialize the original bytes.
+fn gemini_remote_image(url: &str) -> Result<Value, ServiceError> {
+    let unsupported = || {
+        ServiceError::Unsupported("Gemini remote image requires an HTTP(S) URI with a literal JPEG, PNG or GIF suffix and no query, fragment or userinfo".into())
+    };
+    if url
+        .chars()
+        .any(|c| c.is_control() || c.is_ascii_whitespace())
+        || url.contains(['?', '#', ';', '\\'])
+    {
+        return Err(unsupported());
+    }
+    let (scheme, rest) = url.split_once("://").ok_or_else(unsupported)?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return Err(unsupported());
+    }
+    let (authority, path) = rest.split_once('/').ok_or_else(unsupported)?;
+    if authority.is_empty() || authority.contains('@') {
+        return Err(unsupported());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|_| unsupported())?;
+    if parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(unsupported());
+    }
+    let filename = path.rsplit('/').next().ok_or_else(unsupported)?;
+    let (stem, suffix) = filename.rsplit_once('.').ok_or_else(unsupported)?;
+    if stem.chars().all(|c| c == '.') {
+        return Err(unsupported());
+    }
+    let mime = match suffix.to_ascii_lowercase().as_str() {
+        "jpg" | "jpeg" | "jpe" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        _ => return Err(unsupported()),
+    };
+    Ok(json!({"fileData":{"fileUri":url,"mimeType":mime}}))
+}
+
 fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
     let (extracted_system, input) = extract_initial_system(request)?;
     let settings_system = request
@@ -550,32 +589,81 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                             native_calls.insert(tool_call_id.clone());
                             continue;
                         }
-                        let converted = match part{
-                        ContentPart::GeminiText{text,thought,signature,incomplete}=>{
-                            if *incomplete{return Err(ServiceError::InvalidRequest("incomplete signed Gemini text requires an explicit application history decision".into()));}
-                            let mut part = json!({"text":text});
-                            if *thought {
-                                part["thought"] = json!(true);
+                        let converted = match part {
+                            ContentPart::GeminiText {
+                                text,
+                                thought,
+                                signature,
+                                incomplete,
+                            } => {
+                                if *incomplete {
+                                    return Err(ServiceError::InvalidRequest("incomplete signed Gemini text requires an explicit application history decision".into()));
+                                }
+                                let mut part = json!({"text":text});
+                                if *thought {
+                                    part["thought"] = json!(true);
+                                }
+                                if let Some(signature) = signature {
+                                    part["thoughtSignature"] = json!(signature);
+                                }
+                                part
                             }
-                            if let Some(signature) = signature {
-                                part["thoughtSignature"] = json!(signature);
+                            ContentPart::GeminiToolMetadata { .. } => {
+                                unreachable!("metadata handled separately")
                             }
-                            part
-                        }
-                        ContentPart::GeminiToolMetadata{..}=>unreachable!("metadata handled separately"),
-                        ContentPart::Text{text}=>json!({"text":text}),
-                        ContentPart::InlineData{mime_type,data}=>json!({"inlineData":{"mimeType":mime_type,"data":data}}),
-                        ContentPart::ImageUrl{url} if url.starts_with("data:")=>{let(mime,data)=data_url(url)?;json!({"inlineData":{"mimeType":mime,"data":data}})},
-                        ContentPart::ImageUrl{..}=>return Err(ServiceError::Unsupported("Gemini remote image URLs require an explicit MIME-typed file API integration".into())),
-                        ContentPart::ImageUrlDetailed{url,detail} if detail=="auto" && url.starts_with("data:")=>{let(mime,data)=data_url(url)?;json!({"inlineData":{"mimeType":mime,"data":data}})},
-                        ContentPart::File{data,mime_type,..}=>json!({"inlineData":{"mimeType":mime_type,"data":data}}),
-                        ContentPart::InputAudio{data,format} if matches!(format.as_str(),"wav"|"mp3")=>json!({"inlineData":{"mimeType":if format=="wav"{"audio/wav"}else{"audio/mp3"},"data":data}}),
-                        ContentPart::InputAudio{..}=>return Err(ServiceError::Unsupported("Gemini input audio format".into())),
-                        ContentPart::ImageUrlDetailed{..}=>return Err(ServiceError::Unsupported("Gemini image detail or remote image URL".into())),
-                        ContentPart::BedrockReasoning { .. } | ContentPart::BedrockRedacted { .. } => return Err(ServiceError::Unsupported("Bedrock history in Gemini".into())),
-                        ContentPart::Thinking{..} | ContentPart::RedactedThinking { .. } =>return Err(ServiceError::Unsupported("Gemini thought-signature context replay".into())),
-                        ContentPart::Refusal{..}=>return Err(ServiceError::Unsupported("Gemini refusal content parts".into())),
-                    };
+                            ContentPart::Text { text } => json!({"text":text}),
+                            ContentPart::InlineData { mime_type, data } => {
+                                json!({"inlineData":{"mimeType":mime_type,"data":data}})
+                            }
+                            ContentPart::ImageUrl { url } if url.starts_with("data:") => {
+                                let (mime, data) = data_url(url)?;
+                                json!({"inlineData":{"mimeType":mime,"data":data}})
+                            }
+                            ContentPart::ImageUrl { url } => gemini_remote_image(url)?,
+                            ContentPart::ImageUrlDetailed { url, detail }
+                                if detail == "auto" && url.starts_with("data:") =>
+                            {
+                                let (mime, data) = data_url(url)?;
+                                json!({"inlineData":{"mimeType":mime,"data":data}})
+                            }
+                            ContentPart::ImageUrlDetailed { url, detail } if detail == "auto" => {
+                                gemini_remote_image(url)?
+                            }
+                            ContentPart::File {
+                                data, mime_type, ..
+                            } => json!({"inlineData":{"mimeType":mime_type,"data":data}}),
+                            ContentPart::InputAudio { data, format }
+                                if matches!(format.as_str(), "wav" | "mp3") =>
+                            {
+                                json!({"inlineData":{"mimeType":if format=="wav"{"audio/wav"}else{"audio/mp3"},"data":data}})
+                            }
+                            ContentPart::InputAudio { .. } => {
+                                return Err(ServiceError::Unsupported(
+                                    "Gemini input audio format".into(),
+                                ))
+                            }
+                            ContentPart::ImageUrlDetailed { .. } => {
+                                return Err(ServiceError::Unsupported(
+                                    "Gemini image detail or remote image URL".into(),
+                                ))
+                            }
+                            ContentPart::BedrockReasoning { .. }
+                            | ContentPart::BedrockRedacted { .. } => {
+                                return Err(ServiceError::Unsupported(
+                                    "Bedrock history in Gemini".into(),
+                                ))
+                            }
+                            ContentPart::Thinking { .. } | ContentPart::RedactedThinking { .. } => {
+                                return Err(ServiceError::Unsupported(
+                                    "Gemini thought-signature context replay".into(),
+                                ))
+                            }
+                            ContentPart::Refusal { .. } => {
+                                return Err(ServiceError::Unsupported(
+                                    "Gemini refusal content parts".into(),
+                                ))
+                            }
+                        };
                         parts.push(converted);
                     }
                 }

@@ -87,3 +87,42 @@ remains distinct from an empty Parts list. OpenAI and Anthropic normalization,
 including Anthropic cache placement, is unchanged. Adapter fixtures and a
 synthetic HTTP streaming regression cover this behavior; no live model acceptance
 or behavior is claimed.
+
+## Bounded remote image URI conversion
+
+Normal `ImageUrl` and `ImageUrlDetailed` with `detail="auto"` now support a
+conservative HTTP(S) subset: literal, case-insensitive `.jpg`, `.jpeg`, `.jpe`,
+`.png` and `.gif` filename extensions produce `fileData` with `fileUri` equal to
+the exact original URI and `mimeType` equal to `image/jpeg`, `image/png` or
+`image/gif`. Mixed-case schemes and escaped basenames are preserved, not
+normalized or decoded. The client does not download, sniff, or register media.
+This classification is separate from the unchanged service POST endpoint
+security policy; public HTTP media URIs do not relax that policy.
+
+URI queries/fragments (even empty), literal semicolons (Python-version-dependent
+path parameter inference), userinfo (even empty), controls, ASCII
+whitespace, backslashes, missing authorities, invalid hosts/ports, bare dotfile
+suffixes and non-HTTP(S) schemes are rejected. Unknown/absent or encoded suffixes,
+WEBP, compressed filenames, opaque Files API URIs and non-auto detail remain
+unsupported. Existing data URL conversion and other providers are unchanged.
+Diagnostics continue retaining public media URIs while redacting inline payloads
+and thought signatures; rejection messages never echo rejected URIs.
+
+Evidence: pinned Pipecat `af9f9da9d7afddaa8811c0e0251b32566c980bdf`
+`gemini_adapter.py:547–561` delegates non-data images to SDK `Part.from_uri`.
+Official google-genai v1.68.0 (`types.py:1965–1990`) and v2.25.0
+(`types.py:2460–2485`) infer MIME via strict `mimetypes.guess_type` and preserve the
+original URI. These five extensions are stable built-in mappings in CPython
+v3.11.0, v3.12.0 and v3.13.0 `Lib/mimetypes.py`. Query handling and strict WEBP
+support differ across these versions; OS MIME files, registry and custom mappings
+can change inference further. This is not complete system-dependent MIME or
+remote-image compatibility. Adapter and loopback HTTP fixtures verify exact
+native wire conversion and no local media connection, not live vendor acceptance.
+
+Source references:
+- https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/adapters/services/gemini_adapter.py
+- https://github.com/googleapis/python-genai/blob/v1.68.0/google/genai/types.py
+- https://github.com/googleapis/python-genai/blob/v2.25.0/google/genai/types.py
+- https://github.com/python/cpython/blob/v3.11.0/Lib/mimetypes.py
+- https://github.com/python/cpython/blob/v3.12.0/Lib/mimetypes.py
+- https://github.com/python/cpython/blob/v3.13.0/Lib/mimetypes.py

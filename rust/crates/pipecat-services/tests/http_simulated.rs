@@ -827,3 +827,53 @@ async fn simulated_openai_detailed_image_files_keep_native_identity_and_use_imag
     );
     fake.task.await.unwrap();
 }
+
+#[tokio::test]
+async fn simulated_gemini_remote_image_is_serialized_without_local_fetch() {
+    // Keep a real media listener open: any attempted fetch connects here rather
+    // than contacting a public image host, and fails the assertion below.
+    let media = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let uri = format!("http://{}/photo%20one.JpEg", media.local_addr().unwrap());
+    let fake = server(
+        "200 OK", "text/event-stream",
+        vec![record(json!({"candidates":[{"content":{"parts":[{"text":"Synthetic description"}]},"finishReason":"STOP"}]}))],
+        Duration::ZERO, Duration::ZERO,
+    ).await;
+    let mut message = Message::text(Role::User, "");
+    message.content = Some(Content::Parts(vec![
+        ContentPart::Text {
+            text: "Describe".into(),
+        },
+        ContentPart::ImageUrl { url: uri.clone() },
+    ]));
+    let request = CompletionRequest::new("synthetic-model", Context::new(vec![message]));
+    let before = serde_json::to_value(&request).unwrap();
+    let mut stream = LlmClient::new(config(Provider::Gemini, fake.url))
+        .unwrap()
+        .stream(request.clone())
+        .unwrap();
+    let events = collect(&mut stream).await;
+    assert!(events.iter().all(Result::is_ok));
+    assert!(events.iter().any(
+        |event| matches!(event, Ok(StreamEvent::TextDelta(text)) if text == "Synthetic description")
+    ));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        Ok(StreamEvent::Finished {
+            reason: Some(FinishReason::Stop)
+        })
+    )));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body["contents"],
+        json!([{"role":"user","parts":[{"text":"Describe"},{"fileData":{"fileUri":uri,"mimeType":"image/jpeg"}}]}])
+    );
+    assert_eq!(serde_json::to_value(&request).unwrap(), before);
+    fake.task.await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), media.accept())
+            .await
+            .is_err(),
+        "the client must not connect to the media URI"
+    );
+}
