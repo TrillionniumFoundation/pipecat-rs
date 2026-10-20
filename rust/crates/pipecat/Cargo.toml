@@ -9,6 +9,7 @@ pipecat-openclaw = { path = "../pipecat-openclaw", optional = true }
 pipecat-classifiers = { path = "../pipecat-classifiers", optional = true }
 pipecat-deepgram-flux = { path = "../pipecat-deepgram-flux", optional = true }
 pipecat-grok-realtime = { path = "../pipecat-grok-realtime", optional = true }
+pipecat-inworld-realtime = { path = "../pipecat-inworld-realtime", optional = true }
 pipecat-images = { path = "../pipecat-images", optional = true }
 pipecat-speechmatics = { path = "../pipecat-speechmatics", optional = true }
 pipecat-soniox = { path = "../pipecat-soniox", optional = true }
@@ -68,6 +69,7 @@ openclaw = ["dep:pipecat-openclaw"]
 classifiers = ["dep:pipecat-classifiers"]
 deepgram-flux = ["dep:pipecat-deepgram-flux"]
 grok-realtime = ["dep:pipecat-grok-realtime"]
+inworld-realtime = ["dep:pipecat-inworld-realtime"]
 images = ["dep:pipecat-images"]
 speechmatics = ["dep:pipecat-speechmatics", "pipecat-speech/speechmatics"]
 minimax = ["pipecat-speech/minimax"]

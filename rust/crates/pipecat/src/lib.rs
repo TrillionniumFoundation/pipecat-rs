@@ -31,6 +31,8 @@ pub use pipecat_gradium as gradium;
 pub use pipecat_grok_realtime as grok_realtime;
 #[cfg(feature = "images")]
 pub use pipecat_images as images;
+#[cfg(feature = "inworld-realtime")]
+pub use pipecat_inworld_realtime as inworld_realtime;
 #[cfg(feature = "livekit")]
 pub use pipecat_livekit as livekit;
 #[cfg(feature = "local-audio")]
@@ -83,3 +85,21 @@ pub use pipecat_webrtc as webrtc;
 
 #[cfg(feature = "voicemail")]
 pub use pipecat_processors::voicemail;
+
+#[cfg(all(test, feature = "inworld-realtime"))]
+mod inworld_feature_tests {
+    use super::inworld_realtime::{
+        InworldClient, InworldConfig, InworldRealtimeProcessor, SessionProperties,
+    };
+
+    #[test]
+    fn facade_constructs_both_inworld_pcm_profiles_without_connecting() {
+        for session in [SessionProperties::pcm(), SessionProperties::manual()] {
+            let mut config = InworldConfig::new("synthetic-facade-credential");
+            config.session = session;
+            config.validate().unwrap();
+            let client = InworldClient::new(config).unwrap();
+            assert!(InworldRealtimeProcessor::new(client).is_ok());
+        }
+    }
+}
