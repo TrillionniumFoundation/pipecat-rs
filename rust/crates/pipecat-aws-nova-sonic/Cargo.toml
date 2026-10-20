@@ -1,0 +1,39 @@
+[package]
+name = "pipecat-aws-nova-sonic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+pipecat-core = { path = "../pipecat-core" }
+pipecat-services = { path = "../pipecat-services" }
+pipecat-turns = { path = "../pipecat-turns" }
+pipecat-aws-common = { path = "../pipecat-aws-common" }
+base64 = "0.22"
+url = "2"
+h2 = "0.4.20"
+http = "1.5.0"
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1.0.9"
+futures-util = "0.3"
+
+[dev-dependencies]
+pipecat-media-transport = { path = "../pipecat-media-transport" }
+sha2 = "0.10"
+hmac = "0.12"
+crc32fast = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+pipecat-audio = { path = "../pipecat-audio" }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
+
+[lints]
+workspace = true

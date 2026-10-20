@@ -1,7 +1,7 @@
 //! Shared explicit AWS signing and bounded binary EventStream primitives.
 pub mod auth;
 pub mod eventstream;
-pub use auth::{AwsCredentials, PresignedUrl};
+pub use auth::{AwsCredentials, EventStreamSigner, PresignedUrl};
 #[derive(Debug, thiserror::Error)]
 pub enum AwsError {
     #[error("invalid AWS configuration: {0}")]

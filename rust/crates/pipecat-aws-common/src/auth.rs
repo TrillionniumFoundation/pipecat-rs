@@ -2,7 +2,12 @@
 use crate::AwsError;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fmt, net::IpAddr};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    net::IpAddr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 /// Explicit application-owned credentials. No ambient provider chain is consulted.
 #[derive(Clone, PartialEq, Eq)]
@@ -266,6 +271,244 @@ pub fn signed_post_headers(
     Ok(headers)
 }
 
+// 16-byte frame overhead + the binary signature (52 bytes) and timestamp
+// (15 bytes) headers. This is independent of the nested message's size.
+const SIGNED_EVENT_OVERHEAD: usize = 83;
+const MAX_SIGNED_EVENT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Single-session SigV4 EventStream chain with opaque, redacted credentials.
+///
+/// Construct this together with its signed HTTP headers using
+/// [`signed_event_stream_post_headers`]. The state is deliberately not `Clone`:
+/// one writer owns one chain. Every successful signing call advances the chain;
+/// a transport must not retry a possibly admitted frame or reuse this state for
+/// another connection. This type does not send, retry, or reconnect anything.
+///
+/// The secret is retained privately to derive each event's signing key from that
+/// event's UTC day, including a session crossing midnight. No secret or signing
+/// key accessor is exposed. Debug output never includes credentials/signatures.
+pub struct EventStreamSigner {
+    secret_key: String,
+    region: String,
+    service: String,
+    previous_signature: String,
+    max_message_bytes: usize,
+    finalized: bool,
+}
+
+impl fmt::Debug for EventStreamSigner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("EventStreamSigner([redacted])")
+    }
+}
+
+impl EventStreamSigner {
+    /// Signs one complete encoded inner EventStream message, not bare JSON/PCM.
+    ///
+    /// Validates both inner CRCs, headers, and the complete outer size before
+    /// advancing the chain. A local validation failure leaves the chain intact.
+    /// The signed outer headers are binary `:chunk-signature`, then `:date`.
+    /// Both the timestamp header and string-to-sign truncate subsecond time.
+    pub fn sign_message(
+        &mut self,
+        encoded_inner: &[u8],
+        timestamp: SystemTime,
+    ) -> Result<Vec<u8>, AwsError> {
+        self.ensure_open()?;
+        if encoded_inner.len() > self.max_message_bytes - SIGNED_EVENT_OVERHEAD {
+            return Err(AwsError::TooLarge);
+        }
+        crate::eventstream::decode(encoded_inner, self.max_message_bytes)?;
+        self.sign_payload(encoded_inner, timestamp, false)
+    }
+
+    /// Emits the one signed terminal with an actually zero-byte outer payload.
+    ///
+    /// This is not an encoded empty inner message. Successful finalization is
+    /// irreversible: later message or terminal signing fails. If transmission
+    /// subsequently fails or is canceled, the transport must invalidate the
+    /// session instead of emitting another terminal.
+    pub fn sign_empty(&mut self, timestamp: SystemTime) -> Result<Vec<u8>, AwsError> {
+        self.ensure_open()?;
+        self.sign_payload(&[], timestamp, true)
+    }
+
+    fn ensure_open(&self) -> Result<(), AwsError> {
+        if self.finalized {
+            return Err(AwsError::Protocol("AWS eventstream signer finalized"));
+        }
+        Ok(())
+    }
+
+    fn sign_payload(
+        &mut self,
+        payload: &[u8],
+        time: SystemTime,
+        terminal: bool,
+    ) -> Result<Vec<u8>, AwsError> {
+        use crate::eventstream::{encode_typed, HeaderValue};
+        let (timestamp, millis) = stream_timestamp(time)?;
+        let day = date(&timestamp)?;
+        let kdate = mac(
+            format!("AWS4{}", self.secret_key).as_bytes(),
+            day.as_bytes(),
+        );
+        let kregion = mac(&kdate, self.region.as_bytes());
+        let kservice = mac(&kregion, self.service.as_bytes());
+        let ksigning = mac(&kservice, b"aws4_request");
+        let text = stream_string_to_sign(
+            payload,
+            &self.previous_signature,
+            &timestamp,
+            millis,
+            &self.region,
+            &self.service,
+        )?;
+        let signature = mac(&ksigning, text.as_bytes());
+        let message = encode_typed(
+            &[
+                (":chunk-signature", HeaderValue::Bytes(&signature)),
+                (":date", HeaderValue::Timestamp(millis)),
+            ],
+            payload,
+            self.max_message_bytes,
+        )?;
+        self.previous_signature = hex(&signature);
+        self.finalized = terminal;
+        Ok(message)
+    }
+}
+
+/// Signs a POST request with the SDK's empty-body EventStream signing profile.
+///
+/// This is additive to [`signed_post_headers`], whose JSON/body-hash behavior is
+/// unchanged. The returned sensitive headers have EventStream MIME, host, date,
+/// optional session token and authorization, but no `x-amz-content-sha256`.
+/// The URI is derived from the already single-encoded wire URL and encoded again
+/// for SigV4 while preserving `/` separators (e.g. `%3A` becomes `%253A`).
+/// Query, fragment, userinfo, repeated-slash paths and non-HTTP URLs are rejected.
+/// The caller must separately enforce its regional or literal-loopback endpoint
+/// policy before network use; signing is not endpoint authorization.
+///
+/// `max_message_bytes` bounds every complete signed outer frame, from 83 bytes
+/// (terminal only) through 16 MiB. Request URLs are bounded to 8192 bytes. Times
+/// must be on/after the Unix epoch and have a four-digit UTC year; subseconds are
+/// truncated consistently for request and event signing.
+pub fn signed_event_stream_post_headers(
+    url: &url::Url,
+    region: &str,
+    credentials: &AwsCredentials,
+    timestamp: SystemTime,
+    service: &str,
+    max_message_bytes: usize,
+) -> Result<(reqwest::header::HeaderMap, EventStreamSigner), AwsError> {
+    region_validate_service(region, service)?;
+    if !(SIGNED_EVENT_OVERHEAD..=MAX_SIGNED_EVENT_BYTES).contains(&max_message_bytes) {
+        return Err(AwsError::Invalid("AWS eventstream message limit"));
+    }
+    if url.as_str().len() > 8192
+        || !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.path().starts_with('/')
+        || url.path().contains("//")
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(AwsError::Invalid("SigV4 eventstream URI"));
+    }
+    let (timestamp, _) = stream_timestamp(timestamp)?;
+    let canonical_uri = url
+        .path()
+        .split('/')
+        .map(encode_component)
+        .collect::<Vec<_>>()
+        .join("/");
+    let mut values = BTreeMap::from([
+        (
+            "content-type",
+            "application/vnd.amazon.eventstream".to_string(),
+        ),
+        ("host", host(url)),
+        ("x-amz-date", timestamp.clone()),
+    ]);
+    if let Some(token) = &credentials.session_token {
+        values.insert("x-amz-security-token", token.clone());
+    }
+    let names = values.keys().copied().collect::<Vec<_>>().join(";");
+    let header_text = values
+        .iter()
+        .map(|(key, value)| format!("{key}:{value}\n"))
+        .collect::<String>();
+    let canonical = format!(
+        "POST\n{canonical_uri}\n\n{header_text}\n{names}\n{}",
+        hash(b"")
+    );
+    let (scope, signature) = signature(credentials, region, service, &timestamp, &canonical)?;
+    values.insert(
+        "authorization",
+        format!(
+            "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={names}, Signature={signature}",
+            credentials.access_key
+        ),
+    );
+    let mut headers = reqwest::header::HeaderMap::new();
+    for (key, value) in values {
+        let mut value = reqwest::header::HeaderValue::from_str(&value)
+            .map_err(|_| AwsError::Invalid("AWS signed header"))?;
+        if matches!(key, "authorization" | "x-amz-security-token") {
+            value.set_sensitive(true);
+        }
+        headers.insert(key, value);
+    }
+    Ok((
+        headers,
+        EventStreamSigner {
+            secret_key: credentials.secret_key.clone(),
+            region: region.into(),
+            service: service.into(),
+            previous_signature: signature,
+            max_message_bytes,
+            finalized: false,
+        },
+    ))
+}
+
+fn stream_timestamp(time: SystemTime) -> Result<(String, i64), AwsError> {
+    let seconds = time
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| AwsError::Invalid("SigV4 timestamp"))?
+        .as_secs();
+    let seconds = i64::try_from(seconds).map_err(|_| AwsError::Invalid("SigV4 timestamp"))?;
+    let value = chrono::DateTime::<chrono::Utc>::from_timestamp(seconds, 0)
+        .ok_or(AwsError::Invalid("SigV4 timestamp"))?;
+    let timestamp = value.format("%Y%m%dT%H%M%SZ").to_string();
+    date(&timestamp)?;
+    let millis = seconds
+        .checked_mul(1000)
+        .ok_or(AwsError::Invalid("SigV4 timestamp"))?;
+    Ok((timestamp, millis))
+}
+
+fn stream_string_to_sign(
+    payload: &[u8],
+    previous_signature: &str,
+    timestamp: &str,
+    millis: i64,
+    region: &str,
+    service: &str,
+) -> Result<String, AwsError> {
+    use crate::eventstream::{encode_headers_typed, HeaderValue};
+    let day = date(timestamp)?;
+    let date_header = encode_headers_typed(&[(":date", HeaderValue::Timestamp(millis))], 15)?;
+    Ok(format!(
+        "AWS4-HMAC-SHA256-PAYLOAD\n{timestamp}\n{day}/{region}/{service}/aws4_request\n{previous_signature}\n{}\n{}",
+        hash(&date_header),
+        hash(payload)
+    ))
+}
+
 fn region_validate_service(value: &str, service: &str) -> Result<(), AwsError> {
     region(value)?;
     if service.is_empty()
@@ -293,6 +536,28 @@ mod tests {
             Some("TOKEN/+=".into()),
         )
         .unwrap()
+    }
+    #[test]
+    fn event_stream_string_to_sign_matches_published_aws_sdk_vector() {
+        // Retained primary source: aws-sigv4 1.6.0, event_stream.rs::tests::string_to_sign.
+        // The source's 1234 nanoseconds truncate to zero before signing.
+        let inner =
+            crate::eventstream::encode(&[("some-header", "value")], b"test payload", 1024).unwrap();
+        let (timestamp, millis) =
+            stream_timestamp(UNIX_EPOCH + std::time::Duration::new(123_456_789, 1234)).unwrap();
+        let actual = stream_string_to_sign(
+            &inner,
+            &hash(b"last message sts"),
+            &timestamp,
+            millis,
+            "us-east-1",
+            "testservice",
+        )
+        .unwrap();
+        assert_eq!(
+            actual,
+            include_str!("../tests/fixtures/aws_sdk_event_stream_string_to_sign.txt").trim_end()
+        );
     }
     #[test]
     fn polly_sigv4_matches_independent_fixed_date_fixture() {

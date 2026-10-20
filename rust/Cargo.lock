@@ -3461,6 +3461,7 @@ dependencies = [
  "pipecat-assemblyai",
  "pipecat-audio",
  "pipecat-aws-bedrock",
+ "pipecat-aws-nova-sonic",
  "pipecat-aws-speech",
  "pipecat-azure-realtime",
  "pipecat-azure-voice-live",
@@ -3590,6 +3591,37 @@ dependencies = [
  "thiserror 2.0.21",
  "url",
 ]
+
+[[package]]
+name = "pipecat-aws-nova-sonic"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "futures-util",
+ "h2",
+ "hmac 0.12.1",
+ "http",
+ "libc",
+ "pipecat-audio",
+ "pipecat-aws-common",
+ "pipecat-core",
+ "pipecat-media-transport",
+ "pipecat-services",
+ "pipecat-turns",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "url",
+ "webpki-roots 1.0.9",
+]
+
 
 [[package]]
 name = "pipecat-aws-speech"

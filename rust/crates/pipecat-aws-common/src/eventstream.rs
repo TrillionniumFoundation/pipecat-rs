@@ -114,34 +114,42 @@ pub fn decode(message: &[u8], max_bytes: usize) -> Result<Event<'_>, AwsError> {
         payload: &message[12 + header_length..total - 4],
     })
 }
-/// Encodes string headers and a raw payload. Intended for fixture generation too.
+/// Encodes string headers and a raw payload in the supplied order.
+///
+/// This preserves the original string-only wire format. For binary or numeric
+/// headers, use [`encode_typed`].
 pub fn encode(
     headers: &[(&str, &str)],
     payload: &[u8],
     max_bytes: usize,
 ) -> Result<Vec<u8>, AwsError> {
-    let mut raw = Vec::new();
-    let mut names = std::collections::BTreeSet::new();
     if headers.len() > 128 {
         return Err(AwsError::TooLarge);
     }
-    for (name, value) in headers {
-        if name.is_empty() || name.len() > 255 || value.len() > 65535 || !names.insert(name) {
-            return Err(invalid());
-        }
-        let size = raw
-            .len()
-            .checked_add(name.len() + value.len() + 4)
-            .ok_or(AwsError::TooLarge)?;
-        if size > 128 * 1024 || size.saturating_add(payload.len()).saturating_add(16) > max_bytes {
-            return Err(AwsError::TooLarge);
-        }
-        raw.push(name.len() as u8);
-        raw.extend_from_slice(name.as_bytes());
-        raw.push(7);
-        raw.extend_from_slice(&(value.len() as u16).to_be_bytes());
-        raw.extend_from_slice(value.as_bytes());
-    }
+    let typed: Vec<_> = headers
+        .iter()
+        .map(|(name, value)| (*name, HeaderValue::String(value)))
+        .collect();
+    encode_typed(&typed, payload, max_bytes)
+}
+
+/// Encodes every primitive AWS EventStream header type, preserving caller order.
+///
+/// Header names must be unique and nonempty. A message has at most 128 headers,
+/// 128 KiB of encoded headers, and `max_bytes` total bytes (including both CRCs).
+/// Strings and byte arrays have the protocol's 16-bit length bound. Lengths are
+/// checked before payload allocation or copying; integer and timestamp values
+/// use big-endian representation. A timestamp is signed milliseconds since the
+/// Unix epoch, not a textual date.
+pub fn encode_typed(
+    headers: &[(&str, HeaderValue<'_>)],
+    payload: &[u8],
+    max_bytes: usize,
+) -> Result<Vec<u8>, AwsError> {
+    let raw = encode_headers_typed(
+        headers,
+        max_bytes.saturating_sub(payload.len()).saturating_sub(16),
+    )?;
     let total = raw
         .len()
         .checked_add(payload.len())
@@ -158,6 +166,91 @@ pub fn encode(
     message.extend_from_slice(payload);
     message.extend_from_slice(&crc32fast::hash(&message).to_be_bytes());
     Ok(message)
+}
+
+// Shared with the opaque stream signer so the hashed timestamp header uses the
+// exact same typed representation as the eventual signed outer message.
+pub(crate) fn encode_headers_typed(
+    headers: &[(&str, HeaderValue<'_>)],
+    max_bytes: usize,
+) -> Result<Vec<u8>, AwsError> {
+    let mut raw = Vec::new();
+    let mut names = std::collections::BTreeSet::new();
+    if headers.len() > 128 {
+        return Err(AwsError::TooLarge);
+    }
+    for (name, value) in headers {
+        if name.is_empty() || name.len() > 255 || !names.insert(name) {
+            return Err(invalid());
+        }
+        let value_len = match value {
+            HeaderValue::Bool(_) => 0,
+            HeaderValue::Byte(_) => 1,
+            HeaderValue::Short(_) => 2,
+            HeaderValue::Integer(_) => 4,
+            HeaderValue::Long(_) | HeaderValue::Timestamp(_) => 8,
+            HeaderValue::Uuid(_) => 16,
+            HeaderValue::Bytes(value) => {
+                if value.len() > u16::MAX as usize {
+                    return Err(invalid());
+                }
+                value.len() + 2
+            }
+            HeaderValue::String(value) => {
+                if value.len() > u16::MAX as usize {
+                    return Err(invalid());
+                }
+                value.len() + 2
+            }
+        };
+        let size = raw
+            .len()
+            .checked_add(name.len() + value_len + 2)
+            .ok_or(AwsError::TooLarge)?;
+        if size > 128 * 1024 || size > max_bytes {
+            return Err(AwsError::TooLarge);
+        }
+        raw.push(name.len() as u8);
+        raw.extend_from_slice(name.as_bytes());
+        match value {
+            HeaderValue::Bool(value) => raw.push(u8::from(!*value)),
+            HeaderValue::Byte(value) => {
+                raw.push(2);
+                raw.push(*value as u8);
+            }
+            HeaderValue::Short(value) => {
+                raw.push(3);
+                raw.extend_from_slice(&value.to_be_bytes());
+            }
+            HeaderValue::Integer(value) => {
+                raw.push(4);
+                raw.extend_from_slice(&value.to_be_bytes());
+            }
+            HeaderValue::Long(value) => {
+                raw.push(5);
+                raw.extend_from_slice(&value.to_be_bytes());
+            }
+            HeaderValue::Bytes(value) => {
+                raw.push(6);
+                raw.extend_from_slice(&(value.len() as u16).to_be_bytes());
+                raw.extend_from_slice(value);
+            }
+            HeaderValue::String(value) => {
+                raw.push(7);
+                raw.extend_from_slice(&(value.len() as u16).to_be_bytes());
+                raw.extend_from_slice(value.as_bytes());
+            }
+            HeaderValue::Timestamp(value) => {
+                raw.push(8);
+                raw.extend_from_slice(&value.to_be_bytes());
+            }
+            HeaderValue::Uuid(value) => {
+                raw.push(9);
+                raw.extend_from_slice(value);
+            }
+        }
+    }
+    Ok(raw)
 }
 pub fn audio(payload: &[u8], max_bytes: usize) -> Result<Vec<u8>, AwsError> {
     encode(

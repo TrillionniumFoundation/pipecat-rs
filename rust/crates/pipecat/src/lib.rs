@@ -7,6 +7,8 @@ pub use pipecat_assemblyai as assemblyai;
 pub use pipecat_audio as audio;
 #[cfg(feature = "aws-bedrock")]
 pub use pipecat_aws_bedrock as aws_bedrock;
+#[cfg(feature = "aws-nova-sonic")]
+pub use pipecat_aws_nova_sonic as aws_nova_sonic;
 #[cfg(feature = "aws-speech")]
 pub use pipecat_aws_speech as aws_speech;
 #[cfg(feature = "azure-realtime")]
