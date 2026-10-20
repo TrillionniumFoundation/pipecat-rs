@@ -61,3 +61,29 @@ Tests exercise native HTTP/SSE and real ToolExecutor execution against loopback
 fixtures. They do not establish live Gemini/Vertex acceptance. Live provider
 qualification, signed image Parts, code execution and Vertex authentication remain
 separate gaps. No Python runtime or test execution is used by these components.
+
+## System-only startup conversion
+
+At the pinned reference above, `gemini_adapter.py:417–433` appends a distinct
+user text Content when an effective system instruction exists but the converted,
+signed-tool-grouped history has no regular message. A regular message has exactly
+one nonempty text Part and no function call or function response. Whitespace is
+nonempty; text plus media or multiple text Parts do not qualify. This decision
+precedes generic adjacent-role merging and trailing-user enforcement, including
+for the pinned model prefixes that permit assistant prefill.
+
+The startup seed prefers the extracted initial context system text over service
+settings, while the final `systemInstruction` prefers service settings over the
+extracted context system text. A sole context system message is instead retained
+as a user turn and does not receive a duplicate seed when it has ordinary text.
+The seed exists only in the request body; repeated conversions do not change or
+accumulate messages in the universal Context.
+
+Gemini no longer fabricates `"(empty)"` text for absent content or an empty Parts
+list: empty converted Contents are removed after the seed decision, matching the
+pinned source. With an effective system instruction they cannot suppress the
+seed; without one they do not invent a user turn. An explicit empty text Part
+remains distinct from an empty Parts list. OpenAI and Anthropic normalization,
+including Anthropic cache placement, is unchanged. Adapter fixtures and a
+synthetic HTTP streaming regression cover this behavior; no live model acceptance
+or behavior is claimed.

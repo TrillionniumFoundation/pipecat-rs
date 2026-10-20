@@ -227,15 +227,14 @@ fn openai_content(content: &Content) -> Result<Value, ServiceError> {
     }
 }
 
-fn split_system(request: &CompletionRequest) -> Result<(Option<String>, &[Message]), ServiceError> {
+fn extract_initial_system(
+    request: &CompletionRequest,
+) -> Result<(Option<String>, &[Message]), ServiceError> {
     let messages = &request.context.messages;
     // Keep a single system message as a user turn rather than producing an
     // empty conversation, matching the universal Python adapter contract.
     if messages.len() == 1 {
-        return Ok((
-            request.system_instruction.clone().filter(|s| !s.is_empty()),
-            messages,
-        ));
+        return Ok((None, messages));
     }
     let (initial, remaining) = match messages.first() {
         Some(Message {
@@ -263,12 +262,17 @@ fn split_system(request: &CompletionRequest) -> Result<(Option<String>, &[Messag
         }
         _ => (None, messages.as_slice()),
     };
+    Ok((initial.filter(|s| !s.is_empty()), remaining))
+}
+
+fn split_system(request: &CompletionRequest) -> Result<(Option<String>, &[Message]), ServiceError> {
+    let (initial, remaining) = extract_initial_system(request)?;
     Ok((
         request
             .system_instruction
             .clone()
             .filter(|s| !s.is_empty())
-            .or(initial.filter(|s| !s.is_empty())),
+            .or(initial),
         remaining,
     ))
 }
@@ -481,7 +485,15 @@ fn data_url(url: &str) -> Result<(&str, &str), ServiceError> {
 }
 
 fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
-    let (system, input) = split_system(request)?;
+    let (extracted_system, input) = extract_initial_system(request)?;
+    let settings_system = request
+        .system_instruction
+        .as_ref()
+        .filter(|s| !s.is_empty());
+    // The pinned source deliberately uses opposite precedence for the startup
+    // seed and final systemInstruction. Neither changes the persisted context.
+    let seed_system = extracted_system.as_ref().or(settings_system);
+    let system = settings_system.or(extracted_system.as_ref());
     let mut messages = vec![];
     let mut native_calls = std::collections::HashSet::new();
     let names: std::collections::HashMap<_, _> = request
@@ -586,13 +598,21 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
                 parts.push(part);
             }
         }
-        if parts.is_empty() {
-            parts.push(json!({"text":"(empty)"}));
-        }
         let native_text = matches!(&message.content,Some(Content::Parts(content))if content.iter().any(|part|matches!(part,ContentPart::GeminiText{..})));
         messages.push((json!({"role":role,"parts":parts}), native_text));
     }
     let messages = gemini_group_signed_tools(messages)?;
+    // Evaluate before generic adjacent-role merging changes the part counts.
+    let has_regular_messages = messages.iter().any(|message| {
+        message["parts"].as_array().is_some_and(|parts| {
+            parts.len() == 1
+                && parts[0]["text"]
+                    .as_str()
+                    .is_some_and(|text| !text.is_empty())
+                && parts[0].get("functionCall").is_none()
+                && parts[0].get("functionResponse").is_none()
+        })
+    });
     let mut merged = vec![];
     for message in messages {
         let role = message["role"].as_str().expect("generated role");
@@ -639,6 +659,19 @@ fn gemini(request: &CompletionRequest) -> Result<Value, ServiceError> {
             }
         }
     }
+    if !has_regular_messages {
+        if let Some(seed) = seed_system {
+            // Keep this a distinct user Content, even after a tool response.
+            messages.push(json!({"role":"user","parts":[{"text":seed}]}));
+        }
+    }
+    // Python drops empty converted Contents after deciding whether to seed.
+    // Do not fabricate a regular "(empty)" text turn that suppresses the seed.
+    messages.retain(|message| {
+        message["parts"]
+            .as_array()
+            .is_some_and(|parts| !parts.is_empty())
+    });
     let supports_prefill = ["gemini-2.", "gemini-3-", "gemini-3.1-", "gemini-pro-latest"]
         .iter()
         .any(|prefix| request.model.starts_with(prefix));

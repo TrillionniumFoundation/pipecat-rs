@@ -229,6 +229,42 @@ async fn simulated_gemini_actual_generate_content_wire_and_usage() {
     fake.task.await.unwrap();
 }
 #[tokio::test]
+async fn simulated_gemini_empty_context_settings_seed_reaches_http_wire() {
+    let fake = server(
+        "200 OK",
+        "text/event-stream",
+        vec![record(
+            json!({"candidates":[{"content":{"parts":[{"text":"Hello"}]},"finishReason":"STOP"}]}),
+        )],
+        Duration::ZERO,
+        Duration::ZERO,
+    )
+    .await;
+    let mut request = CompletionRequest::new("gemini-3.8-flash", Context::new(vec![]));
+    request.settings.system_instruction = Setting::Value("Begin the conversation".into());
+    let before = serde_json::to_value(&request).unwrap();
+    let mut stream = LlmClient::new(config(Provider::Gemini, fake.url))
+        .unwrap()
+        .stream(request.clone())
+        .unwrap();
+    let events = collect(&mut stream).await;
+    assert!(events.iter().all(Result::is_ok));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, Ok(StreamEvent::TextDelta(text)) if text == "Hello")));
+    let (_, body) = fake.request.await.unwrap();
+    assert_eq!(
+        body["contents"],
+        json!([{"role":"user","parts":[{"text":"Begin the conversation"}]}])
+    );
+    assert_eq!(
+        body["systemInstruction"],
+        json!({"parts":[{"text":"Begin the conversation"}]})
+    );
+    assert_eq!(serde_json::to_value(&request).unwrap(), before);
+    fake.task.await.unwrap();
+}
+#[tokio::test]
 async fn simulated_http_error_keeps_status_and_retry_after_and_brackets_response() {
     let fake = server(
         "429 Too Many Requests",
