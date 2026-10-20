@@ -28,6 +28,35 @@ pub enum GeminiError {
     Closed,
 }
 
+/// Optional idle silence for transcription-only sessions. Selecting this policy
+/// is explicit; existing clients remain disabled. Durations are native bounds,
+/// not provider idle-expiry guarantees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SttKeepalivePolicy {
+    pub idle_timeout: Duration,
+    pub check_interval: Duration,
+}
+impl SttKeepalivePolicy {
+    /// Use Python STT's five-second checking cadence with an explicit timeout.
+    pub fn new(idle_timeout: Duration) -> Self {
+        Self {
+            idle_timeout,
+            check_interval: Duration::from_secs(5),
+        }
+    }
+    pub(crate) fn validate(&self) -> Result<(), GeminiError> {
+        for duration in [self.idle_timeout, self.check_interval] {
+            if duration.is_zero()
+                || duration > Duration::from_secs(86_400)
+                || tokio::time::Instant::now().checked_add(duration).is_none()
+            {
+                return Err(GeminiError::Invalid("STT keepalive duration"));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Explicit bounded receive-side session recovery. Sent actions are never replayed.
 /// A saved handle need not cover the most recent input: this is not a guarantee
 /// of lossless delivery or exactly-once provider output.

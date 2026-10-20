@@ -303,6 +303,10 @@ A finite finish deadline reports `Timeout`, never synthetic response completion.
 frame; it does not claim downstream audio was played or a close handshake was
 acknowledged. The pipeline owns and joins its receive work on cleanup.
 
+Optional [STT idle-silence keepalive](STT_KEEPALIVE.md) is available through
+`GeminiClient::with_stt_keepalive`; it is disabled by default and does not mark
+synthetic silence as user work or hold an idle finish open.
+
 ## Deliberate exclusions
 
 The following are not implemented, and no pass-through setting/action advertises
@@ -310,7 +314,7 @@ them: automatic replay, handle-less session rebuilding, Vertex authentication, e
 creation, context-window compression, thinking tools/budgets,
 Google built-in tools/search/grounding and Google-specific RTVI search messages,
 file input and image formats beyond the bounded RGB video path, Google File API upload/list/get/delete, live setting
-updates, language-hint/adaptation options for dedicated STT, STT keepalive audio,
+updates, language-hint/adaptation options for dedicated STT,
 tracing spans, transcription aggregation timeouts, or playback-status reporting.
 Related frame input, recognized unsupported server semantics, and unknown config
 fields are rejected. By default `GoAway` is exposed as an event and an actionable

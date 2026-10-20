@@ -247,6 +247,7 @@ fn retire_pending(
 pub struct GeminiClient {
     config: Arc<GeminiConfig>,
     resumption: Option<ResumptionPolicy>,
+    stt_keepalive: Option<SttKeepalivePolicy>,
     thinking: Option<ThinkingPolicy>,
     initial_history: Option<(InitialHistoryPolicy, protocol::InitialHistoryModel)>,
     non_blocking_tools: Arc<HashSet<String>>,
@@ -273,10 +274,26 @@ impl GeminiClient {
         Ok(Self {
             config: Arc::new(config),
             resumption: None,
+            stt_keepalive: None,
             thinking: None,
             initial_history: None,
             non_blocking_tools: Arc::new(HashSet::new()),
         })
+    }
+    /// Send 100 ms of zero PCM when a ready STT session is idle. Synthetic
+    /// input does not establish a user turn or delay an otherwise idle finish.
+    /// A failed write is terminal, not retried on a possibly partial socket.
+    pub fn with_stt_keepalive(mut self, policy: SttKeepalivePolicy) -> Result<Self, GeminiError> {
+        policy.validate()?;
+        if self.config.mode != SessionMode::Transcription {
+            return Err(GeminiError::Unsupported(
+                "STT keepalive requires transcription mode",
+            ));
+        }
+        // Validate the exact encoded wire payload before opening any socket.
+        keepalive_message(&self.config)?;
+        self.stt_keepalive = Some(policy);
+        Ok(self)
     }
     /// Opt in to bounded receive-side recovery with an opaque server handle.
     /// Connect/setup/write/protocol failures are terminal; no action is replayed.
@@ -540,6 +557,10 @@ impl GeminiClient {
         let worker_sender = sender.clone();
         let policy = self.resumption.clone();
         let thinking = self.thinking.clone();
+        let stt_keepalive = self
+            .stt_keepalive
+            .map(|policy| SttKeepalive::new(policy, config))
+            .transpose()?;
         let worker = tokio::spawn(async move {
             run(
                 socket,
@@ -552,6 +573,7 @@ impl GeminiClient {
                     handle,
                     thinking,
                     receive_policy,
+                    stt_keepalive,
                 },
             )
             .await
@@ -1710,7 +1732,40 @@ impl InputWatermarks {
     }
 }
 
+fn keepalive_message(config: &GeminiConfig) -> Result<String, GeminiError> {
+    let silence = vec![0; (config.input_sample_rate / 10) as usize * 2];
+    let messages = protocol::action_messages(&Action::Audio(silence), config)?;
+    Ok(messages
+        .into_iter()
+        .next()
+        .expect("audio has one message")
+        .to_string())
+}
+
+struct SttKeepalive {
+    policy: SttKeepalivePolicy,
+    message: String,
+    last_audio: Instant,
+    next_check: Instant,
+}
+impl SttKeepalive {
+    fn new(policy: SttKeepalivePolicy, config: &GeminiConfig) -> Result<Self, GeminiError> {
+        let now = Instant::now();
+        Ok(Self {
+            policy,
+            message: keepalive_message(config)?,
+            last_audio: now,
+            next_check: now + policy.check_interval,
+        })
+    }
+    fn ready(&mut self) {
+        self.last_audio = Instant::now();
+        self.next_check = self.last_audio + self.policy.check_interval;
+    }
+}
+
 struct WorkerOptions {
+    stt_keepalive: Option<SttKeepalive>,
     policy: Option<ResumptionPolicy>,
     handle: Option<String>,
     thinking: Option<ThinkingPolicy>,
@@ -1731,6 +1786,7 @@ async fn run(
         mut handle,
         thinking,
         receive_policy,
+        stt_keepalive: mut keepalive,
     } = options;
     #[cfg(feature = "paired-history")]
     let mut input_watermarks = InputWatermarks::default();
@@ -1791,16 +1847,21 @@ async fn run(
                 Control,
                 Deadline,
                 ThinkingDeadline,
+                Keepalive,
                 Message(Option<Result<Message, tokio_tungstenite::tungstenite::Error>>),
                 Command(Option<Command>),
             }
             let thinking_at = held.as_ref().map(|h| h.deadline);
+            let keepalive_at = keepalive.as_ref().filter(|_|
+                !finishing && !sender.finishing.load(Ordering::SeqCst)
+            ).map(|state| state.next_check);
             let wake = tokio::select! { biased;
                 _ = control.changed() => Wake::Control,
                 _ = tokio::time::sleep_until(finish_at), if finishing => Wake::Deadline,
                 _ = tokio::time::sleep_until(thinking_at.unwrap_or(finish_at)), if thinking_at.is_some() => Wake::ThinkingDeadline,
                 message = socket.next() => Wake::Message(message),
                 command = commands.recv() => Wake::Command(command),
+                _ = tokio::time::sleep_until(keepalive_at.unwrap_or(finish_at)), if keepalive_at.is_some() => Wake::Keepalive,
             };
             match wake {
                 Wake::Control => {
@@ -1809,6 +1870,22 @@ async fn run(
                     }
                 }
                 Wake::Deadline => return Err(GeminiError::Timeout("finish")),
+                Wake::Keepalive => {
+                    let state = keepalive.as_mut().expect("enabled timer");
+                    // Delay missed checks; never catch up with a burst. Explicit
+                    // queued commands and socket/control input win the select.
+                    state.next_check = Instant::now() + state.policy.check_interval;
+                    if Instant::now().duration_since(state.last_audio) < state.policy.idle_timeout
+                        || sender.finishing.load(Ordering::SeqCst) || control.borrow().cancel {
+                        continue;
+                    }
+                    // This is deliberately not ordinary Action::Audio admission:
+                    // no busy/has_audio/attribution/generation/usage transition.
+                    write(&mut socket, Message::Text(state.message.clone().into()),
+                        &mut control, sender.config.limits.write_timeout).await?;
+                    state.last_audio = Instant::now();
+                    state.next_check = state.last_audio + state.policy.check_interval;
+                }
                 Wake::ThinkingDeadline => {
                     if held.as_ref().is_some_and(|h| h.generation == sender.generation()) {
                         return Err(GeminiError::Timeout("thinking silence"));
@@ -1861,6 +1938,7 @@ async fn run(
                             }
                         };
                         socket = replacement;
+                        if let Some(state) = &mut keepalive { state.ready(); }
                         // End/Cancel racing with the handshake win before any new
                         // command or provider content can be consumed.
                         if control.borrow().cancel || sender.finishing.load(Ordering::SeqCst) {
@@ -2390,6 +2468,7 @@ async fn run(
                             busy = true;
                         }
                         Action::Audio(_) => {
+                            if let Some(state) = &mut keepalive { state.last_audio = Instant::now(); }
                             busy = true;
                             has_audio = true;
                         }
@@ -4359,3 +4438,7 @@ mod initial_history_tests {
         assert!(wire.try_recv().is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "stt_keepalive_tests.rs"]
+mod stt_keepalive_tests;
