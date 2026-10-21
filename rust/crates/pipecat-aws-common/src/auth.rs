@@ -596,6 +596,89 @@ pub fn signed_event_stream_post_headers(
     service: &str,
     max_message_bytes: usize,
 ) -> Result<(reqwest::header::HeaderMap, EventStreamSigner), AwsError> {
+    event_stream_post_headers(
+        url,
+        region,
+        credentials,
+        timestamp,
+        service,
+        max_message_bytes,
+        None,
+    )
+}
+
+/// Sign the two SageMaker model-routing headers as part of the stream seed.
+/// This finite helper rejects duplicate keys, empty values and ambiguous routing
+/// grammar. It does not authorize the endpoint. Routing values are sensitive.
+#[allow(clippy::too_many_arguments)]
+pub fn signed_sagemaker_event_stream_post_headers(
+    url: &url::Url,
+    region: &str,
+    credentials: &AwsCredentials,
+    timestamp: SystemTime,
+    max_message_bytes: usize,
+    model_invocation_path: &str,
+    model_query_string: &str,
+) -> Result<(reqwest::header::HeaderMap, EventStreamSigner), AwsError> {
+    let unreserved = |b: u8| b.is_ascii_alphanumeric() || b"-._~".contains(&b);
+    if model_invocation_path.is_empty()
+        || model_invocation_path.len() > 100
+        || model_invocation_path.split('/').any(|part| {
+            part.is_empty()
+                || !part
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-._".contains(&b))
+        })
+        || model_query_string.is_empty()
+        || model_query_string.len() > 2048
+    {
+        return Err(AwsError::Invalid("SageMaker model routing"));
+    }
+    let mut keys = std::collections::BTreeSet::new();
+    for pair in model_query_string.split('&') {
+        let (key, value) = pair
+            .split_once('=')
+            .ok_or(AwsError::Invalid("SageMaker model query"))?;
+        if key.is_empty() || !key.bytes().all(unreserved) || value.is_empty() || !keys.insert(key) {
+            return Err(AwsError::Invalid("SageMaker model query"));
+        }
+        let bytes = value.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            if unreserved(bytes[index]) {
+                index += 1;
+            } else if bytes[index] == b'%'
+                && index + 2 < bytes.len()
+                && bytes[index + 1].is_ascii_hexdigit()
+                && bytes[index + 2].is_ascii_hexdigit()
+            {
+                index += 3;
+            } else {
+                return Err(AwsError::Invalid("SageMaker model query"));
+            }
+        }
+    }
+    event_stream_post_headers(
+        url,
+        region,
+        credentials,
+        timestamp,
+        "sagemaker",
+        max_message_bytes,
+        Some((model_invocation_path, model_query_string)),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn event_stream_post_headers(
+    url: &url::Url,
+    region: &str,
+    credentials: &AwsCredentials,
+    timestamp: SystemTime,
+    service: &str,
+    max_message_bytes: usize,
+    routing: Option<(&str, &str)>,
+) -> Result<(reqwest::header::HeaderMap, EventStreamSigner), AwsError> {
     region_validate_service(region, service)?;
     if !(SIGNED_EVENT_OVERHEAD..=MAX_SIGNED_EVENT_BYTES).contains(&max_message_bytes) {
         return Err(AwsError::Invalid("AWS eventstream message limit"));
@@ -630,6 +713,10 @@ pub fn signed_event_stream_post_headers(
     if let Some(token) = &credentials.session_token {
         values.insert("x-amz-security-token", token.clone());
     }
+    if let Some((path, query)) = routing {
+        values.insert("x-amzn-sagemaker-model-invocation-path", path.into());
+        values.insert("x-amzn-sagemaker-model-query-string", query.into());
+    }
     let names = values.keys().copied().collect::<Vec<_>>().join(";");
     let header_text = values
         .iter()
@@ -651,7 +738,13 @@ pub fn signed_event_stream_post_headers(
     for (key, value) in values {
         let mut value = reqwest::header::HeaderValue::from_str(&value)
             .map_err(|_| AwsError::Invalid("AWS signed header"))?;
-        if matches!(key, "authorization" | "x-amz-security-token") {
+        if matches!(
+            key,
+            "authorization"
+                | "x-amz-security-token"
+                | "x-amzn-sagemaker-model-invocation-path"
+                | "x-amzn-sagemaker-model-query-string"
+        ) {
             value.set_sensitive(true);
         }
         headers.insert(key, value);
