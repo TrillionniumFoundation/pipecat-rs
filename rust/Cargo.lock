@@ -3676,6 +3676,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-aws-sagemaker-stt"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "crc32fast",
+ "futures-util",
+ "h2",
+ "hmac 0.12.1",
+ "http",
+ "libc",
+ "pipecat-aws-common",
+ "pipecat-core",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "url",
+ "webpki-roots 1.0.9",
+]
+
+[[package]]
 name = "pipecat-aws-speech"
 version = "0.1.0"
 dependencies = [
