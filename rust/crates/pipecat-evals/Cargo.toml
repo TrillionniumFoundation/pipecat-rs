@@ -6,6 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
+# Explicit autonomous single-run text evaluation. No credentials or providers by default.
+simulation = ["dep:pipecat-services"]
 user-images = ["dep:pipecat-images"]
 # Explicit Cartesia scripted user audio; does not activate ONNX/VAD.
 user-speech = ["dep:pipecat-speech", "dep:sha2", "dep:rustix"]
@@ -83,3 +85,11 @@ required-features = ["user-images", "native-bot-example"]
 png = "=0.18.1"
 jpeg-encoder = { version = "=0.6.1", default-features = false, features = ["std"] }
 jpeg-decoder = { version = "=0.3.2", path = "../../vendor/jpeg-decoder-0.3.2", default-features = false, features = ["platform_independent"] }
+
+[[test]]
+name = "simulation"
+required-features = ["simulation"]
+
+[[test]]
+name = "batch156_evals_regressions"
+required-features = ["process-fixtures"]

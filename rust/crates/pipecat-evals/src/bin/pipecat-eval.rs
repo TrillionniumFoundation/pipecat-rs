@@ -22,6 +22,9 @@ async fn main() {
     }
 }
 async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
+    if args.first().is_some_and(|arg| arg == "simulate") {
+        return simulate(args).await;
+    }
     let suite = args.len() >= 2 && args[0] == "suite";
     let single = (3..=11).contains(&args.len()) && args[0] == "run";
     let mut stop_bot = false;
@@ -430,4 +433,48 @@ async fn run(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
     signal.abort();
     let _ = signal.await;
     result
+}
+
+// Separate direct route: existing run/suite schemas and defaults are unchanged.
+async fn simulate(args: &[String]) -> Result<bool, pipecat_evals::EvalError> {
+    if args.len() == 2 && args[1] == "--help" {
+        println!("Usage: pipecat-eval simulate SCENARIO.yaml ws://HOST:PORT[/PATH] RUNTIME.yaml\nRequires simulation build feature. Single text scenario/run only. Exit 0: independently judged pass; exit 1: unjudged, failed or execution error; exit 2: invalid configuration.");
+        return Ok(true);
+    }
+    if args.len() != 4 || args[1..].iter().any(|arg| arg.starts_with("--")) {
+        return Err(pipecat_evals::EvalError::Scenario("Usage: pipecat-eval simulate SCENARIO.yaml ws://HOST:PORT[/PATH] RUNTIME.yaml; no audio, suite, repeats or per-turn judged criteria".into()));
+    }
+    #[cfg(not(feature = "simulation"))]
+    {
+        Err(pipecat_evals::EvalError::Unsupported(
+            "simulate requires the simulation build feature".into(),
+        ))
+    }
+    #[cfg(feature = "simulation")]
+    {
+        use pipecat_evals::simulation::{SimulationRuntime, SimulationScenario, SimulationSession};
+        use std::io::Read;
+        fn bounded_read(path: &str) -> Result<Vec<u8>, pipecat_evals::EvalError> {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)?
+                .take(1024 * 1024 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > 1024 * 1024 {
+                return Err(pipecat_evals::EvalError::Limit("simulation input file"));
+            }
+            Ok(bytes)
+        }
+        let scenario = SimulationScenario::from_yaml(&bounded_read(&args[1])?)?;
+        let runtime = SimulationRuntime::from_yaml(&bounded_read(&args[3])?)?;
+        let session = SimulationSession::new(scenario, runtime, &args[2])?;
+        let cancellation = Cancellation::new();
+        let run = session.run(cancellation.clone());
+        tokio::pin!(run);
+        let result = tokio::select! {
+            result=&mut run=>result,
+            _=tokio::signal::ctrl_c()=>{cancellation.cancel();run.await},
+        };
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        Ok(result.passed())
+    }
 }

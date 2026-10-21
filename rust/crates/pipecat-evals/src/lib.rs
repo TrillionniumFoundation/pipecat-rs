@@ -84,3 +84,6 @@ mod user_images;
 pub use user_image_input::ImageInputLimits;
 #[cfg(feature = "user-images")]
 pub use user_images::{EncodedUserImage, UserImageScenarioFile};
+
+#[cfg(feature = "simulation")]
+pub mod simulation;

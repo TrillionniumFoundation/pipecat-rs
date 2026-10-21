@@ -555,27 +555,105 @@ async fn absolute_session_deadline_bounds_long_expectations() {
 }
 #[tokio::test]
 async fn unknown_protocol_messages_still_count_toward_traffic_limits() {
-    let b = bot(
-        true,
-        vec![],
-        vec![(0..20)
-            .map(|_| (0, wire("irrelevant", json!({}))))
-            .collect()],
-    )
-    .await;
+    // This checks traffic accounting, not an 80-ms scheduling deadline. Keep
+    // the product limits unchanged and make actual peer progress observable.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("ws://{}/eval", listener.local_addr().unwrap());
+    let mut peer = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut socket = WebSocketSession::accept(stream, options().transport)
+            .await
+            .unwrap();
+        let Packet::Text(ready) = socket.recv().await.expect("peer: client-ready") else {
+            panic!("peer: client-ready must be text");
+        };
+        let ready: Value = serde_json::from_str(&ready).unwrap();
+        assert_eq!(ready["type"], "client-ready", "peer: handshake {ready}");
+        socket
+            .sender()
+            .send(Packet::Text(
+                wire("bot-ready", json!({"version":"2.2.0"})).to_string(),
+            ))
+            .await
+            .unwrap();
+        socket.sender().flush().await.unwrap();
+        let Packet::Text(user) = socket.recv().await.expect("peer: send-text") else {
+            panic!("peer: send-text must be text");
+        };
+        let user: Value = serde_json::from_str(&user).unwrap();
+        assert_eq!(user["type"], "send-text", "peer: user input {user}");
+        assert_eq!(user["data"]["content"], "hi");
+        // bot-ready plus this flushed prefix equals the five-message budget.
+        // The next unknown frame must cross it, even without a friendly event.
+        for _ in 0..4 {
+            socket
+                .sender()
+                .send(Packet::Text(wire("irrelevant", json!({})).to_string()))
+                .await
+                .unwrap();
+        }
+        let prefix_flush = socket.sender().flush().await;
+        let mut admitted = 4;
+        for _ in 4..20 {
+            if socket
+                .sender()
+                .send(Packet::Text(wire("irrelevant", json!({})).to_string()))
+                .await
+                .is_err()
+            {
+                break;
+            }
+            admitted += 1;
+        }
+        // The client deliberately closes at overflow; do not require the
+        // remaining burst to flush after that valid termination.
+        let tail_flush = socket.sender().flush().await;
+        let cleanup = socket.finish_and_join().await;
+        (user, admitted, prefix_flush, tail_flush, cleanup)
+    });
     let mut opt = options();
     opt.max_wire_messages = 5;
     let result = EvalSession::new(
-        scenario(json!([{"user":"hi","expect":[{"event":"response"}]}])),
-        &b.url,
+        scenario(json!([{"user":"hi","expect":[{"event":"response","within_ms":1000}]}])),
+        &url,
         opt,
     )
     .unwrap()
     .run(Cancellation::new())
     .await;
-    assert_eq!(result.failures[0].kind, "limit_exceeded");
-    assert!(result.events_seen.is_empty());
-    finish(b).await;
+    // Join the actual peer before any assertion can unwind the test runtime.
+    let evidence = match tokio::time::timeout(Duration::from_secs(3), &mut peer).await {
+        Ok(joined) => joined.expect("peer: handshake/send-text/burst task"),
+        Err(_) => {
+            peer.abort();
+            let _ = peer.await;
+            panic!("peer: bounded join expired; result: {result:?}");
+        }
+    };
+    assert!(
+        evidence.2.is_ok(),
+        "peer prefix evidence: {evidence:?}; result: {result:?}"
+    );
+    assert!(
+        evidence.1 >= 5,
+        "peer crossing admission: {evidence:?}; result: {result:?}"
+    );
+    assert!(
+        !result.failures.is_empty(),
+        "result: {result:?}; peer: {evidence:?}"
+    );
+    assert_eq!(
+        result.failures[0].kind, "limit_exceeded",
+        "result: {result:?}; peer: {evidence:?}"
+    );
+    assert_eq!(
+        result.failures[0].reason, "evaluation limit exceeded: wire message traffic",
+        "result: {result:?}; peer: {evidence:?}"
+    );
+    assert!(
+        result.events_seen.is_empty(),
+        "result: {result:?}; peer: {evidence:?}"
+    );
 }
 #[tokio::test]
 async fn disconnect_is_failure_even_for_an_absence_assertion() {

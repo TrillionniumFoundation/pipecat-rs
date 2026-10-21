@@ -256,7 +256,7 @@ impl LlmClient {
         let (tx, rx) = mpsc::channel(self.config.channel_capacity);
         let worker_cancel = cancel.clone();
         let config = self.config.clone();
-        runtime.spawn(async move {
+        let task = runtime.spawn(async move {
             if tx.send(Ok(StreamEvent::Started)).await.is_err() {
                 return;
             }
@@ -296,7 +296,11 @@ impl LlmClient {
                 }))
                 .await;
         });
-        Ok(LlmStream { rx, cancel })
+        Ok(LlmStream {
+            rx,
+            cancel,
+            task: Some(task),
+        })
     }
     fn endpoint(&self, model: &str) -> Result<reqwest::Url, ServiceError> {
         if let Some(azure) = &self.config.azure {
@@ -355,10 +359,41 @@ fn is_sarvam(config: &ClientConfig) -> bool {
 pub struct LlmStream {
     rx: mpsc::Receiver<Result<StreamEvent, ServiceError>>,
     cancel: CancellationToken,
+    task: Option<tokio::task::JoinHandle<()>>,
 }
 impl LlmStream {
     pub async fn next(&mut self) -> Option<Result<StreamEvent, ServiceError>> {
         self.rx.recv().await
+    }
+    /// Close consumer admission, cancel HTTP work, and join its producer.
+    /// A cancelled wait retains ownership; repeated retirement is harmless.
+    /// On deadline the producer is aborted and joined, reported as a timeout
+    /// rather than misrepresented as natural completion.
+    pub async fn cancel_and_join(&mut self, timeout: Duration) -> Result<(), ServiceError> {
+        self.rx.close();
+        self.cancel.cancel();
+        let Some(task) = self.task.as_mut() else {
+            return Ok(());
+        };
+        let result = match tokio::time::timeout(timeout, &mut *task).await {
+            Ok(result) => result.map_err(|error| {
+                ServiceError::Protocol(
+                    if error.is_panic() {
+                        "LLM producer panicked"
+                    } else {
+                        "LLM producer was cancelled unexpectedly"
+                    }
+                    .into(),
+                )
+            }),
+            Err(_) => {
+                task.abort();
+                let _ = task.await;
+                Err(ServiceError::Timeout)
+            }
+        };
+        self.task.take();
+        result
     }
     pub fn cancel(&self) {
         self.cancel.cancel();
@@ -532,5 +567,77 @@ fn transport_error(error: reqwest::Error) -> ServiceError {
         ServiceError::Timeout
     } else {
         ServiceError::Transport(error.without_url().to_string())
+    }
+}
+
+#[cfg(test)]
+mod stream_join_tests {
+    use super::*;
+    fn owner(task: tokio::task::JoinHandle<()>) -> LlmStream {
+        let (_tx, rx) = mpsc::channel(1);
+        LlmStream {
+            rx,
+            cancel: CancellationToken::new(),
+            task: Some(task),
+        }
+    }
+    #[tokio::test]
+    async fn completed_producer_is_joined_and_repeated_retirement_is_safe() {
+        let mut stream = owner(tokio::spawn(async {}));
+        stream
+            .cancel_and_join(Duration::from_secs(1))
+            .await
+            .unwrap();
+        assert!(stream.task.is_none());
+        stream.cancel_and_join(Duration::ZERO).await.unwrap();
+    }
+    #[tokio::test]
+    async fn stuck_producer_is_aborted_then_joined_not_reported_as_completed() {
+        let dropped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        struct Guard(std::sync::Arc<std::sync::atomic::AtomicBool>);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        let flag = dropped.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let mut stream = owner(tokio::spawn(async move {
+            let _guard = Guard(flag);
+            let _ = tx.send(());
+            std::future::pending::<()>().await;
+        }));
+        rx.await.unwrap();
+        assert!(matches!(
+            stream.cancel_and_join(Duration::ZERO).await,
+            Err(ServiceError::Timeout)
+        ));
+        assert!(stream.task.is_none());
+        assert!(dropped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+    #[tokio::test]
+    async fn cancelled_join_wait_retains_owner_for_later_retirement() {
+        let mut stream = owner(tokio::spawn(std::future::pending()));
+        assert!(tokio::time::timeout(
+            Duration::from_millis(1),
+            stream.cancel_and_join(Duration::from_secs(1))
+        )
+        .await
+        .is_err());
+        assert!(stream.task.is_some());
+        assert!(matches!(
+            stream.cancel_and_join(Duration::ZERO).await,
+            Err(ServiceError::Timeout)
+        ));
+        assert!(stream.task.is_none());
+    }
+    #[tokio::test]
+    async fn panicked_producer_is_reported_and_retired() {
+        let mut stream = owner(tokio::spawn(async { panic!("synthetic producer panic") }));
+        assert!(matches!(
+            stream.cancel_and_join(Duration::from_secs(1)).await,
+            Err(ServiceError::Protocol(_))
+        ));
+        assert!(stream.task.is_none());
     }
 }
