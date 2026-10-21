@@ -11,7 +11,7 @@ use livekit::{
     },
     DataPacket, DataPacketKind, SipDTMF,
 };
-use pipecat_core::{AudioRawFrame, KeypadEntry};
+use pipecat_core::{AudioRawFrame, KeypadEntry, OutputImageRawFrame};
 use tokio::{
     sync::{mpsc, oneshot, watch, Mutex},
     task::{JoinHandle, JoinSet},
@@ -34,6 +34,7 @@ pub struct LiveKitConnection {
     state: watch::Receiver<ConnectionState>,
     cancel: CancellationToken,
     audio: Option<crate::publisher::AudioPublisher>,
+    video: Option<crate::video::VideoPublisher>,
     owner: Mutex<Option<JoinHandle<Result<()>>>>,
 }
 impl LiveKitConnection {
@@ -94,8 +95,9 @@ impl LiveKitConnection {
                 let cleanup = (&mut owner).await.map_err(sdk);
                 return match cleanup {
                     Ok(Ok(())) => Err(error),
-                    Ok(Err(cleanup)) => Err(cleanup),
-                    Err(cleanup) => Err(cleanup),
+                    Ok(Err(cleanup)) | Err(cleanup) => {
+                        Err(crate::publication::with_cleanup(error, Err(cleanup)))
+                    }
                 };
             }
         };
@@ -108,6 +110,7 @@ impl LiveKitConnection {
             state,
             cancel,
             audio: ready.publisher,
+            video: ready.video,
             owner: Mutex::new(Some(owner)),
         })
     }
@@ -179,6 +182,48 @@ impl LiveKitConnection {
         }
     }
 
+    /// Capture-time video only: pipeline PTS is ignored, alpha discarded.
+    /// The result describes native adaptation, not publication or remote receipt.
+    pub fn publish_video(
+        &self,
+        output: &OutputImageRawFrame,
+    ) -> Result<crate::VideoCaptureOutcome> {
+        self.publish_video_generation(output, None)
+    }
+    pub(crate) fn video_generation(&self) -> u64 {
+        self.video
+            .as_ref()
+            .map_or(0, crate::video::VideoPublisher::generation)
+    }
+    pub(crate) fn stop_video(&self) {
+        if let Some(video) = &self.video {
+            video.close();
+        }
+    }
+    pub(crate) fn interrupt_video(&self) {
+        if let Some(video) = &self.video {
+            video.interrupt();
+        }
+    }
+    pub(crate) fn publish_video_generation<'a>(
+        &self,
+        output: impl Into<crate::video::VideoInput<'a>>,
+        generation: Option<u64>,
+    ) -> Result<crate::VideoCaptureOutcome> {
+        self.ready()?;
+        let config = self
+            .config
+            .video_output
+            .as_ref()
+            .ok_or(Error::VideoDisabled)?;
+        self.video.as_ref().ok_or(Error::VideoDisabled)?.capture(
+            output,
+            config,
+            generation,
+            &self.cancel,
+        )
+    }
+
     pub async fn publish_data(
         &self,
         payload: Vec<u8>,
@@ -232,6 +277,9 @@ impl LiveKitConnection {
         }
     }
     pub async fn close(&self) -> Result<()> {
+        if let Some(video) = &self.video {
+            video.close();
+        }
         self.interrupt_audio();
         self.cancel.cancel();
         let mut owned = self.owner.lock().await;
@@ -254,6 +302,9 @@ impl LiveKitConnection {
 }
 impl Drop for LiveKitConnection {
     fn drop(&mut self) {
+        if let Some(video) = &self.video {
+            video.close();
+        }
         self.interrupt_audio();
         self.cancel.cancel();
     }
@@ -291,6 +342,7 @@ impl Drop for SetupCancellation {
     }
 }
 struct ReadyMedia {
+    video: Option<crate::video::VideoPublisher>,
     source: Option<NativeAudioSource>,
     publisher: Option<crate::publisher::AudioPublisher>,
 }
@@ -303,35 +355,46 @@ async fn initialize_room(
     config: LiveKitConfig,
     ready: oneshot::Sender<Result<ReadyMedia>>,
 ) -> Result<()> {
-    let setup = async {
-        let source = if let Some(format) = config.output_format {
-            let source = NativeAudioSource::new(AudioSourceOptions::default(), format.sample_rate(), format.channels().into(), config.source_queue_ms);
-            let track = LocalAudioTrack::create_audio_track("pipecat-audio", RtcAudioSource::Native(source.clone()));
-            let participant = room.local_participant();
-            tokio::select! {
-                biased;
-                _ = cancel.cancelled() => return Err(Error::Closed),
-                result = timeout(config.operation_timeout, participant.publish_track(LocalTrack::Audio(track), TrackPublishOptions { source: TrackSource::Microphone, ..Default::default() })) => { result.map_err(|_| Error::Timeout("audio track publication"))?.map_err(sdk)?; }
-            }
-            Some(source)
-        } else { None };
-        if cancel.is_cancelled() { return Err(Error::Closed); }
-        emit(&tx, LiveKitEvent::Connected { identity: room.local_participant().identity().to_string(), room: room.name() })?;
-        Ok(source)
-    }.await;
-    let source = match setup {
-        Ok(source) => source,
-        Err(error) => {
-            let closed = close_room(&room, config.close_timeout).await;
-            let message = match closed {
-                Ok(()) => error.to_string(),
-                Err(cleanup) => format!("{error}; rollback: {cleanup}"),
-            };
-            state.send_replace(ConnectionState::Failed(message.clone()));
-            let _ = ready.send(Err(Error::Sdk(message.clone())));
-            return Err(Error::Sdk(message));
-        }
+    let mut setup = RoomSetup {
+        room: &room,
+        config: &config,
+        source: None,
+        video: None,
     };
+    let initialized = crate::publication::initialize(&mut setup, &config, &cancel).await;
+    if let Err(error) = initialized {
+        let message = error.to_string();
+        state.send_replace(ConnectionState::Failed(message.clone()));
+        let _ = ready.send(Err(Error::Sdk(message.clone())));
+        return Err(Error::Sdk(message));
+    }
+    let source = setup.source.take();
+    let video = setup.video.take().map(crate::video::VideoPublisher::new);
+    drop(setup);
+    // No Connected event/readiness until every configured publication completed.
+    let announced = if cancel.is_cancelled() {
+        Err(Error::Closed)
+    } else {
+        emit(
+            &tx,
+            LiveKitEvent::Connected {
+                identity: room.local_participant().identity().to_string(),
+                room: room.name(),
+            },
+        )
+    };
+    if let Err(primary) = announced {
+        if let Some(video) = &video {
+            video.close();
+        }
+        let error = crate::publication::with_cleanup(
+            primary,
+            close_room(&room, config.close_timeout).await,
+        );
+        state.send_replace(ConnectionState::Failed(error.to_string()));
+        let _ = ready.send(Err(Error::Sdk(error.to_string())));
+        return Err(error);
+    }
     let audio = source.clone().map(|source| {
         let (publisher, receiver) = crate::publisher::AudioPublisher::channel(
             config.queue_capacity,
@@ -353,15 +416,15 @@ async fn initialize_room(
         None => (None, None),
     };
     state.send_replace(ConnectionState::Connected);
-    if ready
-        .send(Ok(ReadyMedia {
+    crate::publication::transfer_ready(
+        ready,
+        ReadyMedia {
             source: source.clone(),
             publisher: publisher.clone(),
-        }))
-        .is_err()
-    {
-        cancel.cancel();
-    }
+            video: video.clone(),
+        },
+        &cancel,
+    );
     room_loop(
         room,
         events,
@@ -369,6 +432,7 @@ async fn initialize_room(
         state,
         cancel,
         RoomMedia {
+            video,
             source,
             publisher,
             task,
@@ -376,6 +440,70 @@ async fn initialize_room(
         config,
     )
     .await
+}
+struct RoomSetup<'a> {
+    room: &'a Room,
+    config: &'a LiveKitConfig,
+    source: Option<NativeAudioSource>,
+    video: Option<crate::video::NativeCamera>,
+}
+#[async_trait::async_trait]
+impl crate::publication::PublicationOwner for RoomSetup<'_> {
+    async fn publish_audio(&mut self) -> Result<()> {
+        let format = self.config.output_format.ok_or(Error::AudioDisabled)?;
+        let source = NativeAudioSource::new(
+            AudioSourceOptions::default(),
+            format.sample_rate(),
+            format.channels().into(),
+            self.config.source_queue_ms,
+        );
+        let track = LocalAudioTrack::create_audio_track(
+            "pipecat-audio",
+            RtcAudioSource::Native(source.clone()),
+        );
+        self.source = Some(source);
+        self.room
+            .local_participant()
+            .publish_track(
+                LocalTrack::Audio(track),
+                TrackPublishOptions {
+                    source: TrackSource::Microphone,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(sdk)?;
+        Ok(())
+    }
+    async fn publish_video(&mut self) -> Result<()> {
+        let camera = crate::video::NativeCamera::new(
+            self.config
+                .video_output
+                .as_ref()
+                .ok_or(Error::VideoDisabled)?,
+        )?;
+        let track = camera.track.clone();
+        self.video = Some(camera);
+        self.room
+            .local_participant()
+            .publish_track(
+                LocalTrack::Video(track),
+                TrackPublishOptions {
+                    source: TrackSource::Camera,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(sdk)?;
+        Ok(())
+    }
+    async fn rollback(&mut self) -> Result<()> {
+        // Release our ownership even if SDK close times out. SDK room owns published tracks
+        // until its own close/drop; no separate detached publication tasks are started here.
+        self.video.take();
+        self.source.take();
+        close_room(self.room, self.config.close_timeout).await
+    }
 }
 async fn close_room(room: &Room, deadline: std::time::Duration) -> Result<()> {
     timeout(deadline, room.close())
@@ -387,6 +515,7 @@ async fn close_room(room: &Room, deadline: std::time::Duration) -> Result<()> {
         })
 }
 struct RoomMedia {
+    video: Option<crate::video::VideoPublisher>,
     source: Option<NativeAudioSource>,
     publisher: Option<crate::publisher::AudioPublisher>,
     task: Option<JoinHandle<Result<()>>>,
@@ -470,7 +599,8 @@ async fn room_loop(
                             if speakers.len() > config.max_audio_tracks { return Err(Error::Limit("active speakers per event")); }
                             emit(&tx, LiveKitEvent::ActiveSpeakers(speakers.iter().map(|p| p.identity().to_string()).collect()))?;
                         }
-                        RoomEvent::Reconnecting => { state.send_replace(ConnectionState::Reconnecting); if let Some(publisher) = &media.publisher { publisher.interrupt(); }
+                        RoomEvent::Reconnecting => { state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
+                            if let Some(publisher) = &media.publisher { publisher.interrupt(); }
                             if let Some(source) = &media.source { source.clear_buffer(); } emit(&tx, LiveKitEvent::Reconnecting)?; }
                         RoomEvent::Reconnected => { state.send_replace(ConnectionState::Connected); emit(&tx, LiveKitEvent::Reconnected)?; }
                         RoomEvent::Disconnected { reason } => { emit(&tx, LiveKitEvent::Disconnected { reason: format!("{reason:?}") })?; break; }
@@ -481,6 +611,9 @@ async fn room_loop(
         }
         Ok(())
     }.await;
+    if let Some(video) = &media.video {
+        video.close();
+    }
     cancel.cancel();
     if let Some(source) = &media.source {
         source.clear_buffer();
@@ -500,7 +633,8 @@ async fn room_loop(
         Ok(())
     };
     let closed = close_room(&room, config.close_timeout).await;
-    let result = result.and(publisher_closed).and(closed);
+    let result = crate::publication::combine_cleanup(result, publisher_closed);
+    let result = crate::publication::combine_cleanup(result, closed);
     state.send_replace(match &result {
         Ok(()) => ConnectionState::Closed,
         Err(error) => ConnectionState::Failed(error.to_string()),
@@ -547,5 +681,40 @@ mod tests {
             emit(&tx, LiveKitEvent::Reconnected),
             Err(Error::Closed)
         ));
+    }
+}
+
+#[cfg(test)]
+mod setup_guard_tests {
+    use super::*;
+    #[tokio::test]
+    async fn aborted_connect_caller_guard_signals_existing_owner() {
+        let cancel = CancellationToken::new();
+        let owned_cancel = cancel.clone();
+        let owner = tokio::spawn(async move {
+            owned_cancel.cancelled().await;
+        });
+        let caller_cancel = cancel.clone();
+        let (started, waiting) = oneshot::channel();
+        let caller = tokio::spawn(async move {
+            let _guard = SetupCancellation(Some(caller_cancel));
+            started.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        timeout(std::time::Duration::from_secs(1), waiting)
+            .await
+            .unwrap()
+            .unwrap();
+        caller.abort();
+        assert!(timeout(std::time::Duration::from_secs(1), caller)
+            .await
+            .unwrap()
+            .unwrap_err()
+            .is_cancelled());
+        timeout(std::time::Duration::from_secs(1), owner)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(cancel.is_cancelled());
     }
 }

@@ -13,6 +13,7 @@ application-provided mock backend.
 
 - Join an existing LiveKit room with a caller-supplied participant JWT
 - Publish one microphone audio track, receive each remote audio track separately
+- Optionally publish one fixed-size `pipecat-video` camera track from raw output images
 - Convert interleaved PCM16-LE with exact sample-rate/channel validation
 - Preserve participant identity separately from participant and track SIDs
 - Receive participant connect/active/disconnect, track subscribe/unsubscribe,
@@ -24,8 +25,8 @@ application-provided mock backend.
   count, cancellation, and awaited shutdown
 
 `LiveKitConnection::connect(url, token, config, cancellation)` connects and
-publishes the configured output track before returning a ready session. Pass
-`output_format: None` for receive/data-only operation. Tokens are supplied by the
+publishes all configured output tracks before returning a ready session. Pass
+`output_format: None` and leave `video_output: None` for receive/data-only operation. Tokens are supplied by the
 application and are not generated or persisted here. Use `wss://` outside a
 trusted local development environment.
 
@@ -93,6 +94,66 @@ close call to await. Repeated close calls are safe. Dropping the connection only
 the existing owner task to perform bounded best-effort shutdown; an async Drop
 cannot report or await completion. Runtime shutdown can prevent that cleanup.
 
+## Optional bounded camera output
+
+Set `video_output: Some(VideoOutputConfig { width, height, ..Default::default() })`.
+It is disabled by default, creates one room-wide track named `pipecat-video`, and
+publishes with SDK `LocalTrack::Video` / `TrackSource::Camera` after real room join.
+Audio publication happens first when enabled; Connected/readiness waits for both.
+A failed or cancelled publication rolls back the room, retaining primary and
+cleanup errors. There is no separate video publisher task: synchronous native
+capture and terminal source/track release share one lock. All clones share this
+gate, so completed close excludes later capture and releases adapter-owned native
+source/track references. An externally cancelled token is checked inside the gate;
+a capture already in progress cannot be recalled. The SDK's raw-source keepalive
+uses weak capture state and exits after first capture or last-source drop; this
+adapter does not own/join that SDK-internal task or promise instantaneous exit.
+
+Pipeline `OutputImage` and `publish_video` accept exact configured input dimensions.
+These are not a promise of identical SDK output dimensions: native sink wants and
+source adaptation may scale, crop, align or drop frames. The pinned SDK source
+uses alignment 4, so native passthrough fixtures use dimensions divisible by 4;
+odd/small inputs remain supported by conversion but may be adapted or dropped.
+Accepted input formats:
+
+- RGB bytes R,G,B; RGBA bytes R,G,B,A; BGRA bytes B,G,R,A; ARGB bytes A,R,G,B.
+  Alpha is discarded, not composited. Explicit uppercase format is mandatory.
+- I420 is a Rust extension: packed Y then U then V, with ceil(width/2) by
+  ceil(height/2) chroma. Odd sizes are supported. No caller-provided strides.
+- Payload length must be exact, without short or trailing bytes. Dimensions,
+  allocations, source strides and native integer conversions are validated before
+  FFI. Destination planes use SDK-owned initialized I420; packed colors normalize
+  to RGBA bytes and use libyuv ABGR register-order conversion.
+- `sync_with_audio: true` and any image `transport_destination` are rejected before
+  queue admission. No rescaling, private routing, sprite rendering or scheduling.
+  Pipeline PTS is not cast into SDK time: `timestamp_us=0` requests native capture
+  time (and SDK timestamp alignment). This is not audio/video synchronization.
+
+The dedicated video lane accepts 1–4 queued frames (default 4), independent of the
+normal audio/data queue. Size is capped at 4096 per dimension and 2,073,600 pixels.
+Raw bytes AND Vec capacity must fit `max_frame_bytes` (at most 8 MiB). Configuration
+checks `(queue_capacity + 1) * max_frame_bytes + width * height * 4 + I420_bytes`
+against `max_retained_bytes` (at most 64 MiB). This bounds queued/in-flight adapter
+raw bytes plus one conversion scratch/native buffer; conversion is serialized,
+including direct callers. Caller-owned borrowed inputs, general frame metadata,
+SDK-retained frames, encoder, room events and downstream sinks are outside this
+payload budget, so it is not a whole-process memory limit.
+
+Interruption/reconnection invalidates older interruptible images at both the
+pipeline epoch and native video gate; noninterruptible images survive ordinary
+interruption. End closes video admission and drains the owned lane to synchronous
+capture, not encoder/network/remote completion. Cancel closes the native gate and
+discards all queued images, including noninterruptible ones; cleanup does likewise.
+Frames already forwarded to WebRTC cannot be recalled. Upstream images pass through
+without video validation or publication. Saturation is an explicit processor error.
+
+`VideoCaptureOutcome::ForwardedToSource` means the native adapter forwarded the
+frame. `AdaptationDropped` means the native adapter did not forward it, including
+resolution/frame-rate adaptation or having no interested sinks; it is not a
+network failure. Neither outcome proves track publication, encoding,
+RTP transmission, remote receipt, rendering, or playback. Pipeline processing does
+not fabricate acknowledgements for either outcome.
+
 ## Native build
 
 On Linux the pinned SDK requires Clang 21 or newer, C++ development tooling,
@@ -112,7 +173,7 @@ Its bundled third-party licenses remain in the extracted artifact's `LICENSE.md`
 
 ## Qualification and remaining scope
 
-The 23 unit tests cover protocol/frame conversion, identity versus SID,
+The historical 2026-10-09 qualification recorded 23 unit tests covering protocol/frame conversion, identity versus SID,
 unattributed server data, DTMF codes, format/size/JSON limits, bounded queue
 admission, independent urgent output, cancellation before and during signaling,
 SDK HTTP validation rejection, real native source/track/sink stereo PCM delivery,
@@ -134,6 +195,33 @@ Linux host it owns a disposable loopback-only server and short-lived fixture
 tokens, with no hosted account or stored credentials. See
 [local SFU qualification](qualification/LOCAL_SFU.md) for the exact limits.
 
-Video capture/publication, screen-share selection, participant audio mixing,
+Remote video subscription, device capture, screen-share selection, participant audio mixing,
 metadata mutation, subscription/mute controls, token/REST helpers, and Python
 API/event-handler parity are not implemented by this crate.
+
+### Camera output qualification boundary
+
+The default-disabled camera path accepts room-wide `OutputImage` /
+`OutputImageDetailed`, validates exact format, dimensions and payload size, and
+rejects per-participant destinations and audio synchronization before admission.
+A separate bounded video lane feeds owned native I420 buffers. Typed sequential
+publication preserves audio-before-video readiness and rollback ownership.
+
+Revision 5 passed **46 independently verified crate unit tests** (L07).
+Strict package all-target Clippy (`-D warnings`) and crate formatting checks
+both passed on that unchanged revision (Q06, natural exit zero). Two earlier
+integration tests passed on revision 4: one `review_contracts` (R02) and one real
+loopback WebSocket `network_signaling` (N02). Their results are carried through
+an explicit reviewed unaffected/semantic-equivalence bridge, not represented as
+revision 5 executions. This is 48 distinct qualified test cases, not 48 tests
+rerun on revision 5; integration scenarios and repeated historical runs are not
+additional tests. `local_sfu` was compiled and linked only on revision 4 (S01),
+with the same explicit carry bridge: zero runtime tests, no listing, and no
+server startup. The previous netlink denial remains a boundary and was not
+bypassed or retried.
+
+Native-synthetic media checks use linked WebRTC, not stubs, but do not join a
+room. Publication transaction tests use mocks, not a successful SDK publication.
+There is no live-provider, joined SFU, remote video, physical device, codec/RTP,
+production-readiness or full Python parity claim. Earlier whole-workspace and
+vendored signaling test counts are historical and are not added to these 48.

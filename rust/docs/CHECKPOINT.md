@@ -1,5 +1,37 @@
 # Native rewrite checkpoints — 2026-10-10
 
+## Batch 158: bounded optional LiveKit camera output — 2026-10-21
+
+The default-disabled camera path accepts room-wide `OutputImage` /
+`OutputImageDetailed`, validates exact format, dimensions and payload size, and
+rejects per-participant destinations and audio synchronization before admission.
+A separate bounded video lane feeds owned native I420 buffers. Typed sequential
+publication preserves audio-before-video readiness and rollback ownership.
+
+Revision 5 passed **46 independently verified crate unit tests** (L07).
+Strict package all-target Clippy (`-D warnings`) and crate formatting checks
+both passed on that unchanged revision (Q06, natural exit zero). Two earlier
+integration tests passed on revision 4: one `review_contracts` (R02) and one real
+loopback WebSocket `network_signaling` (N02). Their results are carried through
+an explicit reviewed unaffected/semantic-equivalence bridge, not represented as
+revision 5 executions. This is 48 distinct qualified test cases, not 48 tests
+rerun on revision 5; integration scenarios and repeated historical runs are not
+additional tests. `local_sfu` was compiled and linked only on revision 4 (S01),
+with the same explicit carry bridge: zero runtime tests, no listing, and no
+server startup. The previous netlink denial remains a boundary and was not
+bypassed or retried.
+
+Native-synthetic media checks use linked WebRTC, not stubs, but do not join a
+room. Publication transaction tests use mocks, not a successful SDK publication.
+There is no live-provider, joined SFU, remote video, physical device, codec/RTP,
+production-readiness or full Python parity claim. Earlier whole-workspace and
+vendored signaling test counts are historical and are not added to these 48.
+
+This is a scoped addition; the older checkpoint and coverage records below are
+historical, not a new whole-workspace gate. See the current
+[LiveKit validation](../crates/pipecat-livekit/VALIDATION.md) for the retained attempt history.
+
+
 This is a local, in-progress migration, not a completed rewrite or production
 qualification. Original source baseline:
 `af9f9da9d7afddaa8811c0e0251b32566c980bdf`. Original files are preserved.

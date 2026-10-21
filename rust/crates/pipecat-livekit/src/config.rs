@@ -9,6 +9,8 @@ use crate::{Error, Result};
 pub struct LiveKitConfig {
     pub input_format: PcmFormat,
     pub output_format: Option<PcmFormat>,
+    /// Disabled by default; one fixed-size room camera track when configured.
+    pub video_output: Option<crate::VideoOutputConfig>,
     pub queue_capacity: usize,
     pub max_audio_tracks: usize,
     pub max_data_bytes: usize,
@@ -25,6 +27,7 @@ impl Default for LiveKitConfig {
         Self {
             input_format: PcmFormat::new(16000, 1).expect("valid default format"),
             output_format: Some(PcmFormat::new(24000, 1).expect("valid default format")),
+            video_output: None,
             queue_capacity: 128,
             max_audio_tracks: 16,
             max_data_bytes: 15_000,
@@ -40,6 +43,9 @@ impl Default for LiveKitConfig {
 impl LiveKitConfig {
     pub(crate) fn validate(&self) -> Result<()> {
         validate_format(self.input_format)?;
+        if let Some(video) = &self.video_output {
+            video.validate()?;
+        }
         if let Some(format) = self.output_format {
             validate_format(format)?;
         }

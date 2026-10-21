@@ -4,15 +4,18 @@
 mod config;
 mod connection;
 mod protocol;
+mod publication;
 mod publisher;
 #[cfg(test)]
 mod tests;
 mod transport;
+mod video;
 
 pub use config::LiveKitConfig;
 pub use connection::LiveKitConnection;
 pub use protocol::{ConnectionState, LiveKitEvent, ParticipantInfo, SourceAccepted};
 pub use transport::{LiveKitInput, LiveKitOutput, LiveKitTransport};
+pub use video::{VideoCaptureOutcome, VideoOutputConfig};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -22,6 +25,10 @@ pub enum Error {
     Sdk(String),
     #[error("invalid PCM: {0}")]
     Audio(String),
+    #[error("invalid video: {0}")]
+    Video(&'static str),
+    #[error("video publication is disabled")]
+    VideoDisabled,
     #[error("JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("resource limit exceeded: {0}")]

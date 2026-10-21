@@ -1,5 +1,82 @@
 # LiveKit native validation
 
+## Batch 158: bounded optional LiveKit camera output — 2026-10-21
+
+The default-disabled camera path accepts room-wide `OutputImage` /
+`OutputImageDetailed`, validates exact format, dimensions and payload size, and
+rejects per-participant destinations and audio synchronization before admission.
+A separate bounded video lane feeds owned native I420 buffers. Typed sequential
+publication preserves audio-before-video readiness and rollback ownership.
+
+Revision 5 passed **46 independently verified crate unit tests** (L07).
+Strict package all-target Clippy (`-D warnings`) and crate formatting checks
+both passed on that unchanged revision (Q06, natural exit zero). Two earlier
+integration tests passed on revision 4: one `review_contracts` (R02) and one real
+loopback WebSocket `network_signaling` (N02). Their results are carried through
+an explicit reviewed unaffected/semantic-equivalence bridge, not represented as
+revision 5 executions. This is 48 distinct qualified test cases, not 48 tests
+rerun on revision 5; integration scenarios and repeated historical runs are not
+additional tests. `local_sfu` was compiled and linked only on revision 4 (S01),
+with the same explicit carry bridge: zero runtime tests, no listing, and no
+server startup. The previous netlink denial remains a boundary and was not
+bypassed or retried.
+
+Native-synthetic media checks use linked WebRTC, not stubs, but do not join a
+room. Publication transaction tests use mocks, not a successful SDK publication.
+There is no live-provider, joined SFU, remote video, physical device, codec/RTP,
+production-readiness or full Python parity claim. Earlier whole-workspace and
+vendored signaling test counts are historical and are not added to these 48.
+
+### Source provenance and retained failures
+
+Revision 4 L06/R02/N02/S01 used unchanged full-source SHA256
+`08a740d73378c2c9528c4760f949c969f575032b5d707e0a07a11ad105e33deb`.
+Revision 5 L07 and Q06 used unchanged full-source SHA256
+`5d7815b70b24e588fdeb80ece550d799c8bed2005d613106daa73d9f483f7b8a`.
+The reviewed bridge carries only the unaffected revision 4 integration and
+compile/link evidence, with no new execution claimed. Documentation is updated
+after qualification; the publication binding checks every non-documentation
+source byte against that final source and records the new documentation-inclusive
+hash. Documentation hashing is not another test run.
+
+The complete attempt history remains part of the evidence:
+
+- L01 stopped on the diagnostic witness cap; it is not a passing run.
+- L02 failed on the allocation-only 4096 baseline check before Cargo execution.
+- L03 executed compilation and failed with nine errors involving SDK public vs.
+  internal APIs and core image variants.
+- L04 compiled and listed tests, then rejected two namespace inventory
+  mismatches before executing tests.
+- L05 executed 45 tests: 42 passed and three chroma-oracle tests failed.
+- Revision 4 changed tests only: a pinned libyuv non-rounded packed-color chroma
+  value of 239 is distinct from the raw I420 oracle's 240. L06 then passed all
+  46 tests, including the explicit distinguishing oracle test.
+- R01 was a withheld unused grant and N01 an unused candidate, not executed
+  failures. Source-only review and test listing count as zero executed tests.
+
+- Q01 exceeded the 10-second observer-gap limit (22.3379 seconds, pregraph
+  22.3057 seconds); Cargo ended after TERM (-15), outer status 123, all owners
+  closed and source unchanged. There was no accepted lint result or format run;
+  the exact delay cause was not established.
+- Q02 naturally failed on two actual adapter Clippy findings. Revision 5 made
+  two reviewed semantic-equivalent corrections: keep independent conditions
+  separated for `possible_missing_else`, and use typed four-byte chunks for
+  `chunks_exact_to_as_chunks`. No other product file changed from revision 4.
+- L07 actually reran and passed all 46 revision 5 library tests.
+- Q03 failed at launcher proof admission (outer exit 1), before owner
+  directories, Popen or Cargo; this is a prelaunch failure, not an unused grant.
+- Q04 passed actual strict Clippy, but the stage then failed before formatting
+  spawned because formatting RSS was classified as build RSS. The finite proof
+  cap was 192 MiB, with an extra 32 MiB funded from workspace reserve; this did
+  not waive other limits. Q04 is not a complete lint/format pass.
+- Q05's outcome remains uncertain after an execution interruption and is not
+  counted as a pass. Q06 independently completed strict Clippy and formatting
+  with natural zero exits and verified closure. Historical uncertainty is not
+  overwritten by that later pass.
+
+Historical results below retain their original date and scope.
+
+
 Validated on 2026-10-09, Linux x86-64, Rust 1.99.0.
 
 ## Results
