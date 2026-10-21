@@ -139,14 +139,23 @@ impl Probe {
 }
 
 pub async fn hosted(extra: &[&str]) -> Outcome<Probe> {
+    hosted_with_env(
+        extra,
+        &[
+            ("DEEPGRAM_API_KEY", "synthetic-no-provider-request"),
+            ("OPENAI_API_KEY", "synthetic-no-provider-request"),
+            ("CARTESIA_API_KEY", "synthetic-no-provider-request"),
+        ],
+    )
+    .await
+}
+pub async fn hosted_with_env(extra: &[&str], environment: &[(&str, &str)]) -> Outcome<Probe> {
     let files = Files::new()?;
     let stdout = File::create(files.0.join("stdout")).map_err(|e| e.to_string())?;
     let stderr = File::create(files.0.join("stderr")).map_err(|e| e.to_string())?;
     let child = Command::new(env!("CARGO_BIN_EXE_pipecat-browser-agent"))
         .env_clear()
-        .env("DEEPGRAM_API_KEY", "synthetic-no-provider-request")
-        .env("OPENAI_API_KEY", "synthetic-no-provider-request")
-        .env("CARTESIA_API_KEY", "synthetic-no-provider-request")
+        .envs(environment.iter().copied())
         .env("RUST_BACKTRACE", "0")
         .args(["--bind", "127.0.0.1:0", "--assets"])
         .arg(&files.0)

@@ -73,13 +73,32 @@ pub(crate) struct SessionParts {
 #[derive(Clone)]
 pub(crate) enum SessionProviders {
     Default(Box<ProviderConfig>),
+    #[cfg(feature = "realtime")]
+    Realtime(Box<crate::OpenAiRealtimeVoiceConfig>),
     #[cfg(feature = "soniox")]
     Soniox(Box<crate::SonioxVoiceConfig>),
 }
 impl SessionProviders {
+    pub fn is_realtime(&self) -> bool {
+        match self {
+            #[cfg(feature = "realtime")]
+            Self::Realtime(_) => true,
+            _ => false,
+        }
+    }
+    pub fn mode(&self) -> &'static str {
+        if self.is_realtime() {
+            "openai-realtime"
+        } else {
+            "cascade"
+        }
+    }
+
     pub fn input_rate(&self) -> u32 {
         match self {
             Self::Default(config) => config.input_rate,
+            #[cfg(feature = "realtime")]
+            Self::Realtime(_) => 24_000,
             #[cfg(feature = "soniox")]
             Self::Soniox(config) => config.stt.sample_rate,
         }
@@ -87,6 +106,8 @@ impl SessionProviders {
     pub fn output_rate(&self) -> u32 {
         match self {
             Self::Default(config) => config.output_rate,
+            #[cfg(feature = "realtime")]
+            Self::Realtime(_) => 24_000,
             #[cfg(feature = "soniox")]
             Self::Soniox(config) => config.tts.sample_rate,
         }
@@ -95,6 +116,8 @@ impl SessionProviders {
     pub fn legacy(&self) -> Option<&ProviderConfig> {
         match self {
             Self::Default(config) => Some(config),
+            #[cfg(feature = "realtime")]
+            Self::Realtime(_) => None,
             #[cfg(feature = "soniox")]
             Self::Soniox(_) => None,
         }

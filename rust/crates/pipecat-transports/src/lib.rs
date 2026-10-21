@@ -2,6 +2,7 @@
 //! `RtviClientProcessor` adds an explicit, single-run RTVI text/LLM pipeline
 //! boundary. See `RTVI_CLIENT.md` for its IPv4, framing and lifecycle profile.
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
+mod fenced_send;
 pub mod rtvi_client;
 pub use rtvi_client::{RtviClientConfig, RtviClientControl, RtviClientProcessor};
 
@@ -105,13 +106,53 @@ pub enum TransportError {
     #[error("session task: {0}")]
     Join(#[from] tokio::task::JoinError),
 }
+enum Outbound {
+    Packet {
+        packet: Packet,
+        fence: Option<pipecat_core::InvocationFence>,
+    },
+    Flush(tokio::sync::oneshot::Sender<()>),
+}
 #[derive(Clone)]
 pub struct SessionSender {
-    tx: mpsc::Sender<Packet>,
+    tx: mpsc::Sender<Outbound>,
     max: usize,
 }
 impl SessionSender {
     pub async fn send(&self, packet: Packet) -> Result<(), TransportError> {
+        self.enqueue(packet, None).await
+    }
+    /// Enqueue under the original pipeline invocation. Stale items are dropped
+    /// before socket admission, including while waiting for sink readiness.
+    /// Already admitted bytes are flushed once and cannot be retracted. This
+    /// reports queue acceptance, not socket delivery or audible playback.
+    pub async fn send_fenced(
+        &self,
+        packet: Packet,
+        fence: pipecat_core::InvocationFence,
+    ) -> Result<(), TransportError> {
+        self.enqueue(packet, Some(fence)).await
+    }
+    /// Ordered socket-flush barrier, including queue admission, within five
+    /// seconds. This does not acknowledge remote receipt.
+    /// Dropping the waiter does not cancel or replay already admitted writes.
+    pub async fn flush(&self) -> Result<(), TransportError> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let (reply, wait) = tokio::sync::oneshot::channel();
+            self.tx
+                .send(Outbound::Flush(reply))
+                .await
+                .map_err(|_| TransportError::Closed)?;
+            wait.await.map_err(|_| TransportError::Closed)
+        })
+        .await
+        .map_err(|_| TransportError::Timeout("flush barrier"))?
+    }
+    async fn enqueue(
+        &self,
+        packet: Packet,
+        fence: Option<pipecat_core::InvocationFence>,
+    ) -> Result<(), TransportError> {
         let size = match &packet {
             Packet::Text(s) => s.len(),
             Packet::Binary(b) => b.len(),
@@ -120,7 +161,7 @@ impl SessionSender {
             return Err(TransportError::TooLarge);
         }
         self.tx
-            .send(packet)
+            .send(Outbound::Packet { packet, fence })
             .await
             .map_err(|_| TransportError::Closed)
     }
@@ -265,7 +306,7 @@ impl WebSocketSession {
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
-        let (out_tx, mut out_rx) = mpsc::channel::<Packet>(config.queue_capacity);
+        let (out_tx, mut out_rx) = mpsc::channel::<Outbound>(config.queue_capacity);
         let (in_tx, in_rx) = mpsc::channel(config.queue_capacity);
         let (cancel, mut cancelled) = watch::channel(0u8);
         let task = tokio::spawn(async move {
@@ -338,6 +379,19 @@ impl WebSocketSession {
                                 tokio::time::timeout(config.close_timeout,sink.close()).await.map_err(|_|TransportError::Timeout("close"))??;
                                 return Ok(());
                             };
+                            let (packet, fence) = match packet {
+                                Outbound::Flush(reply) => {
+                                    tokio::select! {
+                                        biased;
+                                        _ = wait_for_cancel(&mut cancelled) => return Ok(()),
+                                        _ = peer_closed.changed() => { return Err(TransportError::Closed); },
+                                        result = tokio::time::timeout(config.write_timeout, sink.flush()) => { result.map_err(|_| TransportError::Timeout("flush barrier"))??; }
+                                    }
+                                    let _ = reply.send(());
+                                    continue;
+                                }
+                                Outbound::Packet { packet, fence } => (packet, fence),
+                            };
                             let message = match packet { Packet::Text(s)=>Message::Text(s.into()), Packet::Binary(b)=>Message::Binary(b) };
                             tokio::select! {
                                 biased;
@@ -346,7 +400,7 @@ impl WebSocketSession {
                                     out_rx.close();
                                     return flush_peer_close(&mut sink, &mut cancelled, config.close_timeout, true).await;
                                 },
-                                result = tokio::time::timeout(config.write_timeout,sink.send(message)) => { result.map_err(|_|TransportError::Timeout("write"))??; }
+                                result = tokio::time::timeout(config.write_timeout,fenced_send::send(&mut sink, message, fence.as_ref())) => { result.map_err(|_|TransportError::Timeout("write"))??; }
                             }
                         }
                     }

@@ -513,3 +513,11 @@ constructor provide a bounded native phone cascade without browser RTVI.
 They do not change this browser host's defaults or transport allowlist.
 See [TWILIO.md](TWILIO.md) for configuration, exact signature/URL assumptions,
 synthetic loopback validation, lifecycle and opt-in hangup boundaries.
+
+## Opt-in integrated realtime voice
+
+With the `realtime` Cargo feature, `--realtime openai` selects integrated OpenAI
+speech-to-speech through the existing browser WebSocket host. Only the OpenAI
+credential is required; the default cascade and Soniox selections remain
+unchanged. See [REALTIME.md](REALTIME.md) for the production typed constructor,
+fixed PCM/server-VAD contract, readiness, cancellation and qualification limits.

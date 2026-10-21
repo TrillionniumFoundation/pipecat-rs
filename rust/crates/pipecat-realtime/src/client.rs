@@ -730,6 +730,13 @@ impl RealtimeSender {
             .get(id)
             .cloned()
     }
+    /// Session input may outlive a response generation, but never session close.
+    pub(crate) fn with_open_session<T>(&self, operation: impl FnOnce() -> T) -> Option<T> {
+        let _guard = self.emission_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let open = !self.control.borrow().close;
+        open.then(operation)
+    }
+
     pub(crate) fn with_current_generation<T>(
         &self,
         generation: u64,

@@ -136,7 +136,7 @@ async fn run_cascade(
     session_deadline: Instant,
     _resources: &SessionResources,
 ) -> Result<(Context, u64), RunnerError> {
-    let rtvi=Arc::new(RtviProcessor::new(RtviConfig{max_message_bytes:session.message_limit(),capabilities:Some(json!({"context_mode":"generated-text","playback_acknowledgements":false,"input_sample_rate":providers.input_rate(),"output_sample_rate":session.output_sample_rate(providers.output_rate()),"synthesis_sample_rate":providers.output_rate()}).as_object().unwrap().clone()),..Default::default()}).map_err(|_|RunnerError::Rtvi)?);
+    let rtvi=Arc::new(RtviProcessor::new(RtviConfig{max_message_bytes:session.message_limit(),capabilities:Some(json!({"voice_mode":providers.mode(),"context_mode":"generated-text","playback_acknowledgements":false,"input_sample_rate":providers.input_rate(),"output_sample_rate":session.output_sample_rate(providers.output_rate()),"synthesis_sample_rate":providers.output_rate()}).as_object().unwrap().clone()),..Default::default()}).map_err(|_|RunnerError::Rtvi)?);
     let handle = rtvi.handle();
     let mut events = handle.subscribe();
     let observer = Arc::new(
@@ -160,120 +160,195 @@ async fn run_cascade(
     };
     let mut processors: Vec<Arc<dyn FrameProcessor>> =
         vec![rtvi, Arc::new(NormalizeAudio::new(providers.input_rate()))];
-    if let Some(paths) = config.options.vad.clone() {
-        let rate = providers.input_rate();
-        let processor = tokio::task::spawn_blocking(move || {
-            let model = pipecat_vad::SileroModel::load(
-                &pipecat_vad::RuntimeOptions {
-                    library_path: paths.runtime,
-                },
-                paths.model,
+    #[cfg(feature = "realtime")]
+    let mut realtime_state = None;
+    let context = match providers {
+        #[cfg(feature = "realtime")]
+        crate::cascade::SessionProviders::Realtime(realtime) => {
+            let (context, state) = crate::realtime::compose(
+                realtime,
+                &mut processors,
+                output.clone(),
+                observer.clone(),
             )?;
-            pipecat_vad::SileroVadProcessor::new(
-                pipecat_vad::SileroVadAnalyzer::new(model, rate, Default::default())?,
-                Default::default(),
-            )
-        })
-        .await
-        .map_err(|_| RunnerError::Provider)?
-        .map_err(|_| RunnerError::Provider)?;
-        processors.push(Arc::new(processor));
-    }
-    let crate::cascade::SessionParts {
-        stt,
-        tts,
-        llm,
-        user_config,
-        initial_context,
-        tools,
-        model,
-        system_prompt,
-    } = match providers {
-        crate::cascade::SessionProviders::Default(providers) => match &config.stt {
-            SttProvider::Deepgram => {
-                crate::cascade::hosted_parts(providers, config.options.turn_timeout)?
+            realtime_state = Some(state);
+            context
+        }
+        _ => {
+            if let Some(paths) = config.options.vad.clone() {
+                let rate = providers.input_rate();
+                let processor = tokio::task::spawn_blocking(move || {
+                    let model = pipecat_vad::SileroModel::load(
+                        &pipecat_vad::RuntimeOptions {
+                            library_path: paths.runtime,
+                        },
+                        paths.model,
+                    )?;
+                    pipecat_vad::SileroVadProcessor::new(
+                        pipecat_vad::SileroVadAnalyzer::new(model, rate, Default::default())?,
+                        Default::default(),
+                    )
+                })
+                .await
+                .map_err(|_| RunnerError::Provider)?
+                .map_err(|_| RunnerError::Provider)?;
+                processors.push(Arc::new(processor));
             }
-            #[cfg(feature = "whisper")]
-            SttProvider::Whisper(local) => {
-                let processor = tokio::select! {
-                    biased;
-                    _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
-                    result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
-                };
-                crate::cascade::hosted_parts_with_stt(
-                    providers,
-                    config.options.turn_timeout,
-                    Arc::new(processor),
-                )?
-            }
-        },
-        #[cfg(feature = "soniox")]
-        crate::cascade::SessionProviders::Soniox(providers) => providers.build_session()?,
+            let crate::cascade::SessionParts {
+                stt,
+                tts,
+                llm,
+                user_config,
+                initial_context,
+                tools,
+                model,
+                system_prompt,
+            } = match providers {
+                crate::cascade::SessionProviders::Default(providers) => match &config.stt {
+                    SttProvider::Deepgram => {
+                        crate::cascade::hosted_parts(providers, config.options.turn_timeout)?
+                    }
+                    #[cfg(feature = "whisper")]
+                    SttProvider::Whisper(local) => {
+                        let processor = tokio::select! {
+                            biased;
+                            _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during model loading")),
+                            result = tokio::time::timeout_at(session_deadline, crate::whisper::OwnedWhisper::load(local, _resources.local_stt_workers.clone())) => result.map_err(|_| RunnerError::Deadline)??,
+                        };
+                        crate::cascade::hosted_parts_with_stt(
+                            providers,
+                            config.options.turn_timeout,
+                            Arc::new(processor),
+                        )?
+                    }
+                },
+                #[cfg(feature = "realtime")]
+                crate::cascade::SessionProviders::Realtime(_) => {
+                    unreachable!("separate realtime composition")
+                }
+                #[cfg(feature = "soniox")]
+                crate::cascade::SessionProviders::Soniox(providers) => providers.build_session()?,
+            };
+            let pair = LLMContextAggregatorPair::new(
+                initial_context,
+                user_config,
+                AssistantAggregatorConfig {
+                    text_mode: AssistantTextMode::Text,
+                },
+            );
+            let context = pair.context();
+            let mut request = CompletionRequest::new(model, Context::default());
+            request.system_instruction = Some(system_prompt);
+            let retention_budget = Arc::new(RetentionBudget::default());
+            processors.extend([
+                stt,
+                retention_budget.clone(),
+                tap("BrowserInputEvents"),
+                pair.user(),
+                tap("BrowserUserEvents"),
+                Arc::new(LlmProcessor::new(
+                    LlmClient::new(llm).map_err(|_| RunnerError::Provider)?,
+                    request,
+                )),
+            ]);
+            processors.extend(tools);
+            processors.extend([
+                retention_budget as Arc<dyn FrameProcessor>,
+                tap("BrowserLlmEvents"),
+                Arc::new(GeneratedText::new(output.clone())),
+                Arc::new(GeneratedContext {
+                    assistant: pair.assistant(),
+                }),
+                tts,
+                tap("BrowserSynthesisEvents"),
+                Arc::new(BrowserOutput {
+                    sender: output.clone(),
+                }),
+            ]);
+            context
+        }
     };
-    let pair = LLMContextAggregatorPair::new(
-        initial_context,
-        user_config,
-        AssistantAggregatorConfig {
-            text_mode: AssistantTextMode::Text,
-        },
-    );
-    let context = pair.context();
-    let mut request = CompletionRequest::new(model, Context::default());
-    request.system_instruction = Some(system_prompt);
-    let retention_budget = Arc::new(RetentionBudget::default());
-    processors.extend([
-        stt,
-        retention_budget.clone(),
-        tap("BrowserInputEvents"),
-        pair.user(),
-        tap("BrowserUserEvents"),
-        Arc::new(LlmProcessor::new(
-            LlmClient::new(llm).map_err(|_| RunnerError::Provider)?,
-            request,
-        )),
-    ]);
-    processors.extend(tools);
-    processors.extend([
-        retention_budget as Arc<dyn FrameProcessor>,
-        tap("BrowserLlmEvents"),
-        Arc::new(GeneratedText::new(output.clone())),
-        Arc::new(GeneratedContext {
-            assistant: pair.assistant(),
-        }),
-        tts,
-        tap("BrowserSynthesisEvents"),
-        Arc::new(BrowserOutput {
-            sender: output.clone(),
-        }),
-    ]);
     let mut pipeline_config = PipelineConfig::default();
     pipeline_config.start.audio_in_sample_rate = providers.input_rate();
     pipeline_config.start.audio_out_sample_rate = providers.output_rate();
     pipeline_config.shutdown_timeout = Duration::from_secs(5);
     let pipeline = Pipeline::new(processors);
-    let mut worker = tokio::select! {
-        biased;
-        _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during initialization")),
-        result = tokio::time::timeout_at(session_deadline, pipeline.start(pipeline_config)) => result.map_err(|_| RunnerError::Deadline)??,
+    if providers.is_realtime() {
+        // Do not drop Pipeline::start on cancellation: its drop fallback owns
+        // asynchronous cleanup. Await this bounded setup, then cancel+collect
+        // the returned worker before releasing the browser/session owner.
+        pipeline_config.startup_timeout = config.connect_timeout.min(Duration::from_secs(5));
+    }
+    let mut worker = if providers.is_realtime() {
+        pipeline.start(pipeline_config).await?
+    } else {
+        tokio::select! {
+            biased;
+            _ = cancel.changed() => return Err(RunnerError::Protocol("session canceled during initialization")),
+            result = tokio::time::timeout_at(session_deadline, pipeline.start(pipeline_config)) => result.map_err(|_| RunnerError::Deadline)??,
+        }
     };
     let sender = worker.sender();
-    handle
-        .set_bot_ready(Some(
-            json!({"implementation":"pipecat-rust-runner","context_mode":"generated-text"})
-                .as_object()
-                .unwrap()
-                .clone(),
-        ))
-        .map_err(|_| RunnerError::Rtvi)?;
+    #[allow(unused_mut)]
+    let mut provider_ready = !providers.is_realtime();
+    if provider_ready {
+        handle
+            .set_bot_ready(Some(
+                json!({"implementation":"pipecat-rust-runner","context_mode":"generated-text"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ))
+            .map_err(|_| RunnerError::Rtvi)?;
+    }
     let began = Instant::now();
     let mut last_activity = began;
     let mut ready = false;
     let mut introduced = false;
+    #[cfg(feature = "realtime")]
+    let mut draining = false;
     let mut timer = tokio::time::interval(Duration::from_millis(100));
     let result = loop {
+        if *cancel.borrow() {
+            break Ok(());
+        }
+        #[cfg(feature = "realtime")]
+        if let Some(state) = &mut realtime_state {
+            match *state.borrow_and_update() {
+                pipecat_realtime::RealtimeConnectionState::Closed if !draining => {
+                    break Err(RunnerError::Protocol(
+                        "realtime provider closed before browser session ended",
+                    ));
+                }
+                pipecat_realtime::RealtimeConnectionState::Ready if !provider_ready => {
+                    provider_ready = true;
+                    if handle.set_bot_ready(Some(json!({"implementation":"pipecat-rust-runner","voice_mode":"openai-realtime","context_mode":"generated-text"}).as_object().unwrap().clone())).is_err() { break Err(RunnerError::Rtvi); }
+                }
+                _ => {}
+            }
+        }
+        if ready && provider_ready && !introduced && config.options.introduce {
+            introduced = true;
+            if context
+                .append(Message::text(
+                    Role::Developer,
+                    "Please introduce yourself to the user.",
+                ))
+                .is_err()
+            {
+                break Err(RunnerError::Provider);
+            }
+            if sender
+                .send(Frame::new(FrameData::LlmRun), Direction::Downstream)
+                .await
+                .is_err()
+            {
+                break Err(RunnerError::Provider);
+            }
+        }
         // Enforce deadlines even when continuous RTP keeps the ready branches busy.
         if Instant::now() >= session_deadline
-            || (!ready && began.elapsed() > config.connect_timeout)
+            || (!(ready && provider_ready) && began.elapsed() > config.connect_timeout)
             || last_activity.elapsed() > config.options.idle_timeout
         {
             break Err(RunnerError::Deadline);
@@ -284,11 +359,6 @@ async fn run_cascade(
             event=events.recv()=>match event {
                 Ok(RtviEvent::ClientReady(_))=>{
                     ready=true;
-                    if !introduced&&config.options.introduce{
-                        introduced=true;
-                        context.append(Message::text(Role::Developer,"Please introduce yourself to the user.")).map_err(|_|RunnerError::Provider)?;
-                        if sender.send(Frame::new(FrameData::LlmRun),Direction::Downstream).await.is_err(){break Err(RunnerError::Provider);}
-                    }
                 },
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_))=>break Err(RunnerError::Protocol("RTVI event overflow")),
                 _=>{}
@@ -296,6 +366,12 @@ async fn run_cascade(
             packet=session.recv_frame()=>{
                 let Some(packet)=packet else {break Ok(());};last_activity=Instant::now();
                 let frame=match packet {Ok(frame)=>frame,Err(error)=>break Err(error)};
+                #[cfg(feature = "realtime")]
+                if providers.is_realtime() {
+                    if let Err(error) = crate::realtime::admit_browser(&frame) { break Err(error); }
+                    if matches!(&frame.data, FrameData::InputTransportMessage(value) if value["type"] == "disconnect-bot") { draining = true; }
+                    if !provider_ready && !matches!(&frame.data, FrameData::InputTransportMessage(value) if value["type"] == "client-ready") { break Err(RunnerError::Protocol("provider readiness must precede input")); }
+                }
                 // RTP capture can precede SCTP readiness. Do not retain early microphone audio.
                 if !ready && session.is_realtime_audio() && matches!(frame.data, FrameData::InputAudio(_)) { continue; }
                 if !ready && !matches!(&frame.data,FrameData::InputTransportMessage(value) if value["type"]=="client-ready") {break Err(RunnerError::Protocol("client-ready must precede input"));}
@@ -307,7 +383,7 @@ async fn run_cascade(
                 _=>{}
             },
             _=timer.tick()=>{
-                if Instant::now() >= session_deadline || (!ready&&began.elapsed()>config.connect_timeout)||last_activity.elapsed()>config.options.idle_timeout {break Err(RunnerError::Deadline);}
+                if Instant::now() >= session_deadline || (!(ready&&provider_ready)&&began.elapsed()>config.connect_timeout)||last_activity.elapsed()>config.options.idle_timeout {break Err(RunnerError::Deadline);}
             }
         }
     };

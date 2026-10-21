@@ -1,6 +1,10 @@
 //! Browser-compatible RTVI runner with bounded WebSocket and optional WebRTC sessions.
 // Copyright (c) 2024–2026, Daily. SPDX-License-Identifier: BSD-2-Clause
 mod cascade;
+#[cfg(feature = "realtime")]
+mod realtime;
+#[cfg(feature = "realtime")]
+pub use realtime::OpenAiRealtimeVoiceConfig;
 mod command;
 mod config;
 pub use cascade::VoiceCascade;
@@ -43,6 +47,8 @@ use tokio::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
+    #[error("invalid realtime voice configuration: {0}")]
+    RealtimeConfiguration(&'static str),
     #[error("invalid runner configuration")]
     Configuration,
     #[error("invalid voice cascade configuration: {0}")]
@@ -162,6 +168,23 @@ impl NativeRunner {
         Self::new_cascade(
             config,
             cascade::SessionProviders::Soniox(Box::new(providers)),
+        )
+    }
+    /// Opt-in integrated OpenAI speech-to-speech over browser WebSocket only.
+    #[cfg(feature = "realtime")]
+    pub fn new_openai_realtime(
+        config: RunnerConfig,
+        providers: OpenAiRealtimeVoiceConfig,
+    ) -> Result<Self, RunnerError> {
+        providers.validate()?;
+        if !matches!(config.stt, SttProvider::Deepgram) || config.options.vad.is_some() {
+            return Err(RunnerError::RealtimeConfiguration(
+                "realtime voice uses server VAD; local STT and VAD are unsupported",
+            ));
+        }
+        Self::new_cascade(
+            config,
+            cascade::SessionProviders::Realtime(Box::new(providers)),
         )
     }
     fn new_cascade(
@@ -491,7 +514,7 @@ impl BotApi for NativeRunner {
             });
         });
         Ok(
-            json!({"wsUrl":ws_url,"sessionId":id,"token":null,"transport":"websocket","contextMode":"generated-text","playbackAcknowledgements":false}),
+            json!({"wsUrl":ws_url,"sessionId":id,"token":null,"transport":"websocket","voiceMode":self.inner.providers.mode(),"inputSampleRate":self.inner.providers.input_rate(),"outputSampleRate":self.inner.providers.output_rate(),"contextMode":"generated-text","playbackAcknowledgements":false}),
         )
     }
     async fn session(

@@ -38,6 +38,47 @@ struct VideoInput {
     sequence: u64,
 }
 
+/// Observed connection state, not inference acceptance or playback evidence.
+/// Ready means the first actual `session.updated` event (no request-ID match).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RealtimeConnectionState {
+    Connecting,
+    Ready,
+    Closed,
+}
+struct ConnectionStateGuard(Option<tokio::sync::watch::Sender<RealtimeConnectionState>>);
+impl Drop for ConnectionStateGuard {
+    fn drop(&mut self) {
+        if let Some(state) = &self.0 {
+            state.send_replace(RealtimeConnectionState::Closed);
+        }
+    }
+}
+
+// This closed whitelist contains no response-bearing event or executable control.
+fn is_session_input(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::SpeechStarted { .. }
+            | Event::SpeechStopped { .. }
+            | Event::InputTranscriptionDelta { .. }
+            | Event::InputTranscriptionCompleted { .. }
+    )
+}
+
+fn observe_generation<T>(
+    sender: &RealtimeSender,
+    generation: u64,
+    session_input: bool,
+    observe: impl FnOnce() -> T,
+) -> Option<T> {
+    if session_input {
+        sender.with_open_session(observe)
+    } else {
+        sender.with_current_generation(generation, observe)
+    }
+}
+
 /// Single-session PCM adapter. Place a paired user aggregator before this service
 /// and its assistant after delivery. A tool executor needs the result relay below.
 ///
@@ -48,6 +89,7 @@ struct VideoInput {
 /// does not, so a preceding image may write before Cancel is processed.
 pub struct OpenAiRealtimeProcessor {
     client: RealtimeClient,
+    connection_state: tokio::sync::watch::Sender<RealtimeConnectionState>,
     progress_provider: Mutex<ProgressProvider>,
     deferred_provider: Mutex<DeferredProvider>,
     sender: Mutex<Option<RealtimeSender>>,
@@ -60,6 +102,7 @@ pub struct OpenAiRealtimeProcessor {
     started: AtomicBool,
     receive_ready: Arc<tokio::sync::Notify>,
     user_id: String,
+    preserve_session_input: bool,
     manual_turns: bool,
     audio_preroll_override: bool,
     video: crate::video::VideoEncoder,
@@ -77,6 +120,13 @@ pub struct OpenAiRealtimeProcessor {
     final_tool_result: Arc<Mutex<Option<Result<(), ProcessorError>>>>,
 }
 impl OpenAiRealtimeProcessor {
+    /// A watch subscription cannot lose readiness/closure wakeups. Closed is
+    /// terminal, including failed setup and an aborted receive owner.
+    pub fn subscribe_connection_state(
+        &self,
+    ) -> tokio::sync::watch::Receiver<RealtimeConnectionState> {
+        self.connection_state.subscribe()
+    }
     pub fn new(mut client: RealtimeClient) -> Result<Self, RealtimeError> {
         let audio = client.config().session.audio.as_ref();
         if audio.is_none_or(|a| a.input.is_none() || a.output.is_none()) {
@@ -111,6 +161,7 @@ impl OpenAiRealtimeProcessor {
         let context = ContextState::with_instructions(client.config().session.instructions.clone());
         Ok(Self {
             client,
+            connection_state: tokio::sync::watch::channel(RealtimeConnectionState::Connecting).0,
             progress_provider: Mutex::new(ProgressProvider::default()),
             deferred_provider: Mutex::new(DeferredProvider::default()),
             sender: Mutex::new(None),
@@ -123,6 +174,7 @@ impl OpenAiRealtimeProcessor {
             started: AtomicBool::new(false),
             receive_ready: Arc::new(tokio::sync::Notify::new()),
             user_id: String::new(),
+            preserve_session_input: false,
             manual_turns,
             audio_preroll_override: false,
             video: Default::default(),
@@ -315,6 +367,14 @@ impl OpenAiRealtimeProcessor {
         }
         self.audio_preroll_override = true;
         Ok(self)
+    }
+    /// Preserve provider-authored user input across bot-response interruption.
+    /// Only speech boundaries and final/interim input transcripts are exempt
+    /// from response generation retirement. Runtime termination, bounded queues,
+    /// and every assistant response fence remain unchanged. Disabled by default.
+    pub fn with_interruption_resilient_user_input(mut self) -> Self {
+        self.preserve_session_input = true;
+        self
     }
     pub fn with_user_id(mut self, user_id: impl Into<String>) -> Self {
         self.user_id = user_id.into();
@@ -791,6 +851,7 @@ impl OpenAiRealtimeProcessor {
         } else {
             ctx.clone()
         };
+        let mut setup_guard = ConnectionStateGuard(Some(self.connection_state.clone()));
         let session = self.client.connect().await.map_err(processor_error)?;
         let sender = session.sender();
         let joined = session.join_observer();
@@ -853,6 +914,7 @@ impl OpenAiRealtimeProcessor {
             );
         }
         let user_id = self.user_id.clone();
+        let preserve_session_input = self.preserve_session_input;
         let context = self.context.clone();
         let audio_items = self.audio_items.clone();
         let limit = self.client.config().limits.max_message_bytes;
@@ -866,7 +928,10 @@ impl OpenAiRealtimeProcessor {
         let (handoff, receive) =
             tokio::sync::oneshot::channel::<Arc<tokio::sync::Mutex<RealtimeSession>>>();
         let (owned, ownership) = tokio::sync::oneshot::channel::<()>();
+        let connection_state = self.connection_state.clone();
+        let receive_guard = ConnectionStateGuard(Some(connection_state.clone()));
         let task = ctx.spawn("openai-realtime-receive", false, async move {
+            let _connection_guard = receive_guard;
             let Ok(owner) = receive.await else { return Ok(()); };
             let mut session = owner.lock().await;
             let _ = owned.send(());
@@ -904,6 +969,14 @@ impl OpenAiRealtimeProcessor {
                     };
                     let received = result.map_err(processor_error)?;
                     let event = received.event;
+                    if matches!(&event.event, Event::SessionUpdated { .. }) {
+                        connection_state.send_if_modified(|state| {
+                            if *state == RealtimeConnectionState::Connecting {
+                                *state = RealtimeConnectionState::Ready;
+                                true
+                            } else { false }
+                        });
+                    }
                     if let Event::Error { error } = &event.event {
                         return Err(ProcessorError::fatal(format!(
                             "realtime provider rejected session state: {}",
@@ -921,8 +994,8 @@ impl OpenAiRealtimeProcessor {
                         .event
                         .response_id()
                         .and_then(|id| sender.response_fence(id));
-                    let observed = sender
-                        .with_current_generation(event.generation, || {
+                    let session_input = preserve_session_input && is_session_input(&event.event);
+                    let observed = observe_generation(&sender, event.generation, session_input, || {
                             // Keep the same lock order as context enqueue and receipt
                             // acknowledgement: local state first, raw runtime gates last.
                             let mut state = context.lock().map_err(|_| {
@@ -1022,6 +1095,9 @@ impl OpenAiRealtimeProcessor {
                         } else {
                             Direction::Downstream
                         };
+                        if session_input && direction == Direction::Upstream {
+                            frame.interruptible = false;
+                        }
                         if event.event.response_id().is_some() {
                             if let Some(result) = sender
                                 .while_current(event.generation, async {
@@ -1066,6 +1142,7 @@ impl OpenAiRealtimeProcessor {
         });
         match task {
             Ok(_) => {
+                setup_guard.0.take();
                 if let Err(session) = handoff.send(session) {
                     return with_cleanup_result(
                         Err(ProcessorError::fatal(
@@ -1231,6 +1308,7 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         config: &StartFrame,
         ctx: &ProcessorContext,
     ) -> Result<(), ProcessorError> {
+        let mut state_guard = ConnectionStateGuard(Some(self.connection_state.clone()));
         if self.started.swap(true, Ordering::AcqRel) {
             return Err(ProcessorError::new(
                 "realtime processors are single-session; construct a new processor",
@@ -1253,22 +1331,23 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
             .lock()
             .map_err(|_| ProcessorError::fatal("realtime video input lock poisoned"))? =
             VideoInput::default();
-        if let Some(route) = &self.progress_route {
-            route.register_role(NativeToolProgressRole::Provider, ctx, None)?;
-            *self
-                .progress_start
-                .lock()
-                .map_err(|_| ProcessorError::fatal("realtime selected Start lock poisoned"))? =
-                Some(config.clone());
-            *self
-                .progress_output
-                .lock()
-                .map_err(|_| ProcessorError::fatal("realtime selected output lock poisoned"))? =
-                Some(ctx.clone());
-            Ok(())
-        } else {
-            self.connect_and_receive(config, ctx).await
+        let result =
+            if let Some(route) = &self.progress_route {
+                route.register_role(NativeToolProgressRole::Provider, ctx, None)?;
+                *self.progress_start.lock().map_err(|_| {
+                    ProcessorError::fatal("realtime selected Start lock poisoned")
+                })? = Some(config.clone());
+                *self.progress_output.lock().map_err(|_| {
+                    ProcessorError::fatal("realtime selected output lock poisoned")
+                })? = Some(ctx.clone());
+                Ok(())
+            } else {
+                self.connect_and_receive(config, ctx).await
+            };
+        if result.is_ok() {
+            state_guard.0.take();
         }
+        result
     }
     async fn process(
         &self,
@@ -1781,6 +1860,8 @@ impl FrameProcessor for OpenAiRealtimeProcessor {
         )
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        self.connection_state
+            .send_replace(RealtimeConnectionState::Closed);
         let closed = self.close();
         let encoded = self.video.finish().await.map_err(processor_error);
         // Cancel/Failed abort the receive task before cleanup. Its async mutex
@@ -2374,5 +2455,138 @@ mod cleanup_error_tests {
         );
         assert_eq!(error.category, ErrorCategory::InvalidRequest);
         assert!(error.fatal);
+    }
+}
+
+#[cfg(test)]
+mod connection_state_tests {
+    use super::*;
+    use pipecat_core::{Pipeline, PipelineConfig};
+    #[test]
+    fn receive_owner_drop_closes_state_and_late_update_cannot_revive_it() {
+        let (state, observed) = tokio::sync::watch::channel(RealtimeConnectionState::Connecting);
+        let guard = ConnectionStateGuard(Some(state.clone()));
+        state.send_if_modified(|current| {
+            *current = RealtimeConnectionState::Ready;
+            true
+        });
+        assert_eq!(*observed.borrow(), RealtimeConnectionState::Ready);
+        drop(guard);
+        state.send_if_modified(|current| {
+            if *current == RealtimeConnectionState::Connecting {
+                *current = RealtimeConnectionState::Ready;
+                true
+            } else {
+                false
+            }
+        });
+        assert_eq!(*observed.borrow(), RealtimeConnectionState::Closed);
+        assert_eq!(*state.subscribe().borrow(), RealtimeConnectionState::Closed);
+    }
+    #[tokio::test]
+    async fn setup_failure_before_connection_publishes_closed_and_joins_pipeline() {
+        let mut config = RealtimeConfig::new("dummy-key");
+        config.endpoint = "ws://127.0.0.1:9/unopened".into();
+        let processor =
+            Arc::new(OpenAiRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
+        let state = processor.subscribe_connection_state();
+        let mut worker = Pipeline::new(vec![processor])
+            .start(PipelineConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(*state.borrow(), RealtimeConnectionState::Closed); // default pipeline is not 24 kHz
+        worker.cancel("setup failure observed").await.unwrap();
+        worker.collect().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod session_input_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn opt_in_input_observation_survives_response_generation_but_not_close() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut config = RealtimeConfig::new("dummy-loopback-key");
+        config.endpoint = format!("ws://{}", listener.local_addr().unwrap());
+        let peer = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            while let Some(message) = socket.next().await {
+                if matches!(
+                    message.unwrap(),
+                    tokio_tungstenite::tungstenite::Message::Close(_)
+                ) {
+                    socket.flush().await.unwrap();
+                    break;
+                }
+            }
+        });
+        let client = RealtimeClient::new(config).unwrap();
+        assert!(
+            !OpenAiRealtimeProcessor::new(client.clone())
+                .unwrap()
+                .preserve_session_input
+        );
+        assert!(
+            OpenAiRealtimeProcessor::new(client.clone())
+                .unwrap()
+                .with_interruption_resilient_user_input()
+                .preserve_session_input
+        );
+        let mut session = client.connect().await.unwrap();
+        let sender = session.sender();
+        let captured_generation = sender.generation();
+        let inputs = [
+            json!({"type":"input_audio_buffer.speech_started","audio_start_ms":0,"item_id":"user"}),
+            json!({"type":"input_audio_buffer.speech_stopped","audio_end_ms":1,"item_id":"user"}),
+            json!({"type":"conversation.item.input_audio_transcription.delta","item_id":"user","content_index":0,"delta":"partial"}),
+            json!({"type":"conversation.item.input_audio_transcription.completed","item_id":"user","content_index":0,"transcript":"final"}),
+        ].map(|value| serde_json::from_value::<Event>(value).unwrap());
+        sender.interrupt(None);
+        assert_ne!(sender.generation(), captured_generation);
+        for event in &inputs {
+            assert!(is_session_input(event));
+            assert!(event.response_id().is_none());
+            assert_eq!(
+                observe_generation(&sender, captured_generation, false, || 1),
+                None
+            );
+            assert_eq!(
+                observe_generation(&sender, captured_generation, is_session_input(event), || 1),
+                Some(1)
+            );
+        }
+        for value in [
+            json!({"type":"session.updated","session":{"id":"s","type":"realtime"}}),
+            json!({"type":"response.created","response":{"id":"r","status":"in_progress","output":[]}}),
+            json!({"type":"response.output_text.delta","response_id":"r","item_id":"a","output_index":0,"content_index":0,"delta":"old"}),
+            json!({"type":"response.output_audio.delta","response_id":"r","item_id":"a","output_index":0,"content_index":0,"delta":"AAA="}),
+            json!({"type":"conversation.item.input_audio_transcription.failed","item_id":"user","content_index":0,"error":{"type":"server_error","message":"failed"}}),
+        ] {
+            let event: Event = serde_json::from_value(value).unwrap();
+            assert!(!is_session_input(&event));
+            assert_eq!(
+                observe_generation(&sender, captured_generation, is_session_input(&event), || 1),
+                None
+            );
+        }
+        sender.close();
+        for event in &inputs {
+            assert_eq!(
+                observe_generation(&sender, sender.generation(), is_session_input(event), || 1),
+                None
+            );
+        }
+        timeout(Duration::from_secs(2), session.shutdown())
+            .await
+            .unwrap()
+            .unwrap();
+        timeout(Duration::from_secs(2), peer)
+            .await
+            .unwrap()
+            .unwrap();
     }
 }

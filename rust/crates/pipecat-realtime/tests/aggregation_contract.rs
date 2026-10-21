@@ -438,3 +438,190 @@ async fn mutated_native_batch_is_rejected_at_provider_and_relay_ingress() {
 
 #[path = "support/continuation_gate.rs"]
 mod continuation_gate;
+
+#[tokio::test]
+async fn opt_in_held_user_input_survives_vad_and_pipeline_interruption_without_reviving_response() {
+    use pipecat_services::Content;
+    use pipecat_turns::LLMContextAggregatorPair;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tokio::sync::Notify;
+
+    struct HoldInput {
+        held: AtomicBool,
+        entered: mpsc::Sender<()>,
+        release: Arc<Notify>,
+    }
+    #[async_trait]
+    impl FrameProcessor for HoldInput {
+        fn name(&self) -> &str {
+            "HoldProviderInput"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if direction == Direction::Upstream
+                && matches!(&frame.data, FrameData::Transcription(text) if text.text == "first input")
+                && !self.held.swap(true, Ordering::SeqCst)
+            {
+                assert!(
+                    !frame.interruptible,
+                    "provider input must survive before first upstream enqueue"
+                );
+                self.entered.send(()).await.unwrap();
+                self.release.notified().await;
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    struct ResponseTap(mpsc::Sender<FrameData>);
+    #[async_trait]
+    impl FrameProcessor for ResponseTap {
+        fn name(&self) -> &str {
+            "ResponseWitness"
+        }
+        async fn process(
+            &self,
+            frame: Frame,
+            direction: Direction,
+            ctx: &ProcessorContext,
+        ) -> Result<(), ProcessorError> {
+            if direction == Direction::Downstream
+                && matches!(
+                    frame.data,
+                    FrameData::LlmResponseStart | FrameData::LlmText(_)
+                )
+            {
+                self.0.try_send(frame.data.clone()).unwrap();
+            }
+            ctx.push(frame, direction).await
+        }
+    }
+    let (mut peer, client) = Peer::new().await;
+    let mut realtime_config = client.config().clone();
+    realtime_config
+        .session
+        .audio
+        .as_mut()
+        .unwrap()
+        .input
+        .as_mut()
+        .unwrap()
+        .turn_detection = Some(TurnDetection::ServerVad {
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 500,
+        create_response: true,
+        interrupt_response: true,
+    });
+    let client = RealtimeClient::new(realtime_config).unwrap();
+    let pair =
+        LLMContextAggregatorPair::new(Default::default(), Default::default(), Default::default());
+    let release = Arc::new(Notify::new());
+    let (entered, mut held) = mpsc::channel(1);
+    let (response_tx, mut responses) = mpsc::channel(8);
+    let processor = OpenAiRealtimeProcessor::new(client)
+        .unwrap()
+        .with_interruption_resilient_user_input();
+    let mut config = PipelineConfig::default();
+    config.start.audio_in_sample_rate = 24000;
+    config.start.audio_out_sample_rate = 24000;
+    let mut worker = Pipeline::new(vec![
+        pair.user(),
+        Arc::new(HoldInput {
+            held: AtomicBool::new(false),
+            entered,
+            release: release.clone(),
+        }),
+        Arc::new(processor),
+        Arc::new(ResponseTap(response_tx)),
+        pair.assistant(),
+    ])
+    .start(config)
+    .await
+    .unwrap();
+    peer.event(json!({"type":"response.created","response":{"id":"retired","status":"in_progress","output":[]}}));
+    assert!(matches!(
+        timeout(Duration::from_secs(2), responses.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        FrameData::LlmResponseStart
+    ));
+    peer.event(
+        json!({"type":"input_audio_buffer.speech_started","audio_start_ms":0,"item_id":"u1"}),
+    );
+    peer.event(json!({"type":"input_audio_buffer.speech_stopped","audio_end_ms":1,"item_id":"u1"}));
+    peer.event(json!({"type":"conversation.item.input_audio_transcription.completed","item_id":"u1","content_index":0,"transcript":"first input"}));
+    timeout(Duration::from_secs(2), held.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(peer.command().await["type"], "response.cancel");
+    // A second, explicit interruption runs while the final is held in-flight.
+    // A system-lane witness confirms it crossed the gate before releasing input.
+    let interruption = Frame::interruption();
+    let interruption_id = interruption.id;
+    worker
+        .sender()
+        .send(interruption, Direction::Downstream)
+        .await
+        .unwrap();
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let frame = worker.recv().await.unwrap();
+            if frame.frame.id == interruption_id {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(peer.command().await["type"], "response.cancel");
+    peer.event(json!({"type":"response.output_text.delta","response_id":"retired","item_id":"a","output_index":0,"content_index":0,"delta":"STALE RESPONSE"}));
+    peer.event(json!({"type":"response.done","response":{"id":"retired","status":"cancelled","output":[]}}));
+    release.notify_one();
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if pair.user().transcript_frames().unwrap().iter().any(|frame| matches!(&frame.data, FrameData::Transcription(text) if text.text == "first input")) { break; }
+            tokio::task::yield_now().await;
+        }
+    }).await.unwrap();
+    peer.event(
+        json!({"type":"input_audio_buffer.speech_started","audio_start_ms":2,"item_id":"u2"}),
+    );
+    peer.event(json!({"type":"input_audio_buffer.speech_stopped","audio_end_ms":3,"item_id":"u2"}));
+    peer.event(json!({"type":"conversation.item.input_audio_transcription.completed","item_id":"u2","content_index":0,"transcript":"second input"}));
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if pair.user().transcript_frames().unwrap().iter().any(|frame| matches!(&frame.data, FrameData::Transcription(text) if text.text == "second input")) { break; }
+            tokio::task::yield_now().await;
+        }
+    }).await.unwrap();
+    peer.quiet().await;
+    worker.end().await.unwrap();
+    let (frames, report) = timeout(Duration::from_secs(3), worker.collect())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(report.total_errors, 0);
+    assert!(!frames.iter().any(|frame| matches!(&frame.frame.data, FrameData::LlmText(text) if text.text.contains("STALE RESPONSE"))));
+    while let Ok(data) = responses.try_recv() {
+        assert!(!matches!(data, FrameData::LlmText(text) if text.text.contains("STALE RESPONSE")));
+    }
+    let messages = pair.context().snapshot().unwrap().messages;
+    let all_text = messages
+        .iter()
+        .filter_map(|message| match &message.content {
+            Some(Content::Text(text)) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_eq!(all_text.matches("first input").count(), 1);
+    assert_eq!(all_text.matches("second input").count(), 1);
+    assert!(!all_text.contains("STALE RESPONSE"));
+    peer.close().await;
+}

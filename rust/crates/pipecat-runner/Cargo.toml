@@ -15,12 +15,14 @@ default = []
 webrtc = ["dep:pipecat-webrtc"]
 whisper = ["dep:pipecat-whisper"]
 soniox = ["dep:pipecat-soniox"]
+realtime = ["dep:pipecat-realtime"]
 
 [[bin]]
 name = "pipecat-twilio-agent"
 path = "src/twilio_main.rs"
 
 [dependencies]
+pipecat-realtime = { path = "../pipecat-realtime", optional = true }
 base64 = "0.22"
 hmac = "0.12"
 sha1 = "0.10"
@@ -53,6 +55,7 @@ pipecat-turns = { path = "../pipecat-turns" }
 pipecat-vad = { path = "../pipecat-vad" }
 
 [dev-dependencies]
+futures-util = "=0.3.34"
 pipecat-browser-client = { path = "../../client-templates" }
 
 [lints]

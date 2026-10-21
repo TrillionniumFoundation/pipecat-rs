@@ -219,13 +219,24 @@ struct GeneratedState {
 /// A stable segment is updated from generated LLM text. Its `spoken:false` is
 /// intentional: transport queueing and TTS timestamps are not playback evidence.
 pub struct GeneratedText {
+    #[cfg(feature = "realtime")]
+    fenced: bool,
     state: Mutex<GeneratedState>,
     sender: BrowserSender,
 }
 impl GeneratedText {
+    #[cfg(feature = "realtime")]
+    pub fn new_realtime(sender: BrowserSender) -> Self {
+        Self {
+            fenced: true,
+            ..Self::new(sender)
+        }
+    }
     pub fn new(sender: BrowserSender) -> Self {
         Self {
             state: Mutex::new(GeneratedState::default()),
+            #[cfg(feature = "realtime")]
+            fenced: false,
             sender,
         }
     }
@@ -262,7 +273,12 @@ impl FrameProcessor for GeneratedText {
                         json!({"label":"rtvi-ai","type":"bot-output","data":{"text":state.text,"aggregated_by":"generated","segment_id":segment,"spoken":false,"will_be_spoken":text.skip_tts!=Some(true)}}),
                     )
                 }
-                FrameData::Interruption | FrameData::Cancel(_) | FrameData::End(_) => {
+                FrameData::Interruption
+                | FrameData::Cancel(_)
+                | FrameData::CancelDetailed(_)
+                | FrameData::End(_)
+                | FrameData::EndDetailed(_)
+                | FrameData::Stop => {
                     state.text.clear();
                     state.segment = None;
                     None
@@ -273,6 +289,15 @@ impl FrameProcessor for GeneratedText {
             None
         };
         if let Some(value) = event {
+            #[cfg(feature = "realtime")]
+            if self.fenced {
+                self.sender
+                    .message_fenced(value, ctx.invocation_fence()?)
+                    .await?;
+            } else {
+                self.sender.message(value).await?;
+            }
+            #[cfg(not(feature = "realtime"))]
             self.sender.message(value).await?;
         }
         ctx.push(frame, direction).await

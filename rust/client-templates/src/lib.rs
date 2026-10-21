@@ -72,6 +72,13 @@ impl InputMode {
     }
 }
 
+/// Optional server-advertised voice backend; this is not a client mode override.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub enum VoiceMode {
+    #[serde(rename = "openai-realtime")]
+    OpenAiRealtime,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -80,6 +87,14 @@ pub struct Config {
     pub transports: Vec<Transport>,
     #[serde(default)]
     pub input_mode: InputMode,
+    #[serde(default)]
+    pub voice_mode: Option<VoiceMode>,
+    #[serde(default)]
+    pub input_sample_rate: Option<u32>,
+    #[serde(default)]
+    pub output_sample_rate: Option<u32>,
+    #[serde(default)]
+    pub playback_acknowledgements: Option<bool>,
 }
 impl Config {
     pub fn validate(&self, page_url: &str) -> Result<Url, String> {
@@ -94,6 +109,27 @@ impl Config {
         }
         for transport in &self.transports {
             self.input_mode.validate_transport(*transport)?;
+        }
+        let realtime = (
+            self.voice_mode,
+            self.input_sample_rate,
+            self.output_sample_rate,
+            self.playback_acknowledgements,
+        );
+        if realtime != (None, None, None, None)
+            && (realtime
+                != (
+                    Some(VoiceMode::OpenAiRealtime),
+                    Some(24000),
+                    Some(24000),
+                    Some(false),
+                )
+                || self.transports != [Transport::WebSocket])
+        {
+            return Err(
+                "realtime voice requires websocket, 24000 Hz PCM and no playback acknowledgements"
+                    .into(),
+            );
         }
         let url = Url::parse(page_url)
             .and_then(|p| p.join(&self.start_endpoint))
@@ -343,5 +379,52 @@ mod tests {
         assert!(InputMode::Voice
             .validate_transport(Transport::SmallWebRtc)
             .is_ok());
+    }
+    #[test]
+    fn realtime_runtime_config_preserves_strict_browser_contract() {
+        let value = json!({"project_name":"voice","start_endpoint":"/api/start",
+            "transports":["websocket"],"voice_mode":"openai-realtime",
+            "input_sample_rate":24000,"output_sample_rate":24000,
+            "playback_acknowledgements":false});
+        let config: Config = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(config.voice_mode, Some(VoiceMode::OpenAiRealtime));
+        assert!(config.validate("http://127.0.0.1:8080/").is_ok());
+        let mut text = value.clone();
+        text["input_mode"] = json!("text");
+        let text: Config = serde_json::from_value(text).unwrap();
+        assert!(!text.input_mode.captures_microphone());
+        assert!(text.validate("http://127.0.0.1:8080/").is_ok());
+        for field in [
+            "voice_mode",
+            "input_sample_rate",
+            "output_sample_rate",
+            "playback_acknowledgements",
+        ] {
+            let mut incomplete = value.clone();
+            incomplete.as_object_mut().unwrap().remove(field);
+            let config: Config = serde_json::from_value(incomplete).unwrap();
+            assert!(config.validate("http://127.0.0.1:8080/").is_err());
+        }
+        for (field, invalid) in [
+            ("input_sample_rate", json!(48000)),
+            ("output_sample_rate", json!(16000)),
+            ("playback_acknowledgements", json!(true)),
+            ("transports", json!(["smallwebrtc"])),
+            ("transports", json!(["websocket", "smallwebrtc"])),
+        ] {
+            let mut invalid_config = value.clone();
+            invalid_config[field] = invalid;
+            let config: Config = serde_json::from_value(invalid_config).unwrap();
+            assert!(config.validate("http://127.0.0.1:8080/").is_err());
+        }
+        for (field, invalid) in [
+            ("voice_mode", json!("other")),
+            ("input_sample_rate", json!("24000")),
+            ("unknown", json!(true)),
+        ] {
+            let mut invalid_config = value.clone();
+            invalid_config[field] = invalid;
+            assert!(serde_json::from_value::<Config>(invalid_config).is_err());
+        }
     }
 }

@@ -90,6 +90,33 @@ async fn send(sender: &SessionSender, packet: Packet) -> Result<(), ProcessorErr
         .map_err(error)
 }
 impl BrowserSender {
+    #[cfg(feature = "realtime")]
+    pub async fn packet_fenced(
+        &self,
+        packet: Packet,
+        fence: pipecat_core::InvocationFence,
+    ) -> Result<(), ProcessorError> {
+        match self {
+            Self::WebSocket(sender) => {
+                tokio::time::timeout(Duration::from_secs(5), sender.send_fenced(packet, fence))
+                    .await
+                    .map_err(|_| error("browser output backpressure deadline"))?
+                    .map_err(error)
+            }
+            #[cfg(feature = "webrtc")]
+            Self::WebRtc(_) => Err(error("realtime browser voice supports WebSocket only")),
+        }
+    }
+    #[cfg(feature = "realtime")]
+    pub async fn message_fenced(
+        &self,
+        value: Value,
+        fence: pipecat_core::InvocationFence,
+    ) -> Result<(), ProcessorError> {
+        self.packet_fenced(wire::message(value).map_err(error)?, fence)
+            .await
+    }
+
     pub async fn message(&self, value: Value) -> Result<(), ProcessorError> {
         match self {
             Self::WebSocket(sender) => send(sender, wire::message(value).map_err(error)?).await,
