@@ -902,3 +902,538 @@ async fn sequential_sessions_never_reuse_caller_history_or_claims() {
     }
     finish(http).await;
 }
+
+fn quality_scenario(min_score: Option<f64>) -> SimulationScenario {
+    let mut spec = scenario();
+    spec.judged_metrics = vec![JudgedMetric {
+        name: "courtesy".into(),
+        criterion: "Every reply is polite".into(),
+        min_score,
+    }];
+    spec
+}
+fn quality_answer(request: &Value, outcome: &str) -> String {
+    let evidence: Value =
+        serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
+    completion(&json!({"metric":evidence["metric"],"turn":evidence["turn"],"outcome":outcome,"reason":"synthetic evidence"}).to_string(), None)
+}
+
+#[tokio::test]
+async fn quality_four_turn_prefixes_inclusive_score_and_independent_goal() {
+    for (goal, threshold, status) in [
+        ("yes", Some(0.75), "passed"),
+        ("yes", Some(0.76), "failed"),
+        ("no", None, "failed"),
+    ] {
+        let (endpoint, caller) = provider(4, |i, _| {
+            if i == 3 {
+                completion(
+                    "",
+                    Some(json!({"success":true,"reason":"SECRET CALLER CLAIM"})),
+                )
+            } else {
+                completion(&format!("user{i}"), None)
+            }
+        })
+        .await;
+        let (judge, judged) = provider(5, move |i, request| {
+            if i == 0 {
+                return completion(
+                    &json!({"verdict":goal,"reason":"independent"}).to_string(),
+                    None,
+                );
+            }
+            assert!(request.get("tools").is_none());
+            let text = request["messages"][1]["content"].as_str().unwrap();
+            assert!(!text.contains("SECRET CALLER CLAIM"));
+            let evidence: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(evidence["turn"], i);
+            assert_eq!(evidence["latest_bot_reply"], format!("bot{}", i - 1));
+            let prefix = evidence["conversation"].as_array().unwrap();
+            assert_eq!(prefix.len(), (i - 1) * 2);
+            for future in i..4 {
+                assert!(!text.contains(&format!("bot{future}")));
+            }
+            quality_answer(
+                request,
+                if goal == "no" {
+                    "meets"
+                } else {
+                    ["meets", "not_applicable", "fails", "meets"][i - 1]
+                },
+            )
+        })
+        .await;
+        let (url, bot) = bot(
+            reply("bot0"),
+            vec![reply("bot1"), reply("bot2"), reply("bot3")],
+        )
+        .await;
+        let mut config = runtime(endpoint);
+        config.judge = Some(model(judge));
+        let result = SimulationSession::new(quality_scenario(threshold), config, url)
+            .unwrap()
+            .run(Cancellation::new())
+            .await;
+        assert_eq!(result.status, status, "{result:?}");
+        assert_eq!(
+            result.judged_metrics[0].score,
+            Some(if goal == "no" { 1.0 } else { 0.75 })
+        );
+        assert_eq!(result.judged_metrics[0].turns.len(), 4);
+        assert_eq!(
+            result.judged_metrics[0].passed,
+            threshold.map(|t| 0.75 >= t)
+        );
+        assert_eq!(
+            result.failures.iter().any(|f| f.kind == "goal_failure"),
+            goal == "no"
+        );
+        assert_eq!(
+            result
+                .failures
+                .iter()
+                .any(|f| f.kind == "criterion_failure"),
+            threshold == Some(0.76)
+        );
+        finish(caller).await;
+        finish(judged).await;
+        finish(bot).await;
+    }
+}
+
+#[tokio::test]
+async fn quality_tool_preamble_preserves_arrival_order_and_immutable_stops() {
+    let greeting = vec![
+        wire("bot-llm-started", json!({})),
+        wire("bot-llm-text", json!({"text":"Check"})),
+        wire("bot-llm-text", json!({"text":"ing"})),
+        wire(
+            "llm-function-call-in-progress",
+            json!({"tool_call_id":"a","function_name":"order","arguments":{"color":"red"}}),
+        ),
+        wire(
+            "llm-function-call-in-progress",
+            json!({"tool_call_id":"b","function_name":"order","arguments":{"color":"blue"}}),
+        ),
+        wire("bot-llm-stopped", json!({})),
+        wire(
+            "llm-function-call-stopped",
+            json!({"tool_call_id":"a","cancelled":true}),
+        ),
+        wire(
+            "llm-function-call-stopped",
+            json!({"tool_call_id":"b","cancelled":false}),
+        ),
+        wire("bot-llm-started", json!({})),
+        wire("bot-llm-text", json!({"text":"Blue ordered"})),
+        wire("bot-llm-stopped", json!({})),
+    ];
+    let (endpoint, caller) = provider(1, |_, request| {
+        assert_eq!(request["messages"][1]["content"], "Checking Blue ordered");
+        completion("", Some(json!({"success":true,"reason":"done"})))
+    })
+    .await;
+    let (judge, judged) = provider(3, |i, request| {
+        if i == 0 {
+            return completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None);
+        }
+        let e: Value =
+            serde_json::from_str(request["messages"][1]["content"].as_str().unwrap()).unwrap();
+        if i == 1 {
+            assert_eq!(e["latest_bot_reply"], "Checking");
+            assert_eq!(e["conversation"], json!([]));
+        } else {
+            let p = e["conversation"].as_array().unwrap();
+            assert_eq!(p.len(), 5);
+            assert_eq!(p[1]["content"]["id"], "a");
+            assert_eq!(p[1]["content"]["stopped"], false);
+            assert_eq!(p[2]["content"]["id"], "b");
+            assert_eq!(p[2]["content"]["stopped"], false);
+            assert_eq!(p[3]["content"]["cancelled"], true);
+            assert_eq!(p[4]["content"]["stopped"], true);
+        }
+        quality_answer(request, "meets")
+    })
+    .await;
+    let (url, bot) = bot(greeting, vec![]).await;
+    let mut config = runtime(endpoint);
+    config.judge = Some(model(judge));
+    let result = SimulationSession::new(quality_scenario(Some(1.0)), config, url)
+        .unwrap()
+        .run(Cancellation::new())
+        .await;
+    assert_eq!(result.status, "passed", "{result:?}");
+    assert_eq!(result.judged_metrics[0].turns.len(), 2);
+    finish(caller).await;
+    finish(judged).await;
+    finish(bot).await;
+}
+
+#[tokio::test]
+async fn quality_missing_malformed_and_wrong_identity_keep_expected_denominator() {
+    for threshold in [None, Some(0.9)] {
+        let (endpoint, caller) = provider(4, |i, _| {
+            if i == 3 {
+                completion("", Some(json!({"success":true,"reason":"done"})))
+            } else {
+                completion("next", None)
+            }
+        })
+        .await;
+        let (judge, judged) = provider(5, |i, r| match i {
+            0 => completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None),
+            1 => quality_answer(r, "meets"),
+            2 => completion("{}", None),
+            3 => completion(
+                "{\"metric\":\"wrong\",\"turn\":3,\"outcome\":\"meets\",\"reason\":\"x\"}",
+                None,
+            ),
+            _ => quality_answer(r, "none"),
+        })
+        .await;
+        let (url, bot) = bot(reply("a"), vec![reply("b"), reply("c"), reply("d")]).await;
+        let mut config = runtime(endpoint);
+        config.judge = Some(model(judge));
+        let result = SimulationSession::new(quality_scenario(threshold), config, url)
+            .unwrap()
+            .run(Cancellation::new())
+            .await;
+        assert_eq!(
+            result.status,
+            if threshold.is_none() {
+                "passed"
+            } else {
+                "error"
+            },
+            "{result:?}"
+        );
+        let m = &result.judged_metrics[0];
+        assert_eq!(m.score, Some(0.25));
+        assert_eq!(m.turns.len(), 4);
+        assert!(m.turns[1..].iter().all(|v| v.outcome == TurnOutcome::None));
+        assert_eq!(
+            m.failure_kind.as_deref(),
+            threshold.map(|_| "criterion_no_verdict")
+        );
+        finish(caller).await;
+        finish(judged).await;
+        finish(bot).await;
+    }
+}
+
+#[tokio::test]
+async fn quality_no_judge_is_unjudged_and_zero_turns_have_no_score() {
+    let (endpoint, caller) = provider(1, |_, _| {
+        completion("", Some(json!({"success":true,"reason":"done"})))
+    })
+    .await;
+    let (url, bot_task) = bot(reply("hello"), vec![]).await;
+    let r = SimulationSession::new(quality_scenario(Some(1.0)), runtime(endpoint), url)
+        .unwrap()
+        .run(Cancellation::new())
+        .await;
+    assert_eq!(r.status, "unjudged");
+    assert_eq!(r.judged_metrics[0].turns.len(), 1);
+    assert!(r.judged_metrics[0].score.is_none());
+    assert!(r.judged_metrics[0].passed.is_none());
+    finish(caller).await;
+    finish(bot_task).await;
+    let (judge, judged) = provider(1, |_, _| {
+        completion("{\"verdict\":\"yes\",\"reason\":\"no turns\"}", None)
+    })
+    .await;
+    let (url, bot) = bot(vec![], vec![]).await;
+    let mut spec = quality_scenario(Some(1.0));
+    spec.max_silence_ms = 30;
+    let mut config = runtime("http://127.0.0.1:9/api".into());
+    config.judge = Some(model(judge));
+    let r = SimulationSession::new(spec, config, url)
+        .unwrap()
+        .run(Cancellation::new())
+        .await;
+    assert_eq!(r.ended_by, "silence");
+    assert!(r.judged_metrics[0].score.is_none());
+    assert!(r.judged_metrics[0].turns.is_empty());
+    finish(judged).await;
+    finish(bot).await;
+}
+
+#[test]
+fn quality_preflight_rejects_bounds_duplicates_and_mixed_forms_before_io() {
+    for value in [
+        json!({"name":"x","criterion":"c","measure":"turns"}),
+        json!({"name":" ","criterion":"c"}),
+        json!({"name":"x","criterion":" "}),
+        json!({"name":"x","criterion":"c","min_score":1.1}),
+        json!({"name":"x","criterion":"c","min_score":true}),
+    ] {
+        let input =
+            json!({"name":"n","persona":"p","goal":"g","success":"s","judged_metrics":[value]});
+        assert!(SimulationScenario::from_yaml(&serde_json::to_vec(&input).unwrap()).is_err());
+    }
+    let mut spec = quality_scenario(Some(f64::NAN));
+    assert!(spec.validate().is_err());
+    spec.judged_metrics[0].min_score = Some(f64::INFINITY);
+    assert!(spec.validate().is_err());
+    spec.judged_metrics[0].min_score = None;
+    spec.metrics.push(Metric::Turns {
+        name: "courtesy".into(),
+        max: 4,
+    });
+    assert!(spec.validate().is_err());
+    spec.metrics.clear();
+    spec.judged_metrics.push(spec.judged_metrics[0].clone());
+    assert!(spec.validate().is_err());
+    spec.judged_metrics = (0..3)
+        .map(|i| JudgedMetric {
+            name: format!("q{i}"),
+            criterion: "c".into(),
+            min_score: None,
+        })
+        .collect();
+    spec.max_judged_turns = 512;
+    let mut config = runtime("http://127.0.0.1:9/api".into());
+    config.caller.api_key_env = Some("MISSING_BATCH157_PREFLIGHT".into());
+    assert!(SimulationSession::new(spec, config, "ws://127.0.0.1:9").is_err());
+}
+
+#[tokio::test]
+async fn quality_cancel_and_shared_deadline_join_first_middle_last_and_admit_no_later_calls() {
+    for cancelled in [true, false] {
+        for stalled_turn in 1..=3 {
+            let (endpoint, caller) = provider(3, |i, _| {
+                if i == 2 {
+                    completion("", Some(json!({"success":true,"reason":"done"})))
+                } else {
+                    completion("next", None)
+                }
+            })
+            .await;
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let judge = format!("http://{}/api", listener.local_addr().unwrap());
+            let cancel = Cancellation::new();
+            let signal = cancel.clone();
+            let judged = tokio::spawn(async move {
+                let mut first_admission = None;
+                for i in 0..=stalled_turn {
+                    let (mut socket, _) =
+                        tokio::time::timeout(Duration::from_secs(3), listener.accept())
+                            .await
+                            .unwrap()
+                            .unwrap();
+                    let r = read_request(&mut socket).await;
+                    let first = *first_admission.get_or_insert_with(std::time::Instant::now);
+                    if i == stalled_turn {
+                        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n").await.unwrap();
+                        if cancelled {
+                            signal.cancel();
+                        }
+                        let mut byte = [0; 1];
+                        let closed =
+                            tokio::time::timeout(Duration::from_secs(2), socket.read(&mut byte))
+                                .await
+                                .unwrap();
+                        assert!(matches!(closed, Ok(0) | Err(_)));
+                        if !cancelled && stalled_turn == 3 {
+                            // Three earlier answers consume at least 450ms. A fresh
+                            // 800ms budget here would close no earlier than 1250ms.
+                            assert!(first.elapsed() < Duration::from_millis(1100));
+                        }
+                    } else {
+                        // Earlier work consumes the SAME aggregate budget, not a fresh
+                        // timeout per completed question. Production guards every admission.
+                        tokio::time::sleep(Duration::from_millis(150)).await;
+                        let body = if i == 0 {
+                            completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None)
+                        } else {
+                            quality_answer(&r, "meets")
+                        };
+                        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+                    }
+                }
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(80), listener.accept())
+                        .await
+                        .is_err()
+                );
+            });
+            let (url, bot) = bot(reply("a"), vec![reply("b"), reply("c")]).await;
+            let mut config = runtime(endpoint);
+            let mut j = model(judge);
+            j.timeout_ms = 800;
+            config.judge = Some(j);
+            let r = SimulationSession::new(quality_scenario(None), config, url)
+                .unwrap()
+                .run(cancel)
+                .await;
+            assert_eq!(r.status, "error", "{r:?}");
+            assert_eq!(r.goal.as_ref().unwrap().verdict, Verdict::Yes);
+            assert!(r.failures.iter().any(|f| f.kind == "judge_error"));
+            assert_eq!(r.judged_metrics[0].turns.len(), 3);
+            for (i, v) in r.judged_metrics[0].turns.iter().enumerate() {
+                assert_eq!(
+                    v.outcome,
+                    if i + 1 < stalled_turn {
+                        TurnOutcome::Meets
+                    } else {
+                        TurnOutcome::None
+                    }
+                );
+            }
+            if cancelled {
+                assert!(r.failures.iter().any(|f| f.kind == "cancelled"));
+            }
+            assert!(!r.failures.iter().any(|f| f.kind == "cleanup_error"));
+            finish(caller).await;
+            finish(judged).await;
+            finish(bot).await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn quality_compiled_cli_serializes_real_verdicts_and_exit_status() {
+    for (outcome, exit, status) in [
+        ("meets", 0, "passed"),
+        ("fails", 1, "failed"),
+        ("none", 1, "error"),
+    ] {
+        let (endpoint, caller) = provider(1, |_, _| {
+            completion("", Some(json!({"success":true,"reason":"done"})))
+        })
+        .await;
+        let (judge, judged) = provider(2, move |i, r| {
+            if i == 0 {
+                completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None)
+            } else {
+                quality_answer(r, outcome)
+            }
+        })
+        .await;
+        let (url, bot) = bot(reply("hello"), vec![]).await;
+        let mut config = runtime(endpoint);
+        config.judge = Some(model(judge));
+        let files = Files::new();
+        let spec = files.write("quality.json", &quality_scenario(Some(1.0)));
+        let config = files.write("runtime.json", &config);
+        let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_pipecat-eval"))
+            .args(["simulate", &spec, &url, &config])
+            .output()
+            .await
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(exit),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let r: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(r["status"], status);
+        assert_eq!(r["goal"]["verdict"], "yes");
+        assert_eq!(r["judged_metrics"][0]["turns"][0]["outcome"], outcome);
+        assert_eq!(r["judged_metrics"][0]["turns"][0]["turn"], 1);
+        finish(caller).await;
+        finish(judged).await;
+        finish(bot).await;
+    }
+    let files = Files::new();
+    let mut spec = quality_scenario(None);
+    spec.max_judged_turns = 0;
+    let spec = files.write("invalid.json", &spec);
+    let config = files.write("runtime.json", &runtime("http://127.0.0.1:9/api".into()));
+    let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_pipecat-eval"))
+        .args(["simulate", &spec, "ws://127.0.0.1:9", &config])
+        .output()
+        .await
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[tokio::test]
+async fn quality_sequential_sessions_never_share_prefix_history() {
+    for name in ["first unique session", "second unique session"] {
+        let (endpoint, caller) = provider(1, |_, _| {
+            completion("", Some(json!({"success":true,"reason":"done"})))
+        })
+        .await;
+        let (judge, judged) = provider(2, move |i, r| {
+            if i == 0 {
+                return completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None);
+            }
+            let evidence: Value =
+                serde_json::from_str(r["messages"][1]["content"].as_str().unwrap()).unwrap();
+            assert_eq!(evidence["turn"], 1);
+            assert_eq!(evidence["conversation"], json!([]));
+            assert_eq!(evidence["latest_bot_reply"], name);
+            quality_answer(r, "meets")
+        })
+        .await;
+        let (url, bot) = bot(reply(name), vec![]).await;
+        let mut config = runtime(endpoint);
+        config.judge = Some(model(judge));
+        let r = SimulationSession::new(quality_scenario(Some(1.0)), config, url)
+            .unwrap()
+            .run(Cancellation::new())
+            .await;
+        assert_eq!(r.status, "passed", "{r:?}");
+        assert_eq!(r.judged_metrics[0].turns.len(), 1);
+        finish(caller).await;
+        finish(judged).await;
+        finish(bot).await;
+    }
+}
+
+#[tokio::test]
+async fn quality_multiple_criteria_keep_identity_order_and_scores_independent() {
+    let (endpoint, caller) = provider(2, |i, _| {
+        if i == 0 {
+            completion("next", None)
+        } else {
+            completion("", Some(json!({"success":true,"reason":"done"})))
+        }
+    })
+    .await;
+    let (judge, judged) = provider(5, |i, r| {
+        if i == 0 {
+            return completion("{\"verdict\":\"yes\",\"reason\":\"done\"}", None);
+        }
+        let e: Value = serde_json::from_str(r["messages"][1]["content"].as_str().unwrap()).unwrap();
+        assert_eq!(e["metric"], if i <= 2 { "courtesy" } else { "accuracy" });
+        assert_eq!(e["turn"], if i % 2 == 1 { 1 } else { 2 });
+        assert_eq!(
+            e["latest_bot_reply"],
+            if i % 2 == 1 { "first" } else { "second" }
+        );
+        quality_answer(r, ["meets", "not_applicable", "fails", "meets"][i - 1])
+    })
+    .await;
+    let (url, bot) = bot(reply("first"), vec![reply("second")]).await;
+    let mut config = runtime(endpoint);
+    config.judge = Some(model(judge));
+    let mut spec = quality_scenario(Some(1.0));
+    spec.judged_metrics.push(JudgedMetric {
+        name: "accuracy".into(),
+        criterion: "Every reply is accurate".into(),
+        min_score: Some(0.75),
+    });
+    let r = SimulationSession::new(spec, config, url)
+        .unwrap()
+        .run(Cancellation::new())
+        .await;
+    assert_eq!(r.status, "failed", "{r:?}");
+    assert_eq!(r.judged_metrics.len(), 2);
+    assert_eq!(r.judged_metrics[0].name, "courtesy");
+    assert_eq!(r.judged_metrics[0].score, Some(1.0));
+    assert_eq!(r.judged_metrics[0].passed, Some(true));
+    assert_eq!(r.judged_metrics[1].name, "accuracy");
+    assert_eq!(r.judged_metrics[1].score, Some(0.5));
+    assert_eq!(r.judged_metrics[1].passed, Some(false));
+    assert_eq!(
+        r.judged_metrics[1].failure_kind.as_deref(),
+        Some("criterion_failure")
+    );
+    finish(caller).await;
+    finish(judged).await;
+    finish(bot).await;
+}

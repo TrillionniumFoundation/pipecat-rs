@@ -1,7 +1,8 @@
 //! Opt-in autonomous text evaluation, independent of scripted run/suite semantics.
 mod config;
+mod quality;
 mod session;
-pub use config::{Metric, ModelConfig, SimulationRuntime, SimulationScenario};
+pub use config::{JudgedMetric, Metric, ModelConfig, SimulationRuntime, SimulationScenario};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 pub use session::SimulationSession;
@@ -67,6 +68,8 @@ pub struct SimulationResult {
     pub longest_bot_reply_words: Option<u64>,
     pub slowest_text_response_ms: Option<u64>,
     pub metrics: Vec<MetricResult>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub judged_metrics: Vec<JudgedMetricResult>,
     pub failures: Vec<SimulationFailure>,
 }
 impl SimulationResult {
@@ -79,4 +82,29 @@ impl SimulationResult {
             reason: reason.into(),
         });
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnOutcome {
+    Meets,
+    Fails,
+    NotApplicable,
+    None,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnJudgment {
+    pub turn: usize,
+    pub outcome: TurnOutcome,
+    pub reason: String,
+    pub diagnostic: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JudgedMetricResult {
+    pub name: String,
+    pub score: Option<f64>,
+    pub min_score: Option<f64>,
+    pub passed: Option<bool>,
+    pub failure_kind: Option<String>,
+    pub turns: Vec<TurnJudgment>,
 }

@@ -12,8 +12,9 @@ pipecat-eval simulate --help
 The bot must implement existing RTVI text events, client-ready/bot-ready,
 send-text and eval-configure full function reporting. The URL forces skip_tts
 and strips audio/image/disconnect profile flags. No Python, audio, model pull,
-provider fallback/retry, suite/repeats, images or per-turn judged criteria are
-implemented. Unknown fields (including criteria/min_score metrics) are rejected
+provider fallback/retry, suite/repeats or images are implemented. Per-turn quality
+criteria use the separate native judged_metrics list below. Unknown fields and
+criteria/min_score inside measured metrics are rejected
 before credentials, sockets or output. Files are bounded to 1 MiB. YAML expansion
 uses the existing bounded loader. Typed `SimulationSession::new` does the same
 preflight and `run(Cancellation)` owns the one-shot execution.
@@ -121,3 +122,79 @@ loopback HTTP/SSE and WebSocket peers. Synthetic responders inspect live caller
 context and actual transmitted turns; they are not a production canned persona.
 No real credentials, paid requests, devices, SFU or model intelligence are qualified.
 This slice does not claim full Python evaluation parity or full Pipecat parity.
+
+
+## Native per-bot-turn quality criteria
+
+Optional `judged_metrics` is separate from the unchanged measured `metrics`
+list; this is deliberately NOT Python YAML drop-in compatibility:
+
+```yaml
+max_judged_turns: 128
+judged_metrics:
+  - name: courtesy
+    criterion: Every reply addresses the caller politely.
+    min_score: 0.8
+  - name: disclosure
+    criterion: A reply that offers an order discloses that payment is required.
+```
+
+Names must be nonblank, at most 128 bytes and unique across both lists. Criteria
+must be nonblank and at most 32768 bytes. `min_score` is optional, finite, and in
+[0,1]. Unknown/mixed measured fields are rejected. At most 64 criteria are allowed;
+`max_judged_turns` defaults to 128, ranges 1..512, and criteria count multiplied by
+that limit must not exceed 1024. This bounds at most 1024 criterion calls plus
+one whole-goal call. These checks happen before credential reads or networking.
+Exhausting the runtime turn bound is an execution error, never silent truncation.
+
+A quality turn is completed bot text with no intervening caller or tool event.
+Token chunks concatenate without added spaces; adjacent completed segments join
+with one space. Tool boundaries split preamble and final replies even though the
+caller and existing measured transcript still receive their original aggregation.
+A preamble before tool start is retained at its actual arrival position, including
+when its bot-llm-stopped comes after tool start. Only bot-llm-stopped admits complete
+targets; token fragments or tool stop alone do not. Empty completion after a held
+preamble does not invent an extra turn. An abandoned partial response is never a
+target. Prefix bot entries are explicitly observed text, not completion claims.
+
+The session keeps a byte/count-bounded ordered ledger and completed-target text
+snapshots. No timestamp sorting is used, even when all event milliseconds are
+equal. Tool start/stop observations are immutable, correlated by ID and include
+only state known then. Each request carries one named criterion, 1-based turn,
+prior ledger entries, and the complete target text. No later caller/bot text,
+future tool completion/cancellation or caller end_call claim is supplied. Earlier
+observed partial text may remain in later prefixes, labeled as observation rather
+than completion. A fresh session has a fresh ledger. Native explicit tool-stop
+boundaries and arrival ordering intentionally differ from Python simulation
+caller's merged timeline; no exact Python end-to-end turn-count parity is claimed.
+
+The independently configured judge first evaluates the whole goal using the
+unchanged response contract. Criteria then run serially, metric-major/turn-minor,
+under that SAME aggregate `judge.timeout_ms` deadline, beginning only after caller
+and bot cleanup. Every admission rechecks cancellation and deadline synchronously.
+There are no retries, fallback providers, concurrency or extra explainer calls.
+Every stream is cancelled/joined. Transport, stream, deadline or cleanup failure
+stops later calls, retains earlier results and leaves every expected remaining
+turn as `none`, with diagnostics. Invalid completed JSON is recorded as `none`
+and the next distinct question may proceed within the same budget; it is not a
+retry. The goal-only route and exact goal parser are unchanged.
+
+Turn answers are strict JSON with exactly `metric`, `turn`, `outcome`, and
+nonblank `reason` (at most 4096 bytes). Outcomes are `meets`, `fails`,
+`not_applicable`, or `none`. The first and third count yes. Score is yes divided
+by ALL expected complete turns, never just returned answers. No turns means null
+score/passed. No judge means unjudged outcomes and null score/passed, not a
+fabricated pass. An omitted threshold is report-only (`passed: null`); malformed
+or missing answers are visible diagnostics, not an independent report-only gate.
+An actual infrastructure/cancellation failure still makes the run an error.
+Threshold comparison is inclusive. A miss with a real `fails` is
+`criterion_failure`; a miss caused only by missing judgments is
+`criterion_no_verdict` and an error. Goal failures remain independent. No model
+confidence/probability is fabricated from this text-response route.
+
+`judged_metrics` results expose name, score, min_score, passed, failure_kind,
+and every ordered turn's outcome, reason and diagnostic. This result field is
+omitted for legacy scenarios without criteria. Existing measured fields,
+serialized scenario defaults, CLI route, stdout JSON and exit rules are preserved.
+This is still a single-run text simulation, not suite/repetition, audio/video,
+real-model judgment quality, or full Python/Pipecat parity.

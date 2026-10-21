@@ -13,6 +13,12 @@ pub(super) const MAX_TOOLS: usize = 256;
 pub(super) fn invalid(message: &str) -> EvalError {
     EvalError::Scenario(message.into())
 }
+fn judged_turns() -> usize {
+    128
+}
+fn default_judged_turns(value: &usize) -> bool {
+    *value == 128
+}
 fn turns() -> usize {
     20
 }
@@ -52,6 +58,18 @@ pub struct SimulationScenario {
     pub handshake_timeout_ms: u64,
     #[serde(default)]
     pub metrics: Vec<Metric>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub judged_metrics: Vec<JudgedMetric>,
+    #[serde(default = "judged_turns", skip_serializing_if = "default_judged_turns")]
+    pub max_judged_turns: usize,
+}
+/// Native per-complete-bot-turn quality criterion, separate from measured metrics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JudgedMetric {
+    pub name: String,
+    pub criterion: String,
+    pub min_score: Option<f64>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "measure", rename_all = "snake_case", deny_unknown_fields)]
@@ -109,6 +127,13 @@ impl SimulationScenario {
             || !(1..=60_000).contains(&self.closing_timeout_ms)
             || !(1..=60_000).contains(&self.handshake_timeout_ms)
             || self.metrics.len() > 64
+            || self.judged_metrics.len() > 64
+            || !(1..=512).contains(&self.max_judged_turns)
+            || self
+                .judged_metrics
+                .len()
+                .saturating_mul(self.max_judged_turns)
+                > 1024
         {
             return Err(invalid("simulation bounds exceed native limits"));
         }
@@ -133,6 +158,19 @@ impl SimulationScenario {
                         "function metric requires bounded function and argument mapping",
                     ));
                 }
+            }
+        }
+        for metric in &self.judged_metrics {
+            if metric.name.trim().is_empty()
+                || metric.name.len() > 128
+                || !names.insert(metric.name.as_str())
+                || metric.criterion.trim().is_empty()
+                || metric.criterion.len() > MAX_TEXT
+                || metric
+                    .min_score
+                    .is_some_and(|s| !s.is_finite() || !(0.0..=1.0).contains(&s))
+            {
+                return Err(invalid("judged metrics require unique bounded names, nonempty bounded criteria and finite min_score in 0..1"));
             }
         }
         Ok(())
