@@ -1,5 +1,42 @@
 # Native implementation evidence and remaining scope
 
+## Batch 159: bounded opt-in LiveKit video input — 2026-10-22
+
+Default-disabled incoming camera/screen video uses bounded native I420 readers,
+private frame/byte admission budgets, generation and track-SID ownership, mute
+cancellation and awaited reader joins. Production input dispatch converts supported
+frames into participant-tagged RGB `UserImage` frames. Sampling, image requests,
+and public video lifecycle events remain deferred.
+
+Revision 3 passed **60 crate unit tests** (L03, including 14 new tests),
+**one review_contracts integration test** (R01), and **one network_signaling
+integration test** (N01), all with natural zero exits. Revision 3 S01 compiled
+and linked local_sfu only: zero runtime tests, no test listing or server startup.
+Q01 strict Clippy then failed with three test-only chunks_exact_to_as_chunks
+diagnostics (Clippy exit 101); formatting was never reached.
+
+Revision 4 changes only those three RGB fixture loops to as_chunks::<3>() with
+empty-remainder assertions. Production and documentation remain unchanged.
+The reviewed cfg(test)-only bridge preserves applicability of revision 3 R01,
+N01 and S01; these are historical executions, not fresh revision 4 runs.
+Revision 4 L04 freshly reran and passed all **60 library tests** with zero
+ignored or filtered tests and a natural zero exit. Together with historical
+revision 3 R01/N01, this is 62 distinct qualified test cases: 60 fresh revision 4
+executions and two historical revision 3 executions, not 62 revision 4 reruns.
+The prior revision 3 library run is not added again. Q02 passed strict package
+all-target Clippy (`-D warnings`) and package `fmt --check` on unchanged
+revision 4, with natural zero exits. Static checks are not additional tests.
+
+Native synthetic frames and loopback signaling do not establish joined-room
+remote video, SFU media, codec/RTP interoperability, device operation, reconnect
+media behavior, production readiness, or full Python parity. Adapter queue
+bounds do not establish a whole-process memory guarantee. Resource observations
+are sampled, not a kernel-enforced aggregate quota. This is a scoped package
+qualification, not a new whole-workspace test gate.
+
+See the current [LiveKit validation](../crates/pipecat-livekit/VALIDATION.md) for provenance and retained failures.
+
+
 ## Batch 158: bounded optional LiveKit camera output — 2026-10-21
 
 The default-disabled camera path accepts room-wide `OutputImage` /

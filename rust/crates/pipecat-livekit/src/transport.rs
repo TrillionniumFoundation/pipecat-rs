@@ -79,7 +79,7 @@ impl FrameProcessor for LiveKitInput {
                     match event {
                         Some(LiveKitEvent::Disconnected { reason }) => return Err(ProcessorError::fatal(format!("LiveKit disconnected: {reason}"))),
                         Some(LiveKitEvent::Error(message)) => return Err(ProcessorError::fatal(message)),
-                        Some(event) => if let Some(frame) = event.into_frame().map_err(processor_error)? { output.push(frame, Direction::Downstream).await?; },
+                        Some(event) => dispatch_input(event, &output).await?,
                         None => return Err(ProcessorError::fatal(format!("LiveKit event stream closed: {:?}", connection.state()))),
                     }
                 }
@@ -601,4 +601,15 @@ mod video_lane_tests {
         started.discard();
         assert!(started.discard.is_cancelled());
     }
+}
+
+/// Shared production input dispatch; push acknowledges bounded pipeline admission only.
+pub(crate) async fn dispatch_input(
+    event: LiveKitEvent,
+    output: &ProcessorContext,
+) -> Result<(), ProcessorError> {
+    if let Some(frame) = event.into_frame().map_err(processor_error)? {
+        output.push(frame, Direction::Downstream).await?;
+    }
+    Ok(())
 }

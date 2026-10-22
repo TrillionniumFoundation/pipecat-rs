@@ -30,8 +30,9 @@ pub struct LiveKitConnection {
     room: Arc<Room>,
     config: LiveKitConfig,
     source: Option<NativeAudioSource>,
-    events: Mutex<mpsc::Receiver<LiveKitEvent>>,
+    events: Mutex<EventReceiver>,
     state: watch::Receiver<ConnectionState>,
+    video_input_stats: Arc<crate::video_input::Stats>,
     cancel: CancellationToken,
     audio: Option<crate::publisher::AudioPublisher>,
     video: Option<crate::video::VideoPublisher>,
@@ -69,6 +70,11 @@ impl LiveKitConnection {
         let (room, room_events) = joined;
         let room = Arc::new(room);
         let (tx, rx) = mpsc::channel(config.queue_capacity);
+        let (video_readers, video_rx) = crate::video_input::VideoReaders::new(
+            config.video_input.clone().unwrap_or_default(),
+            cancel.clone(),
+        );
+        let video_input_stats = video_readers.stats();
         let (state_tx, state) = watch::channel(ConnectionState::Connecting);
         let (ready_tx, ready_rx) = oneshot::channel();
         let mut guard = SetupCancellation(Some(cancel.clone()));
@@ -80,6 +86,7 @@ impl LiveKitConnection {
             cancel.clone(),
             config.clone(),
             ready_tx,
+            video_readers,
         ));
         let readiness = tokio::select! {
             biased;
@@ -106,8 +113,13 @@ impl LiveKitConnection {
             room,
             config,
             source: ready.source,
-            events: Mutex::new(rx),
+            events: Mutex::new(EventReceiver {
+                events: rx,
+                video: video_rx,
+                video_closed: false,
+            }),
             state,
+            video_input_stats,
             cancel,
             audio: ready.publisher,
             video: ready.video,
@@ -115,6 +127,9 @@ impl LiveKitConnection {
         })
     }
 
+    pub fn video_input_stats(&self) -> crate::VideoInputStats {
+        self.video_input_stats.snapshot()
+    }
     pub fn state(&self) -> ConnectionState {
         self.state.borrow().clone()
     }
@@ -286,6 +301,7 @@ impl LiveKitConnection {
         if let Some(owner) = owned.as_mut() {
             let result = owner.await.map_err(sdk).and_then(|result| result);
             owned.take();
+            self.events.lock().await.video.close();
             result
         } else {
             let mut state = self.state.clone();
@@ -346,6 +362,7 @@ struct ReadyMedia {
     source: Option<NativeAudioSource>,
     publisher: Option<crate::publisher::AudioPublisher>,
 }
+#[allow(clippy::too_many_arguments)] // One owner receives all session resources.
 async fn initialize_room(
     room: Arc<Room>,
     events: mpsc::UnboundedReceiver<RoomEvent>,
@@ -354,6 +371,7 @@ async fn initialize_room(
     cancel: CancellationToken,
     config: LiveKitConfig,
     ready: oneshot::Sender<Result<ReadyMedia>>,
+    video_readers: crate::video_input::VideoReaders,
 ) -> Result<()> {
     let mut setup = RoomSetup {
         room: &room,
@@ -438,6 +456,7 @@ async fn initialize_room(
             task,
         },
         config,
+        video_readers,
     )
     .await
 }
@@ -520,6 +539,7 @@ struct RoomMedia {
     publisher: Option<crate::publisher::AudioPublisher>,
     task: Option<JoinHandle<Result<()>>>,
 }
+#[allow(clippy::too_many_arguments)] // Session owner, not a detached video lifecycle.
 async fn room_loop(
     room: Arc<Room>,
     mut events: mpsc::UnboundedReceiver<RoomEvent>,
@@ -528,6 +548,7 @@ async fn room_loop(
     cancel: CancellationToken,
     mut media: RoomMedia,
     config: LiveKitConfig,
+    mut video_readers: crate::video_input::VideoReaders,
 ) -> Result<()> {
     let mut tracks = HashMap::<String, AudioReader>::new();
     let mut readers = JoinSet::<(String, u64, Result<()>)>::new();
@@ -542,6 +563,7 @@ async fn room_loop(
                     published.map_err(sdk)??;
                     return Err(Error::Sdk("native publisher stopped unexpectedly".into()));
                 }
+                ended = video_readers.next_finished() => { ended?; }
                 ended = readers.join_next(), if !readers.is_empty() => {
                     let (sid, generation, result) = ended.expect("nonempty JoinSet").map_err(sdk)?;
                     if tracks.get(&sid).is_some_and(|reader| reader.generation == generation) { tracks.remove(&sid); }
@@ -554,17 +576,47 @@ async fn room_loop(
                         RoomEvent::ParticipantActive(p) => emit(&tx, LiveKitEvent::ParticipantActive(participant_info(&p)))?,
                         RoomEvent::ParticipantDisconnected(p) => {
                             let identity = p.identity().to_string();
+                            video_readers.remove_participant(&identity).await?;
                             for reader in tracks.values().filter(|r| r.identity == identity) { reader.cancel.cancel(); }
                             emit(&tx, LiveKitEvent::ParticipantDisconnected(participant_info(&p)))?;
                         }
                         RoomEvent::Connected { participants_with_tracks } => {
                             for (p, publications) in participants_with_tracks {
                                 emit(&tx, LiveKitEvent::ParticipantConnected(participant_info(&p)))?;
-                                if config.accepts(&p.identity().to_string()) { for publication in publications { if publication.kind() == TrackKind::Audio { publication.set_subscribed(true); } } }
+                                for publication in publications { if selects_publication(&config, &p.identity().to_string(), publication.kind()) { publication.set_subscribed(true); } }
                             }
                         }
                         RoomEvent::TrackPublished { publication, participant } => {
-                            if publication.kind() == TrackKind::Audio && config.accepts(&participant.identity().to_string()) { publication.set_subscribed(true); }
+                            if selects_publication(&config, &participant.identity().to_string(), publication.kind()) { publication.set_subscribed(true); }
+                        }
+                        RoomEvent::TrackSubscribed { track: RemoteTrack::Video(track), publication, participant } => {
+                            let identity = participant.identity().to_string();
+                            if !selects_publication(&config, &identity, TrackKind::Video) { continue; }
+                            let key = crate::video_input::Key { identity, source: crate::VideoSource::from_track(publication.source()) };
+                            video_readers.start(key, track.sid().to_string(), track.rtc_track(), publication.is_muted()).await?;
+                        }
+                        RoomEvent::TrackUnsubscribed { track: RemoteTrack::Video(track), publication, participant } => {
+                            let key = crate::video_input::Key { identity: participant.identity().to_string(), source: crate::VideoSource::from_track(publication.source()) };
+                            video_readers.stop(&key, Some(&track.sid().to_string())).await?;
+                        }
+                        RoomEvent::TrackUnpublished { publication, participant } => {
+                            if publication.kind() == TrackKind::Video {
+                                let key = crate::video_input::Key { identity: participant.identity().to_string(), source: crate::VideoSource::from_track(publication.source()) };
+                                video_readers.stop(&key, Some(&publication.sid().to_string())).await?;
+                            }
+                        }
+                        RoomEvent::TrackMuted { participant: Participant::Remote(participant), publication: TrackPublication::Remote(publication) } => {
+                            if publication.kind() == TrackKind::Video {
+                                let key = crate::video_input::Key { identity: participant.identity().to_string(), source: crate::VideoSource::from_track(publication.source()) };
+                                video_readers.mute(&key, &publication.sid().to_string()).await?;
+                            }
+                        }
+                        RoomEvent::TrackUnmuted { participant: Participant::Remote(participant), publication: TrackPublication::Remote(publication) } => {
+                            if publication.kind() == TrackKind::Video {
+                                let key = crate::video_input::Key { identity: participant.identity().to_string(), source: crate::VideoSource::from_track(publication.source()) };
+                                // Only the currently owned SID can resume, with an entirely fresh sink.
+                                video_readers.unmute(&key, &publication.sid().to_string())?;
+                            }
                         }
                         RoomEvent::TrackSubscribed { track: RemoteTrack::Audio(track), participant, .. } => {
                             let identity = participant.identity().to_string();
@@ -599,11 +651,23 @@ async fn room_loop(
                             if speakers.len() > config.max_audio_tracks { return Err(Error::Limit("active speakers per event")); }
                             emit(&tx, LiveKitEvent::ActiveSpeakers(speakers.iter().map(|p| p.identity().to_string()).collect()))?;
                         }
-                        RoomEvent::Reconnecting => { state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
+                        RoomEvent::Reconnecting => { video_readers.close().await?; state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
                             if let Some(publisher) = &media.publisher { publisher.interrupt(); }
                             if let Some(source) = &media.source { source.clear_buffer(); } emit(&tx, LiveKitEvent::Reconnecting)?; }
-                        RoomEvent::Reconnected => { state.send_replace(ConnectionState::Connected); emit(&tx, LiveKitEvent::Reconnected)?; }
-                        RoomEvent::Disconnected { reason } => { emit(&tx, LiveKitEvent::Disconnected { reason: format!("{reason:?}") })?; break; }
+                        RoomEvent::Reconnected => {
+                            for participant in room.remote_participants().values() {
+                                let identity = participant.identity().to_string();
+                                if !selects_publication(&config, &identity, TrackKind::Video) { continue; }
+                                for publication in participant.track_publications().values() {
+                                    if let Some(RemoteTrack::Video(track)) = publication.track() {
+                                        let key = crate::video_input::Key { identity: identity.clone(), source: crate::VideoSource::from_track(publication.source()) };
+                                        video_readers.start(key, track.sid().to_string(), track.rtc_track(), publication.is_muted()).await?;
+                                    }
+                                }
+                            }
+                            state.send_replace(ConnectionState::Connected); emit(&tx, LiveKitEvent::Reconnected)?;
+                        }
+                        RoomEvent::Disconnected { reason } => { video_readers.close().await?; emit(&tx, LiveKitEvent::Disconnected { reason: format!("{reason:?}") })?; break; }
                         _ => {}
                     }
                 }
@@ -618,6 +682,7 @@ async fn room_loop(
     if let Some(source) = &media.source {
         source.clear_buffer();
     }
+    let video_closed = video_readers.close().await;
     readers.abort_all();
     while readers.join_next().await.is_some() {}
     let publisher_closed = if let Some(mut task) = media.task.take() {
@@ -633,6 +698,7 @@ async fn room_loop(
         Ok(())
     };
     let closed = close_room(&room, config.close_timeout).await;
+    let result = crate::publication::combine_cleanup(result, video_closed);
     let result = crate::publication::combine_cleanup(result, publisher_closed);
     let result = crate::publication::combine_cleanup(result, closed);
     state.send_replace(match &result {
@@ -716,5 +782,47 @@ mod setup_guard_tests {
             .unwrap()
             .unwrap();
         assert!(cancel.is_cancelled());
+    }
+}
+
+/// The same opt-in/filter predicate is used for initial and later publications.
+fn selects_publication(config: &LiveKitConfig, identity: &str, kind: TrackKind) -> bool {
+    config.accepts(identity)
+        && (kind == TrackKind::Audio || (kind == TrackKind::Video && config.video_input.is_some()))
+}
+struct EventReceiver {
+    events: mpsc::Receiver<LiveKitEvent>,
+    video: crate::video_input::VideoReceiver,
+    video_closed: bool,
+}
+impl EventReceiver {
+    async fn recv(&mut self) -> Option<LiveKitEvent> {
+        loop {
+            tokio::select! {
+                event = self.events.recv() => return event,
+                event = self.video.recv(), if !self.video_closed => match event {
+                    Some(event) => return Some(event),
+                    None => self.video_closed = true,
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod video_selection_tests {
+    use super::*;
+    #[test]
+    fn initial_and_later_publications_use_opt_in_and_identity_filter() {
+        let mut config = LiveKitConfig::default();
+        assert!(selects_publication(&config, "alice", TrackKind::Audio));
+        assert!(!selects_publication(&config, "alice", TrackKind::Video));
+        config.video_input = Some(crate::VideoInputConfig::default());
+        assert!(selects_publication(&config, "alice", TrackKind::Video));
+        config.participant_filter = vec!["alice".into()];
+        for kind in [TrackKind::Audio, TrackKind::Video] {
+            assert!(selects_publication(&config, "alice", kind));
+            assert!(!selects_publication(&config, "bob", kind));
+        }
     }
 }

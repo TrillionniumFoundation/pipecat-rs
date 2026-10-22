@@ -14,6 +14,7 @@ application-provided mock backend.
 - Join an existing LiveKit room with a caller-supplied participant JWT
 - Publish one microphone audio track, receive each remote audio track separately
 - Optionally publish one fixed-size `pipecat-video` camera track from raw output images
+- Opt in to bounded I420 camera/screen input as participant-tagged RGB `UserImage`
 - Convert interleaved PCM16-LE with exact sample-rate/channel validation
 - Preserve participant identity separately from participant and track SIDs
 - Receive participant connect/active/disconnect, track subscribe/unsubscribe,
@@ -68,8 +69,9 @@ One owned room task coordinates the SDK event receiver, a single bounded native
 audio publisher, and a capped `JoinSet` of audio readers. The native publisher
 splits buffered writes into source-sized chunks and drains a cancelled capture
 callback before allowing a new write. The pipeline owns separate bounded normal
-and urgent output tasks. Only accepted audio publications are subscribed;
-unsupported video tracks are not automatically subscribed. Application event admission is nonblocking: a full queue
+and urgent output tasks. Audio publications and explicitly enabled video publications
+use the participant filter. Video is disabled by default. Non-video application event
+admission is nonblocking: a full queue
 closes the session with an observable failure rather than allowing unlimited
 buffering. PCM, data, and event metadata sizes are checked; JSON serialization itself is
 bounded. Reconnect invalidates pending interruptible audio. The SDK's audio sink queues
@@ -195,7 +197,7 @@ Linux host it owns a disposable loopback-only server and short-lived fixture
 tokens, with no hosted account or stored credentials. See
 [local SFU qualification](qualification/LOCAL_SFU.md) for the exact limits.
 
-Remote video subscription, device capture, screen-share selection, participant audio mixing,
+General native-buffer video conversion, device capture, manual image requests, source sampling, participant audio mixing,
 metadata mutation, subscription/mute controls, token/REST helpers, and Python
 API/event-handler parity are not implemented by this crate.
 
@@ -225,3 +227,64 @@ room. Publication transaction tests use mocks, not a successful SDK publication.
 There is no live-provider, joined SFU, remote video, physical device, codec/RTP,
 production-readiness or full Python parity claim. Earlier whole-workspace and
 vendored signaling test counts are historical and are not added to these 48.
+
+## Opt-in incoming video subset
+
+`LiveKitConfig::video_input = Some(VideoInputConfig::default())` enables bounded,
+all-frame camera and screen-share input. It is disabled by default. The same
+participant filter and opt-in predicate select both initial room publications and
+later publications. Screen-share maps to `screenVideo`; other video track sources
+map to `camera`, as in Python pin `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
+
+This slice accepts concrete SDK I420 buffers only. Dimensions and pixel/stride/byte
+products are checked before allocating or invoking the inspected I420-to-ABGR
+conversion. ABGR output bytes are RGBA in memory, compacted in place to RGB. No
+`to_i420()` copy or arbitrary native/platform conversion is attempted. Unsupported
+buffers or invalid frame layouts are dropped individually, not promoted to a fatal
+room error. `connection.video_input_stats()` exposes rejection/pressure-drop counts
+and a bounded latest rejection string. These counters do not count downstream
+retention, native sink overflow, or every lifecycle-invalidated queued frame.
+
+Dedicated public video subscribed/unsubscribed lifecycle notifications remain
+deferred; this slice adds the `Video` data event, not the full Python event API.
+
+`LiveKitEvent::Video` maps through the production input dispatcher to
+`FrameData::UserImage`. `user_id` is participant identity, `transport_source` is
+`camera` or `screenVideo`, and `livekit.track_sid` is independent metadata. Format is
+`RGB`; request, text, append-to-context and run-LLM fields remain absent. Native
+rotation is not applied and native timestamps are not translated into pipeline PTS.
+
+Each participant/source owns an independent SID/generation and at most one reader.
+Replacement, mute, unsubscribe, participant removal and teardown invalidate the
+generation, cancel the reader, close the sink and join the task before releasing
+its slot. Muted subscriptions retain a bounded ownership slot but no native sink;
+unmute only resumes the current SID with a new sink and generation. Old completion,
+unsubscribe or unmute cannot remove/resume a replacement. Reconnect clears owned
+readers and reconstructs them from current SDK remote publications. This is lifecycle
+logic, not qualification of remote reconnect/media delivery.
+
+Default limits are four owned tracks (including muted slots), one native queued
+frame per reader, four pending converted frames, 4096 maximum dimension, 2,073,600
+pixels, 8 MiB per conversion and 32 MiB retained converted storage. Configurable
+hard maxima are 16 tracks, four native frames, 16 pending converted frames and
+64 MiB retained storage. Native queue capacity must be positive: SDK `Some(0)` is
+unbounded and is rejected. Native overflow keeps the latest frame; adapter pending
+or byte pressure drops the newly received frame without blocking room control.
+
+Private non-cloneable envelopes hold both pending-frame and byte permits through
+the final `recv()` admission boundary. The charged size includes full RGBA scratch
+capacity retained after RGB compaction, not merely RGB length. Lifecycle validity
+is checked under the same lock used for invalidation at that boundary. An event
+already admitted before invalidation cannot be recalled. Caller clones, public
+event retention, and downstream pipeline storage are outside this adapter budget;
+`ProcessorContext::push` is bounded admission, not downstream consumption. Native
+sink limits apply after native allocation: decoder buffers, SDK room events and
+upstream/native queues are not a whole-process or untrusted-network memory bound.
+`close().await` joins owned readers and drains the private video lane; `Drop` only
+requests best-effort cancellation.
+
+Local native source/track fixtures and synthetic lifecycle tests do not establish
+remote subscription, SFU, RTP, codec decoding, devices, browser, NAT/TURN or remote
+reconnect behavior. Source sampling, manual image requests and full Python input
+transport parity remain deferred. Existing audio, data, DTMF and outgoing-video
+paths are retained. No SFU/netlink experiment is part of this slice.

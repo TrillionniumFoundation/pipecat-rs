@@ -47,6 +47,12 @@ pub enum LiveKitEvent {
         track_sid: String,
         audio: AudioRawFrame,
     },
+    Video {
+        identity: String,
+        track_sid: String,
+        source: crate::VideoSource,
+        image: pipecat_core::ImageRawFrame,
+    },
     Data {
         payload: Vec<u8>,
         identity: Option<String>,
@@ -92,6 +98,23 @@ impl LiveKitEvent {
                 FrameData::UserAudio(UserAudioRawFrame {
                     audio,
                     user_id: identity,
+                })
+            }
+            Self::Video {
+                identity,
+                track_sid,
+                source: video_source,
+                image,
+            } => {
+                source = Some(video_source.as_str().into());
+                metadata.push(("livekit.track_sid", Value::String(track_sid)));
+                FrameData::UserImage(pipecat_core::UserImageRawFrame {
+                    image,
+                    user_id: identity,
+                    text: None,
+                    append_to_context: None,
+                    request: None,
+                    run_llm: None,
                 })
             }
             Self::Data {
@@ -202,7 +225,12 @@ pub(crate) fn validate_event(event: &LiveKitEvent) -> Result<()> {
             .saturating_add(p.sid.len())
             .saturating_add(p.name.len())
             .saturating_add(p.metadata.len()),
-        LiveKitEvent::AudioSubscribed {
+        LiveKitEvent::Video {
+            identity,
+            track_sid,
+            ..
+        }
+        | LiveKitEvent::AudioSubscribed {
             identity,
             track_sid,
         }

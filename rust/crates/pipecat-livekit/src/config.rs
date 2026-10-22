@@ -9,6 +9,8 @@ use crate::{Error, Result};
 pub struct LiveKitConfig {
     pub input_format: PcmFormat,
     pub output_format: Option<PcmFormat>,
+    /// Disabled by default; bounded all-frame I420 receive, without sampling/request APIs.
+    pub video_input: Option<crate::VideoInputConfig>,
     /// Disabled by default; one fixed-size room camera track when configured.
     pub video_output: Option<crate::VideoOutputConfig>,
     pub queue_capacity: usize,
@@ -19,7 +21,7 @@ pub struct LiveKitConfig {
     pub connect_timeout: Duration,
     pub operation_timeout: Duration,
     pub close_timeout: Duration,
-    /// Receive audio only from these participant identities; empty means all.
+    /// Receive audio and video only from these participant identities; empty means all.
     pub participant_filter: Vec<String>,
 }
 impl Default for LiveKitConfig {
@@ -27,6 +29,7 @@ impl Default for LiveKitConfig {
         Self {
             input_format: PcmFormat::new(16000, 1).expect("valid default format"),
             output_format: Some(PcmFormat::new(24000, 1).expect("valid default format")),
+            video_input: None,
             video_output: None,
             queue_capacity: 128,
             max_audio_tracks: 16,
@@ -43,6 +46,9 @@ impl Default for LiveKitConfig {
 impl LiveKitConfig {
     pub(crate) fn validate(&self) -> Result<()> {
         validate_format(self.input_format)?;
+        if let Some(video) = &self.video_input {
+            video.validate()?;
+        }
         if let Some(video) = &self.video_output {
             video.validate()?;
         }

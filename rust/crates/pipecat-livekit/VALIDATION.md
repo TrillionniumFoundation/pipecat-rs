@@ -1,5 +1,63 @@
 # LiveKit native validation
 
+## Batch 159: bounded opt-in LiveKit video input — 2026-10-22
+
+Default-disabled incoming camera/screen video uses bounded native I420 readers,
+private frame/byte admission budgets, generation and track-SID ownership, mute
+cancellation and awaited reader joins. Production input dispatch converts supported
+frames into participant-tagged RGB `UserImage` frames. Sampling, image requests,
+and public video lifecycle events remain deferred.
+
+Revision 3 passed **60 crate unit tests** (L03, including 14 new tests),
+**one review_contracts integration test** (R01), and **one network_signaling
+integration test** (N01), all with natural zero exits. Revision 3 S01 compiled
+and linked local_sfu only: zero runtime tests, no test listing or server startup.
+Q01 strict Clippy then failed with three test-only chunks_exact_to_as_chunks
+diagnostics (Clippy exit 101); formatting was never reached.
+
+Revision 4 changes only those three RGB fixture loops to as_chunks::<3>() with
+empty-remainder assertions. Production and documentation remain unchanged.
+The reviewed cfg(test)-only bridge preserves applicability of revision 3 R01,
+N01 and S01; these are historical executions, not fresh revision 4 runs.
+Revision 4 L04 freshly reran and passed all **60 library tests** with zero
+ignored or filtered tests and a natural zero exit. Together with historical
+revision 3 R01/N01, this is 62 distinct qualified test cases: 60 fresh revision 4
+executions and two historical revision 3 executions, not 62 revision 4 reruns.
+The prior revision 3 library run is not added again. Q02 passed strict package
+all-target Clippy (`-D warnings`) and package `fmt --check` on unchanged
+revision 4, with natural zero exits. Static checks are not additional tests.
+
+Native synthetic frames and loopback signaling do not establish joined-room
+remote video, SFU media, codec/RTP interoperability, device operation, reconnect
+media behavior, production readiness, or full Python parity. Adapter queue
+bounds do not establish a whole-process memory guarantee. Resource observations
+are sampled, not a kernel-enforced aggregate quota. This is a scoped package
+qualification, not a new whole-workspace test gate.
+
+### Source provenance and retained failures
+
+The executed revision 3 full-source SHA256 is
+`09c285af1d0bbc025a7429bd06297950be3a11a1dc6a40d7cc546a1f3efc2c01`.
+The revision 4 full-source SHA256 is
+`978e1a922551483e2a9b56f78eb432e8490ae353a8c7d7b0046e1aacc33e72ec`.
+Only cfg(test) fixture code changed. The reviewed bridge carries revision 3
+integration and compile-only evidence, not new executions. Revision 4 library
+qualification passed freshly at L04 and strict Clippy/formatting at Q02.
+The final documentation-only update is bound separately from these executions;
+it does not turn historical evidence into fresh runs.
+
+- L01 failed compilation with E0277 and executed zero tests.
+- L02 compiled and ran 60 tests: 57 passed and three failed. Those failures
+  remain part of the evidence, not passing tests or masked results.
+- Revision 3 corrected only three wrong fixture expectations against the actual
+  pinned SDK/core behavior: two captures after the final native sink had closed
+  return false; downstream output saturation preserves the core Backpressure
+  failure instead of graceful shutdown. Production behavior and decisive frame
+  assertions were not relaxed. L03 then actually reran and passed all 60 tests.
+
+Historical results below retain their original date and scope.
+
+
 ## Batch 158: bounded optional LiveKit camera output — 2026-10-21
 
 The default-disabled camera path accepts room-wide `OutputImage` /
