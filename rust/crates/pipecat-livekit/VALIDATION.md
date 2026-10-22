@@ -1,6 +1,92 @@
 # LiveKit native validation
 
-## Batch 164: first-participant observation — source only, qualification pending
+## Batch 164: first-participant observation — 2026-10-22
+
+### Completed bounded native qualification
+
+The actual tested source is commit
+[`b806f9b88061afdd3449062c8264920b2f7964a6`](https://github.com/TrillionniumFoundation/pipecat-rs/commit/b806f9b88061afdd3449062c8264920b2f7964a6),
+tree `8e6f8d31f616e609a71173eb1c3a0f4f2ab02396`. Its original publication was
+explicitly source-only and native-untested; the following campaign completed
+later without changing that source. This documentation-only update records those
+results, not a separately compiled revision or a hosted CI result.
+
+The publication bridge changes only this `VALIDATION.md` and the adjacent
+`README.md`; all other tracked paths, bytes and modes match the tested checkpoint.
+Those two documents are absent from the inspected source inclusions and existing
+dep-info. Static source/build-output inspection found no checkout-VCS-derived
+runtime constant. This is not filesystem tracing, a post-edit build, or a
+guarantee of reproducible binary identity. Vendored README inputs are unchanged.
+
+Linux x86-64, Rust 1.99.0, Clang/LLD 21.1.8 and official WebRTC
+`webrtc-89d790b`, with the pinned SDK/native provenance recorded below:
+
+- L: **120 library tests passed in 12.50 seconds**, including the first-participant
+  admission/reset/limits, production-dispatch and owned-video cleanup cases.
+- R: **one `review_contracts` test passed in 9.16 seconds**:
+  `signaling_owners_release_on_cancel_abort_and_timeout`. This is synthetic
+  signaling ownership, not a joined-room or media-delivery test.
+- N: **one `network_signaling` test passed in 4.10 seconds**:
+  `real_websocket_transport_releases_on_cancel_abort_and_timeout`. It uses real
+  loopback TCP/WebSockets with unchanged proxy handling; it does not qualify
+  the SDK's default proxy path, hosted rooms or remote media.
+- Each L/R/N executable was freshly compiled and linked, listed against its exact
+  frozen inventory and actually executed on the same unchanged source. All had
+  zero failed, ignored, measured or filtered tests. Total: **122 actual executed
+  test cases**. Listing, repeated checks and scenarios within a test add no cases.
+- S: `local_sfu` freshly compiled and linked only. **Zero tests executed**: no
+  listing, runtime or server startup. The earlier SFU/netlink restriction was
+  neither retried nor bypassed; this is not SFU runtime qualification.
+- QP: cold strict package all-target Clippy (`-D warnings`) passed with **373
+  artifacts, all `fresh=false`**. A subsequent identical invocation reported all
+  373 fresh and matched the complete canonical artifact records, ignoring only
+  `fresh`. Package `fmt --check` also passed.
+- QF: final strict all-target Clippy passed with **373 artifacts, all
+  `fresh=true`**, and complete canonical equality to the QP all-fresh witness.
+  Final package `fmt --check` passed. QF was a fresh invocation reusing cached
+  artifacts, not a fresh rebuild or another execution of the 122 tests.
+
+These phases were independently accepted. Every original command completed
+naturally with exit zero; recorded cleanup, source/input checks and sampled
+resource limits passed, with no recorded cause, controller error or signal.
+The 2,036-file source inventory and 107,182 immutable-input records were
+reverified unchanged. Before/after hashing does not establish physical
+immutability between observations. Batch163 and older records below remain
+historical and do not contribute to the 122-test total.
+
+### Diagnostics, source binding and remaining scope
+
+Strict Clippy retained **24 warnings in vendored LiveKit 0.9.4**. Each selected
+L/R/N/S compilation also retained one selected-package `linker_messages` warning
+that Clang `--no-default-config` was unused during compilation. Successful strict
+package lint is not a warning-free dependency or native build.
+
+The native test profile used `opt-level=0`, compiler debug level 1, debug assertions
+and overflow checks. Selected ELF links used `--threads=1` and `--strip-debug`:
+ordinary symbols and unwind data remain, but final non-ALLOC DWARF is omitted.
+Source-line diagnostics are reduced; full-DWARF debugging parity is not claimed.
+No dependency, vendor, manifest, lockfile or global profile change is included.
+Resource observations are sampled, not kernel-enforced aggregate quotas, and do
+not rule out between-sample peaks. Final target storage was 2,342,645,760 bytes
+under the 2,560 MiB cap; this does not qualify arbitrary future cache reuse.
+
+The first-participant contract, one-bool bound, raw-first non-atomic admission,
+terminal failure handling and Python ordering/lifetime differences remain as
+documented in README. Actual SDK Connected/live ingress, current membership
+sampling and reconnect preservation are source-qualified, not executed joined-room
+fixtures or Python callback tests. The video cleanup fixture does not qualify
+full room/audio/publisher teardown. No hosted CI, SFU runtime, successful hosted
+join, remote media/device/RTP, full LiveKit/Python API parity, production-readiness
+or complete Rust replacement is established.
+
+Qualification receipt SHA256:
+`9a485554e9baaa5b043086cb21b61791cc1c0ad7f0e0f567ea22d31ffd35a832`.
+The tested source-inventory SHA256 is
+`ec93a055f28ba6a725771910476de1eefd686b220c77bcfac73082488170799f`.
+The following dated source-recovery record is retained as history, superseded
+only by the bounded qualification above.
+
+### Historical source-only and recovery record
 
 Source now adds the bounded `FirstParticipantJoined { identity }` observation,
 a room-owner bool, shared live/initial join admission, and successful-departure

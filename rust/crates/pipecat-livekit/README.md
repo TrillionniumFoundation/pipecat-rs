@@ -278,7 +278,7 @@ executed joined-room test. The cleanup test does not qualify full room/audio/
 publisher teardown. No hosted CI, SFU runtime, remote media/device validation,
 full Python API parity or complete replacement is claimed.
 
-## First-participant observation (batch164 source only; qualification pending)
+## First-participant observation (batch164)
 
 `FirstParticipantJoined { identity }` is an observation following the ordinary
 `ParticipantConnected` for the first admitted remote join in the current armed
@@ -322,14 +322,35 @@ lease or automatic application-action authority. Direct receive and pipeline
 input remain mutually exclusive consumers. The public enum addition can require
 downstream exhaustive-match changes.
 
-This is source-only implementation, not native qualification. Added test source
-covers normalized helper admission/reset/limits, production dispatch, and the
-owned-video cleanup seam; those tests have not run for Batch164. Actual SDK
-Connected/live ingress and reconnect/reset wiring are source-inspected, not
-joined-room tests. Batch163's 109 accepted executions above remain historical and
-do not qualify this changed source. Full Python API/callback parity, hosted SFU
-join/runtime, remote media/device/RTP and complete replacement remain unqualified.
-See [VALIDATION.md](VALIDATION.md) for the pending validation gate.
+Batch164 passed **122 actual test cases** on the unchanged source checkpoint
+[`b806f9b88061afdd3449062c8264920b2f7964a6`](https://github.com/TrillionniumFoundation/pipecat-rs/commit/b806f9b88061afdd3449062c8264920b2f7964a6):
+120 library tests, one synthetic signaling ownership integration test and one
+real loopback WebSocket signaling integration test. All exact inventories were
+freshly compiled, listed and executed with zero failed, ignored, measured or
+filtered tests, and independently accepted. The library tests include normalized
+first-participant admission/reset/limits, production dispatch and the owned-video
+cleanup seam. Actual SDK Connected/live ingress and reconnect/reset wiring remain
+source-inspected, not joined-room tests; the cleanup fixture does not qualify
+full room/audio/publisher teardown.
+
+Cold preflight and final strict package all-target Clippy (`-D warnings`) and
+`fmt --check` passed. Cold Clippy reported 373 non-fresh artifacts; its all-fresh
+witness matched the complete canonical inventory apart from the `fresh` field.
+Final Clippy reused 373 artifacts, all fresh, with full canonical equality to
+that witness; it was not another cold rebuild. `local_sfu` freshly compiled and
+linked only: **zero tests executed**, no listing and no server startup.
+Clippy retained 24 vendored LiveKit warnings, and each selected L/R/N/S build
+also retained a linker warning about unused Clang `--no-default-config`.
+These are not warning-free builds. Selected executables omit final DWARF; see
+[VALIDATION.md](VALIDATION.md) for diagnostics, source binding and exact scope.
+
+Source-recovery history, 2026-10-22: `b806f9b8` was originally published as an
+honest source-only, native-untested checkpoint. The results above were obtained
+afterward on that unchanged checkpoint. This documentation-only update is not a
+separately compiled revision or a hosted CI result. Batch163 and older results
+remain historical and are not added to the 122 tests. Full Python API/callback
+parity, hosted SFU join/runtime, remote media/device/RTP and complete replacement
+remain unqualified.
 
 ## Opt-in incoming video subset
 
