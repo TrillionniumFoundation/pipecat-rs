@@ -1,6 +1,8 @@
 //! Native LiveKit room/audio/data transport using the official Rust SDK.
 //!
 //! Audio publication reports native source admission, not remote playback.
+#[cfg(test)]
+mod active_speaker_tests;
 mod config;
 mod connection;
 mod protocol;

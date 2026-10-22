@@ -1,5 +1,100 @@
 # LiveKit native validation
 
+## Batch 163: bounded active-speaker change observation — 2026-10-22
+
+`ActiveSpeakerChanged { identity }` observes a change in the last identity of a
+nonempty SDK list, while `ActiveSpeakers` preserves every admitted raw list,
+including empty/repeated lists, order and duplicates. The room owner retains one
+bounded identity only after the derived observation is admitted. Empty updates,
+departure and automatic reconnect do not reset it. Raw-first admission is not
+atomic: the raw event can be queued before the derived event fails with
+`QueueFull` or `Closed`. Existing terminal cleanup handles that failure without
+retry or rollback. The observation has no frame projection or callback authority;
+direct receive and pipeline input remain mutually exclusive consumers. The added
+public enum variant can require downstream exhaustive-match updates.
+
+Python reference remains `af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`src/pipecat/transports/livekit/transport.py`. The comparison covers state
+selection, not Python asynchronous callbacks or the full transport API. See the
+README for limits, ownership and compatibility details. No dependency, Cargo
+manifest, lockfile, profile or vendored SDK change is part of this slice.
+
+### Completed validation
+
+Linux x86-64, Rust 1.99.0, with pinned SDK/WebRTC provenance as recorded below:
+
+- L01: **107 library tests passed**, including ten new tests, in **13.21 seconds**.
+- R01: **one `review_contracts` integration test passed** in **9.24 seconds**:
+  `signaling_owners_release_on_cancel_abort_and_timeout`. This is synthetic
+  signaling ownership, not a joined room or media-delivery test.
+- N01: **one `network_signaling` integration test passed** in **4.54 seconds**:
+  `real_websocket_transport_releases_on_cancel_abort_and_timeout`. It uses real
+  loopback TCP/WebSockets, not a hosted room or remote media.
+- All three freshly built, listed and executed their exact inventories on the
+  same frozen source, with zero failed, ignored, measured or filtered tests,
+  natural zero exits and verified process cleanup. Results were independently
+  accepted. Total: **109 actual executed test cases**. Listing, rebuilds and
+  scenarios within one test do not add cases.
+- S01: `local_sfu` freshly compiled and linked, with natural zero exit and verified
+  cleanup, independently accepted. **Zero tests executed**: no test listing,
+  runtime or server startup. This does not qualify SFU runtime.
+- QP01 preflight and QF01 final strict package all-target Clippy (`-D warnings`)
+  and package `fmt --check` passed and were independently accepted. QF01 had
+  natural zero exits and 373 compiler artifacts, all marked fresh by Cargo.
+  This was a new lint invocation using cached artifacts, not a fresh rebuild.
+  Static checks add **zero runtime tests** and do not rerun the 109 cases above.
+
+The ten new tests exercise production normalized admission and input dispatch:
+last-identity selection; raw ordering/duplicates; empty updates and fresh-owner
+state; local/filter-excluded identities; count/UTF-8 limits and compact retained
+identity; queue-full/closed and one-slot partial admission; direct-event validation;
+no observation frame with continued media handling; and existing video-reader
+cancellation/join after admission failure. Departure/reconnect preservation is
+source-qualified by room ownership, not an executed joined-room test. The cleanup
+fixture does not qualify full room, audio or publisher teardown.
+
+### Diagnostics, retention and qualification limits
+
+The selected library, integration and compile-only SFU executables retain compiler
+debug level 1, debug assertions, overflow checks, unoptimized test code, ordinary
+symbols and unwind data, but omit final non-ALLOC DWARF through selected linker
+stripping. Source-line diagnostics are reduced; no full-debug byte equivalence or
+global source/dependency debug-profile change is claimed. The retained network
+signaling executable archive is temporary and not reboot/power-loss durable;
+archive byte verification is not another test execution.
+
+Historical unsuccessful or uncertain checks remain historical, not converted to
+passes by this batch. Separate artifact-accounting/retention failures are not
+failed test cases and do not increase the runtime count. Sampled resource
+observations are not hard aggregate memory/process quotas. Final lint left product
+source unchanged; it does not establish byte-identical build-cache contents.
+
+No hosted CI, full-workspace qualification, SFU runtime, hosted-room join, remote
+media, RTP/codec/device behavior, full Python parity or complete replacement is
+claimed. The earlier SFU startup denial remains unbypassed. Publication, remote CI,
+merge and deployment are separate from the local checks above, not inferred passes.
+
+### Source provenance
+
+Published base (Batch162): `3a20dd352fef728f4d2a402b3845fe3601d9e52d`.
+QP01/L01/R01/N01/S01/QF01 bind the same 2023-file Rust source inventory SHA256
+`70c860a835622418241241d8d76ffaa355c87af02d40e7f9b4dda86df8aa5121`.
+The six-file feature comprises this crate's README, `src/connection.rs`,
+`src/lib.rs`, `src/protocol.rs`, `src/video_input/lifecycle_tests.rs`, and new
+`src/active_speaker_tests.rs`.
+
+Qualified test-executable SHA256 values:
+- Library: `de26102fb4a748593eeacfde2dee1f03c3280eb1251c89eefb8c4ca238abbdf7`.
+- `review_contracts`: `89bc94220150add5d90cc9cbc829459f4d1461442f592b6b52e02a0ff529f754`.
+- `network_signaling`: `b72a830455d135b39347f68a4343ded678965a9ab7faccae50c1fae2f7b5dd98`.
+- Compile-only `local_sfu`: `dff77d5bb14c66d6205bdf120a5506242e9e65e4b3768dfcac3fbd5350c49f2a`.
+
+The subsequent documentation-only update changes this crate's README and
+VALIDATION, not code, tests, dependencies or profiles. Earlier execution binds
+the inventory above, not these later documentation bytes; the final documentation
+binding separately checks unchanged code and the complete post-edit inventory.
+Historical validation entries below are preserved and are not new Batch163 runs.
+
 ## Batch 162: bounded video subscription observations — 2026-10-22
 
 `LiveKitEvent::VideoSubscribed` / `VideoUnsubscribed` expose effective selected

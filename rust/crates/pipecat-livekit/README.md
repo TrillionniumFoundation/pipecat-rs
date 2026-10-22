@@ -228,6 +228,56 @@ There is no live-provider, joined SFU, remote video, physical device, codec/RTP,
 production-readiness or full Python parity claim. Earlier whole-workspace and
 vendored signaling test counts are historical and are not added to these 48.
 
+## Bounded active-speaker change observation (batch163)
+
+`ActiveSpeakers` still reports every admitted SDK list, including empty and repeated
+lists, with identities and ordering unchanged. `ActiveSpeakerChanged { identity }`
+adds an observation when the last identity in a nonempty list differs from the
+last successfully admitted change in this session. Identity is not participant
+SID. Local and participant-filter-excluded identities remain eligible; no second
+sort or empty-identity normalization is applied. The inspected pinned SDK sorts
+ascending audio level, so its last identity is the loudest, preserving SDK ties.
+
+One optional copied identity belongs to the room owner. Empty updates, participant
+departure and automatic reconnect do not reset it; a fresh owner starts without
+one. No silence, departure, callback, VAD or current-speaker lease is invented.
+This follows the state selection in Python pin
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`, not its asynchronous callback API.
+The new event's `into_frame()` returns `None`; production pipeline input consumes
+it without fabricating a frame. Direct receive and pipeline input are still
+mutually exclusive consumers, not independent observation subscriptions.
+
+Before admission or retained-state change, lists must satisfy `max_audio_tracks`
+and the existing 65,536 aggregate identity UTF-8 byte limit. The derived event
+validates the same single-identity byte ceiling. Only one identity copied from
+validated bytes is retained, not the source String's spare capacity or a history.
+SDK allocations, queued public events and downstream retention remain outside
+this tracker bound; it is not a whole-process heap guarantee.
+
+Admission is deliberately non-atomic: raw first, changed second, then update
+retained state only after the changed observation is admitted. An empty or
+unchanged list needs one slot. A changed list needs two: a capacity-one lane can
+admit raw and then return `QueueFull`, leaving prior tracker state unchanged.
+`QueueFull`/`Closed` propagates to existing terminal owner cleanup with no retry,
+rollback or duplicate raw event. Queued raw history is not recalled; terminal
+Error notification is best-effort. This increases control-queue pressure, and the
+new public enum variant can require changes to downstream exhaustive matches.
+
+Batch163 passed **109 fresh test cases** on the same frozen source: 107 library
+tests (including ten new tests), one synthetic signaling ownership integration
+test and one real loopback WebSocket signaling integration test. All had zero
+failed, ignored, measured or filtered tests. Preflight and final strict package
+all-target Clippy (`-D warnings`) and `fmt --check` passed; these checks and the
+test results were independently verified. Final Clippy reused 373 compiler
+artifacts, all marked fresh by Cargo; it was not a fresh rebuild. `local_sfu`
+compiled and linked only: **zero tests executed**, with no listing or server
+startup. See [VALIDATION.md](VALIDATION.md) for source binding and diagnostics.
+
+Departure/reconnect preservation is source-qualified by room ownership, not an
+executed joined-room test. The cleanup test does not qualify full room/audio/
+publisher teardown. No hosted CI, SFU runtime, remote media/device validation,
+full Python API parity or complete replacement is claimed.
+
 ## Opt-in incoming video subset
 
 `LiveKitConfig::video_input = Some(VideoInputConfig::default())` enables bounded,

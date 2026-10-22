@@ -78,6 +78,11 @@ pub enum LiveKitEvent {
         identity: Option<String>,
     },
     ActiveSpeakers(Vec<String>),
+    /// Last identity in a nonempty SDK list changed within this room session.
+    /// Observation only, not silence detection, a callback or a pipeline frame.
+    ActiveSpeakerChanged {
+        identity: String,
+    },
     Reconnecting,
     Reconnected,
     Disconnected {
@@ -274,6 +279,7 @@ pub(crate) fn validate_event(event: &LiveKitEvent) -> Result<()> {
             .map_or(0, String::len)
             .saturating_add(topic.as_ref().map_or(0, String::len)),
         LiveKitEvent::Dtmf { identity, .. } => identity.as_ref().map_or(0, String::len),
+        LiveKitEvent::ActiveSpeakerChanged { identity } => identity.len(),
         LiveKitEvent::ActiveSpeakers(speakers) => speakers
             .iter()
             .fold(0usize, |size, s| size.saturating_add(s.len())),

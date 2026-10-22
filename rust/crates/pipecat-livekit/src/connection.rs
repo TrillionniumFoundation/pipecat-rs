@@ -370,6 +370,39 @@ fn emit(tx: &mpsc::Sender<LiveKitEvent>, event: LiveKitEvent) -> Result<()> {
     })
 }
 
+/// Raw-first, non-atomic admission. Failure terminates the room owner; never retry.
+/// Only a compact copy of the validated last identity survives a successful change.
+pub(crate) fn active_speakers_changed(
+    config: &LiveKitConfig,
+    tx: &mpsc::Sender<LiveKitEvent>,
+    last_identity: &mut Option<String>,
+    speakers: Vec<String>,
+) -> Result<()> {
+    if speakers.len() > config.max_audio_tracks {
+        return Err(Error::Limit("active speakers per event"));
+    }
+    let raw = LiveKitEvent::ActiveSpeakers(speakers);
+    crate::protocol::validate_event(&raw)?;
+    let LiveKitEvent::ActiveSpeakers(speakers) = &raw else {
+        unreachable!()
+    };
+    let changed = speakers
+        .last()
+        .filter(|identity| last_identity.as_deref() != Some(identity.as_str()))
+        .map(|identity| identity.as_str().to_owned());
+    emit(tx, raw)?;
+    if let Some(identity) = changed {
+        emit(
+            tx,
+            LiveKitEvent::ActiveSpeakerChanged {
+                identity: identity.clone(),
+            },
+        )?;
+        *last_identity = Some(identity);
+    }
+    Ok(())
+}
+
 struct AudioReader {
     identity: String,
     generation: u64,
@@ -579,6 +612,8 @@ async fn room_loop(
     let mut tracks = HashMap::<String, AudioReader>::new();
     let mut readers = JoinSet::<(String, u64, Result<()>)>::new();
     let mut next_generation = 0u64;
+    // Session-owned: empty lists, departure and automatic reconnect do not reset it.
+    let mut last_active_speaker = None;
     let result = async {
         loop {
             tokio::select! {
@@ -674,7 +709,7 @@ async fn room_loop(
                         }
                         RoomEvent::ActiveSpeakersChanged { speakers } => {
                             if speakers.len() > config.max_audio_tracks { return Err(Error::Limit("active speakers per event")); }
-                            emit(&tx, LiveKitEvent::ActiveSpeakers(speakers.iter().map(|p| p.identity().to_string()).collect()))?;
+                            active_speakers_changed(&config, &tx, &mut last_active_speaker, speakers.iter().map(|p| p.identity().to_string()).collect())?;
                         }
                         RoomEvent::Reconnecting => { video_readers.reset_readers().await?; state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
                             if let Some(publisher) = &media.publisher { publisher.interrupt(); }

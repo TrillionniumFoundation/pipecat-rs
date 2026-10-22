@@ -606,3 +606,64 @@ async fn unsubscribe_pressure_and_cancelled_or_oversize_start_have_no_false_succ
     assert!(readers.known.is_empty() && readers.readers.is_empty());
     empty(&mut rx);
 }
+
+/// Exercises the actual active-speaker handler error through the production terminal
+/// video cleanup seam, not a hosted room_loop or audio/publisher shutdown.
+#[tokio::test]
+async fn active_speaker_admission_failure_closes_and_joins_existing_video_reader() {
+    for closed in [false, true] {
+        let (native, track) = source();
+        let (mut readers, mut images) =
+            VideoReaders::new(VideoInputConfig::default(), CancellationToken::new());
+        readers
+            .start(
+                key(VideoSource::Camera),
+                "TR".into(),
+                track.rtc_track(),
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(native.capture_frame(&pixels()));
+        let (tx, rx) = mpsc::channel(1);
+        let mut rx = Some(rx);
+        if closed {
+            drop(rx.take());
+        }
+        let mut last = Some("prior".into());
+        let result = crate::connection::active_speakers_changed(
+            &config(),
+            &tx,
+            &mut last,
+            vec!["next".into()],
+        );
+        assert!(if closed {
+            matches!(&result, Err(Error::Closed))
+        } else {
+            matches!(&result, Err(Error::QueueFull))
+        });
+        assert_eq!(last.as_deref(), Some("prior"));
+        let result = timeout(DEADLINE, finish_video_input(result, &mut readers))
+            .await
+            .unwrap();
+        assert!(if closed {
+            matches!(result, Err(Error::Closed))
+        } else {
+            matches!(result, Err(Error::QueueFull))
+        });
+        assert!(readers.known.is_empty() && readers.readers.is_empty());
+        assert!(readers.gates.lock().unwrap().active.is_empty());
+        images.close();
+        assert_eq!(
+            readers.lane.bytes.available_permits(),
+            readers.config.max_retained_bytes
+        );
+        assert!(!native.capture_frame(&pixels()));
+        if let Some(rx) = &mut rx {
+            assert!(
+                matches!(rx.try_recv(), Ok(LiveKitEvent::ActiveSpeakers(ids)) if ids == ["next"])
+            );
+            empty(rx); // No retry, rollback or promised terminal Error observation.
+        }
+    }
+}
