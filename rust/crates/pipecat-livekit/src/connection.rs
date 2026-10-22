@@ -33,7 +33,7 @@ pub struct LiveKitConnection {
     events: Mutex<EventReceiver>,
     state: watch::Receiver<ConnectionState>,
     video_input_stats: Arc<crate::video_input::Stats>,
-    video_capture: crate::video_input::CaptureHandle,
+    pub(crate) video_capture: crate::video_input::CaptureHandle,
     cancel: CancellationToken,
     audio: Option<crate::publisher::AudioPublisher>,
     video: Option<crate::video::VideoPublisher>,
@@ -174,6 +174,12 @@ impl LiveKitConnection {
     }
     pub async fn recv(&self) -> Option<LiveKitEvent> {
         self.events.lock().await.recv().await
+    }
+    pub(crate) async fn discard_input_video(&self) {
+        self.events.lock().await.video.close();
+    }
+    pub(crate) async fn recv_input(&self) -> Option<crate::video_input::InputEvent> {
+        self.events.lock().await.recv_input().await
     }
     pub(crate) fn audio_generation(&self) -> u64 {
         self.audio
@@ -816,6 +822,17 @@ struct EventReceiver {
     video_closed: bool,
 }
 impl EventReceiver {
+    async fn recv_input(&mut self) -> Option<crate::video_input::InputEvent> {
+        loop {
+            tokio::select! {
+                event = self.events.recv() => return event.map(crate::video_input::InputEvent::Event),
+                event = self.video.recv_input(), if !self.video_closed => match event {
+                    Some(event) => return Some(event),
+                    None => self.video_closed = true,
+                }
+            }
+        }
+    }
     async fn recv(&mut self) -> Option<LiveKitEvent> {
         loop {
             tokio::select! {

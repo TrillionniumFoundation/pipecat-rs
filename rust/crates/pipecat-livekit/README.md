@@ -285,8 +285,8 @@ requests best-effort cancellation.
 
 Local native source/track fixtures and synthetic lifecycle tests do not establish
 remote subscription, SFU, RTP, codec decoding, devices, browser, NAT/TURN or remote
-reconnect behavior. Manual image requests and full Python input
-transport parity remain deferred. Existing audio, data, DTMF and outgoing-video
+reconnect behavior. Plain pipeline image requests are opt-in as described below; full Python input
+transport parity remains deferred. Existing audio, data, DTMF and outgoing-video
 paths are retained. No SFU/netlink experiment is part of this slice.
 
 
@@ -294,8 +294,9 @@ paths are retained. No SFU/netlink experiment is part of this slice.
 
 `VideoInputConfig::sources` is a typed source map: empty means all sources/all
 frames; a nonempty map captures only listed camera/screen sources. Values are
-`VideoCaptureMode::AllFrames` or `FramesPerSecond(1..=1_000_000_000)`. Zero and
-request-only mode are rejected, not silently enabled. Input remains opt-in and
+`VideoCaptureMode::AllFrames`, `FramesPerSecond(1..=1_000_000_000)`, or
+`RequestOnly` when plain requests are explicitly enabled. A numeric zero rate is
+still rejected; request-only is not silently enabled. Input remains opt-in and
 participant filtering remains authoritative; sampling does not alter subscription.
 
 `connection.capture_participant_video(identity, source, mode)` (also exposed on
@@ -306,7 +307,8 @@ Python's default capture arguments correspond to `Camera` and
 Updates preserve cadence and apply to subsequent sampling decisions, not already
 queued/admitted images. They do not stop/restart the native reader.
 
-The adapter reuses shared `VideoInSampler<()>`, never enqueuing image requests.
+The adapter reuses shared `VideoInSampler<()>`; plain request selection inserts
+one private bypass token only when the original invocation and source are valid.
 Sampling happens before layout/conversion and before converted-byte/pending-frame
 permits. It uses monotonic arrival time from one session origin, deliberately
 unlike pinned Python's `time.time()` wall clock. First periodic frames are due;
@@ -333,11 +335,110 @@ to all-frame capture. The unconfigured all-frame path needs no policy entry.
 separately from overload/rejection counts. Native upstream/decoder storage remains
 outside the adapter's budget.
 
-Manual image requests and public video lifecycle callbacks remain deferred.
-Pinned Python retains successful request callbacks downstream; the separate shared
-MediaInput completion-on-admission contract is not substituted here. No request,
-callback, SFU, RTP/codec/device, or remote lifecycle parity is claimed.
+Callback/tool-bearing image requests, cached replay and public video lifecycle
+callbacks remain deferred. Pinned Python retains successful request callbacks downstream; the separate shared
+MediaInput completion-on-admission contract is not substituted here. No full Python request/callback, SFU, RTP/codec/device, or remote lifecycle parity
+is claimed.
 Batch160 revision 3 passed 70 fresh library tests and strict Clippy/formatting.
 Two integration tests and compile-only SFU evidence are historical revision 2
 executions carried through a reviewed test-only change. See
 [VALIDATION.md](VALIDATION.md) for source binding, failures and scope limits.
+
+
+### Plain next-observation requests
+
+Set `VideoInputConfig::requests = Some(ImageRequestConfig::default())` to let the
+pipeline `LiveKitInput` consume upstream plain `UserImageRequest` frames whose
+`transport_destination` exactly equals the configured destination (default
+`None`). Nonmatching destinations and downstream requests pass through unchanged.
+There is no connection/direct-receiver request API. Do not concurrently consume
+`connection.recv()` and the transport input; direct receive never exposes a
+requested image stripped of its private constraint.
+
+**The contract is the next post-drain native sink observation, not a newly
+captured camera image.** The sole reader drains its bounded SDK queue until it
+actually observes `Pending`, after capturing an accepted-request cutoff. Only
+requests at or below that cutoff become eligible for subsequent observations;
+requests arriving during draining require another empty-queue fence. A frame
+already dequeued cannot be rebound to a later request. Each drain poll does at
+most eight frame removals and yields; a source preventing the fence expires its
+request rather than manufacturing freshness. Draining discards old native entries
+before conversion, including periodic candidates, without advancing cadence.
+The fence establishes only native sink enqueue after request acceptance and its
+required empty-queue observation, not when the underlying pixels were captured.
+The SDK does not expose trustworthy capture/keepalive/replay provenance. Its
+keepalive can have a new timestamp, and a sender can replay pixels. Such frames
+can satisfy this observation contract. No timestamp comparison, physical camera
+freshness, changed-pixel, RTP, remote-delivery or inference-completion claim is
+made. No adapter pixel cache or cached-response replay is implemented.
+
+The participant must exactly match a currently unmuted configured remote source.
+Omitted/empty source normalizes to camera; only `camera` and `screenVideo` are
+accepted. The response keeps the original plain nested payload, text and
+`append_to_context`, with canonical transport source and the actual track SID.
+`run_llm` remains `None`. Tool/function/callback fields and arbitrary request
+metadata, incoming transport source and broadcast sibling IDs are rejected, not
+stripped or executed. Identity/SID/routing/name limits are 256 bytes; text is
+8 KiB; serialized header is at most 16 KiB. Spare String capacity is included in
+retained header charging. Unsupported fields/oversize are request-local diagnostics.
+
+Requests are bounded across waiting, selection, private queueing and retained
+marked carriers: at most 32 global/8 per source, 4096 accepted-ID tombstones,
+64 KiB aggregate conservatively charged headers, and 8 * 786432 bytes reserved RGB
+by default. Limits may be lowered; RGB reservation can be raised only up to
+32 * 786432 bytes. Each request reserves the full 786432-byte core RGB ceiling;
+individual dimensions are at most 1024 and at most 262144 pixels. Larger frames
+fail that selected request without resize/crop or changing ordinary video limits.
+The ordinary RGBA permit covers conversion/compaction temporary storage while the
+separate requested-RGB reservation follows the marked image through final carrier
+drop. Arbitrary downstream clones allocate pixels outside adapter accounting.
+A retained expired carrier still retains its slot/header/RGB permits until drop.
+This is not a global heap bound over arbitrary processors, native decoders or SDK
+queues. The reader-owned queue and all native upstream allocations retain their
+existing separate limits and exclusions.
+
+Default monotonic expiry is five seconds (positive, configurable to at most sixty).
+One input-owner timer prunes stale/expired requests without needing another video
+frame; expiry also runs before selection and dispatch. Mute/unsubscribe,
+replacement, participant exit, reconnect and terminal close invalidate matching
+uncommitted sources. End/Cancel invalidates all requests and discards private
+queued images rather than draining them. Policies retain the existing lifecycle
+rules. A valid selected observation bypasses/reset sampling cadence; later
+conversion/queue rejection consumes that opportunity but never consumes a second
+request. Rejected admission, expiry-before-selection and stale-reader observations
+do not advance request cadence.
+
+A request owner is moved once into selection, then consumed by a single binding.
+Private `NativeUserImageSource` constraints and the original invocation fence
+survive queueing and frame clones; public IDs/metadata are not provenance. Source
+closure and ordinary assistant history commit are serialized by the core source
+constraint. Closure-first prevents a new compatible context commit; a commit that
+already won cannot be undone. No transport lock spans routing, runtime admission
+wakeups or source-close notifications. The local routing-attempt counter is
+`request_dispatch_attempts`: even an `Ok` routing result can be a stale drop and
+is not evidence of enqueue, consumption or remote success. `DispatchAttempted`
+means neither `Delivered` nor `Succeeded`. `failed_requests` counts local
+accepted-request rejection or invalidation, not end-to-end failure. A retained
+request may expire or be invalidated after a downstream context commit already
+won, increasing this counter without undoing that commit. Admission rejections
+are separately counted by `rejected_requests`. Accepted IDs are never evicted
+to allow replay. Failures use bounded counters/last-rejection text, not
+callback invocation, success events or fabricated failure frames; unrelated audio
+continues.
+
+The supported active consumer is the existing ordinary idle
+`LLMAssistantAggregator`, which can append RGB context and request inference when
+`append_to_context` is true. Passive requests do not append context. Busy/pending
+turn, signed-history and realtime restrictions remain intact. Realtime passive
+video and Gemini pixel sending are not equivalent request-context fulfillment.
+Already dispatched raw sinks are outside recall; compatible constrained context
+consumers enforce the stronger commit-time source gate. The local-native tests
+exercise the actual pipeline input, SDK source/stream and ordinary assistant,
+plus deterministic cutoff/drain, expiry, retention and rejection cases. Batch161
+R2 passed 90 library tests and two integration tests, all freshly executed on the
+same source with zero ignored/filtered and independently accepted. The integration
+scope is synthetic signaling ownership and real loopback WebSocket teardown,
+not joined-room media. Strict package Clippy/formatting and SFU compile/link-only
+validation also passed and were independently accepted; the latter executes zero
+tests. See [VALIDATION.md](VALIDATION.md) for retained failures and source binding. No SFU/device
+runtime, remote-network media or physical-camera freshness is established.

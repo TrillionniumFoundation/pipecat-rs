@@ -28,7 +28,8 @@ impl LiveKitTransport {
             .map_or(1, |video| video.queue_capacity);
         Self {
             input: Arc::new(LiveKitInput {
-                connection: connection.clone(),
+                source: InputSource::Room(connection.clone()),
+                capture: connection.video_capture.clone(),
                 stop: CancellationToken::new(),
                 started: AtomicBool::new(false),
             }),
@@ -48,9 +49,13 @@ impl LiveKitTransport {
         source: crate::VideoSource,
         mode: crate::VideoCaptureMode,
     ) -> crate::Result<()> {
-        self.input
-            .connection
-            .capture_participant_video(identity, source, mode)
+        match &self.input.source {
+            InputSource::Room(connection) => {
+                connection.capture_participant_video(identity, source, mode)
+            }
+            #[cfg(test)]
+            InputSource::Local(_) => self.input.capture.capture(identity, source, mode),
+        }
     }
     pub fn input(&self) -> Arc<LiveKitInput> {
         self.input.clone()
@@ -59,10 +64,47 @@ impl LiveKitTransport {
         self.output.clone()
     }
 }
+#[derive(Clone)]
+enum InputSource {
+    Room(Arc<LiveKitConnection>),
+    #[cfg(test)]
+    Local(Arc<tokio::sync::Mutex<crate::video_input::VideoReceiver>>),
+}
+impl InputSource {
+    async fn discard_video(&self) {
+        match self {
+            Self::Room(room) => room.discard_input_video().await,
+            #[cfg(test)]
+            Self::Local(receiver) => receiver.lock().await.close(),
+        }
+    }
+    async fn recv(&self) -> Option<crate::video_input::InputEvent> {
+        match self {
+            Self::Room(room) => room.recv_input().await,
+            #[cfg(test)]
+            Self::Local(receiver) => receiver.lock().await.recv_input().await,
+        }
+    }
+}
 pub struct LiveKitInput {
-    connection: Arc<LiveKitConnection>,
+    source: InputSource,
+    capture: crate::video_input::CaptureHandle,
     stop: CancellationToken,
     started: AtomicBool,
+}
+#[cfg(test)]
+impl LiveKitInput {
+    pub(crate) fn local_fixture(
+        capture: crate::video_input::CaptureHandle,
+        receiver: crate::video_input::VideoReceiver,
+    ) -> Self {
+        Self {
+            source: InputSource::Local(Arc::new(tokio::sync::Mutex::new(receiver))),
+            capture,
+            stop: CancellationToken::new(),
+            started: AtomicBool::new(false),
+        }
+    }
 }
 #[async_trait]
 impl FrameProcessor for LiveKitInput {
@@ -70,7 +112,11 @@ impl FrameProcessor for LiveKitInput {
         "livekit-input"
     }
     async fn setup(&self, _: &StartFrame, _: &ProcessorContext) -> Result<(), ProcessorError> {
-        ensure_ready(&self.connection)
+        match &self.source {
+            InputSource::Room(room) => ensure_ready(room),
+            #[cfg(test)]
+            InputSource::Local(_) => Ok(()),
+        }
     }
     async fn process(
         &self,
@@ -80,38 +126,77 @@ impl FrameProcessor for LiveKitInput {
     ) -> Result<(), ProcessorError> {
         if frame.data.is_start() && !self.started.swap(true, Ordering::SeqCst) {
             ctx.push(frame, direction).await?;
-            let connection = self.connection.clone();
+            let source = self.source.clone();
+            let capture = self.capture.clone();
             let stop = self.stop.clone();
             let output = ctx.clone();
             ctx.spawn("livekit-input-events", false, async move {
+                let mut expiry = tokio::time::interval(std::time::Duration::from_millis(25));
+                expiry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
-                    let event = tokio::select! { biased; _ = stop.cancelled() => return Ok(()), event = connection.recv() => event };
+                    let event = tokio::select! { biased;
+                        _ = stop.cancelled() => return Ok(()),
+                        _ = expiry.tick() => { capture.maintain_requests(); continue; },
+                        event = source.recv() => event,
+                    };
                     match event {
-                        Some(LiveKitEvent::Disconnected { reason }) => return Err(ProcessorError::fatal(format!("LiveKit disconnected: {reason}"))),
-                        Some(LiveKitEvent::Error(message)) => return Err(ProcessorError::fatal(message)),
-                        Some(event) => dispatch_input(event, &output).await?,
-                        None => return Err(ProcessorError::fatal(format!("LiveKit event stream closed: {:?}", connection.state()))),
+                        Some(crate::video_input::InputEvent::Requested(request)) => {
+                            capture.dispatch_request(*request)
+                        }
+                        Some(crate::video_input::InputEvent::Event(
+                            LiveKitEvent::Disconnected { reason },
+                        )) => {
+                            return Err(ProcessorError::fatal(format!(
+                                "LiveKit disconnected: {reason}"
+                            )))
+                        }
+                        Some(crate::video_input::InputEvent::Event(LiveKitEvent::Error(
+                            message,
+                        ))) => return Err(ProcessorError::fatal(message)),
+                        Some(crate::video_input::InputEvent::Event(event)) => {
+                            dispatch_input(event, &output).await?
+                        }
+                        None => return Err(ProcessorError::fatal("LiveKit event stream closed")),
                     }
                 }
             })?;
             Ok(())
         } else {
+            if self.capture.handles_request(&frame, direction) {
+                self.capture.request(frame, ctx);
+                return Ok(());
+            }
+            if matches!(frame.data, FrameData::Interruption) {
+                self.capture.maintain_requests();
+            }
             if matches!(
                 frame.data,
                 FrameData::Cancel(_) | FrameData::CancelDetailed(_)
             ) {
+                self.capture.close_requests();
                 self.stop.cancel();
+                self.source.discard_video().await;
             }
             ctx.push(frame, direction).await
         }
     }
     async fn prepare_end(&self, _: &ProcessorContext) -> Result<(), ProcessorError> {
+        self.capture.close_requests();
         self.stop.cancel();
+        self.source.discard_video().await;
         Ok(())
     }
     async fn cleanup(&self) -> Result<(), ProcessorError> {
+        self.capture.close_requests();
         self.stop.cancel();
-        self.connection.close().await.map_err(processor_error)
+        match &self.source {
+            InputSource::Room(room) => room.close().await.map_err(processor_error),
+            #[cfg(test)]
+            InputSource::Local(receiver) => {
+                receiver.lock().await.close();
+                Ok(())
+            }
+        }
     }
 }
 struct Queued {

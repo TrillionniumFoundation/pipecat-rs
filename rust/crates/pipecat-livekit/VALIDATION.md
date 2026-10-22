@@ -1,5 +1,75 @@
 # LiveKit native validation
 
+## Batch 161: bounded plain LiveKit image requests — 2026-10-22
+
+Opt-in pipeline `UserImageRequest` handling adds bounded plain next-observation
+requests and `RequestOnly` capture. Pending/retained requests have finite count,
+header and RGB budgets, monotonic expiry, invocation fencing and source lifecycle
+invalidation. The ordinary idle assistant can append constrained RGB context;
+tool/function/callback requests, cached-response replay and full Python request
+parity remain deferred. The only dependency change is a development edge to the
+existing local `pipecat-turns` crate; no registry package/version/checksum changes.
+
+Revision 2 freshly executed **92 distinct test cases** on unchanged source:
+**90 library tests** in L06 (12.84 seconds), **one review_contracts integration
+test** in R01 (9.19 seconds), and **one network_signaling integration test** in
+N01 (4.15 seconds). Every run passed with zero failed, ignored or filtered tests.
+Each stage was independently accepted, with complete logs, natural zero exits
+and verified process cleanup. These are fresh R2 executions, not carried
+Batch160 evidence or extra cases from build/list phases.
+
+The library tests include local native SDK source/stream and actual pipeline/
+assistant context checks, plus deterministic cutoff/drain, expiry, retained-carrier
+and rejection tests. R01 exercises synthetic signaling ownership release on
+cancel, abort and timeout. N01 exercises real loopback TCP/WebSocket HTTP 101
+and teardown before/after synthetic JoinResponse across six scenarios inside
+one test case; it does not establish SFU, ICE, DTLS or RTP exchange.
+
+R1 L05 remains adverse evidence: **85 passed and 5 failed**, with zero ignored
+or filtered. All five new pipeline tests failed in shared fixture setup because
+the initial capture assertion preceded native sink installation. R2 moves only
+that positive assertion after `VideoReaders.start`; all assertions and 90 test
+names remain. Production source, manifests and lockfile are unchanged from R1.
+The SDK may reject capture without an interested sink; this fixture repair does
+not introduce a physical-camera freshness guarantee. Prior failed/interrupted
+validation and setup attempts remain preserved and add no passing test cases.
+
+QP03 and final QF01 passed strict selected-package all-target Clippy
+(`-D warnings`) and package `fmt --check` on unchanged R2, with natural zero
+exits and 23 retained vendored dependency warnings. QF01 Clippy finished in
+1.12 seconds; formatting exited zero. Independent review accepted QF01. These
+static checks add no runtime test cases and are not a whole-workspace CI gate.
+
+S01 compiled and linked `local_sfu` in 6.68 seconds and was independently
+accepted for that scope only: zero test listing, zero runtime tests and no server
+startup. An earlier prelaunch validation failure remains recorded and is not
+counted as an execution or replaced by the successful attempt.
+The earlier SFU startup denial, `netlinkrib: operation not permitted`,
+remains a boundary, not something bypassed or retried in this slice. See the
+[existing SFU qualification record](qualification/LOCAL_SFU.md).
+
+The image contract establishes only native sink enqueue after request acceptance
+and its required empty-queue fence. SDK keepalive or replayed pixels can satisfy
+it, including with new timestamps; physical capture time is not established.
+`DispatchAttempted` is neither `Delivered` nor `Succeeded`; a successful routing
+return is not downstream fulfillment. `failed_requests` is local rejection or
+invalidation accounting and may increase after a downstream context commit
+already won, without undoing it. Raw sinks already dispatched are outside recall;
+compatible constrained consumers enforce the commit-time gate. No full Python
+parity, SFU/device runtime, remote-media operation or physical-camera freshness
+is established.
+Adapter budgets exclude arbitrary downstream clones and native upstream storage;
+sampled resource guards are not hard aggregate memory quotas.
+
+### Source provenance and evidence scope
+
+Published base: `fa80bb1d1bd1fbdcf88f500221b8de268fc9d6d0` (Batch160).
+QP03/L06/R01/N01/S01/QF01 bind the same R2 full 2021-file source SHA256:
+`e10b176f861bc819818f194c9a5f1dd0c9fdde84fbf715e9625b4869a8c4e919`.
+The documentation-only update is separate from the tested source and does not
+imply another execution or changes to validated production/test source.
+Historical Batch160 results below keep their original scope and counts.
+
 ## Batch 160: bounded per-source LiveKit capture policy — 2026-10-22
 
 Opt-in video input now supports typed per-source `AllFrames` / positive bounded
@@ -176,24 +246,22 @@ The complete attempt history remains part of the evidence:
 - Revision 4 changed tests only: a pinned libyuv non-rounded packed-color chroma
   value of 239 is distinct from the raw I420 oracle's 240. L06 then passed all
   46 tests, including the explicit distinguishing oracle test.
-- R01 was a withheld unused grant and N01 an unused candidate, not executed
-  failures. Source-only review and test listing count as zero executed tests.
+- R01 and N01 were not executed in that revision and are not counted as
+  failures or passes. Source-only review and test listing add no executed tests.
 
 - Q01 exceeded the 10-second observer-gap limit (22.3379 seconds, pregraph
-  22.3057 seconds); Cargo ended after TERM (-15), outer status 123, all owners
-  closed and source unchanged. There was no accepted lint result or format run;
+  22.3057 seconds); Cargo ended after TERM (-15), outer status 123, with
+  process cleanup verified and source unchanged. There was no accepted lint result or format run;
   the exact delay cause was not established.
 - Q02 naturally failed on two actual adapter Clippy findings. Revision 5 made
   two reviewed semantic-equivalent corrections: keep independent conditions
   separated for `possible_missing_else`, and use typed four-byte chunks for
   `chunks_exact_to_as_chunks`. No other product file changed from revision 4.
 - L07 actually reran and passed all 46 revision 5 library tests.
-- Q03 failed at launcher proof admission (outer exit 1), before owner
-  directories, Popen or Cargo; this is a prelaunch failure, not an unused grant.
-- Q04 passed actual strict Clippy, but the stage then failed before formatting
-  spawned because formatting RSS was classified as build RSS. The finite proof
-  cap was 192 MiB, with an extra 32 MiB funded from workspace reserve; this did
-  not waive other limits. Q04 is not a complete lint/format pass.
+- Q03 failed prelaunch validation (exit 1) before Cargo started; it is not
+  counted as an executed lint check.
+- Q04 passed strict Clippy, but a resource-accounting classification error
+  prevented formatting from starting. It is not a complete lint/format pass.
 - Q05's outcome remains uncertain after an execution interruption and is not
   counted as a pass. Q06 independently completed strict Clippy and formatting
   with natural zero exits and verified closure. Historical uncertainty is not
@@ -263,29 +331,24 @@ unverified integration paths. See [the SFU qualification record](qualification/L
 and [preserved startup log](qualification/server-startup-denied.log). This
 qualification does not establish complete Python LiveKit transport parity.
 
-## Reproduction on this workspace host
+## Reproduction prerequisites
 
-The build prerequisites were extracted into a workspace-only prefix. No system
-packages or security settings were changed.
+Use the native build prerequisites in [README.md](README.md#native-build) and
+configure the pinned SDK's build environment for your platform. From the
+repository root, the following commands cover the qualified package scope:
 
 ```sh
-source /workspace/shared/pipecat-tools/env.sh
-source /workspace/shared/pipecat-tools/livekit-native/env.sh
-export CARGO_TARGET_DIR=/workspace/shared/pipecat-tools/livekit-target
-export CARGO_PROFILE_DEV_DEBUG=0
-export CARGO_PROFILE_TEST_DEBUG=0
-cargo test -p pipecat-livekit --jobs 2 --manifest-path rust/Cargo.toml
-cargo clippy -p pipecat-livekit --all-targets --jobs 2 \
+cargo test -p pipecat-livekit --lib --locked --jobs 1 --manifest-path rust/Cargo.toml
+cargo test -p pipecat-livekit --test review_contracts --locked --jobs 1 --manifest-path rust/Cargo.toml
+cargo test -p pipecat-livekit --test network_signaling --locked --jobs 1 --manifest-path rust/Cargo.toml
+cargo test -p pipecat-livekit --test local_sfu --no-run --locked --jobs 1 --manifest-path rust/Cargo.toml
+cargo clippy -p pipecat-livekit --all-targets --locked --jobs 1 \
   --manifest-path rust/Cargo.toml -- -D warnings
 cargo fmt --check -p pipecat-livekit --manifest-path rust/Cargo.toml
-cargo test --manifest-path \
-  rust/crates/pipecat-livekit/vendor/livekit-signaling-0.1.5/Cargo.toml \
-  --lib --locked --jobs 2
 ```
 
-The target directory is separate from the default workspace target. A temporary
-path used for the first build is retained as a symlink; target contents occupy
-workspace storage rather than the host's smaller `/tmp` tmpfs.
+The `local_sfu` command is compile-only. Running that test requires a separately
+configured supported environment and is outside the qualification reported here.
 
 ## Download provenance
 
@@ -298,15 +361,8 @@ workspace storage rather than the host's smaller `/tmp` tmpfs.
 - Native archive size: 156,139,058 bytes, approximately 721 MiB unpacked
 - Native archive SHA256:
   `b167adad5291cea0e4d66a0454d9d52d2ad714e6b0ed70f4410317d3ebde70c5`
-- C/C++ compiler: official Debian 13 backports Clang 21.1.8,
-  package version `1:21.1.8-3~bpo13+2`
-- GLib/GObject/GIO headers/runtime: official Debian 13 packages,
-  version `2.84.4-3~deb13u5`
-- Associated official Debian runtime/development dependencies: approximately
-  69.8 MB compressed in total, 344 MiB unpacked
 
-Debian files were downloaded from `https://deb.debian.org/debian/` and each was
-checked against the SHA256 in the official HTTPS package index before
-extraction. Exact package filenames and hashes are retained in the workspace
-build-tools directory. The SDK's hermetic libc++ requirements and ABI checks
-were preserved. The native artifact retains its upstream `LICENSE.md`.
+For Linux native builds, use Clang 21 or newer, C++ development tooling,
+`pkg-config` and GLib/GObject/GIO development headers from official sources.
+Verify downloaded artifacts against their published checksums. Preserve the
+SDK's hermetic libc++ requirements, ABI checks and bundled `LICENSE.md`.

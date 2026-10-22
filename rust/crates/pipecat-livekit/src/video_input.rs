@@ -11,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use livekit::{
     prelude::TrackSource,
     webrtc::{
@@ -20,20 +20,25 @@ use livekit::{
         video_track::RtcVideoTrack,
     },
 };
-use pipecat_core::ImageRawFrame;
+use pipecat_core::{Frame, ImageRawFrame, InvocationFence};
 use pipecat_media_transport::video::{VideoInSampler, VideoInSourceParams};
 #[cfg(test)]
 use std::time::Duration;
 use tokio::{
-    sync::{mpsc, OwnedSemaphorePermit, Semaphore},
+    sync::{mpsc, Notify, OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::{Error, LiveKitEvent, Result};
+mod requests;
+pub use requests::ImageRequestConfig;
 
 #[derive(Debug, Clone)]
 pub struct VideoInputConfig {
+    /// Disabled by default. Plain pipeline requests observe post-drain SDK input,
+    /// which can contain keepalive/replayed pixels, not proven new captures.
+    pub requests: Option<ImageRequestConfig>,
     /// Empty captures every source. Nonempty maps allow only listed sources, unless overridden.
     pub sources: HashMap<VideoSource, VideoCaptureMode>,
     /// Includes retained schedules and pre-subscription overrides. No eviction/fallback.
@@ -52,6 +57,7 @@ pub struct VideoInputConfig {
 impl Default for VideoInputConfig {
     fn default() -> Self {
         Self {
+            requests: None,
             sources: HashMap::new(),
             max_capture_policies: 16,
             max_policy_identity_bytes: 65_536,
@@ -67,7 +73,15 @@ impl Default for VideoInputConfig {
 }
 impl VideoInputConfig {
     pub(crate) fn validate(&self) -> Result<()> {
+        if let Some(requests) = &self.requests {
+            requests.validate()?;
+        }
         for mode in self.sources.values() {
+            if *mode == VideoCaptureMode::RequestOnly && self.requests.is_none() {
+                return Err(Error::InvalidConfig(
+                    "request-only capture requires image requests",
+                ));
+            }
             mode.params()?;
         }
         if !(1..=128).contains(&self.max_capture_policies)
@@ -140,29 +154,32 @@ pub(crate) struct Stamp {
     sid: String,
     generation: u64,
 }
-/// Supported capture policies. Zero/request-only is deliberately unsupported.
+/// Supported capture policies. RequestOnly requires opt-in pipeline requests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoCaptureMode {
     AllFrames,
+    RequestOnly,
     FramesPerSecond(u32),
 }
 impl VideoCaptureMode {
     fn params(self) -> Result<VideoInSourceParams> {
         match self {
             Self::AllFrames => Ok(VideoInSourceParams::all_frames()),
+            Self::RequestOnly => Ok(VideoInSourceParams::on_request_only()),
             Self::FramesPerSecond(rate) if (1..=1_000_000_000).contains(&rate) => {
                 Ok(VideoInSourceParams {
                     framerate: Some(rate),
                 })
             }
             _ => Err(Error::InvalidConfig(
-                "video sampling requires 1..=1000000000 fps; request-only unsupported",
+                "video sampling requires 1..=1000000000 fps or RequestOnly",
             )),
         }
     }
 }
 #[derive(Default)]
 struct GateState {
+    requests: requests::Requests,
     active: HashMap<Key, Stamp>,
     policies: HashMap<Key, VideoInSampler<()>>,
     identity_bytes: usize,
@@ -178,6 +195,9 @@ pub(crate) struct CaptureHandle {
     config: VideoInputConfig,
     cancel: CancellationToken,
     origin: Instant,
+    request_resources: requests::RequestResources,
+    request_changed: Arc<Notify>,
+    stats: Arc<Stats>,
 }
 impl CaptureHandle {
     // Validation and mutation are atomic. No command queue or pending string retention.
@@ -188,6 +208,11 @@ impl CaptureHandle {
         mode: VideoCaptureMode,
     ) -> Result<()> {
         let params = mode.params()?;
+        if mode == VideoCaptureMode::RequestOnly && self.config.requests.is_none() {
+            return Err(Error::InvalidConfig(
+                "request-only capture requires image requests",
+            ));
+        }
         if identity.is_empty() || identity.len() > 65_536 {
             return Err(Error::Limit("video capture identity"));
         }
@@ -254,8 +279,19 @@ pub(crate) struct QueuedVideo {
     key: Key,
     stamp: Stamp,
     event: LiveKitEvent,
+    requested: Option<RequestedImage>,
     _bytes: OwnedSemaphorePermit,
     _pending: OwnedSemaphorePermit,
+}
+pub(crate) struct RequestedImage {
+    pub(crate) frame: Frame,
+    pub(crate) fence: InvocationFence,
+    pub(crate) token: u64,
+    pub(crate) output: pipecat_core::ProcessorContext,
+}
+pub(crate) enum InputEvent {
+    Event(LiveKitEvent),
+    Requested(Box<RequestedImage>),
 }
 pub(crate) struct VideoReceiver {
     rx: mpsc::Receiver<QueuedVideo>,
@@ -268,24 +304,28 @@ impl VideoReceiver {
         while self.rx.try_recv().is_ok() {}
     }
     pub(crate) async fn recv(&mut self) -> Option<LiveKitEvent> {
-        while let Some(queued) = self.rx.recv().await {
-            // Linearization boundary: validation and removal from adapter accounting occur
-            // under the same gate as lifecycle invalidation. Already admitted events cannot
-            // be recalled from callers or downstream processors.
-            let gates = self.gates.lock().unwrap();
-            if !gates.closed
-                && !self.cancel.is_cancelled()
-                && gates.active.get(&queued.key) == Some(&queued.stamp)
-            {
-                let QueuedVideo {
-                    event,
-                    _bytes,
-                    _pending,
-                    ..
-                } = queued;
-                drop(_bytes);
-                drop(_pending);
+        while let Some(event) = self.recv_input().await {
+            if let InputEvent::Event(event) = event {
                 return Some(event);
+            }
+            // Public recv is intentionally not a request consumer. Mixed use
+            // with the pipeline is unsupported; never strip private authority.
+        }
+        None
+    }
+    pub(crate) async fn recv_input(&mut self) -> Option<InputEvent> {
+        while let Some(queued) = self.rx.recv().await {
+            let valid = {
+                let gates = self.gates.lock().unwrap();
+                !gates.closed
+                    && !self.cancel.is_cancelled()
+                    && gates.active.get(&queued.key) == Some(&queued.stamp)
+            };
+            if valid {
+                return Some(match queued.requested {
+                    Some(request) => InputEvent::Requested(Box::new(request)),
+                    None => InputEvent::Event(queued.event),
+                });
             }
         }
         None
@@ -325,16 +365,20 @@ impl VideoReaders {
             gates: gates.clone(),
             cancel: cancel.clone(),
         };
+        let stats = Arc::new(Stats::default());
         let lane = Lane {
             tx,
             bytes: Arc::new(Semaphore::new(config.max_retained_bytes)),
             pending: Arc::new(Semaphore::new(config.queue_capacity)),
-            stats: Arc::new(Stats::default()),
+            stats: stats.clone(),
             capture: CaptureHandle {
                 gates: gates.clone(),
                 config: config.clone(),
                 cancel: cancel.clone(),
                 origin: Instant::now(),
+                request_resources: requests::RequestResources::new(config.requests.as_ref()),
+                request_changed: Arc::new(Notify::new()),
+                stats,
             },
         };
         (
@@ -458,6 +502,7 @@ impl VideoReaders {
             return Ok(());
         }
         self.gates.lock().unwrap().active.remove(key);
+        self.lane.capture.maintain_requests();
         reader.stop.cancel();
         let result = (&mut reader.task)
             .await
@@ -489,6 +534,7 @@ impl VideoReaders {
     fn finish_joined(&mut self, key: Key, stamp: Stamp, result: Result<()>) -> Result<()> {
         if self.readers.get(&key).is_some_and(|r| r.stamp == stamp) {
             self.gates.lock().unwrap().active.remove(&key);
+            self.lane.capture.maintain_requests();
             self.readers.remove(&key);
             self.known.remove(&key);
             result?;
@@ -518,11 +564,13 @@ impl VideoReaders {
             state.policies.clear();
             state.identity_bytes = 0;
         }
+        self.lane.capture.close_requests();
         self.reset_readers().await
     }
     /// Reconnect teardown invalidates readers, not capture policy or cadence.
     pub(crate) async fn reset_readers(&mut self) -> Result<()> {
         self.gates.lock().unwrap().active.clear();
+        self.lane.capture.maintain_requests();
         for reader in self.readers.values() {
             reader.stop.cancel();
         }
@@ -543,6 +591,7 @@ impl Drop for VideoReaders {
             state.policies.clear();
             state.identity_bytes = 0;
         }
+        self.lane.capture.close_requests();
         for reader in self.readers.values() {
             reader.stop.cancel();
         }
@@ -619,10 +668,12 @@ fn convert(
         key,
         stamp,
         event,
+        requested: None,
         _bytes: permit,
         _pending: pending,
     }))
 }
+#[cfg(test)]
 fn deliver_frame(
     frame: BoxVideoFrame,
     key: &Key,
@@ -630,9 +681,19 @@ fn deliver_frame(
     lane: &Lane,
     config: &VideoInputConfig,
 ) -> Result<()> {
-    match lane.capture.sample(key, stamp) {
-        Ok(true) => {}
-        Ok(false) => {
+    deliver_observation(frame, key, stamp, lane, config, 0)
+}
+fn deliver_observation(
+    frame: BoxVideoFrame,
+    key: &Key,
+    stamp: &Stamp,
+    lane: &Lane,
+    config: &VideoInputConfig,
+    cutoff: u64,
+) -> Result<()> {
+    let selected = match lane.capture.sample_requested(key, stamp, cutoff) {
+        Ok((true, selected)) => selected,
+        Ok((false, _)) => {
             lane.stats.sampled_out.fetch_add(1, Ordering::Relaxed);
             return Ok(());
         }
@@ -640,26 +701,117 @@ fn deliver_frame(
             lane.stats.reject(error.to_string());
             return Ok(());
         }
+    };
+    let token = selected.as_ref().map(|request| request.token);
+    // Reject oversize requested images before native conversion, without
+    // narrowing the existing ordinary video path or selecting a second request.
+    if selected.is_some() {
+        let (w, h) = (frame.buffer.width(), frame.buffer.height());
+        if w == 0 || h == 0 || w > 1024 || h > 1024 || u64::from(w) * u64::from(h) > 262_144 {
+            lane.capture.fail_request(
+                token.unwrap(),
+                "requested RGB dimensions exceed core limits",
+            );
+            return Ok(());
+        }
     }
-    let converted = match convert(frame, key.clone(), stamp.clone(), lane, config) {
-        Ok(frame) => frame,
+    let mut queued = match convert(frame, key.clone(), stamp.clone(), lane, config) {
+        Ok(Some(queued)) => queued,
+        Ok(None) => {
+            lane.stats.dropped.fetch_add(1, Ordering::Relaxed);
+            if let Some(token) = token {
+                lane.capture
+                    .fail_request(token, "requested image queue or bytes full");
+            }
+            return Ok(());
+        }
         Err(error) => {
             lane.stats.reject(error.to_string());
+            if let Some(token) = token {
+                lane.capture
+                    .fail_request(token, "requested image conversion rejected");
+            }
             return Ok(());
         }
     };
-    if let Some(queued) = converted {
-        match lane.tx.try_send(queued) {
-            Ok(()) => {}
-            Err(mpsc::error::TrySendError::Full(_)) => {
-                lane.stats.dropped.fetch_add(1, Ordering::Relaxed);
+    if let Some(selected) = selected {
+        // Compact only the requested route. The ordinary permit still charges
+        // RGBA capacity during compaction; the request reserves another MAX_RGB.
+        let event = std::mem::replace(&mut queued.event, LiveKitEvent::Error(String::new()));
+        let mut response = match event.into_frame() {
+            Ok(Some(response)) => response,
+            _ => {
+                lane.capture
+                    .fail_request(token.unwrap(), "requested image projection rejected");
+                return Ok(());
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => return Err(Error::Closed),
+        };
+        let pipecat_core::FrameData::UserImage(image) = &mut response.data else {
+            unreachable!()
+        };
+        image.image.image = std::mem::take(&mut image.image.image)
+            .into_boxed_slice()
+            .into_vec();
+        let fence = selected.fence.clone();
+        if !lane.capture.current_request(selected.token) {
+            lane.capture
+                .fail_request(token.unwrap(), "requested image invalidated before binding");
+            return Ok(());
         }
-    } else {
-        lane.stats.dropped.fetch_add(1, Ordering::Relaxed);
+        let output = match selected.bind(&mut response) {
+            Ok(output) => output,
+            Err(_) => {
+                lane.capture
+                    .fail_request(token.unwrap(), "requested image binding rejected");
+                return Ok(());
+            }
+        };
+        queued.requested = Some(RequestedImage {
+            frame: response,
+            fence,
+            token: token.unwrap(),
+            output,
+        });
     }
-    Ok(())
+    match lane.tx.try_send(queued) {
+        Ok(()) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            lane.stats.dropped.fetch_add(1, Ordering::Relaxed);
+            if let Some(token) = token {
+                lane.capture
+                    .fail_request(token, "requested image queue full");
+            }
+            Ok(())
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => {
+            if let Some(token) = token {
+                lane.capture
+                    .fail_request(token, "requested image receiver closed");
+            }
+            Err(Error::Closed)
+        }
+    }
+}
+
+/// Establish a reader-owned empty-queue fence. Each poll does bounded work;
+/// producers preventing Pending cause yielding/expiry, never a false fence.
+async fn drain_to_pending<S: Stream<Item = BoxVideoFrame> + Unpin>(
+    stream: &mut S,
+    lane: &Lane,
+) -> bool {
+    futures_util::future::poll_fn(|cx| {
+        for _ in 0..8 {
+            match Pin::new(&mut *stream).poll_next(cx) {
+                Poll::Ready(Some(_)) => {}
+                Poll::Ready(None) => return Poll::Ready(false),
+                Poll::Pending => return Poll::Ready(true),
+            }
+        }
+        lane.capture.maintain_requests();
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    })
+    .await
 }
 async fn read_video(
     mut stream: NativeVideoStream,
@@ -669,22 +821,57 @@ async fn read_video(
     cancel: CancellationToken,
     config: VideoInputConfig,
 ) -> Result<()> {
-    let result = async {
-        loop {
-            tokio::select! {
-                biased;
-                _ = cancel.cancelled() => return Ok(()),
-                frame = stream.next() => {
-                    let Some(frame) = frame else { return Ok(()); };
-                    match deliver_frame(frame, &key, &stamp, &lane, &config) { Ok(()) => {}, Err(Error::Closed) => return Ok(()), Err(error) => return Err(error) }
-                }
-            }
-        }
-    }.await;
+    let result = read_observations(&mut stream, key, stamp, lane, cancel, config).await;
     stream.close();
     result
 }
+async fn read_observations<S: Stream<Item = BoxVideoFrame> + Unpin>(
+    stream: &mut S,
+    key: Key,
+    stamp: Stamp,
+    lane: Lane,
+    cancel: CancellationToken,
+    config: VideoInputConfig,
+) -> Result<()> {
+    let mut armed = 0;
+    loop {
+        // Register before observing the cutoff to avoid a lost admission wake.
+        let changed = lane.capture.request_changed.notified();
+        tokio::pin!(changed);
+        changed.as_mut().enable();
+        let cutoff = lane.capture.request_cutoff(&key, &stamp);
+        if cutoff > armed {
+            let fenced = tokio::select! { biased;
+                _ = cancel.cancelled() => return Ok(()),
+                result = tokio::time::timeout(config.requests.as_ref().expect("request cutoff requires opt-in").timeout, drain_to_pending(stream, &lane)) => match result {
+                    Ok(fenced) => fenced,
+                    Err(_) => { lane.capture.maintain_requests(); continue; }
+                },
+            };
+            if !fenced {
+                return Ok(());
+            }
+            // Arm only this pre-drain cutoff. A later request needs its own fence.
+            armed = cutoff;
+            continue;
+        }
+        // This value belongs to the poll, not to selection later in the loop.
+        let eligible = armed;
+        tokio::select! { biased;
+            _ = cancel.cancelled() => return Ok(()),
+            _ = &mut changed => continue,
+            frame = stream.next() => {
+                let Some(frame) = frame else { return Ok(()); };
+                match deliver_observation(frame, &key, &stamp, &lane, &config, eligible) {
+                    Ok(()) => {}, Err(Error::Closed) => return Ok(()), Err(error) => return Err(error)
+                }
+            }
+        }
+    }
+}
 
+#[cfg(test)]
+mod request_pipeline_tests;
 #[cfg(test)]
 mod tests;
 
@@ -696,21 +883,35 @@ pub struct VideoInputStats {
     /// Policy-excluded, not-due or invalidated before conversion; not overload.
     pub sampled_out_frames: u64,
     pub last_rejection: Option<String>,
+    pub rejected_requests: u64,
+    pub failed_requests: u64,
+    /// Local routing attempts only; never a claim of enqueue, consume or delivery.
+    pub request_dispatch_attempts: u64,
 }
 #[derive(Default)]
 pub(crate) struct Stats {
+    rejected_requests: AtomicU64,
+    failed_requests: AtomicU64,
+    dispatch_attempts: AtomicU64,
     rejected: AtomicU64,
     dropped: AtomicU64,
     sampled_out: AtomicU64,
     last: Mutex<Option<String>>,
 }
 impl Stats {
+    pub(crate) fn reject_request(&self, reason: String) {
+        self.rejected_requests.fetch_add(1, Ordering::Relaxed);
+        *self.last.lock().unwrap() = Some(reason.chars().take(256).collect());
+    }
     fn reject(&self, reason: String) {
         self.rejected.fetch_add(1, Ordering::Relaxed);
         *self.last.lock().unwrap() = Some(reason.chars().take(256).collect());
     }
     pub(crate) fn snapshot(&self) -> VideoInputStats {
         VideoInputStats {
+            rejected_requests: self.rejected_requests.load(Ordering::Relaxed),
+            failed_requests: self.failed_requests.load(Ordering::Relaxed),
+            request_dispatch_attempts: self.dispatch_attempts.load(Ordering::Relaxed),
             rejected_frames: self.rejected.load(Ordering::Relaxed),
             dropped_frames: self.dropped.load(Ordering::Relaxed),
             sampled_out_frames: self.sampled_out.load(Ordering::Relaxed),
