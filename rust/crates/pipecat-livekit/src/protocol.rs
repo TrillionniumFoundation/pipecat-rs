@@ -42,6 +42,20 @@ pub enum LiveKitEvent {
         identity: String,
         track_sid: String,
     },
+    /// Selected video ownership was installed after an SDK subscription event.
+    /// Observation only: no image, capture, timestamp or pipeline frame is implied.
+    VideoSubscribed {
+        identity: String,
+        track_sid: String,
+        source: crate::VideoSource,
+    },
+    /// The matching selected owner was invalidated and its reader joined.
+    /// Historical observation, not a lease on the current video state.
+    VideoUnsubscribed {
+        identity: String,
+        track_sid: String,
+        source: crate::VideoSource,
+    },
     Audio {
         identity: String,
         track_sid: String,
@@ -226,6 +240,16 @@ pub(crate) fn validate_event(event: &LiveKitEvent) -> Result<()> {
             .saturating_add(p.name.len())
             .saturating_add(p.metadata.len()),
         LiveKitEvent::Video {
+            identity,
+            track_sid,
+            ..
+        }
+        | LiveKitEvent::VideoSubscribed {
+            identity,
+            track_sid,
+            ..
+        }
+        | LiveKitEvent::VideoUnsubscribed {
             identity,
             track_sid,
             ..

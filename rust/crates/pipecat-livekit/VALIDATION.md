@@ -1,5 +1,124 @@
 # LiveKit native validation
 
+## Batch 162: bounded video subscription observations — 2026-10-22
+
+`LiveKitEvent::VideoSubscribed` / `VideoUnsubscribed` expose effective selected
+video ownership transitions, carrying participant identity, track SID and typed
+source. They use the existing bounded control-event lane; `into_frame()` returns
+`None`. They confer no callback, pixel-delivery or physical-capture authority.
+The pipeline input and direct connection receiver are not independent observers.
+
+Subscription follows successful ownership/reader installation (an initially
+muted owner has no sink). Same-SID duplicates are silent; same-source replacement
+joins the old reader and reports the new SID without fabricating an unsubscribe.
+Matching unsubscribe invalidates pending requests/private images and joins the
+reader before observation. Stale/duplicate unsubscribe is silent. Mute, departure,
+reader failure, close and reconnect rebuild do not invent lifecycle events.
+After reconnect rebuild, same-SID follow-up remains silent and a new SID emits.
+Queue-full/closed errors propagate to terminal cleanup, not unbounded buffering
+or notification retry. Already queued observations and already returned images
+are not recalled; separate control/data lanes have no total-order guarantee.
+
+Python reference remains `af9f9da9d7afddaa8811c0e0251b32566c980bdf`,
+`src/pipecat/transports/livekit/transport.py`. Rust requires configured input and
+selected participants, unlike Python callbacks that also fire with processing
+disabled. Effective source/SID deduplication and stale-unsubscribe protection are
+intentional hardening, not exact Python callback-count or event-API parity.
+No dependency, manifest, lockfile or vendored SDK changes are part of this slice.
+
+### Completed validation
+
+Linux x86-64, Rust 1.99.0, pinned native SDK/WebRTC provenance as recorded below:
+
+- L02: **97 library tests passed**, including seven new lifecycle tests, in
+  **12.53 seconds**. Zero failed, ignored, measured or filtered tests.
+- R01: **one `review_contracts` integration test passed** in **9.25 seconds**:
+  `signaling_owners_release_on_cancel_abort_and_timeout`. Zero failed, ignored,
+  measured or filtered tests. It covers synthetic signaling ownership, not SFU
+  join or network/media delivery.
+- N01: **one `network_signaling` integration test passed** in **4.17 seconds**:
+  `real_websocket_transport_releases_on_cancel_abort_and_timeout`. Zero failed,
+  ignored, measured or filtered tests. It uses real loopback TCP/WebSockets,
+  not a hosted room or SFU, and does not establish remote video delivery.
+- L02, R01 and N01 built, listed and executed their complete exact test inventories
+  on the same frozen source, with natural zero exits and verified process cleanup.
+  All three were independently verified. This is **99 distinct executed test cases**;
+  listing, repeated builds, and scenarios inside one test add no test cases.
+- S01: `local_sfu` freshly compiled and linked with natural zero exit and verified
+  cleanup on the same frozen source. **Zero tests executed**: no listing, test
+  runtime or server startup. Compile/link-only evidence was independently verified.
+- QP01 preflight strict package all-target Clippy (`-D warnings`) and package
+  `fmt --check` passed on the same source and were independently accepted.
+- QF01 final strict package all-target Clippy (`-D warnings`) and package
+  `fmt --check` passed with natural zero exits on the same frozen source and were
+  independently verified. Clippy reported 373 cached compiler artifacts, all
+  marked fresh by Cargo; this was a new lint invocation, not a fresh rebuild.
+  Preflight and final static checks add **zero runtime tests**.
+
+The seven new tests exercise the production normalized lifecycle handlers with
+local native fixtures: selected/filtered/disabled and muted sources; duplicate,
+replacement, stale/unpublish and reconnect counts; queue pressure and receiver
+closure; start/join failure without false success; join-before-unsubscribe with
+request/private-image invalidation; metadata boundaries/no frame projection;
+and cancellation/oversize-start/unsubscribe-pressure rejection. Existing plain
+request and video regression cases remain in the 97-test run. Native fixtures do
+not establish physical-device, RTP/codec, hosted-room or remote lifecycle parity.
+
+### Retained failure and executable diagnostics
+
+L01 failed during the library build because an allocation scan exceeded its
+unchanged time guard (3.727 seconds observed). The build was terminated (SIGTERM,
+phase exit -15; overall exit 123), with cleanup verified and source unchanged.
+It produced no qualified test executable, listing or runtime result and counts as
+zero tests, not a pass. One retry, L02, passed under the same guards; the earlier
+failure remains recorded rather than reclassified or hidden.
+
+The library, `review_contracts`, `network_signaling` and compile-only `local_sfu`
+test targets were linked with target-only
+`-C link-arg=-Wl,--strip-debug` (and one linker thread). Compiler debug level 1,
+debug assertions, overflow checks and unoptimized test code were retained.
+Audits verified ordinary symbols, unwind data and load/TLS structures, with no
+final non-ALLOC DWARF; the allocated `.debug_gdb_scripts` section remains.
+Source-line debugging/backtrace detail is therefore weaker. These artifacts are
+not claimed to retain full DWARF or to be byte-equivalent to full-debug builds.
+No global source/dependency debug-profile change is implied.
+
+### Qualification boundaries
+
+Historical Batch161 integration/SFU/lint results below are not new Batch162
+executions or silently carried passes. The earlier SFU startup denial remains
+unbypassed; no SFU/netlink runtime experiment is part of this slice. No complete
+CI, full-workspace validation, production readiness, full Python parity or
+physical-camera freshness is claimed. Adapter budgets exclude downstream clones
+and native upstream storage; sampled resource observations are not hard aggregate
+memory bounds. Commit publication and remote CI are separate checks, not inferred passes.
+
+### Source provenance
+
+Published base (Batch161): `d4abf356a23e5fe18e5c8395f987c831634b9181`.
+QP01/L02/R01/N01/S01/QF01 bind unchanged revision-2 Rust source inventory SHA256
+`e5844a09a73a9f78584b0515ccf80bcf5a2f7bf97f3af59d2cb79b3314c119f3`
+(2022 files). Revision 2 corrected inventory scope only; product bytes did not
+change from revision 1. The five-file feature comprises this crate's README,
+`src/connection.rs`, `src/protocol.rs`, `src/video_input.rs`, and new
+`src/video_input/lifecycle_tests.rs`.
+
+Qualified test-executable SHA256 values:
+- Library: `467abd519cc37ed4a034e86d5396d1686abeb02827653f9fc6eb0b5109145c12`.
+- `review_contracts`: `0bb05c4cbed1bccb09b69a5fd872d16bb17b91e837d9a3519b7bd30ffa554a60`.
+- `network_signaling`: `1ec44eb227657637a8c4bc64e19db31e7e9f6a20a3658a75854b50bb8a1003f3`.
+
+Independently verified compile-only `local_sfu` executable SHA256:
+`e7079dfbddd3253e071658734cdabecda8d6fcec610d049737b63159006bc0dc`.
+
+This documentation update is separate from the tested-source inventory.
+The post-test documentation update is limited to this crate's `README.md` and
+`VALIDATION.md`; all non-documentation bytes must match the tested source before
+release. The documentation-inclusive manifest and source bridge are maintained
+in separate qualification records, not embedded in the documents they hash.
+That binding is not another execution or a new test pass.
+Historical results below retain their original dates and scope.
+
 ## Batch 161: bounded plain LiveKit image requests — 2026-10-22
 
 Opt-in pipeline `UserImageRequest` handling adds bounded plain next-observation

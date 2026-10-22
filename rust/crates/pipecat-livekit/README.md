@@ -245,8 +245,41 @@ room error. `connection.video_input_stats()` exposes rejection/pressure-drop cou
 and a bounded latest rejection string. These counters do not count downstream
 retention, native sink overflow, or every lifecycle-invalidated queued frame.
 
-Dedicated public video subscribed/unsubscribed lifecycle notifications remain
-deferred; this slice adds the `Video` data event, not the full Python event API.
+`VideoSubscribed` and `VideoUnsubscribed` report effective selected video ownership
+transitions through the existing bounded connection control-event lane. Both carry
+participant identity (not participant SID), track SID and `VideoSource`. They are
+observations only: `into_frame()` returns `None`; the pipeline input consumes them
+without creating images, callbacks or other frames. The connection receiver and
+pipeline input are not independent observer subscriptions. No timestamp, capture,
+pixel arrival or downstream delivery is implied.
+
+Subscription is observed only after ownership and the unmuted native reader/sink
+are installed; an initially muted owner also counts, without a sink. A same-SID
+duplicate is silent. Replacement joins the old reader before installing and
+observing the new SID, without inventing an old-SID unsubscribe. A matching SDK
+unsubscribe invalidates the generation and pending requests, cancels and joins the
+reader, then emits. Stale or duplicate unsubscribe is silent. The pinned SDK emits
+unsubscribe before unpublish, so normal unpublish yields the real unsubscribe;
+a synthetic reversed order removes ownership first and suppresses the stale event.
+Mute/unmute, participant departure, reader EOF/failure, cancellation, close and
+reconnect teardown/reconstruction do not fabricate lifecycle observations. After a
+silent reconnect rebuild, a same-SID SDK subscription is still a duplicate; a new
+SID is an effective transition.
+
+Each observation validates at most 65,536 aggregate identity/SID UTF-8 bytes and
+uses the existing bounded nonblocking control queue. Queue-full or receiver-closed
+errors propagate to the room owner's terminal cleanup; completed ownership changes
+are not rolled back merely to retry notification. The terminal error event remains
+best-effort under queue pressure. Already queued observations are historical and
+are not recalled; there is no total ordering between control and video-data lanes.
+Already returned images likewise remain outside recall.
+
+Unlike Python's pinned subscription callbacks, these observations require configured
+video input and a selected participant, and deduplicate effective ownership by SID.
+Python emits even when video processing is disabled and does not apply these stale
+SID guards. This is intentional bounded hardening, not exact callback-count parity
+or the full Python event API. Local native tests exercise production normalized
+handlers and terminal video cleanup without qualifying hosted-room/SFU behavior.
 
 `LiveKitEvent::Video` maps through the production input dispatcher to
 `FrameData::UserImage`. `user_id` is participant identity, `transport_source` is
@@ -289,6 +322,24 @@ reconnect behavior. Plain pipeline image requests are opt-in as described below;
 transport parity remains deferred. Existing audio, data, DTMF and outgoing-video
 paths are retained. No SFU/netlink experiment is part of this slice.
 
+
+### Batch162 qualification status
+
+The bounded lifecycle observations passed **99 fresh test cases** on the same
+frozen source: 97 library tests (including seven new lifecycle tests), one
+synthetic signaling ownership integration test, and one real loopback WebSocket
+signaling integration test. All had zero failed, ignored or filtered tests and
+were independently verified. Preflight and final strict package all-target
+Clippy (`-D warnings`) and formatting checks passed and were independently verified.
+`local_sfu` compiled and linked only: **zero tests executed**, independently
+verified. These checks do not qualify SFU runtime or remote video.
+
+The selected test executables retain compiler debug level 1, assertions, ordinary
+symbols and unwind data, but omit final non-ALLOC DWARF; source-line diagnostics
+are reduced. See [VALIDATION.md](VALIDATION.md) for exact scope and retained failure.
+
+This report records validation scope; commit publication and remote CI are separate
+checks, not inferred passes. No SFU runtime or full Python parity is claimed.
 
 ### Bounded source sampling
 

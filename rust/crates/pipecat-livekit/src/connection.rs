@@ -617,13 +617,12 @@ async fn room_loop(
                         }
                         RoomEvent::TrackSubscribed { track: RemoteTrack::Video(track), publication, participant } => {
                             let identity = participant.identity().to_string();
-                            if !selects_publication(&config, &identity, TrackKind::Video) { continue; }
                             let key = crate::video_input::Key { identity, source: crate::VideoSource::from_track(publication.source()) };
-                            video_readers.start(key, track.sid().to_string(), track.rtc_track(), publication.is_muted()).await?;
+                            video_subscribed(&config, &tx, &mut video_readers, key, track.sid().to_string(), track.rtc_track(), publication.is_muted()).await?;
                         }
                         RoomEvent::TrackUnsubscribed { track: RemoteTrack::Video(track), publication, participant } => {
                             let key = crate::video_input::Key { identity: participant.identity().to_string(), source: crate::VideoSource::from_track(publication.source()) };
-                            video_readers.stop(&key, Some(&track.sid().to_string())).await?;
+                            video_unsubscribed(&tx, &mut video_readers, key, track.sid().to_string()).await?;
                         }
                         RoomEvent::TrackUnpublished { publication, participant } => {
                             if publication.kind() == TrackKind::Video {
@@ -708,7 +707,7 @@ async fn room_loop(
     if let Some(source) = &media.source {
         source.clear_buffer();
     }
-    let video_closed = video_readers.close().await;
+    let result = finish_video_input(result, &mut video_readers).await;
     readers.abort_all();
     while readers.join_next().await.is_some() {}
     let publisher_closed = if let Some(mut task) = media.task.take() {
@@ -724,7 +723,6 @@ async fn room_loop(
         Ok(())
     };
     let closed = close_room(&room, config.close_timeout).await;
-    let result = crate::publication::combine_cleanup(result, video_closed);
     let result = crate::publication::combine_cleanup(result, publisher_closed);
     let result = crate::publication::combine_cleanup(result, closed);
     state.send_replace(match &result {
@@ -736,6 +734,63 @@ async fn room_loop(
     }
     result
 }
+/// The room owner's terminal video cleanup, also exercised without a hosted room.
+pub(crate) async fn finish_video_input(
+    result: Result<()>,
+    readers: &mut crate::video_input::VideoReaders,
+) -> Result<()> {
+    crate::publication::combine_cleanup(result, readers.close().await)
+}
+
+// Normalized SDK handlers are shared with local no-SFU lifecycle tests. Reconnect
+// reconstruction deliberately calls VideoReaders::start directly, without emission.
+pub(crate) async fn video_subscribed(
+    config: &LiveKitConfig,
+    tx: &mpsc::Sender<LiveKitEvent>,
+    readers: &mut crate::video_input::VideoReaders,
+    key: crate::video_input::Key,
+    sid: String,
+    track: livekit::webrtc::video_track::RtcVideoTrack,
+    muted: bool,
+) -> Result<()> {
+    if !selects_publication(config, &key.identity, TrackKind::Video) {
+        return Ok(());
+    }
+    if readers
+        .start(key.clone(), sid.clone(), track, muted)
+        .await?
+        == crate::video_input::OwnershipTransition::Changed
+    {
+        emit(
+            tx,
+            LiveKitEvent::VideoSubscribed {
+                identity: key.identity,
+                track_sid: sid,
+                source: key.source,
+            },
+        )?;
+    }
+    Ok(())
+}
+pub(crate) async fn video_unsubscribed(
+    tx: &mpsc::Sender<LiveKitEvent>,
+    readers: &mut crate::video_input::VideoReaders,
+    key: crate::video_input::Key,
+    sid: String,
+) -> Result<()> {
+    if readers.stop(&key, Some(&sid)).await? == crate::video_input::OwnershipTransition::Changed {
+        emit(
+            tx,
+            LiveKitEvent::VideoUnsubscribed {
+                identity: key.identity,
+                track_sid: sid,
+                source: key.source,
+            },
+        )?;
+    }
+    Ok(())
+}
+
 async fn read_audio(
     mut stream: NativeAudioStream,
     identity: String,

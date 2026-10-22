@@ -344,6 +344,12 @@ struct Reader {
     stop: CancellationToken,
     task: JoinHandle<Result<()>>,
 }
+/// Effective ownership changes, not SDK callback counts or pixel delivery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OwnershipTransition {
+    Changed,
+    Unchanged,
+}
 pub(crate) struct VideoReaders {
     config: VideoInputConfig,
     lane: Lane,
@@ -400,7 +406,7 @@ impl VideoReaders {
         sid: String,
         track: RtcVideoTrack,
         muted: bool,
-    ) -> Result<()> {
+    ) -> Result<OwnershipTransition> {
         if key.identity.len().saturating_add(sid.len()) > 65_536 {
             return Err(Error::Limit("video track metadata"));
         }
@@ -412,7 +418,7 @@ impl VideoReaders {
             .get(&key)
             .is_some_and(|(current, _)| current == &sid)
         {
-            return Ok(());
+            return Ok(OwnershipTransition::Unchanged);
         }
         // Cancel AND join before removing the slot or allocating the replacement sink.
         self.stop(&key, None).await?;
@@ -420,10 +426,10 @@ impl VideoReaders {
             return Err(Error::Limit("subscribed video readers"));
         }
         self.known.insert(key.clone(), (sid.clone(), track.clone()));
-        if muted {
-            return Ok(());
+        if !muted {
+            self.start_reader(key, sid, track)?;
         }
-        self.start_reader(key, sid, track)
+        Ok(OwnershipTransition::Changed)
     }
     fn start_reader(&mut self, key: Key, sid: String, track: RtcVideoTrack) -> Result<()> {
         let generation = self
@@ -482,7 +488,11 @@ impl VideoReaders {
         }
         Ok(())
     }
-    pub(crate) async fn stop(&mut self, key: &Key, sid: Option<&str>) -> Result<()> {
+    pub(crate) async fn stop(
+        &mut self,
+        key: &Key,
+        sid: Option<&str>,
+    ) -> Result<OwnershipTransition> {
         if self
             .known
             .get(key)
@@ -490,9 +500,10 @@ impl VideoReaders {
         {
             self.known.remove(key);
         } else {
-            return Ok(());
+            return Ok(OwnershipTransition::Unchanged);
         }
-        self.stop_reader(key, sid).await
+        self.stop_reader(key, sid).await?;
+        Ok(OwnershipTransition::Changed)
     }
     async fn stop_reader(&mut self, key: &Key, sid: Option<&str>) -> Result<()> {
         let Some(reader) = self.readers.get_mut(key) else {
@@ -550,7 +561,10 @@ impl VideoReaders {
             .collect();
         let mut result = Ok(());
         for key in keys {
-            result = crate::publication::combine_cleanup(result, self.stop(&key, None).await);
+            result = crate::publication::combine_cleanup(
+                result,
+                self.stop(&key, None).await.map(|_| ()),
+            );
         }
         let mut state = self.gates.lock().unwrap();
         state.policies.retain(|key, _| key.identity != identity);
@@ -577,7 +591,10 @@ impl VideoReaders {
         let keys: Vec<_> = self.known.keys().cloned().collect();
         let mut result = Ok(());
         for key in keys {
-            result = crate::publication::combine_cleanup(result, self.stop(&key, None).await);
+            result = crate::publication::combine_cleanup(
+                result,
+                self.stop(&key, None).await.map(|_| ()),
+            );
         }
         result
     }
@@ -870,6 +887,8 @@ async fn read_observations<S: Stream<Item = BoxVideoFrame> + Unpin>(
     }
 }
 
+#[cfg(test)]
+mod lifecycle_tests;
 #[cfg(test)]
 mod request_pipeline_tests;
 #[cfg(test)]
