@@ -57,6 +57,14 @@ impl LiveKitTransport {
             InputSource::Local(_) => self.input.capture.capture(identity, source, mode),
         }
     }
+    /// Unsubscribe current remote audio only; see `LiveKitConnection::mute_participant`.
+    pub async fn mute_participant(&self, identity: &str) -> crate::Result<()> {
+        self.output.connection.mute_participant(identity).await
+    }
+    /// Subscribe current remote audio only; never bypasses the configured identity filter.
+    pub async fn unmute_participant(&self, identity: &str) -> crate::Result<()> {
+        self.output.connection.unmute_participant(identity).await
+    }
     pub fn input(&self) -> Arc<LiveKitInput> {
         self.input.clone()
     }

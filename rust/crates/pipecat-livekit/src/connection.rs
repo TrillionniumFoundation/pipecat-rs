@@ -36,6 +36,7 @@ pub struct LiveKitConnection {
     pub(crate) video_capture: crate::video_input::CaptureHandle,
     cancel: CancellationToken,
     audio: Option<crate::publisher::AudioPublisher>,
+    audio_control: crate::participant_audio::AudioControl,
     video: Option<crate::video::VideoPublisher>,
     owner: Mutex<Option<JoinHandle<Result<()>>>>,
 }
@@ -78,6 +79,12 @@ impl LiveKitConnection {
         let video_input_stats = video_readers.stats();
         let video_capture = video_readers.capture_handle();
         let (state_tx, state) = watch::channel(ConnectionState::Connecting);
+        let (audio_control, audio_requests) = crate::participant_audio::AudioControl::channel(
+            config.queue_capacity,
+            state.clone(),
+            cancel.clone(),
+            config.operation_timeout,
+        );
         let (ready_tx, ready_rx) = oneshot::channel();
         let mut guard = SetupCancellation(Some(cancel.clone()));
         let mut owner = tokio::spawn(initialize_room(
@@ -89,6 +96,7 @@ impl LiveKitConnection {
             config.clone(),
             ready_tx,
             video_readers,
+            audio_requests,
         ));
         let readiness = tokio::select! {
             biased;
@@ -125,6 +133,7 @@ impl LiveKitConnection {
             video_capture,
             cancel,
             audio: ready.publisher,
+            audio_control,
             video: ready.video,
             owner: Mutex::new(Some(owner)),
         })
@@ -190,14 +199,22 @@ impl LiveKitConnection {
         &self.config
     }
     fn ready(&self) -> Result<()> {
-        if self.cancel.is_cancelled() {
-            return Err(Error::Closed);
-        }
-        match self.state() {
-            ConnectionState::Connected => Ok(()),
-            ConnectionState::Closed | ConnectionState::Failed(_) => Err(Error::Closed),
-            _ => Err(Error::NotReady),
-        }
+        crate::participant_audio::ready(&self.state(), &self.cancel)
+    }
+    /// Request unsubscribe for the current remote participant's audio publications.
+    /// Identity, not SID; unknown/filtered participants and absent audio are no-ops.
+    /// Success means local SDK setter completion, not SFU confirmation or silence.
+    /// Does not mute their microphone, recall queued PCM or affect future tracks.
+    pub async fn mute_participant(&self, identity: &str) -> Result<()> {
+        self.audio_control.set_subscribed(identity, false).await
+    }
+    /// Request subscribe for current remote audio publications, respecting the filter.
+    /// No persistent policy or remote acknowledgement. Empty/>256-byte identities
+    /// are invalid; closed sessions return Closed and reconnecting ones NotReady.
+    /// Calls observed canceled/expired before application are skipped. Cancellation
+    /// racing an issued setter cannot roll it back, including partial applications.
+    pub async fn unmute_participant(&self, identity: &str) -> Result<()> {
+        self.audio_control.set_subscribed(identity, true).await
     }
     /// Publishes exact-format PCM16-LE. The acknowledgement is native source acceptance.
     /// Cancellation or interruption clears pending source PCM, but cannot recall sent RTP.
@@ -445,6 +462,31 @@ struct AudioReader {
     generation: u64,
     cancel: CancellationToken,
 }
+fn audio_reader_finished(tracks: &mut HashMap<String, AudioReader>, sid: &str, generation: u64) {
+    if tracks
+        .get(sid)
+        .is_some_and(|reader| reader.generation == generation)
+    {
+        tracks.remove(sid);
+    }
+}
+fn audio_unsubscribed(
+    tx: &mpsc::Sender<LiveKitEvent>,
+    tracks: &mut HashMap<String, AudioReader>,
+    identity: String,
+    sid: String,
+) -> Result<()> {
+    if let Some(reader) = tracks.remove(&sid) {
+        reader.cancel.cancel();
+    }
+    emit(
+        tx,
+        LiveKitEvent::AudioUnsubscribed {
+            identity,
+            track_sid: sid,
+        },
+    )
+}
 struct SetupCancellation(Option<CancellationToken>);
 impl Drop for SetupCancellation {
     fn drop(&mut self) {
@@ -468,6 +510,7 @@ async fn initialize_room(
     config: LiveKitConfig,
     ready: oneshot::Sender<Result<ReadyMedia>>,
     video_readers: crate::video_input::VideoReaders,
+    audio_requests: mpsc::Receiver<crate::participant_audio::AudioRequest>,
 ) -> Result<()> {
     let mut setup = RoomSetup {
         room: &room,
@@ -553,6 +596,7 @@ async fn initialize_room(
         },
         config,
         video_readers,
+        audio_requests,
     )
     .await
 }
@@ -645,10 +689,12 @@ async fn room_loop(
     mut media: RoomMedia,
     config: LiveKitConfig,
     mut video_readers: crate::video_input::VideoReaders,
+    mut audio_requests: mpsc::Receiver<crate::participant_audio::AudioRequest>,
 ) -> Result<()> {
     let mut tracks = HashMap::<String, AudioReader>::new();
     let mut readers = JoinSet::<(String, u64, Result<()>)>::new();
     let mut next_generation = 0u64;
+    let mut audio_requests_open = true;
     // Session-owned: empty lists, departure and automatic reconnect do not reset it.
     let mut last_active_speaker = None;
     // Fresh owner only; reconnect and empty initial snapshots do not reset this bool.
@@ -666,7 +712,7 @@ async fn room_loop(
                 ended = video_readers.next_finished() => { ended?; }
                 ended = readers.join_next(), if !readers.is_empty() => {
                     let (sid, generation, result) = ended.expect("nonempty JoinSet").map_err(sdk)?;
-                    if tracks.get(&sid).is_some_and(|reader| reader.generation == generation) { tracks.remove(&sid); }
+                    audio_reader_finished(&mut tracks, &sid, generation);
                     result?;
                 }
                 event = events.recv() => {
@@ -735,8 +781,7 @@ async fn room_loop(
                         }
                         RoomEvent::TrackUnsubscribed { track: RemoteTrack::Audio(track), participant, .. } => {
                             let sid = track.sid().to_string();
-                            if let Some(reader) = tracks.remove(&sid) { reader.cancel.cancel(); }
-                            emit(&tx, LiveKitEvent::AudioUnsubscribed { identity: participant.identity().to_string(), track_sid: sid })?;
+                            audio_unsubscribed(&tx, &mut tracks, participant.identity().to_string(), sid)?;
                         }
                         RoomEvent::TrackSubscriptionFailed { error, .. } => return Err(sdk(error)),
                         RoomEvent::DataReceived { payload, topic, kind, participant } => {
@@ -768,6 +813,24 @@ async fn room_loop(
                         }
                         RoomEvent::Disconnected { reason } => { video_readers.close().await?; emit(&tx, LiveKitEvent::Disconnected { reason: format!("{reason:?}") })?; break; }
                         _ => {}
+                    }
+                }
+                request = audio_requests.recv(), if audio_requests_open => {
+                    if let Some(request) = request {
+                        request.execute(&state.borrow(), &cancel, |identity, subscribed, check| {
+                            crate::participant_audio::sdk_ready(room.connection_state())?;
+                            crate::participant_audio::apply_current(
+                                &config,
+                                identity,
+                                subscribed,
+                                room.remote_participants().into_values().map(|participant| (participant.identity().to_string(), participant)),
+                                |participant| participant.track_publications().into_values().collect(),
+                                check,
+                            )
+                        });
+                    } else {
+                        // Disable a closed lane rather than spinning or creating another owner.
+                        audio_requests_open = false;
                     }
                 }
             }
@@ -990,5 +1053,61 @@ mod video_selection_tests {
             assert!(selects_publication(&config, "alice", kind));
             assert!(!selects_publication(&config, "bob", kind));
         }
+    }
+}
+
+#[cfg(test)]
+mod audio_unsubscribe_tests {
+    use super::*;
+
+    fn reader(generation: u64) -> AudioReader {
+        AudioReader {
+            identity: "alice".into(),
+            generation,
+            cancel: CancellationToken::new(),
+        }
+    }
+
+    #[test]
+    fn unsubscribe_uses_track_sid_not_identity_and_old_completion_preserves_replacement() {
+        let (tx, mut rx) = mpsc::channel(2);
+        let first = reader(1);
+        let first_cancel = first.cancel.clone();
+        let other = reader(2);
+        let other_cancel = other.cancel.clone();
+        let mut tracks = HashMap::from([("first".into(), first), ("other".into(), other)]);
+        audio_unsubscribed(&tx, &mut tracks, "alice".into(), "first".into()).unwrap();
+        assert!(first_cancel.is_cancelled());
+        assert!(!other_cancel.is_cancelled());
+        assert!(tracks.contains_key("other"));
+        assert!(
+            matches!(rx.try_recv(), Ok(LiveKitEvent::AudioUnsubscribed { identity, track_sid }) if identity == "alice" && track_sid == "first")
+        );
+        tracks.insert("first".into(), reader(3));
+        audio_reader_finished(&mut tracks, "first", 1);
+        assert_eq!(tracks.get("first").unwrap().generation, 3);
+        audio_reader_finished(&mut tracks, "first", 3);
+        assert!(!tracks.contains_key("first"));
+        assert!(tracks.contains_key("other"));
+    }
+
+    #[test]
+    fn unsubscribe_cancels_before_raw_admission_failure_and_unknown_sid_remains_raw() {
+        let (tx, mut rx) = mpsc::channel(1);
+        let owned = reader(1);
+        let cancel = owned.cancel.clone();
+        let mut tracks = HashMap::from([("audio".into(), owned)]);
+        emit(&tx, LiveKitEvent::Reconnecting).unwrap();
+        assert!(matches!(
+            audio_unsubscribed(&tx, &mut tracks, "alice".into(), "audio".into()),
+            Err(Error::QueueFull)
+        ));
+        assert!(cancel.is_cancelled());
+        assert!(tracks.is_empty());
+        assert!(matches!(rx.try_recv(), Ok(LiveKitEvent::Reconnecting)));
+        audio_unsubscribed(&tx, &mut tracks, "alice".into(), "unknown".into()).unwrap();
+        assert!(
+            matches!(rx.try_recv(), Ok(LiveKitEvent::AudioUnsubscribed { track_sid, .. }) if track_sid == "unknown")
+        );
     }
 }

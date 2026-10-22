@@ -1,5 +1,29 @@
 # LiveKit native validation
 
+## Batch 165: participant audio subscription control — source-only
+
+This candidate adds owner-queued `mute_participant` / `unmute_participant` on the
+connection and transport, with exact remote-identity/current-audio selection and
+filter protection. It has not been compiled, linted, or tested. Official
+`rustfmt --check` passed after a formatting-only correction; the first check
+failure is preserved. This formatting check establishes no native test passes.
+The new normalized tests exercise shared production selection/setter and command
+boundaries, not a joined SDK room or remote convergence. They cover repeated
+false/true requests, no-op targets, UTF-8 limits, readiness, bounded queue failure,
+dropped/expired/canceled/caller-observed-reconnect-invalidated commands and partial
+non-rollback. No reconnect epoch is retained: a transient cycle missed by the
+waiting caller can leave queued requests eligible after recovery. Additional
+shared audio-cleanup tests preserve track-SID ownership, generation protection
+against late reader completion, and raw unsubscribe admission behavior. Reader
+generations do not guard stale same-SID unsubscribe events. These are candidate
+tests, not native passes.
+
+The base is documentation commit
+`4378ca04b04e4d32e6de41bfe32026c38d3e2750`. Batch164 evidence below remains historical
+and does not qualify this modified source. No dependencies, SDK files, Cargo
+profiles or native controls are changed. Live SFU execution remains prohibited
+here; no server startup, SFU test listing or runtime claim is made.
+
 ## Batch 164: first-participant observation — 2026-10-22
 
 ### Completed bounded native qualification

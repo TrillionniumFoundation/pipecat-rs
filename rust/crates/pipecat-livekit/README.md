@@ -198,7 +198,7 @@ tokens, with no hosted account or stored credentials. See
 [local SFU qualification](qualification/LOCAL_SFU.md) for the exact limits.
 
 General native-buffer video conversion, device capture, manual image requests, participant audio mixing,
-metadata mutation, subscription/mute controls, token/REST helpers, and Python
+metadata mutation, persistent subscription policies, token/REST helpers, and Python
 API/event-handler parity are not implemented by this crate.
 
 ### Camera output qualification boundary
@@ -617,3 +617,48 @@ not joined-room media. Strict package Clippy/formatting and SFU compile/link-onl
 validation also passed and were independently accepted; the latter executes zero
 tests. See [VALIDATION.md](VALIDATION.md) for retained failures and source binding. No SFU/device
 runtime, remote-network media or physical-camera freshness is established.
+
+## Current-participant audio subscription control (batch165)
+
+Both `LiveKitConnection` and `LiveKitTransport` expose async
+`mute_participant(identity)` / `unmute_participant(identity)` returning `Result<()>`.
+They match the names and current-publication selection in the inspected Python
+[implementation](https://github.com/ProfHepta/pipecat/blob/af9f9da9d7afddaa8811c0e0251b32566c980bdf/src/pipecat/transports/livekit/transport.py#L583-L610).
+The existing room owner selects an exact remote identity (not participant SID) and
+requests `set_subscribed(false/true)` for its current audio publications only.
+Local publications, other identities and video are untouched. Unknown identities,
+participants without audio and identities excluded by `participant_filter` are
+no-ops. Repeated calls reissue requests; no mute history or future-track policy is
+installed. Newly published tracks retain the existing configured auto-selection.
+
+Success reports local SDK setter completion, not SFU acceptance, remote delivery
+or immediate silence. This cannot force-mute another participant's microphone,
+recall queued PCM or serve as a privacy boundary. The SDK may update local state
+and emit unsubscribe events before server convergence. Existing raw events remain
+on the normal event lane. Unsubscribe events stop the current reader by track SID;
+reader generations protect against late reader-task completion removing a newer
+owner, not against a stale same-SID `TrackUnsubscribed` event. This preserves the
+existing Rust ownership model rather than Python's identity-based audio reader
+replacement. A request can complete before its resulting unsubscribe event and
+reader cleanup are processed.
+
+The bounded control lane uses `queue_capacity` and `operation_timeout`, owned by
+the existing room loop, with no second room or detached control task. Empty or
+more-than-256-byte UTF-8 identities return `InvalidConfig`; identities are not
+trimmed or normalized. Closed/failed/canceled sessions return `Closed`; connecting
+or reconnecting sessions return `NotReady`. Admission and actual application
+recheck readiness, including the SDK connection state at application. A full
+control lane returns `QueueFull`; waiting beyond the deadline returns `Timeout`.
+Queued requests observed canceled or expired are skipped. Cancellation/deadline
+checks precede each setter, but cancellation racing an already-issued request,
+including a partial multi-publication call, cannot roll it back. A waiting caller
+that polls and observes `Reconnecting` returns `NotReady` and invalidates its
+queued request. There is no reconnect epoch: a transient reconnect-and-recovery
+completed before that caller observation and owner application can leave the
+queued request eligible to apply after recovery. This is not a persistent policy
+across reconnects.
+
+Batch165 is currently source-only and unvalidated: its new tests are candidates,
+not passing results. Batch164's qualification applies to its recorded checkpoint,
+not this modified source. Live SFU runtime remains unqualified and is not run
+in this environment. See [VALIDATION.md](VALIDATION.md).

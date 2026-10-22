@@ -7,6 +7,9 @@ mod config;
 mod connection;
 #[cfg(test)]
 mod first_participant_tests;
+mod participant_audio;
+#[cfg(test)]
+mod participant_audio_tests;
 mod protocol;
 mod publication;
 mod publisher;
