@@ -11,7 +11,7 @@ mod tests;
 mod transport;
 mod video;
 mod video_input;
-pub use video_input::{VideoInputConfig, VideoInputStats, VideoSource};
+pub use video_input::{VideoCaptureMode, VideoInputConfig, VideoInputStats, VideoSource};
 
 pub use config::LiveKitConfig;
 pub use connection::LiveKitConnection;

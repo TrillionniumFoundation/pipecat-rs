@@ -42,6 +42,16 @@ impl LiveKitTransport {
             }),
         }
     }
+    pub fn capture_participant_video(
+        &self,
+        identity: &str,
+        source: crate::VideoSource,
+        mode: crate::VideoCaptureMode,
+    ) -> crate::Result<()> {
+        self.input
+            .connection
+            .capture_participant_video(identity, source, mode)
+    }
     pub fn input(&self) -> Arc<LiveKitInput> {
         self.input.clone()
     }

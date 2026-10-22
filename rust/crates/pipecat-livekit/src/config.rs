@@ -9,7 +9,7 @@ use crate::{Error, Result};
 pub struct LiveKitConfig {
     pub input_format: PcmFormat,
     pub output_format: Option<PcmFormat>,
-    /// Disabled by default; bounded all-frame I420 receive, without sampling/request APIs.
+    /// Disabled by default; bounded I420 receive with optional per-source sampling; no request API.
     pub video_input: Option<crate::VideoInputConfig>,
     /// Disabled by default; one fixed-size room camera track when configured.
     pub video_output: Option<crate::VideoOutputConfig>,

@@ -1,5 +1,72 @@
 # LiveKit native validation
 
+## Batch 160: bounded per-source LiveKit capture policy — 2026-10-22
+
+Opt-in video input now supports typed per-source `AllFrames` / positive bounded
+FPS policies and synchronous participant/source overrides. The shared monotonic
+sampler selects frames before RGB allocation and queue permits, with independent
+finite policy/identity-byte budgets and atomic lifecycle/generation fencing.
+Monotonic arrival time deliberately differs from pinned Python's wall clock.
+Callbacks, tool image requests, cache replay and public video lifecycle events
+remain deferred. The only dependency change is an edge to the existing local
+`pipecat-media-transport` crate; no registry packages, versions or checksums change.
+
+Revision 2 passed **70 library tests** (L01, including 10 new tests),
+**one review_contracts integration test** (R01), and **one network_signaling
+integration test** (N01), all with natural zero exits and zero ignored or filtered.
+S01 compiled and linked local_sfu only: zero test listing, runtime tests or server
+startup. Q01 then failed strict Clippy with one test-only
+`chunks_exact_to_as_chunks` diagnostic (Cargo exit 101; original command natural
+nonzero exit 123); formatting never started. These failures are retained.
+
+Revision 3 changes only that new RGB fixture to typed `as_chunks::<3>()` and an
+empty-remainder assertion, preserving its RGB predicate. Production, manifests,
+lockfile and README are unchanged. The reviewed cfg(test)-only bridge carries
+revision 2 R01/N01/S01 evidence, not fresh revision 3 executions. Revision 2 L01
+remains historical and is not counted again. L02 built/listed successfully, but
+an observer gap of 16.962 seconds exceeded the unchanged 10-second limit and
+triggered SIGTERM during tests: 12 passing lines, no completed summary, unqualified.
+A reviewed scanner optimization removed repeated root-stat work without changing
+cadence, gap limit, accounting or caps; faster probes do not prove the historical
+cause of the gap.
+
+L03 freshly executed all **70 revision 3 library tests**, passing in 8.58 seconds
+with zero ignored/filtered and natural zero exit. Its build reused the cached
+ELF, not a new recompile. The maximum observed phase gap was 0.5943 seconds, below
+10 seconds, with no forced interruption. Q02 passed strict package all-target
+Clippy (`-D warnings`) and package `fmt --check` on unchanged revision 3, with
+natural zero exits. Static checks add no tests. The count is **72 distinct test
+cases**: 70 fresh revision 3 library cases plus two explicitly bridged historical
+revision 2 integrations, not 72 fresh revision 3 executions. Historical L01 and
+L02 partial output add no cases. Independent aggregate review accepted these
+validation results. Documentation is bound separately from the executed source;
+this does not claim another execution or broaden the qualified scope.
+
+Local native synthetic streams and loopback signaling are not remote RoomEvent,
+joined-room/SFU media, RTP/codec/device, network-jitter or production qualification,
+and do not establish full Python parity. Adapter bounds do not bound whole-process
+memory; sampled resource observations are not kernel-enforced aggregate quotas.
+This is scoped package qualification, not a new whole-workspace test gate.
+
+### Source provenance and evidence scope
+
+The historical revision 2 L01/R01/N01 executions used full-source SHA256
+`c54a524978825e40c924585c65385991a9618379478d4d6ae6cb753188e39ed4`.
+Revision 2 changed only README wording from revision 1 before these runs; frozen
+Rust, manifest and lockfile bytes are unchanged between those prepared revisions.
+Revision 3 L03 and Q02 full-source SHA256 is
+`8fc1ff1b402b435d37551330009bfcbc88896a889eb12d30c7c266325f62c160`.
+The final documentation-only update requires a separate source binding and does
+not imply execution of later source edits. Historical batch results below retain
+their original dates and scopes, including prior failures and carry limitations.
+
+The ten new library cases cover policy/config bounds, independent source schedules,
+strict stall/rate switching, atomic policy/identity capacity and cleanup, lazy
+exhaustion without fallback, stale generation/pre-conversion rejection, lifecycle
+retention, simultaneous capture updates and sampling, native stream-to-production
+pipeline RGB/metadata, and pressure-drop cadence/non-retroactive updates.
+
+
 ## Batch 159: bounded opt-in LiveKit video input — 2026-10-22
 
 Default-disabled incoming camera/screen video uses bounded native I420 readers,

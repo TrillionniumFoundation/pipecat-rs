@@ -8,6 +8,7 @@ use std::{
         Arc, Mutex,
     },
     task::Poll,
+    time::Instant,
 };
 
 use futures_util::StreamExt;
@@ -20,6 +21,9 @@ use livekit::{
     },
 };
 use pipecat_core::ImageRawFrame;
+use pipecat_media_transport::video::{VideoInSampler, VideoInSourceParams};
+#[cfg(test)]
+use std::time::Duration;
 use tokio::{
     sync::{mpsc, OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
@@ -30,6 +34,11 @@ use crate::{Error, LiveKitEvent, Result};
 
 #[derive(Debug, Clone)]
 pub struct VideoInputConfig {
+    /// Empty captures every source. Nonempty maps allow only listed sources, unless overridden.
+    pub sources: HashMap<VideoSource, VideoCaptureMode>,
+    /// Includes retained schedules and pre-subscription overrides. No eviction/fallback.
+    pub max_capture_policies: usize,
+    pub max_policy_identity_bytes: usize,
     pub max_tracks: usize,
     /// Positive native sink capacity; zero (SDK unbounded mode) is rejected.
     pub native_queue_capacity: usize,
@@ -43,6 +52,9 @@ pub struct VideoInputConfig {
 impl Default for VideoInputConfig {
     fn default() -> Self {
         Self {
+            sources: HashMap::new(),
+            max_capture_policies: 16,
+            max_policy_identity_bytes: 65_536,
             max_tracks: 4,
             native_queue_capacity: 1,
             queue_capacity: 4,
@@ -55,7 +67,12 @@ impl Default for VideoInputConfig {
 }
 impl VideoInputConfig {
     pub(crate) fn validate(&self) -> Result<()> {
-        if !(1..=16).contains(&self.max_tracks)
+        for mode in self.sources.values() {
+            mode.params()?;
+        }
+        if !(1..=128).contains(&self.max_capture_policies)
+            || !(1..=65_536).contains(&self.max_policy_identity_bytes)
+            || !(1..=16).contains(&self.max_tracks)
             || !(1..=4).contains(&self.native_queue_capacity)
             || !(1..=16).contains(&self.queue_capacity)
             || !(1..=4096).contains(&self.max_dimension)
@@ -123,7 +140,114 @@ pub(crate) struct Stamp {
     sid: String,
     generation: u64,
 }
-type Gates = Arc<Mutex<HashMap<Key, Stamp>>>;
+/// Supported capture policies. Zero/request-only is deliberately unsupported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoCaptureMode {
+    AllFrames,
+    FramesPerSecond(u32),
+}
+impl VideoCaptureMode {
+    fn params(self) -> Result<VideoInSourceParams> {
+        match self {
+            Self::AllFrames => Ok(VideoInSourceParams::all_frames()),
+            Self::FramesPerSecond(rate) if (1..=1_000_000_000).contains(&rate) => {
+                Ok(VideoInSourceParams {
+                    framerate: Some(rate),
+                })
+            }
+            _ => Err(Error::InvalidConfig(
+                "video sampling requires 1..=1000000000 fps; request-only unsupported",
+            )),
+        }
+    }
+}
+#[derive(Default)]
+struct GateState {
+    active: HashMap<Key, Stamp>,
+    policies: HashMap<Key, VideoInSampler<()>>,
+    identity_bytes: usize,
+    closed: bool,
+    #[cfg(test)]
+    now: Option<Duration>,
+}
+type Gates = Arc<Mutex<GateState>>;
+
+#[derive(Clone)]
+pub(crate) struct CaptureHandle {
+    gates: Gates,
+    config: VideoInputConfig,
+    cancel: CancellationToken,
+    origin: Instant,
+}
+impl CaptureHandle {
+    // Validation and mutation are atomic. No command queue or pending string retention.
+    pub(crate) fn capture(
+        &self,
+        identity: &str,
+        source: VideoSource,
+        mode: VideoCaptureMode,
+    ) -> Result<()> {
+        let params = mode.params()?;
+        if identity.is_empty() || identity.len() > 65_536 {
+            return Err(Error::Limit("video capture identity"));
+        }
+        let mut state = self.gates.lock().unwrap();
+        if state.closed || self.cancel.is_cancelled() {
+            return Err(Error::Closed);
+        }
+        let key = Key {
+            identity: identity.into(),
+            source,
+        };
+        if let Some(sampler) = state.policies.get_mut(&key) {
+            sampler
+                .set_params(params)
+                .map_err(|_| Error::InvalidConfig("video sampling rate"))?;
+        } else {
+            self.insert(&mut state, key, params)?;
+        }
+        Ok(())
+    }
+    fn insert(&self, state: &mut GateState, key: Key, params: VideoInSourceParams) -> Result<()> {
+        let bytes = state.identity_bytes.saturating_add(key.identity.len());
+        if state.policies.len() >= self.config.max_capture_policies
+            || bytes > self.config.max_policy_identity_bytes
+        {
+            return Err(Error::Limit("video capture policies"));
+        }
+        let sampler = VideoInSampler::new(params, 1)
+            .map_err(|_| Error::InvalidConfig("video sampling rate"))?;
+        state.policies.insert(key, sampler);
+        state.identity_bytes = bytes;
+        Ok(())
+    }
+    fn sample(&self, key: &Key, stamp: &Stamp) -> Result<bool> {
+        let mut state = self.gates.lock().unwrap();
+        if state.closed || self.cancel.is_cancelled() || state.active.get(key) != Some(stamp) {
+            return Ok(false);
+        }
+        let now = self.origin.elapsed();
+        #[cfg(test)]
+        let now = state.now.unwrap_or(now);
+        if !state.policies.contains_key(key) {
+            let mode = if self.config.sources.is_empty() {
+                // Preserve all-frame behavior without accumulating unnecessary policy keys.
+                return Ok(true);
+            } else if let Some(mode) = self.config.sources.get(&key.source) {
+                *mode
+            } else {
+                return Ok(false);
+            };
+            self.insert(&mut state, key.clone(), mode.params()?)?;
+        }
+        Ok(state
+            .policies
+            .get_mut(key)
+            .expect("installed policy")
+            .sample(now)
+            .0)
+    }
+}
 
 /// Never exposed in the cloneable public event. Permits survive every private transfer.
 pub(crate) struct QueuedVideo {
@@ -149,7 +273,10 @@ impl VideoReceiver {
             // under the same gate as lifecycle invalidation. Already admitted events cannot
             // be recalled from callers or downstream processors.
             let gates = self.gates.lock().unwrap();
-            if !self.cancel.is_cancelled() && gates.get(&queued.key) == Some(&queued.stamp) {
+            if !gates.closed
+                && !self.cancel.is_cancelled()
+                && gates.active.get(&queued.key) == Some(&queued.stamp)
+            {
                 let QueuedVideo {
                     event,
                     _bytes,
@@ -170,6 +297,7 @@ struct Lane {
     bytes: Arc<Semaphore>,
     pending: Arc<Semaphore>,
     stats: Arc<Stats>,
+    capture: CaptureHandle,
 }
 struct Reader {
     stamp: Stamp,
@@ -202,6 +330,12 @@ impl VideoReaders {
             bytes: Arc::new(Semaphore::new(config.max_retained_bytes)),
             pending: Arc::new(Semaphore::new(config.queue_capacity)),
             stats: Arc::new(Stats::default()),
+            capture: CaptureHandle {
+                gates: gates.clone(),
+                config: config.clone(),
+                cancel: cancel.clone(),
+                origin: Instant::now(),
+            },
         };
         (
             Self {
@@ -226,7 +360,7 @@ impl VideoReaders {
         if key.identity.len().saturating_add(sid.len()) > 65_536 {
             return Err(Error::Limit("video track metadata"));
         }
-        if self.cancel.is_cancelled() {
+        if self.cancel.is_cancelled() || self.gates.lock().unwrap().closed {
             return Err(Error::Closed);
         }
         if self
@@ -264,6 +398,7 @@ impl VideoReaders {
         self.gates
             .lock()
             .unwrap()
+            .active
             .insert(key.clone(), stamp.clone());
         let task = tokio::spawn(read_video(
             stream,
@@ -275,6 +410,9 @@ impl VideoReaders {
         ));
         self.readers.insert(key, Reader { stamp, stop, task });
         Ok(())
+    }
+    pub(crate) fn capture_handle(&self) -> CaptureHandle {
+        self.lane.capture.clone()
     }
     pub(crate) fn stats(&self) -> Arc<Stats> {
         self.lane.stats.clone()
@@ -319,7 +457,7 @@ impl VideoReaders {
         if sid.is_some_and(|sid| reader.stamp.sid != sid) {
             return Ok(());
         }
-        self.gates.lock().unwrap().remove(key);
+        self.gates.lock().unwrap().active.remove(key);
         reader.stop.cancel();
         let result = (&mut reader.task)
             .await
@@ -350,7 +488,7 @@ impl VideoReaders {
     }
     fn finish_joined(&mut self, key: Key, stamp: Stamp, result: Result<()>) -> Result<()> {
         if self.readers.get(&key).is_some_and(|r| r.stamp == stamp) {
-            self.gates.lock().unwrap().remove(&key);
+            self.gates.lock().unwrap().active.remove(&key);
             self.readers.remove(&key);
             self.known.remove(&key);
             result?;
@@ -368,10 +506,23 @@ impl VideoReaders {
         for key in keys {
             result = crate::publication::combine_cleanup(result, self.stop(&key, None).await);
         }
+        let mut state = self.gates.lock().unwrap();
+        state.policies.retain(|key, _| key.identity != identity);
+        state.identity_bytes = state.policies.keys().map(|key| key.identity.len()).sum();
         result
     }
     pub(crate) async fn close(&mut self) -> Result<()> {
-        self.gates.lock().unwrap().clear();
+        {
+            let mut state = self.gates.lock().unwrap();
+            state.closed = true;
+            state.policies.clear();
+            state.identity_bytes = 0;
+        }
+        self.reset_readers().await
+    }
+    /// Reconnect teardown invalidates readers, not capture policy or cadence.
+    pub(crate) async fn reset_readers(&mut self) -> Result<()> {
+        self.gates.lock().unwrap().active.clear();
         for reader in self.readers.values() {
             reader.stop.cancel();
         }
@@ -385,7 +536,13 @@ impl VideoReaders {
 }
 impl Drop for VideoReaders {
     fn drop(&mut self) {
-        self.gates.lock().unwrap().clear();
+        {
+            let mut state = self.gates.lock().unwrap();
+            state.closed = true;
+            state.active.clear();
+            state.policies.clear();
+            state.identity_bytes = 0;
+        }
         for reader in self.readers.values() {
             reader.stop.cancel();
         }
@@ -473,6 +630,17 @@ fn deliver_frame(
     lane: &Lane,
     config: &VideoInputConfig,
 ) -> Result<()> {
+    match lane.capture.sample(key, stamp) {
+        Ok(true) => {}
+        Ok(false) => {
+            lane.stats.sampled_out.fetch_add(1, Ordering::Relaxed);
+            return Ok(());
+        }
+        Err(error) => {
+            lane.stats.reject(error.to_string());
+            return Ok(());
+        }
+    }
     let converted = match convert(frame, key.clone(), stamp.clone(), lane, config) {
         Ok(frame) => frame,
         Err(error) => {
@@ -525,12 +693,15 @@ mod tests;
 pub struct VideoInputStats {
     pub rejected_frames: u64,
     pub dropped_frames: u64,
+    /// Policy-excluded, not-due or invalidated before conversion; not overload.
+    pub sampled_out_frames: u64,
     pub last_rejection: Option<String>,
 }
 #[derive(Default)]
 pub(crate) struct Stats {
     rejected: AtomicU64,
     dropped: AtomicU64,
+    sampled_out: AtomicU64,
     last: Mutex<Option<String>>,
 }
 impl Stats {
@@ -542,6 +713,7 @@ impl Stats {
         VideoInputStats {
             rejected_frames: self.rejected.load(Ordering::Relaxed),
             dropped_frames: self.dropped.load(Ordering::Relaxed),
+            sampled_out_frames: self.sampled_out.load(Ordering::Relaxed),
             last_rejection: self.last.lock().unwrap().clone(),
         }
     }

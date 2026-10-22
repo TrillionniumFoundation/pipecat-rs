@@ -197,7 +197,7 @@ Linux host it owns a disposable loopback-only server and short-lived fixture
 tokens, with no hosted account or stored credentials. See
 [local SFU qualification](qualification/LOCAL_SFU.md) for the exact limits.
 
-General native-buffer video conversion, device capture, manual image requests, source sampling, participant audio mixing,
+General native-buffer video conversion, device capture, manual image requests, participant audio mixing,
 metadata mutation, subscription/mute controls, token/REST helpers, and Python
 API/event-handler parity are not implemented by this crate.
 
@@ -231,7 +231,7 @@ vendored signaling test counts are historical and are not added to these 48.
 ## Opt-in incoming video subset
 
 `LiveKitConfig::video_input = Some(VideoInputConfig::default())` enables bounded,
-all-frame camera and screen-share input. It is disabled by default. The same
+camera and screen-share input (all frames unless sampling is configured). It is disabled by default. The same
 participant filter and opt-in predicate select both initial room publications and
 later publications. Screen-share maps to `screenVideo`; other video track sources
 map to `camera`, as in Python pin `af9f9da9d7afddaa8811c0e0251b32566c980bdf`.
@@ -285,6 +285,59 @@ requests best-effort cancellation.
 
 Local native source/track fixtures and synthetic lifecycle tests do not establish
 remote subscription, SFU, RTP, codec decoding, devices, browser, NAT/TURN or remote
-reconnect behavior. Source sampling, manual image requests and full Python input
+reconnect behavior. Manual image requests and full Python input
 transport parity remain deferred. Existing audio, data, DTMF and outgoing-video
 paths are retained. No SFU/netlink experiment is part of this slice.
+
+
+### Bounded source sampling
+
+`VideoInputConfig::sources` is a typed source map: empty means all sources/all
+frames; a nonempty map captures only listed camera/screen sources. Values are
+`VideoCaptureMode::AllFrames` or `FramesPerSecond(1..=1_000_000_000)`. Zero and
+request-only mode are rejected, not silently enabled. Input remains opt-in and
+participant filtering remains authoritative; sampling does not alter subscription.
+
+`connection.capture_participant_video(identity, source, mode)` (also exposed on
+`LiveKitTransport`) installs an explicit override synchronously, including before
+subscription. Success means installed, not that the participant or track exists.
+Python's default capture arguments correspond to `Camera` and
+`FramesPerSecond(30)`. Overrides take precedence over the configured source map.
+Updates preserve cadence and apply to subsequent sampling decisions, not already
+queued/admitted images. They do not stop/restart the native reader.
+
+The adapter reuses shared `VideoInSampler<()>`, never enqueuing image requests.
+Sampling happens before layout/conversion and before converted-byte/pending-frame
+permits. It uses monotonic arrival time from one session origin, deliberately
+unlike pinned Python's `time.time()` wall clock. First periodic frames are due;
+early allowance is min(50ms, half interval); stalls strictly longer than one
+interval reset without catch-up bursts. Rate changes and all-frame switches retain
+the existing schedule. This targets policy compatibility, not exact floating-point,
+clock-jump, callback, or real network-jitter parity. A selected frame that fails
+conversion or queue admission consumes its cadence opportunity.
+
+Capture policy/schedule entries are independent per identity/source. They share
+one short lock with SID/generation validity, so stale readers cannot advance a new
+generation's cadence. Policies survive mute, unsubscribe, replacement and reconnect
+reader teardown; participant departure removes even pre-subscription policies,
+and terminal close clears policies and rejects further updates. Existing final
+admission fencing, fresh unmute sinks, reader joins and pixel accounting remain.
+
+Defaults permit 16 retained policies and 64 KiB total identity bytes, configurable
+to at most 128 policies and 64 KiB. These include pre-subscription overrides and
+lazy configured-source schedules, including retained unsubscribed sources. No
+policy eviction occurs. Invalid updates or exhausted capacity leave prior state
+unchanged. Lazy policy exhaustion rejects the frame observably, never falls back
+to all-frame capture. The unconfigured all-frame path needs no policy entry.
+`sampled_out_frames` counts policy/timing and pre-conversion invalidation drops,
+separately from overload/rejection counts. Native upstream/decoder storage remains
+outside the adapter's budget.
+
+Manual image requests and public video lifecycle callbacks remain deferred.
+Pinned Python retains successful request callbacks downstream; the separate shared
+MediaInput completion-on-admission contract is not substituted here. No request,
+callback, SFU, RTP/codec/device, or remote lifecycle parity is claimed.
+Batch160 revision 3 passed 70 fresh library tests and strict Clippy/formatting.
+Two integration tests and compile-only SFU evidence are historical revision 2
+executions carried through a reviewed test-only change. See
+[VALIDATION.md](VALIDATION.md) for source binding, failures and scope limits.

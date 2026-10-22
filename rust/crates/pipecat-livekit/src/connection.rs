@@ -33,6 +33,7 @@ pub struct LiveKitConnection {
     events: Mutex<EventReceiver>,
     state: watch::Receiver<ConnectionState>,
     video_input_stats: Arc<crate::video_input::Stats>,
+    video_capture: crate::video_input::CaptureHandle,
     cancel: CancellationToken,
     audio: Option<crate::publisher::AudioPublisher>,
     video: Option<crate::video::VideoPublisher>,
@@ -75,6 +76,7 @@ impl LiveKitConnection {
             cancel.clone(),
         );
         let video_input_stats = video_readers.stats();
+        let video_capture = video_readers.capture_handle();
         let (state_tx, state) = watch::channel(ConnectionState::Connecting);
         let (ready_tx, ready_rx) = oneshot::channel();
         let mut guard = SetupCancellation(Some(cancel.clone()));
@@ -120,6 +122,7 @@ impl LiveKitConnection {
             }),
             state,
             video_input_stats,
+            video_capture,
             cancel,
             audio: ready.publisher,
             video: ready.video,
@@ -127,6 +130,23 @@ impl LiveKitConnection {
         })
     }
 
+    /// Install a per-source policy, including before subscription. Does not enable input,
+    /// bypass participant filtering, or promise an available track. Existing cadence remains.
+    /// Python's capture defaults correspond to Camera + FramesPerSecond(30).
+    pub fn capture_participant_video(
+        &self,
+        identity: &str,
+        source: crate::VideoSource,
+        mode: crate::VideoCaptureMode,
+    ) -> Result<()> {
+        if self.config.video_input.is_none() {
+            return Err(Error::InvalidConfig("video input is disabled"));
+        }
+        if !self.config.accepts(identity) {
+            return Err(Error::InvalidConfig("video participant is filtered"));
+        }
+        self.video_capture.capture(identity, source, mode)
+    }
     pub fn video_input_stats(&self) -> crate::VideoInputStats {
         self.video_input_stats.snapshot()
     }
@@ -651,7 +671,7 @@ async fn room_loop(
                             if speakers.len() > config.max_audio_tracks { return Err(Error::Limit("active speakers per event")); }
                             emit(&tx, LiveKitEvent::ActiveSpeakers(speakers.iter().map(|p| p.identity().to_string()).collect()))?;
                         }
-                        RoomEvent::Reconnecting => { video_readers.close().await?; state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
+                        RoomEvent::Reconnecting => { video_readers.reset_readers().await?; state.send_replace(ConnectionState::Reconnecting); if let Some(video) = &media.video { video.interrupt(); }
                             if let Some(publisher) = &media.publisher { publisher.interrupt(); }
                             if let Some(source) = &media.source { source.clear_buffer(); } emit(&tx, LiveKitEvent::Reconnecting)?; }
                         RoomEvent::Reconnected => {
