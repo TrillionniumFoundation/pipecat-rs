@@ -370,6 +370,43 @@ fn emit(tx: &mpsc::Sender<LiveKitEvent>, event: LiveKitEvent) -> Result<()> {
     })
 }
 
+/// Admit the complete raw payload before the first-join observation, without media filtering.
+/// Non-atomic failure terminates the owner: no rollback, retry or resumed processing.
+pub(crate) fn participant_connected(
+    tx: &mpsc::Sender<LiveKitEvent>,
+    other_participant_has_joined: &mut bool,
+    participant: ParticipantInfo,
+) -> Result<()> {
+    let raw = LiveKitEvent::ParticipantConnected(participant);
+    crate::protocol::validate_event(&raw)?;
+    let LiveKitEvent::ParticipantConnected(participant) = &raw else {
+        unreachable!()
+    };
+    let first_identity =
+        (!*other_participant_has_joined).then(|| participant.identity.as_str().to_owned());
+    emit(tx, raw)?;
+    if let Some(identity) = first_identity {
+        emit(tx, LiveKitEvent::FirstParticipantJoined { identity })?;
+        *other_participant_has_joined = true;
+    }
+    Ok(())
+}
+
+/// Sample current unfiltered SDK membership only after successful raw admission.
+/// The deferred fact also lets normalized tests exercise this ordering without a joined room.
+pub(crate) fn participant_disconnected(
+    tx: &mpsc::Sender<LiveKitEvent>,
+    other_participant_has_joined: &mut bool,
+    participant: ParticipantInfo,
+    current_remotes_empty: impl FnOnce() -> bool,
+) -> Result<()> {
+    emit(tx, LiveKitEvent::ParticipantDisconnected(participant))?;
+    if current_remotes_empty() {
+        *other_participant_has_joined = false;
+    }
+    Ok(())
+}
+
 /// Raw-first, non-atomic admission. Failure terminates the room owner; never retry.
 /// Only a compact copy of the validated last identity survives a successful change.
 pub(crate) fn active_speakers_changed(
@@ -614,6 +651,8 @@ async fn room_loop(
     let mut next_generation = 0u64;
     // Session-owned: empty lists, departure and automatic reconnect do not reset it.
     let mut last_active_speaker = None;
+    // Fresh owner only; reconnect and empty initial snapshots do not reset this bool.
+    let mut other_participant_has_joined = false;
     let result = async {
         loop {
             tokio::select! {
@@ -633,17 +672,17 @@ async fn room_loop(
                 event = events.recv() => {
                     let Some(event) = event else { return Err(Error::Sdk("SDK event channel closed unexpectedly".into())); };
                     match event {
-                        RoomEvent::ParticipantConnected(p) => emit(&tx, LiveKitEvent::ParticipantConnected(participant_info(&p)))?,
+                        RoomEvent::ParticipantConnected(p) => participant_connected(&tx, &mut other_participant_has_joined, participant_info(&p))?,
                         RoomEvent::ParticipantActive(p) => emit(&tx, LiveKitEvent::ParticipantActive(participant_info(&p)))?,
                         RoomEvent::ParticipantDisconnected(p) => {
                             let identity = p.identity().to_string();
                             video_readers.remove_participant(&identity).await?;
                             for reader in tracks.values().filter(|r| r.identity == identity) { reader.cancel.cancel(); }
-                            emit(&tx, LiveKitEvent::ParticipantDisconnected(participant_info(&p)))?;
+                            participant_disconnected(&tx, &mut other_participant_has_joined, participant_info(&p), || room.remote_participants().is_empty())?;
                         }
                         RoomEvent::Connected { participants_with_tracks } => {
                             for (p, publications) in participants_with_tracks {
-                                emit(&tx, LiveKitEvent::ParticipantConnected(participant_info(&p)))?;
+                                participant_connected(&tx, &mut other_participant_has_joined, participant_info(&p))?;
                                 for publication in publications { if selects_publication(&config, &p.identity().to_string(), publication.kind()) { publication.set_subscribed(true); } }
                             }
                         }

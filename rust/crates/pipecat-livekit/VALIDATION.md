@@ -1,5 +1,43 @@
 # LiveKit native validation
 
+## Batch 164: first-participant observation — source only, qualification pending
+
+Source now adds the bounded `FirstParticipantJoined { identity }` observation,
+a room-owner bool, shared live/initial join admission, and successful-departure
+re-arming based on a deferred current unfiltered SDK empty-membership sample.
+Raw admission remains first and non-atomic; failures are terminal without retry
+or rollback. See README for Python ordering/lifetime differences and bounds.
+
+Focused test source was added for first/later/duplicate joins, normalized initial
+snapshot ordering, fresh owners, successful departure then next join, rejected
+departures preserving true, media-filter independence, identity and aggregate
+UTF-8 limits, raw/partial queue failure, no derived frame with ordinary join/audio
+dispatch, and existing owned-video-reader cancellation/join after failure.
+These are not executed Batch164 results, joined SDK room fixtures or Python
+callback tests. Actual ingress, SDK sampling and reconnect preservation require
+source review; the cleanup fixture cannot qualify full room/audio/publisher teardown.
+
+Only direct rustfmt on affected Rust files and `git diff --check` were performed
+for this source-only stage. No Cargo, native build/test, Clippy, integration or
+SFU execution occurred. Native validation is capacity-blocked pending resource
+readiness and fresh independent source/invalidation/forecast acceptance. No
+retention deletion, threshold reduction, retained-artifact reuse approval,
+publication, dependency, vendor, manifest or profile change is implied.
+
+Before qualification: freeze the source and exact library inventory; perform
+package formatting, preflight/final strict all-target Clippy, complete library
+execution including new cases, review_contracts and network_signaling integration
+regressions, and local_sfu compile/link only (zero listing/runtime/server startup),
+with stage-specific capacity admission and independent verification. No new
+executed test total is claimed. The accepted Batch163 **109 actual executed test
+cases** below remain unchanged historical evidence, not validation of Batch164.
+
+Recovery update — 2026-10-22: the capacity-blocked state above describes the
+earlier source-only stage. The sources have been recovered, and formatting and
+static checks repeated. Native dependencies and the build environment are being
+re-established. There are no current Batch164 native-test, Clippy, integration or
+SFU results; this recovery is not a native pass or a green CI result.
+
 ## Batch 163: bounded active-speaker change observation — 2026-10-22
 
 `ActiveSpeakerChanged { identity }` observes a change in the last identity of a

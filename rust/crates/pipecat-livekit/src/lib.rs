@@ -5,6 +5,8 @@
 mod active_speaker_tests;
 mod config;
 mod connection;
+#[cfg(test)]
+mod first_participant_tests;
 mod protocol;
 mod publication;
 mod publisher;

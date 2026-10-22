@@ -32,6 +32,11 @@ pub enum LiveKitEvent {
         room: String,
     },
     ParticipantConnected(ParticipantInfo),
+    /// First admitted remote join since the last admitted empty-room departure.
+    /// Observation only: no callback, current-membership lease or pipeline frame.
+    FirstParticipantJoined {
+        identity: String,
+    },
     ParticipantActive(ParticipantInfo),
     ParticipantDisconnected(ParticipantInfo),
     AudioSubscribed {
@@ -279,7 +284,8 @@ pub(crate) fn validate_event(event: &LiveKitEvent) -> Result<()> {
             .map_or(0, String::len)
             .saturating_add(topic.as_ref().map_or(0, String::len)),
         LiveKitEvent::Dtmf { identity, .. } => identity.as_ref().map_or(0, String::len),
-        LiveKitEvent::ActiveSpeakerChanged { identity } => identity.len(),
+        LiveKitEvent::ActiveSpeakerChanged { identity }
+        | LiveKitEvent::FirstParticipantJoined { identity } => identity.len(),
         LiveKitEvent::ActiveSpeakers(speakers) => speakers
             .iter()
             .fold(0usize, |size, s| size.saturating_add(s.len())),

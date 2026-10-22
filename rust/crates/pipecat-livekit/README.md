@@ -278,6 +278,59 @@ executed joined-room test. The cleanup test does not qualify full room/audio/
 publisher teardown. No hosted CI, SFU runtime, remote media/device validation,
 full Python API parity or complete replacement is claimed.
 
+## First-participant observation (batch164 source only; qualification pending)
+
+`FirstParticipantJoined { identity }` is an observation following the ordinary
+`ParticipantConnected` for the first admitted remote join in the current armed
+period. Both live joins and the initial connected snapshot use the same helper;
+snapshot iteration and subsequent subscription ordering remain SDK-delivered.
+Later joins, including duplicate identities, still emit their ordinary event.
+There is no identity sorting, membership deduplication, empty-identity rewrite,
+local-participant synthesis or media-filter eligibility restriction.
+
+The room owner retains one bool, initially false. Departure keeps video cleanup
+and audio cancellation before its ordinary `ParticipantDisconnected` admission.
+Only after that admission succeeds does it sample the current unfiltered SDK
+remote collection and re-arm if empty. Invalid metadata, full or closed queues do
+not re-arm. Remaining remotes prevent re-arming regardless of media-reader count.
+Reconnect, empty initial snapshots and unrelated observations do not reset it.
+SDK membership may advance while events wait in the queue; this is a current
+snapshot condition, not an event counter. The SDK's `remote_participants()` clones
+its map: transient snapshot allocation and SDK membership storage are outside the
+one-bool tracker bound, as are public event queues and downstream retention.
+
+This follows state selection in Python pin
+`af9f9da9d7afddaa8811c0e0251b32566c980bdf`, not Python callback completion order.
+Python awaits ordinary callbacks, sets its flag before awaiting the first callback
+and preserves the flag on a reused client unless an empty-room departure resets
+it. Rust has a fresh owner per connection and sets true only after derived-event
+admission succeeds. Python asynchronous callback completion and overlapping
+initial enumeration can choose a different first identity; no deterministic
+cross-language ordering or reused-client lifetime equivalence is promised.
+
+Full raw ParticipantInfo identity/SID/name/metadata validation precedes admission;
+its aggregate limit is 65,536 UTF-8 bytes. The derived identity has the same byte
+ceiling. Raw-first admission is non-atomic: a one-slot queue may retain the raw
+join and reject the derived observation. `QueueFull` or `Closed` propagates into
+existing terminal cleanup, leaving the bool unchanged on derived failure, without
+retry, rollback, duplicate raw emission or resumed owner processing. Queued raw
+history remains; error notification is best-effort.
+
+The derived event's `into_frame()` returns `None`, while ordinary joins retain
+`ClientConnected` projection. It grants no callback, media, current-membership
+lease or automatic application-action authority. Direct receive and pipeline
+input remain mutually exclusive consumers. The public enum addition can require
+downstream exhaustive-match changes.
+
+This is source-only implementation, not native qualification. Added test source
+covers normalized helper admission/reset/limits, production dispatch, and the
+owned-video cleanup seam; those tests have not run for Batch164. Actual SDK
+Connected/live ingress and reconnect/reset wiring are source-inspected, not
+joined-room tests. Batch163's 109 accepted executions above remain historical and
+do not qualify this changed source. Full Python API/callback parity, hosted SFU
+join/runtime, remote media/device/RTP and complete replacement remain unqualified.
+See [VALIDATION.md](VALIDATION.md) for the pending validation gate.
+
 ## Opt-in incoming video subset
 
 `LiveKitConfig::video_input = Some(VideoInputConfig::default())` enables bounded,

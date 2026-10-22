@@ -667,3 +667,68 @@ async fn active_speaker_admission_failure_closes_and_joins_existing_video_reader
         }
     }
 }
+
+/// Exercises the actual first-participant handler error through the production terminal
+/// video cleanup seam, not a hosted room_loop or audio/publisher shutdown.
+#[tokio::test]
+async fn first_participant_admission_failure_closes_and_joins_existing_video_reader() {
+    for closed in [false, true] {
+        let (native, track) = source();
+        let (mut readers, mut images) =
+            VideoReaders::new(VideoInputConfig::default(), CancellationToken::new());
+        readers
+            .start(
+                key(VideoSource::Camera),
+                "TR".into(),
+                track.rtc_track(),
+                false,
+            )
+            .await
+            .unwrap();
+        assert!(native.capture_frame(&pixels()));
+        let (tx, rx) = mpsc::channel(1);
+        let mut rx = Some(rx);
+        if closed {
+            drop(rx.take());
+        }
+        let mut joined = false;
+        let result = crate::connection::participant_connected(
+            &tx,
+            &mut joined,
+            crate::ParticipantInfo {
+                identity: "next".into(),
+                sid: "PA_next".into(),
+                name: String::new(),
+                metadata: String::new(),
+            },
+        );
+        assert!(if closed {
+            matches!(&result, Err(Error::Closed))
+        } else {
+            matches!(&result, Err(Error::QueueFull))
+        });
+        assert!(!joined);
+        let result = timeout(DEADLINE, finish_video_input(result, &mut readers))
+            .await
+            .unwrap();
+        assert!(if closed {
+            matches!(result, Err(Error::Closed))
+        } else {
+            matches!(result, Err(Error::QueueFull))
+        });
+        assert!(readers.known.is_empty() && readers.readers.is_empty());
+        assert!(readers.gates.lock().unwrap().active.is_empty());
+        images.close();
+        assert_eq!(
+            readers.lane.bytes.available_permits(),
+            readers.config.max_retained_bytes
+        );
+        assert!(!native.capture_frame(&pixels()));
+        if let Some(rx) = &mut rx {
+            assert!(
+                matches!(rx.try_recv(), Ok(LiveKitEvent::ParticipantConnected(p)) if p.identity == "next")
+            );
+            empty(rx); // No retry, rollback or promised terminal Error observation.
+        }
+    }
+}
