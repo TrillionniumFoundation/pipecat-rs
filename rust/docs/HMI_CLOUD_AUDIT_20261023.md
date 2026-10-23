@@ -1,6 +1,6 @@
 # Pipecat / Hepta HMI 云端续审：2026-10-23
 
-原任务的完整产品验收仍未通过。指定的已保存 Codex 云环境已实际运行 Cargo、原生模型与协议测试；owner 双向路由和采集音频来源绑定的源码实现已补齐到可接入、可回归阶段，生产 owner 注册及真实模型/设备链尚未验收。
+原任务的完整产品验收仍未通过。指定的已保存 Codex 云环境已实际运行 Cargo、原生模型与协议测试；owner 双向路由和采集音频来源绑定已实现；第二轮进一步把文本 coordinator 注册进实际 Agentd owner，并通过真实进程回归。生产用户身份、完整语音注册及真实模型/设备链尚未验收。
 
 ## 身份、分支与工具
 
@@ -66,8 +66,8 @@ Pipecat 运行源码已保存于本地 `354d116`（后续仅类型别名格式/�
 
 | 状态 | 精确缺失项 / 影响范围 |
 | --- | --- |
-| BLOCKED：生产 owner 注册 | 需要实际现有 UI/channel owner 的注册 hook、实时 grant checker 和既有 sourced-observation ingress/receipt 实现。源码中的 authority/observation ports 没有生产默认实现，不能用配置字符串或测试 ledger 伪装认证。`apps/hepta-control-ui` 是无权限 presentation core，`hepta-native-gateway` 明确只读；不能扩权借道。通用 coordinator、媒体双向传输及协议回路已实现，生产接线仍待这些实际 owner 输入 |
-| BLOCKED：同一真实 thread 文本闭环 | 缺现有 Agentd/App Server 已认证端点、credential/UDS 所有权、thread/session/home/version、principal/device/organ generation 和当前授权绑定。此环境未发现实际 HMI 配置；没有另建 thread 或 conversation DB |
+| 已推进：实际 owner 文本注册 | 第二轮已接入 `AgentdConfig::with_hmi_text()` / `--hmi-text`，由实际 `RuntimeTasks` 监督。复用 `TextTrust`、签名 AuthBus ingress、原 evidence outbox/relay 和原 Core client ID，已跑真实 Agentd/App Server 进程。测试身份来自仓库原有 fixture，HTTP 模型为 SSE fixture；没有发放生产凭证。详见下文第二轮证据 |
+| 已推进：同一 thread 的进程级文本闭环 | 实际私有 UDS、实时签名/线程授权、原 SQLite ingress 和 Core rollout 已验证；中文流式输出、取消、重连、防重及下一轮次通过。生产用户/真实模型仍未验；具名 fleet/Agentd 运行环境变量未设置，未将独立测试身份冒充生产 |
 | BLOCKED：媒体运行配置 | 缺 owner 预建私有目录、独占/保留策略、quota 与持久单调 capture generation，以及实际采用的平台和设备 ID。当前只实测 Linux 构建，不能当作用户实际部署平台已选定 |
 | DENIED：Whisper 模型获取 | 对 `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin` 的 proxy CONNECT 返回 403。没有下载、没有重试同一资源或换镜像/环境；后续 JFK fixture 获取未执行。这只是英文 native regression 的尝试，不能作为中文模型验收。需要获准的可信多语言 Whisper artifact、摘要与实际语音 fixture |
 | BLOCKED：Piper 实际推理 | 缺可信 Piper manifest、模型、字典/voice 和原生运行依赖的完整 artifact 身份；TTS 实际推理 NOT_RUN |
@@ -77,6 +77,38 @@ Pipecat 运行源码已保存于本地 `354d116`（后续仅类型别名格式/�
 
 另一项保留的访问拒绝为 `https://api.github.com/repos/casey/just/releases/latest` CONNECT 403（未下载/未重试）。Cargo 源码安装 just 1.59.0 和 cargo-nextest 0.9.149 是仓库明确允许的独立路径，在同一环境成功，来源见安装日志。系统 apt 配置读取的 permission-denied 亦未重试。
 
-下一步可继续的源码工作是：在实际提供的既有 owner hook 上实现上述两个授权端口并注册 coordinator，复用其 Agentd 接入与已存在 thread，然后用真实配置先验文本闭环。该步骤不需要重新授权已有任务，但依赖尚未出现的 owner 接口/运行配置，不能自行制造。模型和设备具备后，按原范围完成语音、故障及延迟/资源验收。未采用 WebRTC，不增设商业 provider 全量 parity 门槛。
+第二轮已完成实际 owner 文本 hook 和进程级闭环。下一步源码工作是显式设计/接入签名音频来源 observation profile，复用实际 owner 的权限与原 ingress；现有 `AuthBusTextBody` 没有媒体字段，`KernelEvidenceAppend` 是 qualification envelope，不能偷换为音频 observation。文本 port 的 NoAudio 会明确拒绝音频观测；真实设备授权、模型与完整语音运行输入仍待就绪。模型和设备具备后，按原范围完成语音、故障及延迟/资源验收。未采用 WebRTC，不增设商业 provider 全量 parity 门槛。
 
 原任务：[会话](https://chatgpt.com/c/6adb0f2f-7460-83e8-b88c-11e9da68323e)，ID `01a167b6-4fcc-7722-9808-9489f1564005`。
+
+
+## 第二轮：实际 Agentd owner 文本注册与进程资格
+
+本轮继续使用原保存云环境、原 audit 分支；Pipecat 前一轮 `5357b8a` 与 Hepta `53f6189be` 均保留为祖先。没有切换环境、推送或改写原候选分支。相关 `.agents/skills` 仍不存在，沿用仓库 AGENTS 约束。
+
+实际注册入口是 Hepta `hepta-agentd/src/config.rs::with_hmi_text`、`main.rs::--hmi-text`、`runtime.rs::RuntimeTasks::spawn_optional("hmi-text",...)`。运行代码在 `hmi_text.rs` / `hmi_text_session.rs`，它直接使用真实 `AgentdState`，不是从 UI 字符串构造的授权。`TextAuthority::check_current` 调用 generation/readiness fence，并从实际已附着的 `TextIngress` 重读 `TextTrust`。首个输入和后续输入均需原有 issuer 的 Ed25519 签名和 thread allowlist；验证发生在接入和原 ingress，产出原来的真实 outbox/queue receipt。
+
+媒体 coordinator 的 text 模式已接线：文本输出不调用 speech/audio observation。UI scope 的 principal 来自实际注册 issuer，本地 Agent UI 标识绑定 key epoch 与 Agent spawn；这些字段不构成麦克风权限。新 UDS 默认关闭、启用后仅属于原 Agent owner，未生成密钥/注册或扩张既有只读 gateway/organ。测试仅在云环境内的既有 disposable FleetHarness 中启用。
+
+HMI 跟踪原 `hepta.authbus:<delivery_id>`，通过原 `authbus_ingress::submit` 和 `authbus_dispatch` 入原 Core thread；没有另发 `hepta.hmi:*` 队列请求。重连后的重复签名请求查询已有 canonical delivery，不重开输出或挡住下一次新输入。等待 ingress 查询期间的本地打断用 owner-minted epoch fence 防止旧请求重新打开输出。writer 与 session future 都由 runtime 直接拥有；强制服务退出不会遗留分离的 writer 任务。
+
+真实进程首次运行揭示新建 Core thread 的 lazy rollout 尚未物化，`thread/read` 可用但 `thread/resume` 报 no rollout。修复仅覆盖显式 `excludeTurns:true`、无 path/history/page override、已经加载且非 ephemeral 的同一 thread：使用 Core 自己的 materialize/flush，然后继续原订阅。默认历史 resume 的原拒绝回归保持不变，没有插入预热对话、伪造历史或另建 thread。
+
+| 资格 | 结果与准确边界 | 证据 |
+| --- | --- | --- |
+| 实际 Agentd / App Server 的 HMI 进程回路 | 2/2 通过，0 跳过；真实私有 UDS、实际签名验证/实时撤权、原 SQLite outbox/checkpoint、Core 持久 turn；模型 HTTP SSE 为 fixture | [最终进程回归](/workspace/pipecat-hmi-audit-20261023/agentd-hmi-owned-futures-regression.log) |
+| 重连后的重复及后续新轮次 | 原输入在重复/重连/只读恢复后仍只有一次模型请求；新的不同 sequence 恰好再调用一次，且成功返回，没有被旧输入挡住 | [强化回归](/workspace/pipecat-hmi-audit-20261023/agentd-hmi-recovered-next-turn.log) |
+| 原签名文本入口 | 原有 2/2 通过；最初新 HMI 的 2 个失败与原入口通过出现在同一日志中，未把部分成功当作全包成功 | [首次真实进程失败/原入口结果](/workspace/pipecat-hmi-audit-20261023/agentd-hmi-owner-process-tests-fixed-listener.log) |
+| App Server resume 兼容边界 | 2/2 通过，1014 个其他用例被筛除；旧默认拒绝和新显式订阅分别验证 | [resume](/workspace/pipecat-hmi-audit-20261023/app-server-initial-resume-regression.log) |
+| adapter 全包与新增取消 fence | 原 41/41 通过；新增 fence 1/1 定向通过（41 筛除），不是声称最后一次全跑 42 项 | [全包](/workspace/pipecat-hmi-audit-20261023/hmi-external-owner-adapter-regression.log)、[fence](/workspace/pipecat-hmi-audit-20261023/hmi-admission-fence-regression.log) |
+| Clippy / 格式 | 三包 just fix 退出 0（原有警告保留）；App Server + adapter 全目标 strict `-D warnings` 退出 0。Agentd `-D clippy::all` 实际退出 101，8 个诊断所在源码均与原候选及第一轮 HEAD 字节一致，未抑制或冒充通过；见精确路径/行号/摘要证据。仓库 just fmt 因源码已提交而为空操作；另用精确 recipe 显式格式化/检查全部 17 个变更 Rust 文件，均退出 0；规范化比较证明与已测试 fe6900449 仅有格式差异，见 owner-v2-final-format-equivalence.json | [strict 通过](/workspace/pipecat-hmi-audit-20261023/app-server-hmi-strict-clippy.log)、[Agentd 失败](/workspace/pipecat-hmi-audit-20261023/agentd-hmi-product-clippy.log)、[基线核验](/workspace/pipecat-hmi-audit-20261023/agentd-baseline-lint-evidence.json) |
+
+编译时真实发现 codex_uds wrapper 的 accept 返回值/可变借用差异，修复后继续；日志保留。运行中的路径别名创建有只读文件系统警告，未修改系统目录或权限。磁盘一度剩 124 MiB；确认无 Rust 构建运行后，仅删除本任务的约 19.8 GB incremental cache，未触碰 native CMake 目录、源码、模型、已完成测试二进制与证据。后续 CARGO_INCREMENTAL=0 控制缓存增长，验收断言、特性、原执行环境均不变。
+
+本轮没有运行真实生产用户、完整 Agentd 进程重启/崩溃恢复、物理音频、中文语音推理、噪声/回声、拔插或端到端分位延迟；连接 reconnect 不能冒充整个 Agentd 重启。已有 /dev/snd 缺失和模型 CONNECT 403 保持原阻塞，未重试/绕过。
+
+下一步的最小真实输入：原 owner 的实际 fleet/AgentId/generation、已经存在的 trust/checkpoint 与独立签名 producer、目标 thread；语音另需实际平台/设备身份与权限来源、可信 Whisper/Piper artifact/manifest、媒体 root/quota/generation 和显式签名来源 observation profile。只检查了具名环境变量的存在性，未打印凭证，见 [运行输入存在性](/workspace/pipecat-hmi-audit-20261023/owner-runtime-input-presence.json)。`AuthBusTextBody`（agent-protocol/src/authbus.rs）只含 spawn_generation/thread_id/text；`KernelEvidenceAppendIngress`（agent-protocol/src/evidence.rs）和 evidence_host.rs 明确使用 qualification envelope；channel_ingress migration 只有 schema/validation，不能凭表名当作运行中的 audio ingress。
+
+第二轮补丁、最终源码身份与全部新失败/成功日志见 `/workspace/pipecat-hmi-audit-20261023/owner-v2-handoff.json`；第一轮交接和归档保留。
+
+第二轮源码锚点 `fe6900449` 的 17 个 Rust 变更经过规范化比较，与最终源文件完全一致；fmt 后按仓库要求未再跑已通过测试。第一轮报告/patch/bundle/归档不覆盖，第二轮独立交接使用 owner-v2 前缀。
