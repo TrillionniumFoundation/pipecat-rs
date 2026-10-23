@@ -1,0 +1,69 @@
+{
+  "stream": {
+    "principal_id": "REPLACE_WITH_EXISTING_REGISTERED_ISSUER",
+    "device_id": "REPLACE_WITH_EXISTING_AUTHORIZED_DEVICE_ID",
+    "device_generation": 0,
+    "organ_id": "REPLACE_WITH_EXISTING_CAPTURE_ORGAN_ID",
+    "organ_generation": 0,
+    "logical_session_id": "thread:REPLACE_WITH_EXISTING_THREAD_ID"
+  },
+  "turn_id": "REPLACE_WITH_CURRENT_HEPTA_TURN_ID",
+  "output_epoch": 0,
+  "whisper_model": {
+    "path": "/REPLACE/TRUSTED_ARTIFACTS/multilingual-whisper.bin",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+  },
+  "whisper_settings": {
+    "language": "zh",
+    "no_speech_probability": 0.4,
+    "initial_prompt": null,
+    "temperature": 0.0,
+    "translate_to_english": false,
+    "strategy": { "beam_search": { "beam_size": 5 } }
+  },
+  "silero_model": {
+    "path": "/REPLACE/TRUSTED_ARTIFACTS/silero.onnx",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+  },
+  "piper": {
+    "voice": "REPLACE_WITH_ADOPTED_VOICE",
+    "model": {
+      "path": "/REPLACE/TRUSTED_ARTIFACTS/voice.onnx",
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    "config": {
+      "path": "/REPLACE/TRUSTED_ARTIFACTS/voice.onnx.json",
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    "runtime": {
+      "path": "/REPLACE/TRUSTED_ARTIFACTS/libonnxruntime.so",
+      "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+    },
+    "espeak": {
+      "library": {
+        "path": "/REPLACE/TRUSTED_ARTIFACTS/libespeak-ng.so",
+        "sha256": "REPLACE_WITH_VERIFIED_SHA256"
+      },
+      "data_directory": "/REPLACE/TRUSTED_ARTIFACTS/espeak-ng-data",
+      "data_sha256": "REPLACE_WITH_VERIFIED_DIRECTORY_SHA256"
+    },
+    "output_sample_rate": null,
+    "inference_threads": 2,
+    "queue_capacity": 4,
+    "max_text_bytes": 4096,
+    "max_phonemes": 8192,
+    "max_audio_samples": 5760000,
+    "max_model_bytes": 524288000,
+    "use_cuda": false,
+    "download": false
+  },
+  "input_device": "REPLACE_WITH_EXISTING_NATIVE_INPUT_DEVICE_ID",
+  "output_device": "REPLACE_WITH_EXISTING_NATIVE_OUTPUT_DEVICE_ID",
+  "media_store": {
+    "directory": "/REPLACE/EXISTING_AGENT_HOME/media",
+    "capture_generation": 0,
+    "max_assets": 128,
+    "max_bytes": 16777216,
+    "max_segment_bytes": 1048576
+  }
+}
