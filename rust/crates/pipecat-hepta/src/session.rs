@@ -246,7 +246,30 @@ impl HmiSession {
     }
 
     pub fn barge_in(&mut self, media: &impl MediaControl) -> Result<InterruptOutcome, HmiError> {
-        self.epoch = self.epoch.checked_add(1).ok_or(HmiError::EpochExhausted)?;
+        let epoch = self.epoch.checked_add(1).ok_or(HmiError::EpochExhausted)?;
+        let local_error = self.retire_output(epoch, media)?;
+        Ok(InterruptOutcome {
+            request: TurnInterrupt {
+                logical_session_id: self.identity.logical_session_id.clone(),
+                turn_id: self.turn_id.clone(),
+                output_epoch: self.epoch,
+            },
+            local_error,
+        })
+    }
+
+    /// Acknowledge the exact owner retirement floor. A native VAD stop and its
+    /// owner echo share one epoch; the echo must never increment it a second time.
+    /// MediaControl must make duplicate retirement idempotent and retain failure.
+    pub fn retire_output(
+        &mut self,
+        owner_epoch: u64,
+        media: &impl MediaControl,
+    ) -> Result<Option<String>, HmiError> {
+        if owner_epoch < self.epoch || (owner_epoch == self.epoch && !self.retired) {
+            return Err(HmiError::StaleOutput);
+        }
+        self.epoch = owner_epoch;
         self.retired = true;
         // Fence first: even a device teardown error must never revive old audio.
         let local_error = media
@@ -265,14 +288,7 @@ impl HmiSession {
                 };
             }
         }
-        Ok(InterruptOutcome {
-            request: TurnInterrupt {
-                logical_session_id: self.identity.logical_session_id.clone(),
-                turn_id: self.turn_id.clone(),
-                output_epoch: self.epoch,
-            },
-            local_error,
-        })
+        Ok(local_error)
     }
 
     /// Call only when the existing Hepta owner has admitted the next turn.

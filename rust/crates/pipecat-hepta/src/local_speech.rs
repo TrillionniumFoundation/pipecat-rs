@@ -35,6 +35,9 @@ pub struct LocalSpeechConfig {
     /// Native device IDs; None selects that endpoint's native default.
     pub input_device: Option<String>,
     pub output_device: Option<String>,
+    /// Existing private root and quota supplied by the same authenticated owner.
+    #[serde(default)]
+    pub media_store: Option<crate::MediaStoreConfig>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -72,6 +75,7 @@ pub struct LocalSpeech {
     settings: WhisperSettings,
     input_device: Option<String>,
     presentation: LocalPresentation,
+    media_store: Option<Arc<crate::MediaStore>>,
 }
 impl LocalSpeech {
     /// No downloads, alternate providers, credentials or synthesized transcripts.
@@ -87,6 +91,12 @@ impl LocalSpeech {
         verify(&config.whisper_model, 1024 * 1024 * 1024)?;
         verify(&config.silero_model, 64 * 1024 * 1024)?;
         verify(&config.piper.runtime, 512 * 1024 * 1024)?;
+        let media_store = config
+            .media_store
+            .map(|store| crate::MediaStore::open(store, config.stream.clone()))
+            .transpose()
+            .map_err(native)?
+            .map(Arc::new);
         let model = SileroModel::load(
             &RuntimeOptions {
                 library_path: config.piper.runtime.path.clone(),
@@ -105,6 +115,7 @@ impl LocalSpeech {
         let output = LocalAudioOutput::new(selector(config.output_device), AudioLimits::default())
             .map_err(native)?;
         Ok(Self {
+            media_store,
             whisper: Some(whisper),
             vad: Some(vad),
             settings: config.whisper_settings,
@@ -116,6 +127,9 @@ impl LocalSpeech {
                 gate: Arc::new(Mutex::new(OutputGate {
                     epoch: config.output_epoch,
                     turn_id: config.turn_id,
+                    admitted: true,
+                    opened: false,
+                    last_stop_error: None,
                 })),
             },
         })
@@ -123,6 +137,9 @@ impl LocalSpeech {
 
     pub fn presentation(&self) -> &LocalPresentation {
         &self.presentation
+    }
+    pub fn media_store(&self) -> Option<&Arc<crate::MediaStore>> {
+        self.media_store.as_ref()
     }
 
     /// Opens actual capture through the existing bounded VAD/STT pipeline.
@@ -144,6 +161,10 @@ impl LocalSpeech {
             },
         )
         .map_err(native)?;
+        let stt = match &self.media_store {
+            Some(store) => stt.with_audio_source(store.clone()),
+            None => stt,
+        };
         let vad = SileroVadProcessor::new(vad, Default::default()).map_err(native)?;
         let mut config = PipelineConfig::default();
         config.start.audio_in_sample_rate = 16_000;
@@ -229,6 +250,45 @@ pub struct PreparedAudio {
 struct OutputGate {
     epoch: u64,
     turn_id: String,
+    admitted: bool,
+    opened: bool,
+    last_stop_error: Option<String>,
+}
+#[derive(Debug, PartialEq, Eq)]
+enum Retirement {
+    New,
+    AlreadyRetired,
+}
+impl OutputGate {
+    fn accepts(&self, turn: &str, epoch: u64) -> bool {
+        self.admitted && self.epoch == epoch && self.turn_id == turn
+    }
+    fn begin_retirement(&mut self, epoch: u64) -> Result<Retirement, String> {
+        if epoch < self.epoch || (epoch == self.epoch && self.admitted) {
+            return Err("media epoch cannot be reused".into());
+        }
+        if epoch == self.epoch {
+            return match &self.last_stop_error {
+                Some(error) => Err(error.clone()),
+                None => Ok(Retirement::AlreadyRetired),
+            };
+        }
+        self.epoch = epoch;
+        self.admitted = false;
+        self.last_stop_error = None;
+        Ok(Retirement::New)
+    }
+    fn admit(&mut self, turn: &str, epoch: u64) -> Result<(), LocalSpeechError> {
+        if !crate::session::valid_id(turn) || epoch != self.epoch {
+            return Err(LocalSpeechError::Stale);
+        }
+        if let Some(error) = &self.last_stop_error {
+            return Err(LocalSpeechError::Native(error.clone()));
+        }
+        self.turn_id = turn.to_owned();
+        self.admitted = true;
+        Ok(())
+    }
 }
 pub struct LocalPresentation {
     piper: PiperService,
@@ -243,8 +303,7 @@ impl LocalPresentation {
         identity: &OutputIdentity,
     ) -> Result<(), LocalSpeechError> {
         if identity.stream != self.stream
-            || identity.output_epoch != gate.epoch
-            || identity.turn_id != gate.turn_id
+            || !gate.accepts(&identity.turn_id, identity.output_epoch)
             || !crate::session::valid_id(&identity.utterance_id)
         {
             return Err(LocalSpeechError::Stale);
@@ -254,20 +313,15 @@ impl LocalPresentation {
     /// Only call after Hepta admits the turn. The shared epoch must already have
     /// been advanced through the HmiSession/MediaControl retirement boundary.
     pub fn admit_turn(&self, turn_id: &str, epoch: u64) -> Result<(), LocalSpeechError> {
-        if !crate::session::valid_id(turn_id) {
-            return Err(LocalSpeechError::Stale);
-        }
         let mut gate = self.gate.lock().map_err(native)?;
-        if gate.epoch != epoch {
-            return Err(LocalSpeechError::Stale);
-        }
-        gate.turn_id = turn_id.to_owned();
-        Ok(())
+        gate.admit(turn_id, epoch)
     }
     pub fn open_output(&self) -> Result<(), LocalSpeechError> {
         self.output
             .open(PcmFormat::new(self.piper.sample_rate(), 1).map_err(native)?)
-            .map_err(native)
+            .map_err(native)?;
+        self.gate.lock().map_err(native)?.opened = true;
+        Ok(())
     }
     pub async fn synthesize(
         &self,
@@ -323,14 +377,55 @@ impl MediaControl for LocalPresentation {
             .gate
             .lock()
             .map_err(|_| "media epoch lock poisoned".to_owned())?;
-        if new_epoch <= gate.epoch {
-            return Err("media epoch cannot be reused".into());
+        if gate.begin_retirement(new_epoch)? == Retirement::AlreadyRetired {
+            return Ok(());
         }
-        gate.epoch = new_epoch;
         self.piper.interrupt();
-        if self.output.is_open() {
-            self.output.interrupt().map_err(|error| error.to_string())?;
+        let result = if self.output.is_open() {
+            self.output.interrupt().map_err(|error| error.to_string())
+        } else if gate.opened {
+            Err("local output lost before retirement; device completion unknown".into())
+        } else {
+            Ok(())
+        };
+        gate.last_stop_error = result.as_ref().err().cloned();
+        result
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+    fn gate() -> OutputGate {
+        OutputGate {
+            epoch: 2,
+            turn_id: "old".into(),
+            admitted: true,
+            opened: false,
+            last_stop_error: None,
         }
-        Ok(())
+    }
+    #[test]
+    fn native_retirement_closes_admission_even_for_relabelled_old_turn() {
+        let mut gate = gate();
+        assert!(gate.accepts("old", 2));
+        assert_eq!(gate.begin_retirement(3), Ok(Retirement::New));
+        assert!(!gate.accepts("old", 3));
+        assert!(!gate.accepts("old", 2));
+        assert_eq!(gate.begin_retirement(3), Ok(Retirement::AlreadyRetired));
+        gate.admit("new", 3).unwrap();
+        assert!(gate.accepts("new", 3));
+        assert!(!gate.accepts("old", 3));
+    }
+    #[test]
+    fn failed_device_retirement_stays_unknown_on_duplicate_ack_and_reattach() {
+        let mut gate = gate();
+        gate.begin_retirement(3).unwrap();
+        gate.last_stop_error = Some("device disconnected".into());
+        assert_eq!(gate.begin_retirement(3), Err("device disconnected".into()));
+        assert!(
+            matches!(gate.admit("new", 3), Err(LocalSpeechError::Native(message)) if message == "device disconnected")
+        );
+        assert!(!gate.accepts("old", 3));
     }
 }

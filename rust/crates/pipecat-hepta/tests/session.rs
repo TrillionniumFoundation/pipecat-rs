@@ -75,6 +75,23 @@ fn old_synthesis_cannot_reenter_after_local_barge_in() {
 }
 
 #[test]
+fn owner_stop_echo_uses_the_native_retirement_floor_without_skipping_an_epoch() {
+    let stop = LocalStop::default();
+    let mut session = HmiSession::with_epoch(stream(), "turn-1".into(), 2, 4).unwrap();
+    let native = session.barge_in(&stop).unwrap();
+    assert_eq!(native.request.output_epoch, 3);
+    assert_eq!(session.retire_output(3, &stop), Ok(None));
+    assert_eq!(session.output_epoch(), 3);
+    assert_eq!(session.retire_output(2, &stop), Err(HmiError::StaleOutput));
+    session.attach_turn("turn-2".into(), 4, &stop).unwrap();
+    let mut new = output(1, 4, "new");
+    new.turn_id = "turn-2".into();
+    session.generated(new.clone()).unwrap();
+    assert_eq!(session.retire_output(3, &stop), Err(HmiError::StaleOutput));
+    assert!(session.check_current(&new).is_ok());
+}
+
+#[test]
 fn device_failure_fences_old_output_and_still_returns_remote_interrupt() {
     let mut session = HmiSession::new(stream(), "turn-1".into(), 4).unwrap();
     session.generated(output(1, 0, "old")).unwrap();
