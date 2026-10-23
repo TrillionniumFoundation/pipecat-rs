@@ -15,7 +15,7 @@
 
 两个 checkout 均不存在 `.agents/skills`；已检查 Hepta `AGENTS.md` 和 `.codex/skills`。Hepta 测试均走 `just test`，没有修改 sandbox 行为，也没有扩大只读 organ/gateway 的权限。原有静态检查及 23 个远端文件核对进度保留。
 
-身份实测见 [cloud-identity.log](/workspace/pipecat-hmi-audit-20261023/cloud-identity.log)，工具安装来源、摘要、拒绝及环境边界见 [environment.json](/workspace/pipecat-hmi-audit-20261023/environment.json) 和 [tool-provenance.log](/workspace/pipecat-hmi-audit-20261023/tool-provenance.log)。所有命令的原始输出、退出码和耗时见 [results.json](/workspace/pipecat-hmi-audit-20261023/results.json)。最终提交、补丁、bundle 与摘要见 [handoff.json](/workspace/pipecat-hmi-audit-20261023/handoff.json)；原 23 文件的候选 blob 与当前摘要见 [candidate-scope.json](/workspace/pipecat-hmi-audit-20261023/candidate-scope.json)。
+身份实测见 [cloud-identity.log](/workspace/pipecat-hmi-audit-20261023/cloud-identity.log)，工具安装来源、摘要、拒绝及环境边界见 [environment.json](/workspace/pipecat-hmi-audit-20261023/environment.json) 和 [tool-provenance.log](/workspace/pipecat-hmi-audit-20261023/tool-provenance.log)。第一轮命令的原始输出、退出码和耗时见 [results.json](/workspace/pipecat-hmi-audit-20261023/results.json)，包含第二轮的完整新增索引为 [owner-v2-results.json](/workspace/pipecat-hmi-audit-20261023/owner-v2-results.json)。最终提交、补丁、bundle 与摘要见 [handoff.json](/workspace/pipecat-hmi-audit-20261023/handoff.json)；原 23 文件的候选 blob 与当前摘要见 [candidate-scope.json](/workspace/pipecat-hmi-audit-20261023/candidate-scope.json)。
 
 ## 本次实际实现
 
