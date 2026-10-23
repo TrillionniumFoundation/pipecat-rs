@@ -4,6 +4,8 @@
 
 mod session;
 pub use session::*;
+mod media_store;
+pub use media_store::*;
 
 #[cfg(feature = "local-speech")]
 pub mod local_speech;

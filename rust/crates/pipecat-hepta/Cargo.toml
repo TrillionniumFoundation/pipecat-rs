@@ -12,6 +12,8 @@ local-speech = ["dep:pipecat-audio", "dep:pipecat-core", "dep:pipecat-local-audi
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
+serde_json.workspace = true
+sha2 = "=0.10.9"
 pipecat-audio = { path = "../pipecat-audio", optional = true }
 pipecat-core = { path = "../pipecat-core", optional = true }
 pipecat-local-audio = { path = "../pipecat-local-audio", optional = true }

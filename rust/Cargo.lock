@@ -3649,7 +3649,6 @@ dependencies = [
  "webpki-roots 1.0.9",
 ]
 
-
 [[package]]
 name = "pipecat-aws-sagemaker"
 version = "0.1.0"
@@ -3676,9 +3675,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pipecat-aws-sagemaker-deepgram-stt"
+name = "pipecat-aws-sagemaker-bidi-tts"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "crc32fast",
@@ -3701,10 +3701,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "pipecat-aws-sagemaker-bidi-tts"
+name = "pipecat-aws-sagemaker-deepgram-stt"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "bytes",
  "chrono",
  "crc32fast",
@@ -3897,6 +3896,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-deepgram-flux"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "pipecat-core",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
 name = "pipecat-elevenlabs"
 version = "0.1.0"
 dependencies = [
@@ -3910,24 +3927,6 @@ dependencies = [
  "pipecat-text",
  "serde",
  "serde_json",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "url",
-]
-
-[[package]]
-name = "pipecat-deepgram-flux"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures-util",
- "pipecat-core",
- "pipecat-processors",
- "pipecat-services",
- "pipecat-turns",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "url",
@@ -3986,47 +3985,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "yaml-rust2",
-]
-
-[[package]]
-name = "pipecat-grok-realtime"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "futures-util",
- "libc",
- "pipecat-audio",
- "pipecat-core",
- "pipecat-media-transport",
- "pipecat-processors",
- "pipecat-rtvi",
- "pipecat-services",
- "pipecat-turns",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "url",
-]
-
-[[package]]
-name = "pipecat-inworld-realtime"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "futures-util",
- "pipecat-core",
- "pipecat-processors",
- "pipecat-services",
- "pipecat-turns",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -4091,6 +4049,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-grok-realtime"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "libc",
+ "pipecat-audio",
+ "pipecat-core",
+ "pipecat-media-transport",
+ "pipecat-processors",
+ "pipecat-rtvi",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
 name = "pipecat-hepta"
 version = "0.1.0"
 dependencies = [
@@ -4102,6 +4082,7 @@ dependencies = [
  "pipecat-whisper",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.21",
  "tokio",
 ]
@@ -4125,6 +4106,25 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "pipecat-inworld-realtime"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "pipecat-core",
+ "pipecat-processors",
+ "pipecat-services",
+ "pipecat-turns",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4419,9 +4419,9 @@ dependencies = [
 name = "pipecat-rtvi"
 version = "0.1.0"
 dependencies = [
- "pipecat-audio",
  "async-trait",
  "base64 0.22.1",
+ "pipecat-audio",
  "pipecat-core",
  "pipecat-observers",
  "pipecat-protocol",
