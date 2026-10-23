@@ -91,6 +91,7 @@ pub struct WhisperSttProcessor {
     options: WhisperProcessorOptions,
     state: Arc<Mutex<State>>,
     health: ProcessorHealth,
+    source_retainer: Option<Arc<dyn crate::AudioSourceRetainer>>,
 }
 impl WhisperSttProcessor {
     pub fn new(service: WhisperService, options: WhisperProcessorOptions) -> Result<Self> {
@@ -120,7 +121,14 @@ impl WhisperSttProcessor {
             })),
             health: ProcessorHealth::default(),
             options,
+            source_retainer: None,
         })
+    }
+    /// Install the existing owner's bounded media store before pipeline setup.
+    /// A source-reference failure suppresses that transcript and stays an error.
+    pub fn with_audio_source(mut self, retainer: Arc<dyn crate::AudioSourceRetainer>) -> Self {
+        self.source_retainer = Some(retainer);
+        self
     }
     pub fn is_running(&self) -> bool {
         self.service.is_running()
@@ -172,6 +180,7 @@ impl WhisperSttProcessor {
                 "speech plus trailing silence exceeds segment duration limit",
             ));
         }
+        let captured_samples = bytes.len() / 2;
         bytes.resize(bytes.len() + silence, 0);
         let audio = AudioRawFrame {
             audio: bytes,
@@ -179,9 +188,21 @@ impl WhisperSttProcessor {
             num_channels: 1,
             context_id: None,
         };
-        let pending = self.service.submit(&audio, state.settings.clone())?;
         let id = state.next_request_id;
-        state.next_request_id = state.next_request_id.wrapping_add(1);
+        let sequence = id
+            .checked_add(1)
+            .ok_or(WhisperError::Invalid("source sequence exhausted"))?;
+        let pending = match &self.source_retainer {
+            Some(retainer) => self.service.submit_with_source(
+                &audio,
+                state.settings.clone(),
+                captured_samples,
+                sequence,
+                retainer.clone(),
+            )?,
+            None => self.service.submit(&audio, state.settings.clone())?,
+        };
+        state.next_request_id = sequence;
         state.pending.push((id, pending.cancellation()));
         slot.send(Completion {
             pending,

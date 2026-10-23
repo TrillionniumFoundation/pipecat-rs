@@ -39,6 +39,10 @@ pub struct Transcript {
     pub language: Option<Language>,
     pub segments: Vec<TranscriptSegment>,
     pub audio_duration_seconds: f64,
+    /// Optional retained captured bytes; excludes recognizer-added padding.
+    /// The owning channel must verify it and admit a sourced user observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_source: Option<serde_json::Value>,
 }
 
 /// Synchronous model API. Prefer WhisperService in async code: loading and
@@ -169,6 +173,7 @@ impl WhisperModel {
             language,
             segments,
             audio_duration_seconds: samples.len() as f64 / f64::from(SAMPLE_RATE),
+            audio_source: None,
         })
     }
 }

@@ -2,6 +2,10 @@ use crate::{
     model::decode_pcm, Cancellation, Result, Transcript, WhisperConfig, WhisperError, WhisperModel,
     WhisperSettings,
 };
+use crate::{
+    source::{attach_source, SourceCapture},
+    AudioSourceRetainer,
+};
 use pipecat_core::AudioRawFrame;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -15,6 +19,7 @@ struct Request {
     cancel: Cancellation,
     reply: oneshot::Sender<Result<Transcript>>,
     permit: Arc<OwnedSemaphorePermit>,
+    source: Option<SourceCapture>,
 }
 struct Worker {
     sender: Option<mpsc::Sender<Request>>,
@@ -179,12 +184,16 @@ impl WhisperService {
                     if request.reply.is_closed() {
                         continue;
                     }
-                    let result = model.transcribe_samples(
-                        &request.samples,
-                        &request.settings,
-                        &request.cancel,
-                        &thread_stop,
-                    );
+                    let result = model
+                        .transcribe_samples(
+                            &request.samples,
+                            &request.settings,
+                            &request.cancel,
+                            &thread_stop,
+                        )
+                        .and_then(|transcript| {
+                            attach_source(transcript, request.source, &request.cancel, &thread_stop)
+                        });
                     // Consumers may drop their handle before native cancellation
                     // is acknowledged. Hold admission until both owners finish.
                     drop(request.permit);
@@ -227,6 +236,34 @@ impl WhisperService {
         audio: &AudioRawFrame,
         settings: WhisperSettings,
     ) -> Result<PendingTranscription> {
+        self.submit_inner(audio, settings, None)
+    }
+    /// Preserve only the captured prefix, before any decoder padding. Storage
+    /// executes on the same joined worker as inference, with the same permit;
+    /// no blocking task or file writer is detached during cancellation.
+    pub fn submit_with_source(
+        &self,
+        audio: &AudioRawFrame,
+        settings: WhisperSettings,
+        captured_samples: usize,
+        sequence: u64,
+        retainer: Arc<dyn AudioSourceRetainer>,
+    ) -> Result<PendingTranscription> {
+        if captured_samples == 0 || captured_samples > audio.audio.len() / 2 || sequence == 0 {
+            return Err(WhisperError::Invalid("captured audio prefix or sequence"));
+        }
+        self.submit_inner(
+            audio,
+            settings,
+            Some((captured_samples, sequence, retainer)),
+        )
+    }
+    fn submit_inner(
+        &self,
+        audio: &AudioRawFrame,
+        settings: WhisperSettings,
+        source: Option<(usize, u64, Arc<dyn AudioSourceRetainer>)>,
+    ) -> Result<PendingTranscription> {
         self.validate_settings(&settings)?;
         if self.stop.is_cancelled() {
             return Err(WhisperError::Closed);
@@ -245,6 +282,11 @@ impl WhisperService {
                 .map_err(|_| WhisperError::Backpressure)?,
         );
         let samples = decode_pcm(audio, self.config.max_samples())?;
+        let source = source.map(|(samples, sequence, retainer)| SourceCapture {
+            pcm16: audio.audio[..samples * 2].to_vec(),
+            sequence,
+            retainer,
+        });
         let cancel = Cancellation::new();
         let (reply, receiver) = oneshot::channel();
         worker
@@ -257,6 +299,7 @@ impl WhisperService {
                 cancel: cancel.clone(),
                 reply,
                 permit: permit.clone(),
+                source,
             })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => WhisperError::Backpressure,

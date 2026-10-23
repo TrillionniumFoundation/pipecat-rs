@@ -5,10 +5,12 @@ mod config;
 mod model;
 mod processor;
 mod service;
+mod source;
 pub use config::{DecodingStrategy, Language, WhisperConfig, WhisperSettings, SAMPLE_RATE};
 pub use model::{Cancellation, Transcript, TranscriptSegment, WhisperModel};
 pub use processor::{SegmentationMode, WhisperProcessorOptions, WhisperSttProcessor};
 pub use service::{PendingTranscription, WhisperService};
+pub use source::AudioSourceRetainer;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WhisperError {
