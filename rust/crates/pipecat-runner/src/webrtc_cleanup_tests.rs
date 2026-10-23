@@ -328,7 +328,9 @@ async fn session_observations_survive_registry_failure_and_actual_negotiation_pa
         generated_context: Some(context.clone()),
         worker_report: Some(pipecat_core::WorkerReport {
             state: pipecat_core::WorkerState::Failed,
-            errors: vec![pipecat_core::ErrorFrame::new("local synthetic provider failure")],
+            errors: vec![pipecat_core::ErrorFrame::new(
+                "local synthetic provider failure",
+            )],
             dropped_frames: 0,
             total_errors: 1,
             evicted_errors: 0,
@@ -345,7 +347,11 @@ async fn session_observations_survive_registry_failure_and_actual_negotiation_pa
         Duration::from_secs(3),
         finish_signaling(
             Ok(primary),
-            async { Err(pipecat_webrtc::Error::Shutdown("injected close failure".into())) },
+            async {
+                Err(pipecat_webrtc::Error::Shutdown(
+                    "injected close failure".into(),
+                ))
+            },
             &mut negotiations,
             session::with_session_cleanup,
         ),
@@ -370,7 +376,10 @@ async fn session_observations_survive_registry_failure_and_actual_negotiation_pa
     ));
     assert!(matches!(
         &*failure.cleanup_errors[1],
-        RunnerError::WebRtcNegotiationTasks { panicked: 1, cancelled: 0 }
+        RunnerError::WebRtcNegotiationTasks {
+            panicked: 1,
+            cancelled: 0
+        }
     ));
     assert!(!format!("{failure:?}").contains("synthetic-private-panic-payload"));
 }

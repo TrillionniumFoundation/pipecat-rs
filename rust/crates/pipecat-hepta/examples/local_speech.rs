@@ -1,5 +1,7 @@
 //! JSONL media endpoint. Hepta remains the model/session/tool owner.
-use pipecat_hepta::{local_speech::*, HeptaOutputScope, HmiSession, OutputIdentity, PresentationState};
+use pipecat_hepta::{
+    local_speech::*, HeptaOutputScope, HmiSession, OutputIdentity, PresentationState,
+};
 use serde::Deserialize;
 use serde_json::json;
 use std::{future::Future, io::Read, pin::Pin, time::Duration};
@@ -8,37 +10,72 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Command {
-    Speak { scope: HeptaOutputScope, text: String },
+    Speak {
+        scope: HeptaOutputScope,
+        text: String,
+    },
     Interrupt,
-    Turn { scope: HeptaOutputScope },
+    Turn {
+        scope: HeptaOutputScope,
+    },
     Shutdown,
 }
-type Render<'a> = Pin<Box<dyn Future<Output = Result<pipecat_local_audio::SubmissionReceipt, LocalSpeechError>> + 'a>>;
-struct Active<'a> { identity: OutputIdentity, render: Render<'a> }
+type Render<'a> = Pin<
+    Box<dyn Future<Output = Result<pipecat_local_audio::SubmissionReceipt, LocalSpeechError>> + 'a>,
+>;
+struct Active<'a> {
+    identity: OutputIdentity,
+    render: Render<'a>,
+}
 
 // Cancellation-safe: partial reads live in the caller's bounded buffer.
-async fn line<R: AsyncBufRead + Unpin>(reader: &mut R, pending: &mut Vec<u8>) -> std::io::Result<Option<Vec<u8>>> {
+async fn line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    pending: &mut Vec<u8>,
+) -> std::io::Result<Option<Vec<u8>>> {
     loop {
         let available = reader.fill_buf().await?;
         if available.is_empty() {
-            return if pending.is_empty() { Ok(None) } else { Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "incomplete JSONL command")) };
+            return if pending.is_empty() {
+                Ok(None)
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "incomplete JSONL command",
+                ))
+            };
         }
-        let count = available.iter().position(|byte| *byte == b'\n').map_or(available.len(), |index| index + 1);
-        if count > 65_536 - pending.len() { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "JSONL command exceeds 64 KiB")); }
+        let count = available
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(available.len(), |index| index + 1);
+        if count > 65_536 - pending.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "JSONL command exceeds 64 KiB",
+            ));
+        }
         pending.extend_from_slice(&available[..count]);
         reader.consume(count);
-        if pending.last() == Some(&b'\n') { return Ok(Some(std::mem::take(pending))); }
+        if pending.last() == Some(&b'\n') {
+            return Ok(Some(std::mem::take(pending)));
+        }
     }
 }
 fn emit(tx: &tokio::sync::mpsc::Sender<Vec<u8>>, value: serde_json::Value) -> Result<(), String> {
     let mut bytes = serde_json::to_vec(&value).map_err(|_| "event encoding failed")?;
-    if bytes.len() > 65_535 { return Err("event exceeds 64 KiB".into()); }
+    if bytes.len() > 65_535 {
+        return Err("event exceeds 64 KiB".into());
+    }
     bytes.push(b'\n');
-    tx.try_send(bytes).map_err(|_| "media event receiver closed or overloaded".into())
+    tx.try_send(bytes)
+        .map_err(|_| "media event receiver closed or overloaded".into())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     let result = runtime.block_on(run());
     // Tokio stdin uses a non-cancellable OS read. Native owners have already
     // joined before this bounded runtime teardown; no model work is detached.
@@ -47,12 +84,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 1 { return Err("usage: local_speech CONFIG_JSON; stdin/stdout use bounded JSONL".into()); }
+    if args.len() != 1 {
+        return Err("usage: local_speech CONFIG_JSON; stdin/stdout use bounded JSONL".into());
+    }
     let mut config_bytes = Vec::new();
-    std::fs::File::open(&args[0])?.take(128 * 1024 + 1).read_to_end(&mut config_bytes)?;
-    if config_bytes.len() > 128 * 1024 { return Err("configuration exceeds 128 KiB".into()); }
+    std::fs::File::open(&args[0])?
+        .take(128 * 1024 + 1)
+        .read_to_end(&mut config_bytes)?;
+    if config_bytes.len() > 128 * 1024 {
+        return Err("configuration exceeds 128 KiB".into());
+    }
     let config: LocalSpeechConfig = serde_json::from_slice(&config_bytes)?;
-    let mut session = HmiSession::with_epoch(config.stream.clone(), config.turn_id.clone(), config.output_epoch, 128)?;
+    let mut session = HmiSession::with_epoch(
+        config.stream.clone(),
+        config.turn_id.clone(),
+        config.output_epoch,
+        128,
+    )?;
     let mut speech = LocalSpeech::load(config).await?;
     speech.presentation().open_output()?;
     let mut input = speech.start_input().await?;
@@ -135,11 +183,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let terminal = input.shutdown().await;
     let cleanup = speech.shutdown().await;
     drop(tx);
-    if !writer_finished { writer.abort(); let _ = writer.await; }
+    if !writer_finished {
+        writer.abort();
+        let _ = writer.await;
+    }
     result.map_err(std::io::Error::other)?;
-    if let Some(error) = retired?.local_error { return Err(error.into()); }
-    if let Some(error) = terminal.error { return Err(error.into()); }
-    if terminal.total_errors != 0 { return Err("input reported errors before shutdown".into()); }
+    if let Some(error) = retired?.local_error {
+        return Err(error.into());
+    }
+    if let Some(error) = terminal.error {
+        return Err(error.into());
+    }
+    if terminal.total_errors != 0 {
+        return Err("input reported errors before shutdown".into());
+    }
     cleanup?;
     Ok(())
 }
