@@ -3,7 +3,6 @@ use crate::{session, transport::BrowserSession, RunnerConfig, RunnerError};
 use pipecat_audio::SincResampler;
 use pipecat_client_server::{ProxyError, SessionMethod};
 use pipecat_core::{AudioRawFrame, Frame, FrameData, ProcessorError};
-use pipecat_services::Context;
 use pipecat_webrtc::{
     AudioCodec, ConnectionMode, SmallWebRtcConfig, SmallWebRtcConnection, SmallWebRtcPatchRequest,
     SmallWebRtcRequest, SmallWebRtcRequestHandler,
@@ -48,7 +47,7 @@ pub(crate) async fn serve_session(
     rtc: WebRtcRunnerConfig,
     mut cancel: watch::Receiver<bool>,
     resources: session::SessionResources,
-) -> Result<(Context, u64), RunnerError> {
+) -> Result<session::SessionOutcome, RunnerError> {
     let session_deadline = Instant::now() + config.max_session_duration;
     let connect_deadline = (Instant::now() + config.connect_timeout).min(session_deadline);
     let handler = Arc::new(
@@ -167,7 +166,17 @@ pub(crate) async fn serve_session(
     }.await;
     // Registry cleanup runs even after failed negotiation, missed deadlines, or
     // a dropped HTTP response. Its close operation survives caller cancellation.
-    finish_signaling(result, handler.close(), &mut negotiations).await
+    let result = Ok(session::SessionOutcome::from_result(
+        result,
+        crate::SessionFailureStage::Connection,
+    ));
+    finish_signaling(
+        result,
+        handler.close(),
+        &mut negotiations,
+        session::with_session_cleanup,
+    )
+    .await
 }
 
 fn negotiation_task_error(error: tokio::task::JoinError) -> RunnerError {
@@ -178,15 +187,19 @@ fn negotiation_task_error(error: tokio::task::JoinError) -> RunnerError {
     }
 }
 
+type CleanupMerge<T> =
+    fn(Result<T, RunnerError>, Result<(), RunnerError>) -> Result<T, RunnerError>;
+
 async fn finish_signaling<T, N: Send + 'static>(
     primary: Result<T, RunnerError>,
     close: impl std::future::Future<Output = pipecat_webrtc::Result<()>>,
     negotiations: &mut tokio::task::JoinSet<N>,
+    merge: CleanupMerge<T>,
 ) -> Result<T, RunnerError> {
     // Closing the registry first cancels the owned peers. Even a close failure
     // must not skip joining pending negotiation owners or replace the primary.
     let closed = close.await.map_err(RunnerError::WebRtcCleanup);
-    let result = session::with_transport_cleanup(primary, closed);
+    let result = merge(primary, closed);
     let (mut panicked, mut cancelled) = (0usize, 0usize);
     while let Some(outcome) = negotiations.join_next().await {
         if let Err(error) = outcome {
@@ -205,7 +218,7 @@ async fn finish_signaling<T, N: Send + 'static>(
             cancelled,
         })
     };
-    session::with_transport_cleanup(result, joined)
+    merge(result, joined)
 }
 
 struct AudioState {

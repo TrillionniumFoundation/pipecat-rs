@@ -11,7 +11,12 @@ async fn bounded_finish<T, N: Send + 'static>(
 ) -> Result<T, RunnerError> {
     match tokio::time::timeout(
         Duration::from_secs(3),
-        finish_signaling(primary, close, negotiations),
+        finish_signaling(
+            primary,
+            close,
+            negotiations,
+            session::with_transport_cleanup,
+        ),
     )
     .await
     {
@@ -268,6 +273,7 @@ async fn real_registry_close_precedes_join_and_releases_retained_peer_sockets() 
                 result
             },
             &mut negotiations,
+            session::with_transport_cleanup,
         ),
     )
     .await;
@@ -310,4 +316,61 @@ async fn real_registry_close_precedes_join_and_releases_retained_peer_sockets() 
         .expect("offer deadline")
         .expect("actual registry offer");
     assert_eq!(peer.state(), ConnectionState::Closed);
+}
+
+#[tokio::test]
+async fn session_observations_survive_registry_failure_and_actual_negotiation_panic() {
+    let context = pipecat_services::Context::new(vec![pipecat_services::Message::text(
+        pipecat_services::Role::Assistant,
+        "completed output",
+    )]);
+    let primary = session::SessionOutcome {
+        generated_context: Some(context.clone()),
+        worker_report: Some(pipecat_core::WorkerReport {
+            state: pipecat_core::WorkerState::Failed,
+            errors: vec![pipecat_core::ErrorFrame::new("local synthetic provider failure")],
+            dropped_frames: 0,
+            total_errors: 1,
+            evicted_errors: 0,
+        }),
+        failure: Some(crate::SessionFailure {
+            stage: crate::SessionFailureStage::Runtime,
+            error: Arc::new(RunnerError::Provider),
+            cleanup_errors: Vec::new(),
+        }),
+    };
+    let mut negotiations = JoinSet::<()>::new();
+    negotiations.spawn(async { panic!("synthetic-private-panic-payload") });
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(3),
+        finish_signaling(
+            Ok(primary),
+            async { Err(pipecat_webrtc::Error::Shutdown("injected close failure".into())) },
+            &mut negotiations,
+            session::with_session_cleanup,
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(negotiations.is_empty());
+    let summary = crate::SessionSummary::from_outcome("session".into(), outcome);
+    assert!(!summary.successful);
+    assert!(summary.generated_context_observed);
+    assert_eq!(summary.generated_context, context);
+    assert_eq!(summary.observed_pipeline_errors, Some(1));
+    let failure = summary.failure.unwrap();
+    assert_eq!(failure.stage, crate::SessionFailureStage::Runtime);
+    assert!(matches!(&*failure.error, RunnerError::Provider));
+    assert_eq!(failure.cleanup_errors.len(), 2);
+    assert!(matches!(
+        &*failure.cleanup_errors[0],
+        RunnerError::WebRtcCleanup(pipecat_webrtc::Error::Shutdown(detail))
+        if detail == "injected close failure"
+    ));
+    assert!(matches!(
+        &*failure.cleanup_errors[1],
+        RunnerError::WebRtcNegotiationTasks { panicked: 1, cancelled: 0 }
+    ));
+    assert!(!format!("{failure:?}").contains("synthetic-private-panic-payload"));
 }

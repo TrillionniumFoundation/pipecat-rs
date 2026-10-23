@@ -1,0 +1,31 @@
+[package]
+name = "pipecat-hepta"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+local-speech = ["dep:pipecat-audio", "dep:pipecat-core", "dep:pipecat-local-audio", "dep:pipecat-piper", "dep:pipecat-vad", "dep:pipecat-whisper", "dep:tokio"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+pipecat-audio = { path = "../pipecat-audio", optional = true }
+pipecat-core = { path = "../pipecat-core", optional = true }
+pipecat-local-audio = { path = "../pipecat-local-audio", optional = true }
+pipecat-piper = { path = "../pipecat-piper", features = ["espeak-gpl"], optional = true }
+pipecat-vad = { path = "../pipecat-vad", optional = true }
+pipecat-whisper = { path = "../pipecat-whisper", optional = true }
+tokio = { workspace = true, optional = true, features = ["io-std"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[[example]]
+name = "local_speech"
+required-features = ["local-speech"]

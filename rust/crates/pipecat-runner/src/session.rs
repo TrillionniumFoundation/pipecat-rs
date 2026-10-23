@@ -1,4 +1,7 @@
-use crate::{processors::*, transport::BrowserSession, RunnerConfig, RunnerError, SttProvider};
+use crate::{
+    processors::*, transport::BrowserSession, RunnerConfig, RunnerError, SessionFailure,
+    SessionFailureStage, SttProvider,
+};
 #[cfg(feature = "webrtc")]
 use pipecat_cli::config::ProviderConfig;
 use pipecat_core::*;
@@ -9,6 +12,58 @@ use pipecat_turns::{AssistantAggregatorConfig, AssistantTextMode, LLMContextAggr
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::{net::TcpListener, sync::watch, time::Instant};
+
+/// Retains observations independently from success/failure. Initialization can
+/// fail before either observation exists; that state must remain explicit.
+#[derive(Debug)]
+pub(crate) struct SessionOutcome {
+    pub generated_context: Option<Context>,
+    pub worker_report: Option<WorkerReport>,
+    pub failure: Option<SessionFailure>,
+}
+impl SessionOutcome {
+    pub(crate) fn from_result(
+        result: Result<Self, RunnerError>,
+        stage: SessionFailureStage,
+    ) -> Self {
+        match result {
+            Ok(outcome) => outcome,
+            Err(error) => Self {
+                generated_context: None,
+                worker_report: None,
+                failure: Some(SessionFailure {
+                    stage,
+                    error: Arc::new(error),
+                    cleanup_errors: Vec::new(),
+                }),
+            },
+        }
+    }
+    fn record_failure(&mut self, stage: SessionFailureStage, error: RunnerError) {
+        if let Some(primary) = &mut self.failure {
+            primary.cleanup_errors.push(Arc::new(error));
+        } else {
+            self.failure = Some(SessionFailure {
+                stage,
+                error: Arc::new(error),
+                cleanup_errors: Vec::new(),
+            });
+        }
+    }
+}
+
+/// Unlike a generic Result merge, successful session observations survive a
+/// later transport/negotiation cleanup failure.
+pub(crate) fn with_session_cleanup(
+    primary: Result<SessionOutcome, RunnerError>,
+    cleanup: Result<(), RunnerError>,
+) -> Result<SessionOutcome, RunnerError> {
+    let mut outcome = SessionOutcome::from_result(primary, SessionFailureStage::Initialization);
+    if let Err(error) = cleanup {
+        outcome.record_failure(SessionFailureStage::Cleanup, error);
+    }
+    Ok(outcome)
+}
 
 #[derive(Clone, Default)]
 pub(crate) struct SessionResources {
@@ -38,7 +93,7 @@ pub async fn accept_session(
     providers: &crate::cascade::SessionProviders,
     cancel: &mut watch::Receiver<bool>,
     resources: &SessionResources,
-) -> Result<(Context, u64), RunnerError> {
+) -> Result<SessionOutcome, RunnerError> {
     let session_deadline = Instant::now() + config.max_session_duration;
     let deadline = (Instant::now() + config.connect_timeout).min(session_deadline);
     let session = loop {
@@ -88,11 +143,12 @@ pub async fn accept_session(
     )
     .await;
     let cleanup = session.finish().await;
-    with_transport_cleanup(result, cleanup)
+    with_session_cleanup(result, cleanup)
 }
 
 // Cleanup has already been awaited. Preserve a lone original error unchanged;
 // only simultaneous errors need an aggregate, with the original as its source.
+#[cfg(test)]
 pub(crate) fn with_transport_cleanup<T>(
     primary: Result<T, RunnerError>,
     cleanup: Result<(), RunnerError>,
@@ -116,8 +172,8 @@ pub(crate) async fn run(
     cancel: &mut watch::Receiver<bool>,
     session_deadline: Instant,
     resources: &SessionResources,
-) -> Result<(Context, u64), RunnerError> {
-    run_cascade(
+) -> Result<SessionOutcome, RunnerError> {
+    let result = run_cascade(
         session,
         config,
         &crate::cascade::SessionProviders::Default(Box::new(providers.clone())),
@@ -125,7 +181,11 @@ pub(crate) async fn run(
         session_deadline,
         resources,
     )
-    .await
+    .await;
+    Ok(SessionOutcome::from_result(
+        result,
+        SessionFailureStage::Initialization,
+    ))
 }
 
 async fn run_cascade(
@@ -135,7 +195,7 @@ async fn run_cascade(
     cancel: &mut watch::Receiver<bool>,
     session_deadline: Instant,
     _resources: &SessionResources,
-) -> Result<(Context, u64), RunnerError> {
+) -> Result<SessionOutcome, RunnerError> {
     let rtvi=Arc::new(RtviProcessor::new(RtviConfig{max_message_bytes:session.message_limit(),capabilities:Some(json!({"voice_mode":providers.mode(),"context_mode":"generated-text","playback_acknowledgements":false,"input_sample_rate":providers.input_rate(),"output_sample_rate":session.output_sample_rate(providers.output_rate()),"synthesis_sample_rate":providers.output_rate()}).as_object().unwrap().clone()),..Default::default()}).map_err(|_|RunnerError::Rtvi)?);
     let handle = rtvi.handle();
     let mut events = handle.subscribe();
@@ -387,16 +447,45 @@ async fn run_cascade(
             }
         }
     };
-    if !worker.has_finished() {
-        let _ = worker.cancel("browser session closing").await;
+    let cancellation = if worker.has_finished() {
+        Ok(())
+    } else {
+        match worker.cancel("browser session closing").await {
+            // A terminal worker can win the check/send race. Collection still
+            // supplies its actual final report; Closed alone adds no failure.
+            Err(PipelineError::Closed) if worker.has_finished() => Ok(()),
+            result => result,
+        }
+    };
+    // Collect and snapshot separately: failure of either must not erase the
+    // observations obtained from the other, or the primary runtime failure.
+    let collected = worker.collect().await;
+    let snapshot = context.snapshot();
+    let mut outcome = SessionOutcome {
+        generated_context: None,
+        worker_report: None,
+        failure: None,
+    };
+    if let Err(error) = result {
+        outcome.record_failure(SessionFailureStage::Runtime, error);
     }
-    let (_, report) = worker.collect().await?;
-    let snapshot = context.snapshot().map_err(|_| RunnerError::Provider)?;
-    result?;
-    if report.total_errors > 0 {
-        return Err(RunnerError::Provider);
+    if let Err(error) = cancellation {
+        outcome.record_failure(SessionFailureStage::Cleanup, error.into());
     }
-    Ok((snapshot, report.total_errors))
+    match collected {
+        Ok((_, report)) => {
+            if report.total_errors > 0 && outcome.failure.is_none() {
+                outcome.record_failure(SessionFailureStage::Runtime, RunnerError::Provider);
+            }
+            outcome.worker_report = Some(report);
+        }
+        Err(error) => outcome.record_failure(SessionFailureStage::Cleanup, error.into()),
+    }
+    match snapshot {
+        Ok(snapshot) => outcome.generated_context = Some(snapshot),
+        Err(_) => outcome.record_failure(SessionFailureStage::Cleanup, RunnerError::Provider),
+    }
+    Ok(outcome)
 }
 
 #[cfg(test)]
@@ -441,6 +530,81 @@ mod cleanup_tests {
             if matches!(**primary,RunnerError::Protocol("primary"))
             && matches!(**cleanup,RunnerError::Transport(pipecat_transports::TransportError::Timeout("close"))))
         );
+    }
+    #[test]
+    fn session_cleanup_retains_observed_context_counts_and_original_failure() {
+        let context = Context {
+            messages: vec![Message::text(Role::Assistant, "completed before failure")],
+            ..Default::default()
+        };
+        let mut primary = SessionOutcome {
+            generated_context: Some(context.clone()),
+            worker_report: Some(WorkerReport {
+                state: WorkerState::Failed,
+                errors: vec![ErrorFrame::new("original processor diagnostic")],
+                dropped_frames: 0,
+                total_errors: 3,
+                evicted_errors: 2,
+            }),
+            failure: None,
+        };
+        primary.record_failure(
+            SessionFailureStage::Runtime,
+            RunnerError::Protocol("original runtime failure"),
+        );
+        let outcome = with_session_cleanup(
+            Ok(primary),
+            Err(RunnerError::Transport(
+                pipecat_transports::TransportError::Timeout("close"),
+            )),
+        )
+        .unwrap();
+        let summary = crate::SessionSummary::from_outcome("session".into(), outcome);
+        assert!(!summary.successful);
+        assert!(summary.generated_context_observed);
+        assert_eq!(summary.generated_context, context);
+        assert_eq!(summary.pipeline_errors, 3);
+        assert_eq!(summary.observed_pipeline_errors, Some(3));
+        let report = summary.worker_report.unwrap();
+        assert_eq!(report.evicted_errors, 2);
+        assert_eq!(report.errors[0].error, "original processor diagnostic");
+        let failure = summary.failure.unwrap();
+        assert_eq!(failure.stage, SessionFailureStage::Runtime);
+        assert!(matches!(
+            &*failure.error,
+            RunnerError::Protocol("original runtime failure")
+        ));
+        assert_eq!(failure.cleanup_errors.len(), 1);
+        assert!(matches!(
+            &*failure.cleanup_errors[0],
+            RunnerError::Transport(pipecat_transports::TransportError::Timeout("close"))
+        ));
+    }
+    #[test]
+    fn cleanup_failure_after_success_preserves_observations_and_marks_cleanup_stage() {
+        let outcome = with_session_cleanup(
+            Ok(SessionOutcome {
+                generated_context: Some(Context::default()),
+                worker_report: Some(WorkerReport {
+                    state: WorkerState::Ended,
+                    errors: Vec::new(),
+                    dropped_frames: 0,
+                    total_errors: 0,
+                    evicted_errors: 0,
+                }),
+                failure: None,
+            }),
+            Err(RunnerError::Deadline),
+        )
+        .unwrap();
+        let summary = crate::SessionSummary::from_outcome("session".into(), outcome);
+        assert!(!summary.successful);
+        assert!(summary.generated_context_observed);
+        assert_eq!(summary.observed_pipeline_errors, Some(0));
+        let failure = summary.failure.unwrap();
+        assert_eq!(failure.stage, SessionFailureStage::Cleanup);
+        assert!(matches!(&*failure.error, RunnerError::Deadline));
+        assert!(failure.cleanup_errors.is_empty());
     }
     #[cfg(feature = "webrtc")]
     #[test]

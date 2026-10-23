@@ -118,8 +118,56 @@ pub struct SessionSummary {
     pub session_id: String,
     /// Text-generation context, explicitly not a record of audible playback.
     pub generated_context: pipecat_services::Context,
+    /// Compatibility projection. Zero is not evidence of no pipeline errors
+    /// when `observed_pipeline_errors` is `None`.
     pub pipeline_errors: u64,
     pub successful: bool,
+    /// Whether `generated_context` was obtained from the session's actual
+    /// context owner. An empty unobserved context is not a recovery snapshot.
+    pub generated_context_observed: bool,
+    /// The final joined worker report's count, or `None` if no report exists.
+    pub observed_pipeline_errors: Option<u64>,
+    /// Joined worker state, original bounded error frames and eviction counts.
+    /// Native diagnostics are process-local and must not be exported verbatim.
+    pub worker_report: Option<pipecat_core::WorkerReport>,
+    /// Process-local typed diagnostics, not a wire receipt. Do not serialize
+    /// arbitrary native error Debug/source text into public HMI events.
+    pub failure: Option<SessionFailure>,
+}
+/// The boundary at which the session's primary failure was observed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SessionFailureStage {
+    Connection,
+    Initialization,
+    Runtime,
+    Cleanup,
+}
+/// A cloneable terminal failure without flattening the typed error chain.
+#[derive(Clone, Debug)]
+pub struct SessionFailure {
+    pub stage: SessionFailureStage,
+    pub error: Arc<RunnerError>,
+    /// Subsequent cancellation, worker collection or transport cleanup errors.
+    pub cleanup_errors: Vec<Arc<RunnerError>>,
+}
+impl SessionSummary {
+    fn from_outcome(session_id: String, outcome: session::SessionOutcome) -> Self {
+        let generated_context_observed = outcome.generated_context.is_some();
+        let observed_pipeline_errors = outcome
+            .worker_report
+            .as_ref()
+            .map(|report| report.total_errors);
+        Self {
+            session_id,
+            generated_context: outcome.generated_context.unwrap_or_default(),
+            pipeline_errors: observed_pipeline_errors.unwrap_or_default(),
+            successful: outcome.failure.is_none(),
+            generated_context_observed,
+            observed_pipeline_errors,
+            worker_report: outcome.worker_report,
+            failure: outcome.failure,
+        }
+    }
 }
 struct Entry {
     cancel: watch::Sender<bool>,
@@ -320,19 +368,12 @@ impl NativeRunner {
             )
             .await;
             resources.join_native().await;
-            let (generated_context, pipeline_errors, successful) = match result {
-                Ok(report) => (report.0, report.1, true),
-                Err(_) => (Default::default(), 0, false),
-            };
+            let outcome =
+                session::SessionOutcome::from_result(result, SessionFailureStage::Connection);
             if let Some(inner) = weak.upgrade() {
                 inner.state.lock().unwrap().sessions.remove(&session_id);
             }
-            let _ = reports.send(SessionSummary {
-                session_id,
-                generated_context,
-                pipeline_errors,
-                successful,
-            });
+            let _ = reports.send(SessionSummary::from_outcome(session_id, outcome));
         });
         Ok(
             json!({"sessionId":id,"token":null,"transport":"webrtc","icePolicy":"host-only","iceConfig":{"iceServers":[]},"contextMode":"generated-text","playbackAcknowledgements":false}),
@@ -499,19 +540,12 @@ impl BotApi for NativeRunner {
             )
             .await;
             resources.join_native().await;
-            let (generated_context, pipeline_errors, successful) = match result {
-                Ok(report) => (report.0, report.1, true),
-                Err(_) => (Default::default(), 0, false),
-            };
+            let outcome =
+                session::SessionOutcome::from_result(result, SessionFailureStage::Connection);
             if let Some(inner) = weak.upgrade() {
                 inner.state.lock().unwrap().sessions.remove(&session_id);
             }
-            let _ = reports.send(SessionSummary {
-                session_id,
-                generated_context,
-                pipeline_errors,
-                successful,
-            });
+            let _ = reports.send(SessionSummary::from_outcome(session_id, outcome));
         });
         Ok(
             json!({"wsUrl":ws_url,"sessionId":id,"token":null,"transport":"websocket","voiceMode":self.inner.providers.mode(),"inputSampleRate":self.inner.providers.input_rate(),"outputSampleRate":self.inner.providers.output_rate(),"contextMode":"generated-text","playbackAcknowledgements":false}),

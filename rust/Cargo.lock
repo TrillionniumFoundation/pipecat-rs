@@ -4091,6 +4091,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pipecat-hepta"
+version = "0.1.0"
+dependencies = [
+ "pipecat-audio",
+ "pipecat-core",
+ "pipecat-local-audio",
+ "pipecat-piper",
+ "pipecat-vad",
+ "pipecat-whisper",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "pipecat-images"
 version = "0.1.0"
 dependencies = [

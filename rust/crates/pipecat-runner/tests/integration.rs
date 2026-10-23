@@ -1,15 +1,38 @@
 #[path = "support/mod.rs"]
 mod common;
 use pipecat_browser_client::{client_ready, protocol, transcript, websocket_endpoint};
-use pipecat_client_server::server::{serve_with_api, ServerConfig};
-use pipecat_runner::{NativeRunner, Options, ProviderConfig, RunnerConfig};
+use pipecat_client_server::server::{serve_with_api, BotApi, ServerConfig};
+use pipecat_runner::{
+    NativeRunner, Options, ProviderConfig, RunnerConfig, RunnerError, SessionFailureStage,
+};
 use pipecat_transports::{Packet, SessionConfig, WebSocketSession};
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
-use tokio::{net::TcpListener, sync::oneshot};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    sync::oneshot,
+};
 
+#[derive(Clone, Copy)]
+enum Ending {
+    Graceful,
+    InvalidProtobuf,
+    ProviderFailure,
+}
 #[tokio::test]
 async fn actual_http_start_browser_codec_and_synthetic_provider_pipeline() {
+    exercise(Ending::Graceful).await;
+}
+#[tokio::test]
+async fn failure_after_generation_retains_context_and_original_transport_error() {
+    exercise(Ending::InvalidProtobuf).await;
+}
+#[tokio::test]
+async fn provider_error_retains_generated_context_and_actual_pipeline_error_count() {
+    exercise(Ending::ProviderFailure).await;
+}
+async fn exercise(ending: Ending) {
     tokio::time::timeout(Duration::from_secs(20), async {
         let dg = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let llm = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -60,13 +83,27 @@ async fn actual_http_start_browser_codec_and_synthetic_provider_pipeline() {
         ));
         let deepgram = tokio::spawn(async move {
             for _ in 0..2 {
-                common::deepgram(&dg, true).await?;
+                common::deepgram(&dg, matches!(ending, Ending::Graceful)).await?;
             }
             Ok::<_, pipecat_cli::AgentError>(())
         });
         let openai = tokio::spawn(async move {
             for _ in 0..2 {
                 common::openai(&llm, false).await?;
+                if matches!(ending, Ending::ProviderFailure) {
+                    let (mut peer, _) = llm.accept().await?;
+                    let mut request = Vec::new();
+                    while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                        let mut buffer = [0; 1024];
+                        let count = peer.read(&mut buffer).await?;
+                        if count == 0 || request.len() + count > 16 * 1024 {
+                            return Err(pipecat_cli::AgentError::Smoke("missing second LLM request"));
+                        }
+                        request.extend_from_slice(&buffer[..count]);
+                    }
+                    peer.write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await?;
+                    peer.shutdown().await?;
+                }
             }
             Ok::<_, pipecat_cli::AgentError>(())
         });
@@ -123,15 +160,25 @@ async fn actual_http_start_browser_codec_and_synthetic_provider_pipeline() {
             assert_eq!(ready["type"], "bot-ready");
             assert_eq!(ready["id"], "23");
             assert_eq!(ready["data"]["version"], "2.2.0");
-            // A browser's actual 48 kHz capture is converted to configured 16 kHz.
+            // Keep the original audio smoke path. Failure cases use typed
+            // input so cancellation need not flush an unfinished capture tail.
+            let initial_input = if matches!(ending, Ending::Graceful) {
+                protocol::encode_audio(&vec![0.; 1536], 48000)
+            } else {
+                protocol::encode_message(
+                    &json!({"id":"first-turn","label":"rtvi-ai","type":"send-text","data":{"content":"hello native agent","options":{"run_immediately":true,"audio_response":true}}}),
+                )
+            };
             client
                 .sender()
-                .send(Packet::Binary(
-                    protocol::encode_audio(&vec![0.; 1536], 48000).into(),
-                ))
+                .send(Packet::Binary(initial_input.into()))
                 .await
                 .unwrap();
-            let mut user = None;
+            let mut user = if matches!(ending, Ending::Graceful) {
+                None
+            } else {
+                Some("hello native agent".to_string())
+            };
             let mut bot = None;
             let mut audio = Vec::new();
             let mut tts_stopped = false;
@@ -177,22 +224,61 @@ async fn actual_http_start_browser_codec_and_synthetic_provider_pipeline() {
             assert_eq!(user.as_deref(), Some("hello native agent"));
             assert_eq!(audio, [0, 0, 1, 0, 255, 255, 2, 0]);
             assert!(bot_output_count >= 1);
+            let terminal_input = match ending {
+                Ending::Graceful => protocol::encode_message(
+                    &json!({"id":"bye","label":"rtvi-ai","type":"disconnect-bot"}),
+                ),
+                Ending::InvalidProtobuf => vec![0xff],
+                Ending::ProviderFailure => protocol::encode_message(
+                    &json!({"id":"second-turn","label":"rtvi-ai","type":"send-text","data":{"content":"fail this request","options":{"run_immediately":true,"audio_response":true}}}),
+                ),
+            };
             client
                 .sender()
-                .send(Packet::Binary(
-                    protocol::encode_message(
-                        &json!({"id":"bye","label":"rtvi-ai","type":"disconnect-bot"}),
-                    )
-                    .into(),
-                ))
+                .send(Packet::Binary(terminal_input.into()))
                 .await
                 .unwrap();
             while client.recv().await.is_some() {}
             let _ = client.finish().await;
             let report = reports.recv().await.unwrap();
-            assert!(report.successful, "session failed");
-            assert_eq!(report.pipeline_errors, 0);
-            assert_eq!(report.generated_context.messages.len(), 2);
+            assert!(
+                report.generated_context_observed,
+                "lost actual context snapshot"
+            );
+            assert_eq!(report.observed_pipeline_errors, Some(report.pipeline_errors));
+            match ending {
+                Ending::Graceful => {
+                    assert!(report.successful, "session failed: {:?}", report.failure);
+                    assert_eq!(report.pipeline_errors, 0);
+                    assert!(report.failure.is_none());
+                    assert_eq!(report.generated_context.messages.len(), 2);
+                }
+                Ending::InvalidProtobuf => {
+                    assert!(!report.successful);
+                    assert_eq!(report.pipeline_errors, 0);
+                    let failure = report.failure.as_ref().expect("missing typed failure");
+                    assert_eq!(failure.stage, SessionFailureStage::Runtime);
+                    assert!(matches!(&*failure.error, RunnerError::Protobuf(_)));
+                    assert_eq!(report.generated_context.messages.len(), 2);
+                }
+                Ending::ProviderFailure => {
+                    assert!(!report.successful);
+                    assert!(
+                        report.pipeline_errors > 0,
+                        "lost joined worker error count"
+                    );
+                    let worker = report
+                        .worker_report
+                        .as_ref()
+                        .expect("lost joined worker report");
+                    assert_eq!(worker.total_errors, report.pipeline_errors);
+                    assert!(!worker.errors.is_empty(), "lost original processor errors");
+                    let failure = report.failure.as_ref().expect("missing typed failure");
+                    assert_eq!(failure.stage, SessionFailureStage::Runtime);
+                    assert!(matches!(&*failure.error, RunnerError::Provider));
+                    assert!(report.generated_context.messages.len() >= 2);
+                }
+            }
             assert_eq!(
                 report.generated_context.messages[1].content,
                 Some(pipecat_services::Content::Text("Hello from Rust!".into()))
@@ -251,4 +337,45 @@ fn original_source_wire_fixtures_cross_both_rust_codecs() {
         panic!()
     };
     assert_eq!(audio.sample_rate, 48000);
+}
+
+#[tokio::test]
+async fn connection_failure_reports_unobserved_context_and_error_count() {
+    let runner = NativeRunner::new(
+        RunnerConfig {
+            connect_timeout: Duration::from_millis(30),
+            ..Default::default()
+        },
+        ProviderConfig {
+            deepgram_key: "synthetic-only".into(),
+            openai_key: "synthetic-only".into(),
+            cartesia_key: "synthetic-only".into(),
+            deepgram_endpoint: "ws://127.0.0.1:9/stt".into(),
+            openai_endpoint: "http://127.0.0.1:9/llm".into(),
+            cartesia_endpoint: "ws://127.0.0.1:9/tts".into(),
+            model: "synthetic".into(),
+            voice_id: "synthetic".into(),
+            system_prompt: "fixture".into(),
+            input_rate: 16000,
+            output_rate: 24000,
+        },
+    )
+    .unwrap();
+    let mut reports = runner.subscribe();
+    let started = runner
+        .start(&json!({"transport":"websocket"}))
+        .await
+        .unwrap();
+    // Intentionally never connect: no pipeline worker or provider is created.
+    let report = tokio::time::timeout(Duration::from_secs(3), reports.recv()).await;
+    runner.shutdown().await;
+    let report = report.unwrap().unwrap();
+    assert_eq!(report.session_id, started["sessionId"].as_str().unwrap());
+    assert!(!report.successful);
+    assert!(!report.generated_context_observed);
+    assert!(report.generated_context.messages.is_empty());
+    assert_eq!(report.observed_pipeline_errors, None);
+    let failure = report.failure.expect("missing connection failure");
+    assert_eq!(failure.stage, SessionFailureStage::Connection);
+    assert!(matches!(&*failure.error, RunnerError::Deadline));
 }
