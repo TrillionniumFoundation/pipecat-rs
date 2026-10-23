@@ -2,6 +2,8 @@
 
 原任务的完整产品验收仍未通过。指定的已保存 Codex 云环境已实际运行 Cargo、原生模型与协议测试；owner 双向路由和采集音频来源绑定已实现；第二轮进一步把文本 coordinator 注册进实际 Agentd owner，并通过真实进程回归。生产用户身份、完整语音注册及真实模型/设备链尚未验收。
 
+第三轮已完成独立签名音频 observation/device-authority profile、真实 owner 进程重启/崩溃后的恢复与取消，以及有限软件压力/资源增长回归。本文后续表格保留前两轮历史；最新源码身份、结果和仍未验收边界见 [第三轮报告](HMI_SIGNED_AUDIO_20261023.md)。
+
 ## 身份、分支与工具
 
 环境为 `ccarenv_b64_Y2NhcmVudl85ZDBiZTQ3MjU3MjQ4MTkxOWY1N2Y5M2Y1ZDZhZWY1Mw`，工作目录 `/workspace`，Linux x86_64。Pipecat 使用 Cargo/rustc 1.99.0；Hepta 使用仓库固定的 1.95.0。工具激活脚本为 `/workspace/.pipecat-env/activate.sh`。没有使用 Dot 临时工作区、用户电脑或 GitHub Actions 代替执行。
