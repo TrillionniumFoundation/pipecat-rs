@@ -44,7 +44,11 @@ struct Active<'a> {
     identity: OutputIdentity,
     render: Render<'a>,
 }
-type SourceIo = (u64, &'static str, tokio::task::JoinHandle<Result<(), String>>);
+type SourceIo = (
+    u64,
+    &'static str,
+    tokio::task::JoinHandle<Result<(), String>>,
+);
 
 // Cancellation-safe: partial reads live in the caller's bounded buffer.
 async fn line<R: AsyncBufRead + Unpin>(
