@@ -110,18 +110,34 @@ sequence high-water and presentation transitions at this command boundary.
 Configured input emits `source_transcript`; without a store it emits
 `unbound_transcript` for display only. `verify_source` and `release_source` carry
 the complete reference and execute bounded file I/O in a joined blocking task,
-while local interruption remains selectable. Release is explicit, only after
-the existing owner has durably retained the observation/media under its policy.
+while local interruption remains selectable. After a source is handed off,
+release is explicit, only after the existing owner has durably retained the
+observation/media under its policy.
 The companion `HmiJsonlMediaV1` implements these request/ack operations and stamps
 its reader's connection ID. `HmiOwnerBridgeV1` routes final sources, completed
 speech, presentation and interrupts through the existing owner's authority and
 observation ports. These ports have no fabricated production implementation.
 
+Before handoff, cancellation or dropping a ready transcription result reclaims
+the exact unpublished source through `AudioSourceRetainer::release_unpublished_source`.
+The selected `MediaStore` implements that callback and validates the complete
+reference before release. Third-party retainers must supply their own cleanup;
+the compatibility default does nothing. A successful pipeline enqueue or public
+transcription result transfers ownership uncertainty to the existing consumer,
+so later cancellation does not automatically delete that source. Neither enqueue
+nor submission is a durable observation receipt. Failed identity validation or
+cleanup keeps the asset retained.
+
 `retire` carries the exact `output_epoch`. A native VAD stop and its owner echo
 share one floor, including repeat failure; neither reopens an old turn nor skips
 another epoch. `media_ack` confirms turn attachment, queue admission, source I/O
-or retirement; a speak ack is only queued. Later `presentation` is submitted or
-unknown, never heard. `turn_interrupt` retains local failure while the same
+or retirement; a speak ack is only queued. Later `presentation` is `submitted`,
+`interrupted` or `unknown`, never heard. The native terminal ledger releases an
+exact record only after its event enters the bounded output channel; this is
+not a durable owner acknowledgement. Failed event retention keeps the record,
+and a duplicate or stale identity cannot release a newer record. Local
+interruption is distinct from unknown output and establishes no amount of
+device-observed playback. `turn_interrupt` retains local failure while the same
 Hepta owner asynchronously interrupts/reconciles the original operation.
 `revoke_capture` produces `media_terminal` only after joined capture, storage and
 engine cleanup, retaining each failure/counter. The writer drains that terminal
@@ -132,7 +148,11 @@ The example explicitly bounds Tokio teardown because its stdin OS read is not
 interruptible; native model/device owners are shut down first. This does not
 make a stalled native library or device operation hard-real-time bounded.
 
-The pure state tests are authored regression cases, not native-device acceptance.
+`tests/presentation_lifecycle.rs` exercises the example's actual ledger helper,
+including 260 presentation interruptions with capacity two, event-retention failure,
+repeat release and stale utterance identity. `tests/media_store.rs` and the
+Whisper source tests cover exact unpublished release and retention at uncertain
+handoff. These are software fixtures, not native-device acceptance.
 Physical microphones/speakers, Chinese speech, noise/echo, unplug/replug, resource
 curves and an actual App Server/model session must be verified separately on the
 configured project environment. An ALSA null endpoint does not satisfy them.
