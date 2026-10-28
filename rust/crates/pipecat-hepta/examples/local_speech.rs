@@ -103,7 +103,9 @@ fn retire_active(
     tx: &tokio::sync::mpsc::Sender<Vec<u8>>,
     error: Option<&str>,
 ) -> Result<(), String> {
-    let Some(active) = active.take() else { return Ok(()) };
+    let Some(active) = active.take() else {
+        return Ok(());
+    };
     drop(active.render);
     ledger::retain_terminal(session, &active.identity, |record| {
         emit(tx, ledger::terminal_event(record, error))
@@ -262,8 +264,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     // Every malformed/oversized/closed command path revokes before native cleanup.
     let retired = session.barge_in(media);
-    let presentation_error = retire_active(&mut session, &mut active, &tx,
-        retired.as_ref().ok().and_then(|outcome| outcome.local_error.as_deref())).err();
+    let presentation_error = retire_active(
+        &mut session,
+        &mut active,
+        &tx,
+        retired
+            .as_ref()
+            .ok()
+            .and_then(|outcome| outcome.local_error.as_deref()),
+    )
+    .err();
     let terminal = input.shutdown().await;
     let cleanup = speech.shutdown().await;
     let verification_error = match verification {

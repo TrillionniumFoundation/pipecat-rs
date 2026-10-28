@@ -155,7 +155,10 @@ fn duplicate_old_generation_release_preserves_new_assets_and_quota() {
     assert!(current.release(&source).is_err());
     current.verify(&first).unwrap();
     current.verify(&second).unwrap();
-    assert!(matches!(current.retain(b"ij", 3), Err(MediaStoreError::Backpressure)));
+    assert!(matches!(
+        current.retain(b"ij", 3),
+        Err(MediaStoreError::Backpressure)
+    ));
     assert_eq!(fs::read(root.0.join(&first.asset_id)).unwrap(), b"abcd");
     assert_eq!(fs::read(root.0.join(&second.asset_id)).unwrap(), b"efgh");
     current.release(&first).unwrap();
@@ -176,9 +179,15 @@ fn old_organ_reference_cannot_release_identically_named_new_asset() {
     let new_source = current.retain(b"abcd", 1).unwrap();
     assert_eq!(old_source.asset_id, new_source.asset_id);
     assert_eq!(old_source.sha256, new_source.sha256);
-    assert!(matches!(current.release(&old_source), Err(MediaStoreError::Identity)));
+    assert!(matches!(
+        current.release(&old_source),
+        Err(MediaStoreError::Identity)
+    ));
     current.verify(&new_source).unwrap();
-    assert_eq!(fs::read(root.0.join(&new_source.asset_id)).unwrap(), b"abcd");
+    assert_eq!(
+        fs::read(root.0.join(&new_source.asset_id)).unwrap(),
+        b"abcd"
+    );
 }
 
 #[cfg(feature = "local-speech")]
@@ -191,7 +200,9 @@ fn unpublished_cleanup_validates_full_identity_and_releases_once() {
     let source: pipecat_hepta::CapturedAudioRef = serde_json::from_value(metadata.clone()).unwrap();
     let mut foreign = source.clone();
     foreign.stream.organ_generation += 1;
-    assert!(store.release_unpublished_source(&serde_json::to_value(foreign).unwrap()).is_err());
+    assert!(store
+        .release_unpublished_source(&serde_json::to_value(foreign).unwrap())
+        .is_err());
     store.verify(&source).unwrap();
     store.release_unpublished_source(&metadata).unwrap();
     assert!(store.release_unpublished_source(&metadata).is_err());

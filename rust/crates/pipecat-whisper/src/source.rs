@@ -95,7 +95,10 @@ pub(crate) fn attach_source(
         transcript.audio_source = Some(metadata);
         retained = Some(lease);
     }
-    Ok(RetainedTranscript { transcript, source: retained })
+    Ok(RetainedTranscript {
+        transcript,
+        source: retained,
+    })
 }
 
 #[cfg(test)]

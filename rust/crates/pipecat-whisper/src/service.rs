@@ -402,28 +402,60 @@ mod tests {
         let live = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let cancel = Cancellation::new();
         let stop = Cancellation::new();
-        let result = attach_source(Transcript {
-            text: "fixture".into(), language: None, segments: vec![], audio_duration_seconds: 0.001, audio_source: None,
-        }, Some(SourceCapture { retainer: Arc::new(SourceRetainer(live.clone())), pcm16: vec![0, 0], sequence: 1 }), &cancel, &stop);
+        let result = attach_source(
+            Transcript {
+                text: "fixture".into(),
+                language: None,
+                segments: vec![],
+                audio_duration_seconds: 0.001,
+                audio_source: None,
+            },
+            Some(SourceCapture {
+                retainer: Arc::new(SourceRetainer(live.clone())),
+                pcm16: vec![0, 0],
+                sequence: 1,
+            }),
+            &cancel,
+            &stop,
+        );
         let (reply, receiver) = oneshot::channel();
         assert!(reply.send(result).is_ok());
         let permit = Arc::new(Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap());
-        (PendingTranscription { receiver, cancel, stop, _permit: permit }, live)
+        (
+            PendingTranscription {
+                receiver,
+                cancel,
+                stop,
+                _permit: permit,
+            },
+            live,
+        )
     }
 
     #[tokio::test]
     async fn cancellation_after_reply_reclaims_the_unpublished_source() {
         let (pending, live) = completed_sourced_pending();
         pending.cancel();
-        assert!(matches!(pending.result().await, Err(WhisperError::Cancelled)));
-        assert_eq!(live.load(Ordering::SeqCst), 0, "cancelled ready reply leaked its asset");
+        assert!(matches!(
+            pending.result().await,
+            Err(WhisperError::Cancelled)
+        ));
+        assert_eq!(
+            live.load(Ordering::SeqCst),
+            0,
+            "cancelled ready reply leaked its asset"
+        );
     }
 
     #[test]
     fn dropping_a_ready_reply_reclaims_the_unpublished_source() {
         let (pending, live) = completed_sourced_pending();
         drop(pending);
-        assert_eq!(live.load(Ordering::SeqCst), 0, "dropped ready reply leaked its asset");
+        assert_eq!(
+            live.load(Ordering::SeqCst),
+            0,
+            "dropped ready reply leaked its asset"
+        );
     }
 
     #[tokio::test]

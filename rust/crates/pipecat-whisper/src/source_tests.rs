@@ -1,10 +1,10 @@
 //! Source-callback fixtures, not native-model or microphone qualification.
 use super::*;
+use std::collections::BTreeSet;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Mutex,
 };
-use std::collections::BTreeSet;
 
 struct Retainer {
     calls: AtomicUsize,
@@ -129,21 +129,38 @@ fn cancel_during_retention_reclaims_the_unpublished_asset() {
     let cancel = Cancellation::new();
     let store = retainer(Some(cancel.clone()), false);
     assert!(matches!(
-        attach_source(transcript("fixture decode"), Some(capture(store.clone())), &cancel, &Cancellation::new()),
+        attach_source(
+            transcript("fixture decode"),
+            Some(capture(store.clone())),
+            &cancel,
+            &Cancellation::new()
+        ),
         Err(WhisperError::Cancelled)
     ));
     assert_eq!(store.calls.load(Ordering::SeqCst), 1);
-    assert!(store.live.lock().unwrap().is_empty(), "cancelled source lost its only release owner");
+    assert!(
+        store.live.lock().unwrap().is_empty(),
+        "cancelled source lost its only release owner"
+    );
     assert_eq!(store.releases.load(Ordering::SeqCst), 1);
 }
 
 #[test]
 fn dropping_an_unpublished_source_result_reclaims_its_asset() {
     let store = retainer(None, false);
-    let result = attach_source(transcript("fixture decode"), Some(capture(store.clone())), &Cancellation::new(), &Cancellation::new()).unwrap();
+    let result = attach_source(
+        transcript("fixture decode"),
+        Some(capture(store.clone())),
+        &Cancellation::new(),
+        &Cancellation::new(),
+    )
+    .unwrap();
     assert_eq!(store.live.lock().unwrap().len(), 1);
     drop(result);
-    assert!(store.live.lock().unwrap().is_empty(), "discarded source result retained an unowned asset");
+    assert!(
+        store.live.lock().unwrap().is_empty(),
+        "discarded source result retained an unowned asset"
+    );
     assert_eq!(store.releases.load(Ordering::SeqCst), 1);
 }
 
@@ -151,7 +168,13 @@ fn dropping_an_unpublished_source_result_reclaims_its_asset() {
 fn uncertain_handoff_preserves_source_after_consumer_cancellation() {
     let cancel = Cancellation::new();
     let store = retainer(None, false);
-    let result = attach_source(transcript("fixture decode"), Some(capture(store.clone())), &cancel, &Cancellation::new()).unwrap();
+    let result = attach_source(
+        transcript("fixture decode"),
+        Some(capture(store.clone())),
+        &cancel,
+        &Cancellation::new(),
+    )
+    .unwrap();
     let transcript = result.handoff();
     cancel.cancel();
     drop(transcript);
@@ -172,8 +195,20 @@ fn oversized_source_metadata_reclaims_the_unpublished_asset() {
         }
     }
     let store = retainer(None, false);
-    let source = SourceCapture { retainer: Arc::new(Oversized(store.clone())), pcm16: b"abcd".to_vec(), sequence: 7 };
-    assert!(matches!(attach_source(transcript("fixture decode"), Some(source), &Cancellation::new(), &Cancellation::new()), Err(WhisperError::Invalid(_))));
+    let source = SourceCapture {
+        retainer: Arc::new(Oversized(store.clone())),
+        pcm16: b"abcd".to_vec(),
+        sequence: 7,
+    };
+    assert!(matches!(
+        attach_source(
+            transcript("fixture decode"),
+            Some(source),
+            &Cancellation::new(),
+            &Cancellation::new()
+        ),
+        Err(WhisperError::Invalid(_))
+    ));
     assert!(store.live.lock().unwrap().is_empty());
     assert_eq!(store.releases.load(Ordering::SeqCst), 1);
 }
