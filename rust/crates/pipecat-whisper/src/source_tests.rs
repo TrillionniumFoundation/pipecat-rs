@@ -4,12 +4,15 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Mutex,
 };
+use std::collections::BTreeSet;
 
 struct Retainer {
     calls: AtomicUsize,
     bytes: Mutex<Vec<u8>>,
     cancel: Option<Cancellation>,
     fail: bool,
+    live: Mutex<BTreeSet<u64>>,
+    releases: AtomicUsize,
 }
 impl AudioSourceRetainer for Retainer {
     fn retain_source(&self, pcm16: &[u8], sequence: u64) -> Result<serde_json::Value> {
@@ -21,7 +24,14 @@ impl AudioSourceRetainer for Retainer {
         if self.fail {
             return Err(WhisperError::Worker("source quota exhausted".into()));
         }
+        self.live.lock().unwrap().insert(sequence);
         Ok(serde_json::json!({"sequence":sequence,"bytes":pcm16.len()}))
+    }
+    fn release_unpublished_source(&self, source: &serde_json::Value) -> Result<()> {
+        self.releases.fetch_add(1, Ordering::SeqCst);
+        let sequence = source["sequence"].as_u64().unwrap();
+        assert!(self.live.lock().unwrap().remove(&sequence));
+        Ok(())
     }
 }
 fn transcript(text: &str) -> Transcript {
@@ -39,6 +49,8 @@ fn retainer(cancel: Option<Cancellation>, fail: bool) -> Arc<Retainer> {
         bytes: Mutex::new(vec![]),
         cancel,
         fail,
+        live: Mutex::new(BTreeSet::new()),
+        releases: AtomicUsize::new(0),
     })
 }
 fn capture(retainer: Arc<Retainer>) -> SourceCapture {
@@ -110,4 +122,58 @@ fn retention_error_and_cancel_during_storage_do_not_emit_a_final_observation() {
         ),
         Err(WhisperError::Cancelled)
     ));
+}
+
+#[test]
+fn cancel_during_retention_reclaims_the_unpublished_asset() {
+    let cancel = Cancellation::new();
+    let store = retainer(Some(cancel.clone()), false);
+    assert!(matches!(
+        attach_source(transcript("fixture decode"), Some(capture(store.clone())), &cancel, &Cancellation::new()),
+        Err(WhisperError::Cancelled)
+    ));
+    assert_eq!(store.calls.load(Ordering::SeqCst), 1);
+    assert!(store.live.lock().unwrap().is_empty(), "cancelled source lost its only release owner");
+    assert_eq!(store.releases.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn dropping_an_unpublished_source_result_reclaims_its_asset() {
+    let store = retainer(None, false);
+    let result = attach_source(transcript("fixture decode"), Some(capture(store.clone())), &Cancellation::new(), &Cancellation::new()).unwrap();
+    assert_eq!(store.live.lock().unwrap().len(), 1);
+    drop(result);
+    assert!(store.live.lock().unwrap().is_empty(), "discarded source result retained an unowned asset");
+    assert_eq!(store.releases.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn uncertain_handoff_preserves_source_after_consumer_cancellation() {
+    let cancel = Cancellation::new();
+    let store = retainer(None, false);
+    let result = attach_source(transcript("fixture decode"), Some(capture(store.clone())), &cancel, &Cancellation::new()).unwrap();
+    let transcript = result.handoff();
+    cancel.cancel();
+    drop(transcript);
+    assert_eq!(*store.live.lock().unwrap(), BTreeSet::from([7]));
+    assert_eq!(store.releases.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn oversized_source_metadata_reclaims_the_unpublished_asset() {
+    struct Oversized(Arc<Retainer>);
+    impl AudioSourceRetainer for Oversized {
+        fn retain_source(&self, pcm16: &[u8], sequence: u64) -> Result<serde_json::Value> {
+            self.0.retain_source(pcm16, sequence)?;
+            Ok(serde_json::json!({"sequence":sequence,"padding":"x".repeat(4096)}))
+        }
+        fn release_unpublished_source(&self, source: &serde_json::Value) -> Result<()> {
+            self.0.release_unpublished_source(source)
+        }
+    }
+    let store = retainer(None, false);
+    let source = SourceCapture { retainer: Arc::new(Oversized(store.clone())), pcm16: b"abcd".to_vec(), sequence: 7 };
+    assert!(matches!(attach_source(transcript("fixture decode"), Some(source), &Cancellation::new(), &Cancellation::new()), Err(WhisperError::Invalid(_))));
+    assert!(store.live.lock().unwrap().is_empty());
+    assert_eq!(store.releases.load(Ordering::SeqCst), 1);
 }

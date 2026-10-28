@@ -349,4 +349,14 @@ impl pipecat_whisper::AudioSourceRetainer for MediaStore {
         serde_json::to_value(source)
             .map_err(|e| pipecat_whisper::WhisperError::Worker(e.to_string()))
     }
+
+    fn release_unpublished_source(
+        &self,
+        source: &serde_json::Value,
+    ) -> pipecat_whisper::Result<()> {
+        let source: CapturedAudioRef = serde_json::from_value(source.clone())
+            .map_err(|e| pipecat_whisper::WhisperError::Worker(e.to_string()))?;
+        self.release(&source)
+            .map_err(|e| pipecat_whisper::WhisperError::Worker(e.to_string()))
+    }
 }

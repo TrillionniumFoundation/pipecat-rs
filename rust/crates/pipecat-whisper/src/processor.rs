@@ -432,7 +432,7 @@ impl FrameProcessor for WhisperSttProcessor {
                 };
                 let Some(completion) = completion else { break };
                 sync_shared_health(&state, &health).map_err(processor_error)?;
-                let result = completion.pending.result();
+                let result = completion.pending.result_owned();
                 tokio::pin!(result);
                 let result = loop {
                     tokio::select! {
@@ -482,7 +482,7 @@ impl FrameProcessor for WhisperSttProcessor {
                                 timestamp: chrono::Utc::now().to_rfc3339(),
                                 language: transcript.language.as_ref().map(|l| l.as_str().into()),
                                 result: Some(
-                                    serde_json::to_value(&transcript)
+                                    serde_json::to_value(transcript.transcript())
                                         .map_err(|e| ProcessorError::new(e.to_string()))?,
                                 ),
                                 finalized: true,
@@ -496,6 +496,9 @@ impl FrameProcessor for WhisperSttProcessor {
                                     Direction::Downstream,
                                 )
                                 .await?;
+                            // A successful push is an uncertain handoff, not an
+                            // owner receipt. Preserve it for explicit release.
+                            transcript.handoff();
                         }
                     }
                     Err(WhisperError::Cancelled) => {}

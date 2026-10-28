@@ -141,3 +141,62 @@ fn symlinks_and_path_escape_are_rejected_without_touching_the_target() {
     source.asset_id = "../protected".into();
     assert!(store.verify(&source).is_err());
 }
+
+#[test]
+fn duplicate_old_generation_release_preserves_new_assets_and_quota() {
+    let root = Root::new();
+    let old = MediaStore::open(root.config(1), stream()).unwrap();
+    let source = old.retain(b"abcd", 1).unwrap();
+    old.release(&source).unwrap();
+    drop(old);
+    let current = MediaStore::open(root.config(2), stream()).unwrap();
+    let first = current.retain(b"abcd", 1).unwrap();
+    let second = current.retain(b"efgh", 2).unwrap();
+    assert!(current.release(&source).is_err());
+    current.verify(&first).unwrap();
+    current.verify(&second).unwrap();
+    assert!(matches!(current.retain(b"ij", 3), Err(MediaStoreError::Backpressure)));
+    assert_eq!(fs::read(root.0.join(&first.asset_id)).unwrap(), b"abcd");
+    assert_eq!(fs::read(root.0.join(&second.asset_id)).unwrap(), b"efgh");
+    current.release(&first).unwrap();
+    assert!(current.release(&first).is_err());
+    current.retain(b"ij", 3).unwrap();
+    current.verify(&second).unwrap();
+}
+
+#[test]
+fn old_organ_reference_cannot_release_identically_named_new_asset() {
+    let old_root = Root::new();
+    let old = MediaStore::open(old_root.config(1), stream()).unwrap();
+    let old_source = old.retain(b"abcd", 1).unwrap();
+    let root = Root::new();
+    let mut new_stream = stream();
+    new_stream.organ_generation += 1;
+    let current = MediaStore::open(root.config(1), new_stream).unwrap();
+    let new_source = current.retain(b"abcd", 1).unwrap();
+    assert_eq!(old_source.asset_id, new_source.asset_id);
+    assert_eq!(old_source.sha256, new_source.sha256);
+    assert!(matches!(current.release(&old_source), Err(MediaStoreError::Identity)));
+    current.verify(&new_source).unwrap();
+    assert_eq!(fs::read(root.0.join(&new_source.asset_id)).unwrap(), b"abcd");
+}
+
+#[cfg(feature = "local-speech")]
+#[test]
+fn unpublished_cleanup_validates_full_identity_and_releases_once() {
+    use pipecat_whisper::AudioSourceRetainer;
+    let root = Root::new();
+    let store = MediaStore::open(root.config(1), stream()).unwrap();
+    let metadata = store.retain_source(b"abcd", 1).unwrap();
+    let source: pipecat_hepta::CapturedAudioRef = serde_json::from_value(metadata.clone()).unwrap();
+    let mut foreign = source.clone();
+    foreign.stream.organ_generation += 1;
+    assert!(store.release_unpublished_source(&serde_json::to_value(foreign).unwrap()).is_err());
+    store.verify(&source).unwrap();
+    store.release_unpublished_source(&metadata).unwrap();
+    assert!(store.release_unpublished_source(&metadata).is_err());
+    let next = store.retain(b"efgh", 2).unwrap();
+    store.verify(&next).unwrap();
+    assert!(store.release_unpublished_source(&metadata).is_err());
+    store.verify(&next).unwrap();
+}

@@ -3,7 +3,7 @@ use crate::{
     WhisperSettings,
 };
 use crate::{
-    source::{attach_source, SourceCapture},
+    source::{attach_source, RetainedTranscript, SourceCapture},
     AudioSourceRetainer,
 };
 use pipecat_core::AudioRawFrame;
@@ -17,7 +17,7 @@ struct Request {
     samples: Vec<f32>,
     settings: WhisperSettings,
     cancel: Cancellation,
-    reply: oneshot::Sender<Result<Transcript>>,
+    reply: oneshot::Sender<Result<RetainedTranscript>>,
     permit: Arc<OwnedSemaphorePermit>,
     source: Option<SourceCapture>,
 }
@@ -118,7 +118,7 @@ pub struct WhisperService {
     joined: Arc<JoinCompletion>,
 }
 pub struct PendingTranscription {
-    receiver: oneshot::Receiver<Result<Transcript>>,
+    receiver: oneshot::Receiver<Result<RetainedTranscript>>,
     cancel: Cancellation,
     stop: Cancellation,
     _permit: Arc<OwnedSemaphorePermit>,
@@ -132,7 +132,10 @@ impl PendingTranscription {
     }
     /// Resolves after the native call acknowledges cancellation, not merely
     /// after its consumer loses interest. Dropping this future also cancels it.
-    pub async fn result(mut self) -> Result<Transcript> {
+    pub async fn result(self) -> Result<Transcript> {
+        self.result_owned().await.map(RetainedTranscript::handoff)
+    }
+    pub(crate) async fn result_owned(mut self) -> Result<RetainedTranscript> {
         let result = (&mut self.receiver).await;
         if self.cancel.is_cancelled() || self.stop.is_cancelled() {
             return Err(WhisperError::Cancelled);
@@ -382,6 +385,72 @@ impl Drop for WhisperService {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    struct SourceRetainer(Arc<std::sync::atomic::AtomicUsize>);
+    impl AudioSourceRetainer for SourceRetainer {
+        fn retain_source(&self, _: &[u8], sequence: u64) -> Result<serde_json::Value> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(serde_json::json!({"sequence":sequence}))
+        }
+        fn release_unpublished_source(&self, _: &serde_json::Value) -> Result<()> {
+            self.0.fetch_sub(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn completed_sourced_pending() -> (PendingTranscription, Arc<std::sync::atomic::AtomicUsize>) {
+        let live = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cancel = Cancellation::new();
+        let stop = Cancellation::new();
+        let result = attach_source(Transcript {
+            text: "fixture".into(), language: None, segments: vec![], audio_duration_seconds: 0.001, audio_source: None,
+        }, Some(SourceCapture { retainer: Arc::new(SourceRetainer(live.clone())), pcm16: vec![0, 0], sequence: 1 }), &cancel, &stop);
+        let (reply, receiver) = oneshot::channel();
+        assert!(reply.send(result).is_ok());
+        let permit = Arc::new(Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap());
+        (PendingTranscription { receiver, cancel, stop, _permit: permit }, live)
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_reply_reclaims_the_unpublished_source() {
+        let (pending, live) = completed_sourced_pending();
+        pending.cancel();
+        assert!(matches!(pending.result().await, Err(WhisperError::Cancelled)));
+        assert_eq!(live.load(Ordering::SeqCst), 0, "cancelled ready reply leaked its asset");
+    }
+
+    #[test]
+    fn dropping_a_ready_reply_reclaims_the_unpublished_source() {
+        let (pending, live) = completed_sourced_pending();
+        drop(pending);
+        assert_eq!(live.load(Ordering::SeqCst), 0, "dropped ready reply leaked its asset");
+    }
+
+    #[tokio::test]
+    async fn dropping_a_relay_owned_result_reclaims_the_unpublished_source() {
+        let (pending, live) = completed_sourced_pending();
+        let result = pending.result_owned().await.unwrap();
+        drop(result);
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn successful_public_result_keeps_the_source_owner_release_boundary() {
+        let (pending, live) = completed_sourced_pending();
+        let result = pending.result().await.unwrap();
+        drop(result);
+        assert_eq!(live.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn rejected_reply_reclaims_the_unpublished_source() {
+        let (mut pending, live) = completed_sourced_pending();
+        let result = pending.receiver.try_recv().unwrap();
+        let (reply, receiver) = oneshot::channel();
+        drop(receiver);
+        let _ = reply.send(result);
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     fn dropping_pending_keeps_capacity_reserved_until_native_request_exits() {
