@@ -7,6 +7,9 @@ use serde_json::json;
 use std::{future::Future, io::Read, pin::Pin, time::Duration};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+#[path = "local_speech/ledger.rs"]
+mod ledger;
+
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum Command {
@@ -94,6 +97,19 @@ fn emit(tx: &tokio::sync::mpsc::Sender<Vec<u8>>, value: serde_json::Value) -> Re
         .map_err(|_| "media event receiver closed or overloaded".into())
 }
 
+fn retire_active(
+    session: &mut HmiSession,
+    active: &mut Option<Active<'_>>,
+    tx: &tokio::sync::mpsc::Sender<Vec<u8>>,
+    error: Option<&str>,
+) -> Result<(), String> {
+    let Some(active) = active.take() else { return Ok(()) };
+    drop(active.render);
+    ledger::retain_terminal(session, &active.identity, |record| {
+        emit(tx, ledger::terminal_event(record, error))
+    })
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -159,7 +175,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Command::RevokeCapture { request_id } => { revoke_request = Some(request_id); break Ok(()); }
                     Command::Retire { request_id, output_epoch } => {
                         let error = match session.retire_output(output_epoch, media) { Ok(error) => error, Err(error) => Some(error.to_string()) };
-                        active.take();
+                        if let Err(error) = retire_active(&mut session, &mut active, &tx, error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"media_ack","request_id":request_id,"operation":"retire","error":error})) { break Err(error); }
                     }
                     Command::VerifySource { request_id, source } => {
@@ -174,7 +190,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Command::Interrupt => {
                         let outcome = match session.barge_in(media) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
-                        active.take();
+                        if let Err(error) = retire_active(&mut session, &mut active, &tx, outcome.local_error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"turn_interrupt", "stream":session.identity(), "request":outcome.request, "local_error":outcome.local_error})) { break Err(error); }
                     }
                     Command::Turn { request_id, scope } => {
@@ -182,7 +198,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         if identity.stream != *session.identity() { break Err("foreign Hepta turn scope".into()); }
                         let same_turn = session.check_current(&identity).is_ok();
                         let local_error = match session.attach_turn(identity.turn_id.clone(), identity.output_epoch, media) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
-                        if !same_turn { active.take(); }
+                        if !same_turn {
+                            if let Err(error) = retire_active(&mut session, &mut active, &tx, local_error.as_deref()) { break Err(error); }
+                        }
                         if let Err(error) = media.admit_turn(&identity.turn_id, identity.output_epoch) { break Err(error.to_string()); }
                         if let Err(error) = emit(&tx, json!({"type":"media_ack", "request_id":request_id,"operation":"turn","error":local_error})) { break Err(error); }
                     }
@@ -200,7 +218,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match event {
                     Some(RecognitionEvent::SpeechStarted) => {
                         let outcome = match session.barge_in(media) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
-                        active.take();
+                        if let Err(error) = retire_active(&mut session, &mut active, &tx, outcome.local_error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"turn_interrupt", "stream":session.identity(), "request":outcome.request, "local_error":outcome.local_error})) { break Err(error); }
                     }
                     Some(RecognitionEvent::FinalTranscript(text)) => {
@@ -235,14 +253,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let current = active.take().expect("selected active render");
                 let state = if rendered.is_ok() { PresentationState::Submitted } else { PresentationState::Unknown };
                 if let Err(error) = session.transition(&current.identity, state) { break Err(error.to_string()); }
-                if let Err(error) = emit(&tx, json!({"type":"presentation", "identity":&current.identity, "state":state, "error":rendered.err().map(|error|error.to_string())})) { break Err(error); }
-                if let Err(error) = session.release_terminal(&current.identity.utterance_id) { break Err(error.to_string()); }
+                let render_error = rendered.err().map(|error| error.to_string());
+                if let Err(error) = ledger::retain_terminal(&mut session, &current.identity, |record| {
+                    emit(&tx, ledger::terminal_event(record, render_error.as_deref()))
+                }) { break Err(error); }
             }
         }
     };
     // Every malformed/oversized/closed command path revokes before native cleanup.
     let retired = session.barge_in(media);
-    drop(active);
+    let presentation_error = retire_active(&mut session, &mut active, &tx,
+        retired.as_ref().ok().and_then(|outcome| outcome.local_error.as_deref())).err();
     let terminal = input.shutdown().await;
     let cleanup = speech.shutdown().await;
     let verification_error = match verification {
@@ -257,7 +278,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Err(error) => Some(error.to_string()),
     };
     let terminal = json!({"type":"media_terminal","request_id":revoke_request,"stream":session.identity(),"output_epoch":session.output_epoch(),
-        "error":result.err(),"local_stop_error":local_stop_error,"input_error":terminal.error,"input_errors":terminal.total_errors,
+        "error":result.err().or(presentation_error),"local_stop_error":local_stop_error,"input_error":terminal.error,"input_errors":terminal.total_errors,
         "cleanup_error":cleanup.err().map(|error|error.to_string()),"verification_error":verification_error});
     let failed = [
         "error",
