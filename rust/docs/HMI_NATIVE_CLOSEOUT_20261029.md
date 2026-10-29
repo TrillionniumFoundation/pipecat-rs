@@ -146,3 +146,41 @@ well as script variation; the human quality gate remains open. `stt_fixture`
 uses the exact `LocalSpeechConfig.whisper_settings`, verifies the model digest,
 and accepts a bounded explicit WAV without opening devices or admitting a Hepta
 observation. Model comparison remains separate from production activation.
+
+## Quantized small comparison and physical prerequisites
+
+[Model comparison](hmi-model-comparison-20261029.json) records the pinned official
+`ggml-small-q5_1.bin` (190085487 bytes), SHA-256
+`ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb`.
+The interrupted/slow download was resumed and the complete file matched the
+upstream LFS digest before inference. No model is fetched by the media runtime.
+
+With exactly the same generic prompt/decoding settings, the human fixture now
+returns “广州市法地产中介协会分析。”; the word error remains. STT takes 9224479us
+versus base's 2703328us. The eight clean/noisy synthetic-source checks pass with
+this model, with p50 8936464us and p95/p99 9183558us; RSS samples range from
+776172 to 790220 KiB. Source retention still verifies exact PCM without decoder
+padding. This is not evidence of a production-quality Chinese recognizer.
+
+| Release fixture metric | Base | Small q5_1 |
+| --- | --- | --- |
+| Human raw CER, punctuation/space ignored | 3/12, including traditional-script variation | 1/12 |
+| Four clean synthetic phrases | 2/47 | 2/47 |
+| Four additive-noise synthetic phrases | 2/47 | 1/47 |
+| Synthetic STT + retention p50 | 2.506482s | 8.936464s |
+| Synthetic STT + retention p95/p99, n=8 | 4.637607s | 9.183558s |
+
+No automatic model promotion is made: a small fixture improves while CPU latency
+and memory increase, and substantive human-transcription errors remain. These
+fixed-profile comparisons are not neuron shadow or learned resource control.
+Decoder segment timestamps are estimates; captured sample intervals, rather
+than padded decoder endpoints, must provide real capture-duration features.
+
+A bounded read of the selected ALC897 device reports `Input Source = Front Mic`
+and front/rear microphone, line-in, line-out and front-headphone jack states all
+`off`. The adapter did observe owned RUNNING ALSA DMA capture, but that does not
+establish an attached acoustic microphone/speaker. The weak acoustic correlation
+above is therefore unqualified. An actual adopted device/route and reproducible
+acoustic/hotplug/permission conditions are still required, together with the
+existing trusted Hepta owner, thread and registered audio signer. Shadow remains
+inactive until the deterministic live-session gates pass.

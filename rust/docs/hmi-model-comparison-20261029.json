@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "scope": "offline_model_comparison_not_live_owner_or_shadow",
+  "model_source": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "file": "ggml-small-q5_1.bin",
+    "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+    "bytes": 190085487
+  },
+  "human_source": {
+    "repository": "wenet-e2e/wenet",
+    "revision": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+    "wav_path": "test/resources/aishell-BAC009S0724W0121.wav",
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13",
+    "annotation_path": "test/resources/dataset/data.list",
+    "annotation_sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7",
+    "expected": "广州市房地产中介协会分析",
+    "wav_format": {
+      "rate_hz": 16000,
+      "channels": 1,
+      "frames": 68496
+    },
+    "annotation_audio_alias": "test/resources/dataset/aishell-BAC009S0724W0121.wav",
+    "alias_blob_sha256": "ebde2b73df17f327e2e760c37c13c537c753d1cb2d030467bb9518d00322e137"
+  },
+  "base_human": {
+    "load_us": 198313,
+    "model_sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    "scope": "offline_wav_stt_no_device_or_hepta_admission",
+    "settings": {
+      "initial_prompt": "以下是简体中文语音。",
+      "language": "zh",
+      "no_speech_probability": 0.4000000059604645,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      },
+      "temperature": 0.0,
+      "translate_to_english": false
+    },
+    "stt_us": 2703328,
+    "transcript": {
+      "audio_duration_seconds": 4.281,
+      "language": "zh",
+      "segments": [
+        {
+          "end_ms": 30000,
+          "no_speech_probability": 1.928615711221937e-05,
+          "start_ms": 0,
+          "text": "廣州市佛地产中间协会分析。"
+        }
+      ],
+      "text": "廣州市佛地产中间协会分析。"
+    },
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+  },
+  "small_human": {
+    "load_us": 253122,
+    "model_sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+    "scope": "offline_wav_stt_no_device_or_hepta_admission",
+    "settings": {
+      "initial_prompt": "以下是简体中文语音。",
+      "language": "zh",
+      "no_speech_probability": 0.4000000059604645,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      },
+      "temperature": 0.0,
+      "translate_to_english": false
+    },
+    "stt_us": 9224479,
+    "transcript": {
+      "audio_duration_seconds": 4.281,
+      "language": "zh",
+      "segments": [
+        {
+          "end_ms": 3720,
+          "no_speech_probability": 1.9269169570179656e-05,
+          "start_ms": 0,
+          "text": "广州市法地产中介协会分析。"
+        }
+      ],
+      "text": "广州市法地产中介协会分析。"
+    },
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+  },
+  "small_synthetic_stt_and_retention": [
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": false,
+      "recognized": "你好欢迎使用本地语音助手。",
+      "rss_kib": 776172,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 9000495
+    },
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": true,
+      "recognized": "你好欢迎使用本地语音助手。",
+      "rss_kib": 777492,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8777971
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": false,
+      "recognized": "请停止播放保留当前绘画。",
+      "rss_kib": 788956,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8911052
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": true,
+      "recognized": "请停止播放保留当前挥话。",
+      "rss_kib": 788968,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8936464
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": false,
+      "recognized": "今天我们测试中文语音识别。",
+      "rss_kib": 788276,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8843171
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": true,
+      "recognized": "今天我们测试中文语音识别。",
+      "rss_kib": 788284,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8939689
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": false,
+      "recognized": "设备重新连接以后继续工作。",
+      "rss_kib": 790216,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 9183558
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": true,
+      "recognized": "设备重新连接以后,继续工作。",
+      "rss_kib": 790220,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8975322
+    },
+    {
+      "n": 8,
+      "p50_us": 8936464,
+      "p95_us": 9183558,
+      "p99_us": 9183558,
+      "scope": "offline_stt_and_retention_not_mic_to_speaker"
+    }
+  ],
+  "source_file_sha256": {
+    "stt_fixture.rs": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a"
+  },
+  "log_sha256": {
+    "human-configured-small.log": "3d16597ddd1c93237dfc00567eacb80e5e47a13bae940f90f6c2e15d926c443d",
+    "chinese-models-small-release.log": "3d7654c9cc12eb8e035781bedc229f478e48ab52b53b7bc1c82dccff40dd4702"
+  },
+  "not_proven": [
+    "representative_human_accuracy",
+    "acoustic_echo_and_double_talk",
+    "production_owner_admission",
+    "neuron_shadow_gain"
+  ],
+  "physical_jack_status": {
+    "front_mic": "off",
+    "rear_mic": "off",
+    "line_in": "off",
+    "line_out": "off",
+    "front_headphone": "off"
+  }
+}
