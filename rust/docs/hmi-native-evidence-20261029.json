@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-29",
+  "scope": "isolated_real_models_and_physical_callback_submission_not_production_owner",
+  "pipecat_base": "cc4f72efc64bc65c02bad879077e69bc70904d9d",
+  "hepta_base": "965e1b26217378bbe7378aefd5c9c8923eb1a6e7",
+  "profile": "debug",
+  "device": {
+    "backend": "ALSA",
+    "selector": "alsa:plughw:CARD=0,DEV=0",
+    "output_rate_hz": 48000,
+    "output_channels": 1
+  },
+  "software_tests": {
+    "hepta_adapter_passed": 46,
+    "pipecat_default_passed": 23,
+    "pipecat_local_speech_feature_passed": 25,
+    "pipecat_explicit_native_debug_passed": 2,
+    "pipecat_explicit_native_release_passed": 2,
+    "pipecat_strict_clippy": "passed",
+    "hepta_scoped_fix_and_format": "passed",
+    "hepta_pushed_commit": "7bbdd715957e72274bc13209c4a619913e880129"
+  },
+  "chinese_stt_and_retention": [
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": false,
+      "recognized": "你好欢迎使用本地语音助手。",
+      "rss_kib": 551132,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3864393
+    },
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": true,
+      "recognized": "你好欢迎使用本地语音助手。",
+      "rss_kib": 552504,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3771098
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": false,
+      "recognized": "请停止播放保留当前、会话。",
+      "rss_kib": 565908,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3861487
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": true,
+      "recognized": "请停止播放保留当前、会话。",
+      "rss_kib": 565912,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3679817
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": false,
+      "recognized": "今天我们测试中文语音时别。",
+      "rss_kib": 565660,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 6017382
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": true,
+      "recognized": "今天我们测试中文语音时别。",
+      "rss_kib": 565660,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 4131585
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": false,
+      "recognized": "设备重新连借以后继续工作。",
+      "rss_kib": 565788,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3583918
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": true,
+      "recognized": "设备重新连接以后继续工作。",
+      "rss_kib": 565792,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 3574769
+    },
+    {
+      "n": 8,
+      "p50_us": 3771098,
+      "p95_us": 6017382,
+      "p99_us": 6017382,
+      "scope": "offline_stt_and_retention_not_mic_to_speaker"
+    }
+  ],
+  "native_output": {
+    "test": "long_chinese_output_survives_device_deadline_and_interrupt_fences_remaining_pcm",
+    "passed": true,
+    "runtime_seconds": 50.02,
+    "receipt_meaning": "CPAL callback submission; neither physical playback nor hearing"
+  },
+  "raw_logs_sha256": {
+    "chinese-models.log": "e6e59e78bec5926d6a04d2bb64c0bc2130b88e87dbf26f1946249a69a8d5b008",
+    "native-long-output.log": "1c3eb3d07cb5bed66cc1c94ef8d74789d84ac995523235abad7b55ff5e752d38",
+    "native-long-output-rerun.log": "80bf3df557e6976a927c20e9e3211b1196044395c41a56e751ca5021db77ec74",
+    "native-long-output-final.log": "2d056ce8d0031a6ffa5d51c80a76b20799aa78baa4887ef72da3e771e7661af4",
+    "hepta-adapter.log": "9dd3cd506ec37c39f7942594f2385bdcccdcc864c9d2891f75677e5b0a320dcb",
+    "chinese-models-release.log": "4737ad35a71f5b2b73a0a6c1956e6e73fa709ca09b07a5e02d82e5eabd3d648c",
+    "native-long-output-release.log": "cad7863e592789254b60238f127bf09610340c81e996e503dc408ea22a4e13f9",
+    "pipecat-clippy.log": "c8a579616d578f8a2e5968c9e1ad9ed1083d61babd3352f258b97a707a52982b",
+    "pipecat-clippy-final.log": "2ba9dfdf949513c7ccab8ea74f90995859838a55e493e3ce174aeac4af978d20",
+    "pipecat-final-tests.log": "6157533b0399ef57bbf77faba797e6c53d7b087c917e42024e68abeaff66d085",
+    "hepta-fix.log": "d46e8c1f692fdfdbcffb9fd0aa6eb7e7473d84ef15769cccb9b3daa617ebe47e"
+  },
+  "not_qualified": [
+    "existing_production_owner_and_signer",
+    "human_chinese_speech",
+    "acoustic_noise_and_speaker_echo",
+    "physical_hotplug_and_permission_revocation",
+    "model_process_crash_and_live_owner_restart",
+    "full_session_end_to_end_latency_and_sustained_resource_growth",
+    "neuron_shadow_benefit"
+  ],
+  "physical_capture_probe": {
+    "frames": 48000,
+    "peak": 2002,
+    "rms": 283.2,
+    "nonzero": 47991
+  },
+  "source_files_sha256_at_debug_qualification": {
+    "rust/crates/pipecat-hepta/src/local_speech.rs": "489ed04921dcb8c9ab6f07a304f2f0f344b5e08a9e7bdfd55b98e264a6194bcb",
+    "rust/crates/pipecat-hepta/src/local_speech_native_tests.rs": "a2b754d0af0116b18b9fde34db1d9eaca23b9862d9c0a0a1cb94d2a15c66ec28",
+    "rust/Cargo.lock": "2a02bc2025052e1b5c4f0545dce0b229f4d7231f8f0f569bd456c935d14071e7"
+  },
+  "release": {
+    "profile": "release",
+    "chinese_stt_and_retention": [
+      {
+        "expected": "你好，欢迎使用本地语音助手。",
+        "noisy": false,
+        "recognized": "你好欢迎使用本地语音助手。",
+        "rss_kib": 548200,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2646586
+      },
+      {
+        "expected": "你好，欢迎使用本地语音助手。",
+        "noisy": true,
+        "recognized": "你好欢迎使用本地语音助手。",
+        "rss_kib": 549508,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2429126
+      },
+      {
+        "expected": "请停止播放，保留当前会话。",
+        "noisy": false,
+        "recognized": "请停止播放保留当前、会话。",
+        "rss_kib": 552796,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2506482
+      },
+      {
+        "expected": "请停止播放，保留当前会话。",
+        "noisy": true,
+        "recognized": "请停止播放保留当前、会话。",
+        "rss_kib": 552808,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2480361
+      },
+      {
+        "expected": "今天我们测试中文语音识别。",
+        "noisy": false,
+        "recognized": "今天我们测试中文语音时别。",
+        "rss_kib": 553912,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 4637607
+      },
+      {
+        "expected": "今天我们测试中文语音识别。",
+        "noisy": true,
+        "recognized": "今天我们测试中文语音时别。",
+        "rss_kib": 553916,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2467824
+      },
+      {
+        "expected": "设备重新连接以后继续工作。",
+        "noisy": false,
+        "recognized": "设备重新连借以后继续工作。",
+        "rss_kib": 554112,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2652474
+      },
+      {
+        "expected": "设备重新连接以后继续工作。",
+        "noisy": true,
+        "recognized": "设备重新连键以后继续工作。",
+        "rss_kib": 554112,
+        "scope": "offline_synthetic_chinese_tts_to_stt",
+        "stt_us": 2545299
+      },
+      {
+        "n": 8,
+        "p50_us": 2506482,
+        "p95_us": 4637607,
+        "p99_us": 4637607,
+        "scope": "offline_stt_and_retention_not_mic_to_speaker"
+      }
+    ],
+    "native_output_passed": true,
+    "native_output_runtime_seconds": 30.26,
+    "source_files_sha256": {
+      "rust/crates/pipecat-hepta/src/local_speech.rs": "489ed04921dcb8c9ab6f07a304f2f0f344b5e08a9e7bdfd55b98e264a6194bcb",
+      "rust/crates/pipecat-hepta/src/local_speech_native_tests.rs": "48ca4bd2aea77269b37bce42708a3d296666fd81f3f18c6919f8749911a713e0",
+      "rust/Cargo.lock": "2a02bc2025052e1b5c4f0545dce0b229f4d7231f8f0f569bd456c935d14071e7"
+    }
+  }
+}

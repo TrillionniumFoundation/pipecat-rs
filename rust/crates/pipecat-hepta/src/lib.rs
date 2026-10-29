@@ -9,3 +9,6 @@ pub use media_store::*;
 
 #[cfg(feature = "local-speech")]
 pub mod local_speech;
+
+mod speech_segments;
+pub use speech_segments::speech_segments;

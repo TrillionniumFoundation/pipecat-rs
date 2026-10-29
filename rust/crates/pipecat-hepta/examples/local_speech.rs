@@ -1,6 +1,7 @@
 //! JSONL media endpoint. Hepta remains the model/session/tool owner.
 use pipecat_hepta::{
-    local_speech::*, HeptaOutputScope, HmiSession, OutputIdentity, PresentationState,
+    local_speech::*, speech_segments, HeptaOutputScope, HmiSession, OutputIdentity,
+    PresentationState,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -40,9 +41,7 @@ enum Command {
     },
     Shutdown,
 }
-type Render<'a> = Pin<
-    Box<dyn Future<Output = Result<pipecat_local_audio::SubmissionReceipt, LocalSpeechError>> + 'a>,
->;
+type Render<'a> = Pin<Box<dyn Future<Output = Result<(), LocalSpeechError>> + 'a>>;
 struct Active<'a> {
     identity: OutputIdentity,
     render: Render<'a>,
@@ -208,10 +207,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Command::Speak { request_id, scope, text } => {
                         let identity = match OutputIdentity::try_from(scope) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
-                        if active.is_some() || text.len() > 4096 || text.trim().is_empty() { break Err("speech request is invalid or output is busy".into()); }
+                        if active.is_some() || speech_segments(&text).is_err() { break Err("speech request is invalid or output is busy".into()); }
                         if let Err(error) = session.generated(identity.clone()).and_then(|()| session.transition(&identity, PresentationState::Queued)) { break Err(error.to_string()); }
                         let scope = identity.clone();
-                        active = Some(Active { identity, render: Box::pin(async move { let audio = media.synthesize(scope, &text).await?; media.submit(audio).await }) });
+                        active = Some(Active { identity, render: Box::pin(async move { for (index, segment) in speech_segments(&text).map_err(|error| LocalSpeechError::Native(error.into()))?.into_iter().enumerate() {
+                            let audio = media.synthesize(scope.clone(), segment).await.map_err(|error| LocalSpeechError::Native(format!("synthesis segment {index}: {error}")))?;
+                            media.submit(audio).await.map_err(|error| LocalSpeechError::Native(format!("submission segment {index}: {error}; earlier segments may have been submitted")))?;
+                        }
+                        Ok(()) }) });
                         if let Err(error) = emit(&tx,json!({"type":"media_ack","request_id":request_id,"operation":"speak","state":"queued","error":null})) { break Err(error); }
                     }
                 }

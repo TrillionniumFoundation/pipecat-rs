@@ -356,19 +356,39 @@ impl LocalPresentation {
         &self,
         prepared: PreparedAudio,
     ) -> Result<SubmissionReceipt, LocalSpeechError> {
-        let mut write = Box::pin(self.output.write_audio(&prepared.audio));
-        let first = {
-            let gate = self.gate.lock().map_err(native)?;
-            if !Arc::ptr_eq(&prepared.owner, &self.gate) {
-                return Err(LocalSpeechError::Stale);
+        let audio = &prepared.audio;
+        audio.validate().map_err(native)?;
+        // A full Piper sentence can exceed both the device queue and the
+        // five-second write deadline. Feed at most 250ms per cancellable write.
+        let frames_per_write = (audio.sample_rate as usize / 4).max(1);
+        let bytes_per_write = frames_per_write * usize::from(audio.num_channels) * 2;
+        let mut submitted_frames = 0;
+        let mut final_receipt = None;
+        for pcm in audio.audio.chunks(bytes_per_write) {
+            let chunk = AudioRawFrame::new(pcm.to_vec(), audio.sample_rate, audio.num_channels)
+                .map_err(native)?;
+            let mut write = Box::pin(self.output.write_audio(&chunk));
+            let first = {
+                let gate = self.gate.lock().map_err(native)?;
+                if !Arc::ptr_eq(&prepared.owner, &self.gate) {
+                    return Err(LocalSpeechError::Stale);
+                }
+                self.check_scope(&gate, &prepared.identity)?;
+                write.as_mut().poll(&mut Context::from_waker(Waker::noop()))
+            };
+            let receipt = match first {
+                Poll::Ready(result) => result,
+                Poll::Pending => write.await,
             }
-            self.check_scope(&gate, &prepared.identity)?;
-            write.as_mut().poll(&mut Context::from_waker(Waker::noop()))
-        };
-        match first {
-            Poll::Ready(result) => result.map_err(native),
-            Poll::Pending => write.await.map_err(native),
+            .map_err(|error| native(format!(
+                "{error}; {submitted_frames} frames previously callback-submitted; device playback unknown"
+            )))?;
+            submitted_frames += receipt.frames;
+            final_receipt = Some(receipt);
         }
+        let mut receipt = final_receipt.ok_or_else(|| native("empty synthesized PCM"))?;
+        receipt.frames = submitted_frames;
+        Ok(receipt)
     }
 }
 impl MediaControl for LocalPresentation {
@@ -429,3 +449,7 @@ mod gate_tests {
         assert!(!gate.accepts("old", 3));
     }
 }
+
+#[cfg(test)]
+#[path = "local_speech_native_tests.rs"]
+mod native_tests;

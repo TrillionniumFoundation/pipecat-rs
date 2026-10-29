@@ -100,7 +100,15 @@ This initial endpoint admits one `speak` per input `utteranceSequence`. Hepta
 `textFinal` is per output item. The companion Hepta bridge now provides
 `take_completed_speech` / JSONL `takeSpeech` to claim the retained successful
 turn as one bounded `speak` request, including several AgentMessage items.
-It rejects text above 4096 bytes without truncating the terminal text. The
+The paired bridge accepts at most 16384 UTF-8 bytes without truncating terminal
+text. The media endpoint validates the whole request before rendering, splits
+it at UTF-8/phrase boundaries into at most 4096-byte synthesis segments, and
+submits PCM in at most 250ms device writes. Each segment retains the same scope,
+utterance, sequence and output epoch. Cancellation fences every subsequent
+write and synthesis; partially submitted speech is never replayed automatically.
+One terminal describes the whole request; partial failure remains unknown.
+Upgrade both bridge and endpoint together; older endpoints reject larger text.
+The
 trusted owner must still recheck its grant and current `permits_output` before
 forwarding the request. Do not pipe every `textFinal` into this endpoint or
 silently discard later items. Token deltas are display-only.
@@ -156,3 +164,5 @@ handoff. These are software fixtures, not native-device acceptance.
 Physical microphones/speakers, Chinese speech, noise/echo, unplug/replug, resource
 curves and an actual App Server/model session must be verified separately on the
 configured project environment. An ALSA null endpoint does not satisfy them.
+
+Selected native follow-up and remaining gates: [2026-10-29 evidence](../../docs/HMI_NATIVE_CLOSEOUT_20261029.md).
