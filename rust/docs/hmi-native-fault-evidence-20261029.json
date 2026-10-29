@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-29",
+  "scope": "qualification_only_not_production_owner",
+  "media_process_cases": {
+    "schema_version": 1,
+    "scope": "actual_native_media_process_not_live_hepta_owner",
+    "cases": [
+      {
+        "case": "revoke",
+        "exit_code": 0,
+        "outcome": "joined capture revocation and native cleanup",
+        "terminal": {
+          "cleanup_error": null,
+          "error": null,
+          "input_error": null,
+          "input_errors": 0,
+          "local_stop_error": null,
+          "output_epoch": 3,
+          "request_id": 2,
+          "stream": {
+            "device_generation": 1,
+            "device_id": "qualification:alc897",
+            "logical_session_id": "qualification:offline",
+            "organ_generation": 1,
+            "organ_id": "qualification:local-speech",
+            "principal_id": "qualification:owner"
+          },
+          "type": "media_terminal",
+          "verification_error": null
+        },
+        "event_counts": {
+          "media_ack": 1,
+          "media_terminal": 1
+        },
+        "owned_physical_capture_running_observed": true,
+        "owned_capture_released": true,
+        "elapsed_ms": 3999.64
+      },
+      {
+        "case": "invalid_command",
+        "exit_code": 1,
+        "outcome": "failed terminal retains stream and cause",
+        "terminal": {
+          "cleanup_error": null,
+          "error": "invalid JSONL command",
+          "input_error": null,
+          "input_errors": 0,
+          "local_stop_error": null,
+          "output_epoch": 3,
+          "request_id": null,
+          "stream": {
+            "device_generation": 1,
+            "device_id": "qualification:alc897",
+            "logical_session_id": "qualification:offline",
+            "organ_generation": 1,
+            "organ_id": "qualification:local-speech",
+            "principal_id": "qualification:owner"
+          },
+          "type": "media_terminal",
+          "verification_error": null
+        },
+        "event_counts": {
+          "media_ack": 1,
+          "media_terminal": 1
+        },
+        "owned_physical_capture_running_observed": true,
+        "owned_capture_released": true,
+        "elapsed_ms": 4176.46
+      },
+      {
+        "case": "model_process_kill",
+        "exit_code": -9,
+        "outcome": "unknown: abrupt native-process loss; no terminal receipt",
+        "terminal": null,
+        "event_counts": {
+          "media_ack": 3
+        },
+        "owned_physical_capture_running_observed": true,
+        "owned_capture_released": true,
+        "elapsed_ms": 4046.19
+      }
+    ],
+    "not_proven": [
+      "OS permission revocation",
+      "physical hotplug",
+      "live Hepta interruption/reconciliation",
+      "tool effect rollback"
+    ]
+  },
+  "acoustic_probe": {
+    "scope": "physical_ALC897_acoustic_probe_no_AEC_no_Hepta_owner",
+    "capture_frames": 112000,
+    "capture_rms": 26.47,
+    "reference_peak_normalized_correlation": 0.012356164043066603,
+    "best_lag_ms": 1702.0,
+    "capture_exit": 0,
+    "aplay_exit": 0,
+    "not_proven": [
+      "audibility",
+      "calibrated_noise_or_echo_attenuation",
+      "barge_in_under_echo",
+      "end_to_end_identity_binding"
+    ]
+  },
+  "human_chinese_source": {
+    "repository": "wenet-e2e/wenet",
+    "revision": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+    "wav_path": "test/resources/aishell-BAC009S0724W0121.wav",
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13",
+    "annotation_path": "test/resources/dataset/data.list",
+    "annotation_sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7",
+    "expected": "广州市房地产中介协会分析",
+    "wav_format": {
+      "rate_hz": 16000,
+      "channels": 1,
+      "frames": 68496
+    },
+    "annotation_audio_alias": "test/resources/dataset/aishell-BAC009S0724W0121.wav",
+    "alias_blob_sha256": "ebde2b73df17f327e2e760c37c13c537c753d1cb2d030467bb9518d00322e137"
+  },
+  "human_configured_base": {
+    "load_us": 198313,
+    "model_sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    "scope": "offline_wav_stt_no_device_or_hepta_admission",
+    "settings": {
+      "initial_prompt": "以下是简体中文语音。",
+      "language": "zh",
+      "no_speech_probability": 0.4000000059604645,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      },
+      "temperature": 0.0,
+      "translate_to_english": false
+    },
+    "stt_us": 2703328,
+    "transcript": {
+      "audio_duration_seconds": 4.281,
+      "language": "zh",
+      "segments": [
+        {
+          "end_ms": 30000,
+          "no_speech_probability": 1.928615711221937e-05,
+          "start_ms": 0,
+          "text": "廣州市佛地产中间协会分析。"
+        }
+      ],
+      "text": "廣州市佛地产中间协会分析。"
+    },
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+  },
+  "source_file_sha256": {
+    "rust/scripts/qualify_hmi_media_process.py": "86a7d51f11f0d419d02fc23934495f3634a4d302ef33ec86d3b28844ade6d2e4",
+    "rust/crates/pipecat-hepta/examples/stt_fixture.rs": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a"
+  },
+  "log_sha256": {
+    "chinese-human.log": "c5cfbbae1e80d1dd6ddc307380279572bf3fa0377907beac9e5b07148068c037",
+    "chinese-human-actual.log": "d0c40497b96d584f50f7ca0105235b778e79db8419eb70f86320040983ac8817",
+    "human-configured-base.log": "3c3fc16e34bc258a056fcceb5a87a556ca5c1faa4d6f172a66ff4023b9786b93",
+    "process-qualification-final.log": "a6ead6610c1277f08ee3b61c84881230dd576f8141fb1c6f6328a5f3639985de"
+  },
+  "remaining": [
+    "Chinese_quality_model_selection",
+    "real_owner_and_registered_signer_integration",
+    "controlled_acoustic_echo_and_double_talk",
+    "physical_hotplug_and_OS_permission_revocation",
+    "live_Hepta_restart_and_crash_reconciliation",
+    "sustained_end_to_end_performance",
+    "neuron_shadow_after_deterministic_acceptance"
+  ]
+}

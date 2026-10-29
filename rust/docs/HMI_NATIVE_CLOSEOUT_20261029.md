@@ -89,7 +89,7 @@ lifecycle. Both failures remain in the private execution logs.
 Synthetic TTS-to-STT timings
 are not microphone-to-Hepta-to-speaker latency. A nonempty transcript is not a
 Chinese quality score. Physical echo/noise, unplug/replug, permission revocation,
-model-process crash, real owner restart/reconnect and sustained resource/latency
+live owner crash reconciliation, real owner restart/reconnect and sustained resource/latency
 qualification remain separate gates. Neuron shadow stays inactive until the
 adopted deterministic path has passed those gates. Privacy, permissions and
 emergency stop never become learned controls.
@@ -109,3 +109,40 @@ capture generation on every reopen. The output-only test uses `media_store:null`
 it does not open capture. These isolated qualification labels and manifests are
 never production device grants. Release results must be identified separately
 from the debug values above.
+
+## Physical process faults and human fixture follow-up
+
+[Fault evidence](hmi-native-fault-evidence-20261029.json) records three actual
+release media-process scenarios. Each observes the child owning a RUNNING
+ALC897 capture through ALSA's proc status, and verifies that its capture ownership
+is gone after completion. `revoke_capture` yields a joined clean terminal;
+invalid JSONL yields a nonzero exit with the original stream and failure cause;
+SIGKILL after turn/speak acknowledgements yields no terminal and therefore an
+unknown result. The last case confirms queued output, not the precise native
+inference instruction reached at the instant of termination. No live Hepta
+owner, model turn or tool effect is involved. This is not OS permission withdrawal
+or physical hotplug. Reproduce with `rust/scripts/qualify_hmi_media_process.py`
+using the explicit output-only qualification config and capture proc-status path.
+
+The physical acoustic probe plays a public Chinese reference and records seven
+seconds from ALC897. Both ALSA processes exit zero; peak normalized correlation
+is only 0.012356 at 1702ms and capture RMS is 26.47. This is insufficient evidence
+of an acoustic echo fixture. It does not establish AEC, audibility or barge-in
+performance. Private microphone PCM is not published.
+
+The human Chinese fixture is WeNet's AISHELL sample at revision
+`be6ad97fdb512589df113042f7ff3a29d392fb38`,
+`test/resources/aishell-BAC009S0724W0121.wav`, SHA-256
+`2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13`.
+The pinned `test/resources/dataset/data.list` supplies the reference
+“广州市房地产中介协会分析”. Its dataset WAV entry is a Git symlink; raw retrieval
+initially returned the 31-byte link, which the WAV parser correctly rejected.
+The actual target WAV is 16 kHz mono, 68496 frames (4.281 seconds).
+
+Whisper base with the adopted full settings (including the generic simplified
+Chinese prompt, not the expected answer) returns “廣州市佛地产中间协会分析。”
+in 2703328us after 198313us model loading. There are substantive word errors as
+well as script variation; the human quality gate remains open. `stt_fixture`
+uses the exact `LocalSpeechConfig.whisper_settings`, verifies the model digest,
+and accepts a bounded explicit WAV without opening devices or admitting a Hepta
+observation. Model comparison remains separate from production activation.

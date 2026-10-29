@@ -31,3 +31,7 @@ workspace = true
 [[example]]
 name = "local_speech"
 required-features = ["local-speech"]
+
+[[example]]
+name = "stt_fixture"
+required-features = ["local-speech"]
