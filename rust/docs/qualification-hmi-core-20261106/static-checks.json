@@ -1,0 +1,34 @@
+{
+  "rustfmt": {
+    "argv": [
+      "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+      "--edition",
+      "2021",
+      "--check",
+      "rust/crates/pipecat-hepta/src/media_command.rs",
+      "rust/crates/pipecat-hepta/src/lib.rs",
+      "rust/crates/pipecat-hepta/src/session.rs",
+      "rust/crates/pipecat-hepta/examples/local_speech.rs",
+      "rust/crates/pipecat-hepta/tests/media_command.rs"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "python_script_ast_parse": "passed",
+  "root_readme_bytes": 0,
+  "toolchain": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "rustfmt": "rustfmt 1.10.0-stable (b940084d7e 2026-09-28)"
+  },
+  "git": {
+    "head": "70e29b500698dc93cbb56af0d10c848517d69e48",
+    "tree": "a0da019c63ba0e413ca45307a54cb6306bb20393",
+    "branch": "work/hmi-core-audit-20261106",
+    "lock_blob": "61ae24f75ff390065e626a10e570f0c9a03d1dae",
+    "remote_head": "b7e4c008c35036ac1b209dca97f6b737824f29c0",
+    "remote_tree": "a0da019c63ba0e413ca45307a54cb6306bb20393"
+  },
+  "initial_invocation_note": "An initial check incorrectly specified edition 2024 and reported formatting differences; workspace edition is 2021. No files were mutated by that check."
+}

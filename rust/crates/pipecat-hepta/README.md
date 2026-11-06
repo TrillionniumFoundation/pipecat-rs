@@ -75,7 +75,7 @@ cd rust
 cargo test -p pipecat-hepta --locked
 cargo check -p pipecat-hepta --features local-speech --all-targets --locked
 cargo clippy -p pipecat-hepta --all-targets --all-features --locked -- -D warnings
-cargo run -p pipecat-hepta --features local-speech --example local_speech -- /absolute/path/local-speech.json
+cargo run -p pipecat-hepta --features local-speech --example local_speech -- /absolute/path/local-speech.json "$HEPTA_OWNER_CONNECTION_ID"
 ```
 
 The runnable example opens real capture/output and uses bounded stdin/stdout
@@ -83,6 +83,33 @@ JSONL. Its configuration is a serialized `LocalSpeechConfig` containing an
 existing Piper manifest, hashed Whisper/Silero artifacts, device IDs and the
 exact stream/turn/epoch already assigned by Hepta. There is no automatic device,
 model or cloud-provider substitution after an error.
+
+The second argument is mandatory: the supervising owner must pass its actual
+`HmiRequestsV1::connection_id()`, the same value used for `HmiJsonlMediaV1::bind`.
+Missing/zero values reject before native loading or opening devices. Do not
+invent this value or learn it from an incoming command. It is a process-local
+connection incarnation, not authentication or a durable cross-restart identity;
+the existing owner, private pipe and device/organ/capture generations still apply.
+The previous one-argument invocation now fails closed. `LocalSpeechConfig` and
+the on-wire command shape are unchanged. The production owner still needs its
+authorized media-process composition; this CLI does not create one.
+
+`MediaCommandDecoder`, `MediaConnectionBinding` and `MediaCommandGate` are shared
+Rust Core code used by the actual endpoint. The decoder retains partial UTF-8
+bytes across cancelled reads, admits at most one 64 KiB line including newline,
+and becomes terminal on malformed, overlong or incomplete input. Before any
+command effect, the gate binds `turn`/`speak` to the exact owner connection and
+stream, rejects zero utterance/request IDs, and binds source operations to the
+same stream. Existing session/store checks remain at the effect boundary.
+
+Request IDs may arrive out of order and contain arbitrary gaps. The gate records
+up to 65,536 unique IDs per media process without eviction or reset. Reuse across
+any correlated operations, or capacity exhaustion, terminates the endpoint and
+retains uncertainty instead of replaying effects/acks. Uncorrelated `interrupt`
+and `shutdown` remain available at capacity. This is a bounded process-local
+admission budget, not persistent conversation/effect deduplication. A long-lived
+owner must close/join the old process and establish a new connection before
+renewing that budget; automatic production recovery is not implemented here.
 
 Commands are `{"type":"turn","request_id":1,"scope":...}` and
 `{"type":"speak","request_id":2,"scope":...,"text":"..."}`, plus
@@ -166,3 +193,48 @@ curves and an actual App Server/model session must be verified separately on the
 configured project environment. An ALSA null endpoint does not satisfy them.
 
 Selected native follow-up and remaining gates: [2026-10-29 evidence](../../docs/HMI_NATIVE_CLOSEOUT_20261029.md).
+
+## Linux native-process containment (2026-11-06)
+
+The existing `local_speech CONFIG_JSON OWNER_CONNECTION_ID` entry now supervises
+one native child on Linux. Its initial thread binds `PR_SET_PDEATHSIG(SIGKILL)`
+and checks the exact parent before/after arming, before model or device access.
+Private readiness/control sequence messages are removed by the parent; the Hepta
+owner's external JSONL command/event shapes stay the same. This does not register
+production media in Agentd, create a conversation store or grant device authority.
+
+Default parent deadlines are 120 seconds for startup, 5 seconds for a processed
+`interrupt`/`retire`/`turn`, 10 seconds for shutdown/revocation/EOF, 2 seconds for a pipe
+write/drain and 5 seconds to observe reap after a kill request. Control timing
+starts before a potentially blocked child-stdin write. Native VAD events cannot
+acknowledge a command: a private sequence must identify the exact processed
+control. At most eight such controls are monitored. Model loading is distinct
+from the shorter requested-control deadline.
+
+A deadline requests termination of this child and separately records whether it
+was reaped. Already submitted audio and remote effects remain uncertain; no clean
+terminal, rollback or successful acknowledgement is invented. A kernel-stuck
+process which misses reap is reported as unreaped. A successful supervisor exit
+requires native readiness, forwarding an actual complete successful media terminal,
+no unresolved control and a successful child exit. Rejected parent input is
+retained in the native child's actual terminal instead of being replaced by clean
+EOF. Missing native terminal stays missing. Diagnostics are bounded/best-effort
+so a full stderr pipe cannot indefinitely hold the wrapper's failure return.
+On Linux, a diagnostic that cannot finish within 100ms causes this already-failed
+process to signal itself with SIGKILL; the resulting signal exit is a failure,
+not a clean terminal. It never signals a PID taken from input.
+
+Linux parent-death tests use actual child processes, exact waitpid and a real TCP
+listener. These establish process containment, not audio permission or sound.
+Other OSes retain the former direct native path; equivalent macOS/Windows process
+containment and physical qualification have not been established. The private
+`--native-child EXPECTED_PARENT_PID ...` invocation is implementation-only and is
+not an alternate owner entry point.
+
+The CPAL → Silero → Whisper input pipeline now selects the strict
+[`PayloadLimits` profile](../pipecat-core/PAYLOAD_ADMISSION.md): 1 MiB per compact
+JSON payload, 8 MiB normal queue, 1 MiB system queue and independent Start/control
+reservations per processor. These are queue payload charges, not process RSS;
+model allocations, in-flight processing and caller/consumer retention remain
+outside them. The generic pipeline compatibility default still leaves this
+profile disabled for opaque LLM/tool capabilities.

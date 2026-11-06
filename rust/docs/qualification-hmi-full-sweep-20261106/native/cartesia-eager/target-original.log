@@ -1,0 +1,53 @@
+     Running tests/cartesia_turns_eager.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/cartesia_turns_eager-25f622cc5eb07119)
+
+running 34 tests
+test eager::builder_without_eager_consumer_errors_without_ordinary_inference ... ok
+test eager::coalesced_events_mint_one_exact_receipt_and_preserve_source_payload_order ... ok
+test eager::actual_pending_tool_survives_stt_retirement_but_llm_owner_stops_later_effect_polling ... ok
+test eager::actor_skipped_start_retires_no_final_before_eof_and_preserves_installed_receipt ... ok
+test eager::helper_proof_alone_cannot_retain_a_prediction_after_normal_eof ... ok
+test eager::minted_final_survives_source_only_normal_eof_before_consumer_delivery ... ok
+test eager::live_never_predicted_receipt_cannot_close_or_change_an_unbound_current_turn ... ok
+test eager::empty_eager_events_withdraw_exact_prediction_without_closing_the_turn ... ok
+test eager::orphan_and_duplicate_provider_events_are_inert_and_eager_interims_are_suppressed ... ok
+test eager::both_signed_adapters_preserve_exact_next_request_after_transfer_and_discard_before_it ... ok
+test eager::mismatched_final_and_resume_retry_current_final_once_on_the_same_socket ... ok
+test eager::provider_start_authority_is_required_for_one_settled_inference ... ok
+test eager::pending_tool_is_discarded_and_current_final_retries_one_real_effect ... ok
+test eager::no_prediction_watchdog_has_a_healthy_default_recovery_control ... ok
+test eager::both_signed_adapters_discard_mismatch_resume_and_empty_final_before_next_request ... ok
+test eager::rejected_and_noop_settings_preserve_live_prediction_and_socket ... ok
+test eager::provider_only_long_speech_needs_no_interim_refresh_before_exact_final ... ok
+test eager::mixed_vad_updates_do_not_extend_timeout_and_late_source_final_cannot_duplicate_recovery ... ok
+test eager::provider_wire_oversize_is_a_destructive_fault_without_unbound_fallback ... ok
+test eager::repeated_prediction_and_late_exact_cancel_cannot_cancel_replacement ... ok
+test eager::retained_native_record_capacity_fault_retires_the_provider_source ... ok
+test eager::exact_and_normalized_matches_commit_once_and_release_only_after_boundary ... ok
+test eager::review_crosssocket_effects::simultaneous_identical_sockets_reject_crossed_authority_then_both_owners_release ... ok
+test eager::review_crosssocket_effects::crossed_live_receipts_cannot_resurrect_cancelled_tool_or_steal_other_tool_continuation ... ok
+test eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests ... FAILED
+test eager::transferred_tool_survives_stt_restart_but_waits_for_boundary_release ... ok
+test eager::source_end_retires_unsettled_start_before_reader_release_or_close_cleanup ... ok
+test eager::delayed_genuine_usage_and_old_receipts_do_not_retarget_current_turn_or_recovery ... ok
+test eager::retirement_overtakes_real_prediction_before_adoption_and_before_request ... ok
+test eager::review_observations::review_resumed_vad_rearms_deadline_without_reviving_cancelled_prediction ... ok
+test eager::staged_final_retirement_blocks_fallback_and_default_recovery ... ok
+test review_default::review_default_restart_keeps_interims_and_committed_history_without_capabilities ... ok
+test ordinary_constructor_keeps_committed_only_websocket_to_http_behavior ... ok
+test eager::source_health_generation_restoration_never_revives_queued_or_pending_work ... ok
+
+failures:
+
+---- eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests stdout ----
+
+thread 'eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests' (850721) panicked at crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs:343:13:
+provider=Anthropic; schedule=Some("Anthropic: B's exact signed parts/blocks changed in its actual next request: {\"max_tokens\":4096,\"messages\":[{\"content\":[{\"text\":\"same signed turn\",\"type\":\"text\"}],\"role\":\"user\"},{\"content\":[{\"signature\":\"live-B-opaque+/bytes==\",\"thinking\":\"live-B closed\\n思考\",\"type\":\"thinking\"},{\"text\":\"live-B Ready.\",\"type\":\"text\"}],\"role\":\"assistant\"},{\"content\":[{\"text\":\".\",\"type\":\"text\"}],\"role\":\"user\"}],\"model\":\"loopback\",\"stream\":true}"); cleanup A=[]; cleanup B=[]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests
+
+test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+error: test failed, to rerun pass `-p pipecat-streaming-speech --test cartesia_turns_eager`

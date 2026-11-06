@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "case": "actual_local_speech_supervisor_killed_during_native_config_open",
+  "scope": "same built entrypoint and Linux parent binding; no models/devices/owner",
+  "binary": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+  "binary_sha256": "24e44824bfeeed5ec5b8b2ee7f0153362b3b59e4409b3cd676e1a761de18516b",
+  "binary_mtime_ns": 1793960575821191155,
+  "source_sha256": {
+    "rust/crates/pipecat-hepta/examples/local_speech.rs": "5807c0cc6473494c1bc0554a683b3ea5a6825b008d9d908ee4f098176c2f442b",
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "05770d4ca626ace39b8cf9de1d8b0d03a1a3ec604956bd2c7b83b175fafac87a",
+    "rust/scripts/qualify_hmi_media_process.py": "096ea112ba142c8caf552bcb7a8907bfe003e540006290f2a6cc969a23c26efc"
+  },
+  "device_effects_performed": false,
+  "model_load_attempted": false,
+  "native_emergency_cleanup": false,
+  "passed": false,
+  "supervisor_process": {
+    "pid": 6,
+    "parent_pid": 2,
+    "start_time_ticks": 3095738,
+    "state": "R"
+  },
+  "error": "TimeoutError: actual native child identity was not established"
+}

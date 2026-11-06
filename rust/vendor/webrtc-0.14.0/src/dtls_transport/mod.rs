@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, Notify};
 use util::Conn;
 
 use crate::api::setting_engine::SettingEngine;
@@ -70,6 +70,7 @@ pub struct RTCDtlsTransport {
     pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
     closed: AtomicBool,
+    stop_notify: Notify,
     pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
     pub(crate) on_state_change_handler: ArcSwapOption<Mutex<OnDTLSTransportStateChangeHdlrFn>>,
     pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
@@ -406,24 +407,27 @@ impl RTCDtlsTransport {
                 dtls_config.replay_protection_window = self.setting_engine.replay_protection.dtls;
             }
 
-            // Connect as DTLS Client/Server, function is blocking and we
-            // must not hold the DTLSTransport lock
-            if role == DTLSRole::Client {
-                dtls::conn::DTLSConn::new(
+            // Stop must also cancel a constructor that has not published its
+            // connection yet. The peer operation owns this future until it
+            // finishes, so a handshake left pending would retain ICE sockets.
+            // Register before checking the durable flag to avoid losing a stop
+            // between the check and the select. Dropping the native constructor
+            // drops its reader-stop sender and releases its background workers.
+            let stopped = self.stop_notify.notified();
+            tokio::pin!(stopped);
+            stopped.as_mut().enable();
+            if self.closed.load(Ordering::SeqCst) {
+                return Err(Error::ErrInvalidDTLSStart);
+            }
+            tokio::select! {
+                biased;
+                _ = stopped.as_mut() => return Err(Error::ErrInvalidDTLSStart),
+                result = DTLSConn::new(
                     dtls_endpoint as Arc<dyn Conn + Send + Sync>,
                     dtls_config,
-                    true,
+                    role == DTLSRole::Client,
                     None,
-                )
-                .await
-            } else {
-                dtls::conn::DTLSConn::new(
-                    dtls_endpoint as Arc<dyn Conn + Send + Sync>,
-                    dtls_config,
-                    false,
-                    None,
-                )
-                .await
+                ) => result,
             }
         } else {
             Err(dtls::Error::Other(
@@ -513,6 +517,7 @@ impl RTCDtlsTransport {
     /// stops and closes the DTLSTransport object.
     pub async fn stop(&self) -> Result<()> {
         self.closed.store(true, Ordering::SeqCst);
+        self.stop_notify.notify_waiters();
         // Try closing everything and collect the errors
         let mut close_errs: Vec<Error> = vec![];
         {

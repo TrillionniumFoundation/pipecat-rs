@@ -1,0 +1,224 @@
+{
+  "schema": "pipecat-aishell-human-stt-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793987923.619622,
+  "scope": "Independent analysis of the single actual frozen-source offline stt_fixture execution. No replay, parameter change, alternate recording or physical audio access.",
+  "evidence": [
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/result.json",
+      "bytes": 21639,
+      "sha256": "63e3a40d1075d53f65c95b3877d71d34f632b9667540f726a994379d1ca49b35"
+    },
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/launcher.json",
+      "bytes": 10239,
+      "sha256": "a00bb9b8a3dd81e141a6769fffcb15d914e3e3a516409137be386201fbaa15fa"
+    },
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/runtime-start.json",
+      "bytes": 8439,
+      "sha256": "20ce106233a2d4ed35b405b8e8b114008a7c14f6055f52d1693d0fefa71f9e40"
+    },
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/runtime-status.json",
+      "bytes": 952,
+      "sha256": "d62e0841d63e84412b89833a82a2b5034fd34757a6f217607805bbb98b600bfd"
+    },
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/inference.stdout.log",
+      "bytes": 715,
+      "sha256": "0bfd1a9ad0817f17b8f5da1555dd75a29f3ad841774159c9571b22b5d34b5817"
+    },
+    {
+      "path": "workspace-evidence/aishell-human-pin-r1/inference.stderr.log",
+      "bytes": 28614,
+      "sha256": "1b9a732f3550df75b2683e62a9c177f28eb1cfbabcc3423203709b32d96e5705"
+    }
+  ],
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "example_path": "rust/crates/pipecat-hepta/examples/stt_fixture.rs",
+    "example_bytes": 1997,
+    "example_sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a",
+    "compiled_example": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+      "bytes": 6128472,
+      "sha256": "290da17f12da82e1acf138eb272d603be919d9ad136e307c1ee5475fafba2a6c"
+    },
+    "normal_example_profile_test_false": true
+  },
+  "authoritative_runtime": {
+    "job_id": "1a1b1fb70c1-fc05-7bde",
+    "state": "succeeded",
+    "exit_code": 0,
+    "output_complete": true,
+    "output_durable": true,
+    "timed_out": false
+  },
+  "execution": {
+    "inference_attempts": 1,
+    "automatic_retry": false,
+    "inference_argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+      "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+      "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav"
+    ],
+    "inference_exit_code": 0,
+    "wrapper_exit_code": 0,
+    "output_json_exactly_matches_recorded_inference_json": true,
+    "before_after_file_count": 16,
+    "all_file_digests_and_lengths_unchanged": true,
+    "outer_two_script_helper_after_checks_unchanged": true,
+    "source_unchanged": true,
+    "original_quality_passed_field": null,
+    "adds_to_model_optin_rust_case_count": false
+  },
+  "fixed_inputs": {
+    "config": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+      "bytes": 2702,
+      "sha256": "d6fcd5f1a04d0deae47fea2672b1c78707a1b2f136136faa33e05477cf77c1c6"
+    },
+    "model": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+      "bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+    },
+    "wav": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav",
+      "bytes": 137036,
+      "sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+    },
+    "provenance": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source-actual.json",
+      "bytes": 700,
+      "sha256": "1f67bee54368ee8319a2c4bdd0087b5141dfce32fcaf9430423de37d4c1c17e2"
+    }
+  },
+  "settings": {
+    "initial_prompt": "以下是简体中文语音。",
+    "language": "zh",
+    "no_speech_probability": 0.4000000059604645,
+    "strategy": {
+      "beam_search": {
+        "beam_size": 5
+      }
+    },
+    "temperature": 0.0,
+    "translate_to_english": false
+  },
+  "settings_float_representation_note": "Configured 0.4 is serialized by the f32 setting as 0.4000000059604645; independent float32 conversion matches. This is not a parameter change.",
+  "reference": {
+    "text": "广州市房地产中介协会分析",
+    "utf8_sha256_without_newline": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee",
+    "primary_annotation": {
+      "path": "pipecat-rs/rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/wenet-data.list",
+      "bytes": 447,
+      "sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7"
+    },
+    "primary_retrieval": {
+      "path": "pipecat-rs/rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/retrieval.json",
+      "bytes": 873,
+      "sha256": "12a4f617d82abc387f0082135d05b2a2ea49e0f1ef0025015e3b9a445bbea89e"
+    },
+    "upstream_commit": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+    "upstream_blob": "bb298bc1d68ca750bd70a9cf9bb1181dff1458ce",
+    "annotation_independently_verified": true,
+    "limit": "The annotation file establishes the fixed text. This review did not substitute the dataset symlink for the separately hashed local WAV."
+  },
+  "recognition": {
+    "audio_duration_seconds": 4.281,
+    "language": "zh",
+    "segments": [
+      {
+        "end_ms": 30000,
+        "no_speech_probability": 1.928615711221937e-05,
+        "start_ms": 0,
+        "text": "廣州市佛地产中间协会分析。"
+      }
+    ],
+    "text": "廣州市佛地产中间协会分析。"
+  },
+  "cer": {
+    "normalization": "Remove only Unicode punctuation categories P* and whitespace; no traditional/simplified folding, NFKC, case conversion, spelling repair or alternate-reference selection.",
+    "unicode_database_version": "15.0.0",
+    "reference_normalized": "广州市房地产中介协会分析",
+    "hypothesis_normalized": "廣州市佛地产中间协会分析",
+    "reference_codepoints": 12,
+    "hypothesis_codepoints": 12,
+    "substitutions": 3,
+    "deletions": 0,
+    "insertions": 0,
+    "levenshtein_edits": 3,
+    "value": 0.25,
+    "percent": 25.0,
+    "edit_alignment": [
+      {
+        "operation": "substitution",
+        "reference_index_zero_based": 0,
+        "hypothesis_index_zero_based": 0,
+        "reference": "广",
+        "hypothesis": "廣"
+      },
+      {
+        "operation": "substitution",
+        "reference_index_zero_based": 3,
+        "hypothesis_index_zero_based": 3,
+        "reference": "房",
+        "hypothesis": "佛"
+      },
+      {
+        "operation": "substitution",
+        "reference_index_zero_based": 7,
+        "hypothesis_index_zero_based": 7,
+        "reference": "介",
+        "hypothesis": "间"
+      }
+    ],
+    "new_quality_acceptance_threshold": null
+  },
+  "durations": {
+    "recorded_pcm_frames": 68496,
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "actual_audio_seconds": 4.281,
+    "audio_metadata_scope": "The immutable WAV header/frame count was read by the frozen runner; its ratio independently agrees with the native transcript duration. This reviewer did not reopen a remote device or download replacement audio.",
+    "model_load_seconds": 0.206838,
+    "stt_submit_and_result_seconds": 5.038608,
+    "stt_to_audio_ratio": 1.1769698668535389,
+    "native_process_phase_interval_seconds": 14.50675057596527,
+    "whole_runner_interval_seconds": 21.634362198179588,
+    "build_phase_interval_seconds": 4.16151710995473,
+    "interval_scope": "STT timing is the unchanged example submit/result clock. The stage interval starts immediately before opening its output files and spawning, and ends after process wait or failure cleanup; it covers process start, input/model reads, PID-receipt writing and shutdown, but excludes its subsequent final log hashing. The whole runner also includes version/metadata/build and final input/source checks. These are not microphone-to-speaker or production latency measurements."
+  },
+  "segment_timestamp_observation": {
+    "segments": [
+      {
+        "end_ms": 30000,
+        "no_speech_probability": 1.928615711221937e-05,
+        "start_ms": 0,
+        "text": "廣州市佛地产中间协会分析。"
+      }
+    ],
+    "maximum_reported_end_ms": 30000,
+    "actual_audio_ms": 4281.0,
+    "reported_segment_end_exceeds_actual_audio": true,
+    "limit": "The raw segment end is 30000 ms for a 4281 ms input. Preserve this metadata discrepancy; do not call the recording 30 seconds long or assert timestamp alignment quality. The current model wrapper forwards native segment timestamps multiplied by 10 rather than clipping them to actual duration; this observation does not identify the native cause."
+  },
+  "shutdown_and_cleanup": {
+    "success_json_after_source_awaited_shutdown": true,
+    "native_process_wait_returned": 0,
+    "all_five_recorded_stages_exited_zero_without_timeout": true,
+    "forced_cleanup_used": false,
+    "normal_stage_cleanup_fields": null,
+    "limit": "This establishes successful awaited offline Whisper shutdown and actual process exit. Normal stages did not record a separate per-PGID absence probe; this review does not invent an all-descendant join or physical-device/production-owner shutdown observation."
+  },
+  "quality_boundary": [
+    "One public prerecorded human utterance provides a reproducible offline quality diagnostic. Its 25% CER is a measured result, not a pass of a quality threshold.",
+    "The fixed base model and original zh/beam5/temperature0/general prompt were retained. This sample must remain separate from the eight Piper/small-q5_1 synthetic observations.",
+    "The old LocalSpeech config was used only for its Whisper model and settings in stt_fixture. Its other owner/grant/media fields were not admitted or qualified.",
+    "No live human microphone, room echo, OS permission, unplug/revoke, audible playback, current device generations, grants, Hepta owner/thread or producer/replay witness was exercised."
+  ]
+}

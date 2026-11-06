@@ -77,8 +77,13 @@ waiters; primary failure, cleanup failure and forced-abort truth remain distinct
 
 ## Recorded-PCM executable
 
-Build `cargo build --offline --locked -p pipecat-aws-nova-sonic --example pcm_session`.
-`pcm_session --help` reads no credentials and creates no files. `--check-config`
+The example target is now `aws_nova_sonic_pcm_session`. Migrate existing commands
+from `--example pcm_session` to `--example aws_nova_sonic_pcm_session`.
+The source remains `examples/pcm_session.rs`. Cargo builds only the uniquely named
+target so full-workspace builds keep each provider's executable separate.
+
+Build `cargo build --offline --locked -p pipecat-aws-nova-sonic --example aws_nova_sonic_pcm_session`.
+`aws_nova_sonic_pcm_session --help` reads no credentials and creates no files. `--check-config`
 constructs the same app without network or output creation. `--session INPUT OUTPUT`
 uses the same public constructor, validates bounded regular raw input before
 `create_new` output, paces 1024-byte chunks, drains output continuously, waits for a

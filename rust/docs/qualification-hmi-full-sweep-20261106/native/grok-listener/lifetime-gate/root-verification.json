@@ -1,0 +1,17 @@
+{
+  "schema": "pipecat-root-grok-lifetime-delivery-verification-v1",
+  "verified_utc": "2026-11-06T16:25:07.228525+00:00",
+  "original_delivery_files_verified": 16,
+  "archive_members_verified": 28,
+  "all_original_sizes_sha256_and_git_blob_identities_match": true,
+  "original_checksums_verified": 15,
+  "delivery_manifest_sha256": "1bb8cb8e293f168febe331d8247dbf9c3e60868ceb4ee3c81a8586b1a9cdd9b0",
+  "original_candidate_scope": "All original design/audit/README/format receipts remain unchanged snapshots of their generation phase. The later local Clippy change is independently recorded in clippy-fix.json; neither is native requalification.",
+  "extra_root_files": [
+    "application.json",
+    "clippy-fix.json",
+    "delivery-blobs.json",
+    "root-verification.json"
+  ],
+  "archive_sha256": "2ab1f9fd30d57085d688f5010e5048e50968e5debb49f8bfd8c5ae6b07f848d3"
+}

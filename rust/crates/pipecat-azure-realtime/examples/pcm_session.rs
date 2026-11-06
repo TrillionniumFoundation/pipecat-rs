@@ -28,10 +28,10 @@ const HELP: &str = "\
 Recorded Azure OpenAI Realtime PCM session
 
 Usage:
-  pcm_session --help
-  pcm_session --check-config [--manual|--server-vad]
-  pcm_session --manual INPUT.pcm OUTPUT.pcm
-  pcm_session --server-vad INPUT.pcm OUTPUT.pcm
+  azure_realtime_pcm_session --help
+  azure_realtime_pcm_session --check-config [--manual|--server-vad]
+  azure_realtime_pcm_session --manual INPUT.pcm OUTPUT.pcm
+  azure_realtime_pcm_session --server-vad INPUT.pcm OUTPUT.pcm
 
 Required explicit environment:
   AZURE_REALTIME_BASE_URL
@@ -293,6 +293,7 @@ fn pipeline_error(error: &PipelineError) -> &'static str {
         PipelineError::DuplicateStart => "duplicate pipeline start",
         PipelineError::TerminalUpstream => "invalid terminal direction",
         PipelineError::Backpressure(_) => "pipeline backpressure",
+        PipelineError::InvalidPayload(_) => "invalid pipeline payload",
         PipelineError::ProcessorPanic(_) => "pipeline task panicked",
         PipelineError::Execution(_) => "pipeline execution failure",
         PipelineError::AlreadyJoined => "pipeline was already joined",

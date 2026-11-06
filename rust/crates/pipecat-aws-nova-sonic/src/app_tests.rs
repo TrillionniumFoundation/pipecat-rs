@@ -1945,8 +1945,11 @@ fn example_binary() -> PathBuf {
         .parent()
         .unwrap()
         .join("examples")
-        .join(format!("pcm_session{}", std::env::consts::EXE_SUFFIX));
-    assert!(path.is_file(),"acceptance requires the parent build owner to compile the actual pcm_session executable first");
+        .join(format!(
+            "aws_nova_sonic_pcm_session{}",
+            std::env::consts::EXE_SUFFIX
+        ));
+    assert!(path.is_file(),"acceptance requires the parent build owner to compile the actual aws_nova_sonic_pcm_session executable first");
     path
 }
 async fn binary(arguments: Vec<std::ffi::OsString>, credentials: bool) -> std::process::Output {

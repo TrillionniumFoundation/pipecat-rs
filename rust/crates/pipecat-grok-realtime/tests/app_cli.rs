@@ -9,12 +9,12 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::oneshot,
+    sync::{oneshot, RwLock, RwLockReadGuard},
     time::{sleep, timeout},
 };
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
@@ -22,6 +22,11 @@ use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 const WAIT: Duration = Duration::from_secs(10);
 const KEY: &str = "synthetic-cli-key-never-live";
 const TRANSCRIPT: &str = "private-generated-transcript";
+// Parallel children can inherit other cases' CLOEXEC listeners. A release
+// waits for every potential inheritor to be reaped before its single rebind.
+// Reader leases allow live children and test bodies to run concurrently.
+static CHILD_LIFETIMES: RwLock<()> = RwLock::const_new(());
+static CHILD_REAP_FAILED: AtomicBool = AtomicBool::new(false);
 type Ws = WebSocketStream<TcpStream>;
 struct Directory(PathBuf);
 impl Directory {
@@ -49,13 +54,23 @@ impl Drop for Directory {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
-struct ChildOwner(Option<Child>);
+struct ChildOwner(Option<Child>, Option<RwLockReadGuard<'static, ()>>);
 impl Drop for ChildOwner {
     fn drop(&mut self) {
         if let Some(child) = &mut self.0 {
             let _ = child.kill();
-            let _ = child.wait();
+            if let Err(error) = child.wait() {
+                CHILD_REAP_FAILED.store(true, Ordering::Release);
+                eprintln!(
+                    "compiled Grok fixture child {} could not be reaped: {error}",
+                    child.id()
+                );
+            }
         }
+        // collect observes try_wait(Some) before taking the Child. On a Drop
+        // wait error, publish the failure before admission can reopen.
+        drop(self.0.take());
+        drop(self.1.take());
     }
 }
 fn command(address: Option<SocketAddr>) -> Command {
@@ -81,8 +96,15 @@ fn active(command: &mut Command, input: &Path, output: &Path) {
         .arg(output)
         .args(["--responses", "1", "--timeout-ms", "3000"]);
 }
-fn spawn(command: &mut Command) -> ChildOwner {
-    ChildOwner(Some(command.spawn().unwrap()))
+async fn spawn(command: &mut Command) -> ChildOwner {
+    let lease = timeout(WAIT, CHILD_LIFETIMES.read())
+        .await
+        .expect("compiled Grok fixture child admission timed out");
+    assert!(
+        !CHILD_REAP_FAILED.load(Ordering::Acquire),
+        "fixture child reaping failed; new child admission is blocked"
+    );
+    ChildOwner(Some(command.spawn().unwrap()), Some(lease))
 }
 async fn collect(mut child: ChildOwner) -> Output {
     timeout(WAIT, async {
@@ -149,14 +171,164 @@ async fn no_connection(listener: &TcpListener) {
         .await
         .is_err());
 }
+fn socket_holders(inode: Option<u64>) -> Value {
+    const MAX_ENTRIES: usize = 4096;
+    const MAX_MATCHES: usize = 64;
+    let Some(inode) = inode else {
+        return json!({"available":false,"reason":"original socket inode unavailable"});
+    };
+    let entries = match fs::read_dir("/proc/self/fd") {
+        Ok(entries) => entries,
+        Err(error) => return json!({"available":false,"error":error.to_string()}),
+    };
+    let expected = PathBuf::from(format!("socket:[{inode}]"));
+    let mut fds = vec![];
+    let mut raced_or_unreadable = 0;
+    let mut scanned_entries = 0;
+    let mut truncated = false;
+    for entry in entries {
+        if scanned_entries == MAX_ENTRIES {
+            truncated = true;
+            break;
+        }
+        scanned_entries += 1;
+        match entry {
+            Ok(entry) => match fs::read_link(entry.path()) {
+                Ok(target) if target == expected => {
+                    fds.push(entry.file_name().to_string_lossy().into_owned());
+                    if fds.len() == MAX_MATCHES {
+                        truncated = true;
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => raced_or_unreadable += 1,
+            },
+            Err(_) => raced_or_unreadable += 1,
+        }
+    }
+    fds.sort();
+    json!({
+        "available":true,"matching_fds":fds,"raced_or_unreadable_entries":raced_or_unreadable,
+        "scanned_entries":scanned_entries,"max_entries":MAX_ENTRIES,
+        "max_matches":MAX_MATCHES,"truncated":truncated
+    })
+}
+fn tcp_endpoint_snapshot(address: SocketAddr, ipv6: bool) -> Value {
+    use std::io::Read;
+    const MAX_BYTES: usize = 1024 * 1024;
+    const MAX_LINES: usize = 8192;
+    const MAX_MATCHES: usize = 64;
+    let path = if ipv6 {
+        "/proc/net/tcp6"
+    } else {
+        "/proc/net/tcp"
+    };
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) => return json!({"path":path,"available":false,"error":error.to_string()}),
+    };
+    let octets = match (address.ip(), ipv6) {
+        (std::net::IpAddr::V4(ip), false) => ip.octets().to_vec(),
+        (std::net::IpAddr::V4(ip), true) => ip.to_ipv6_mapped().octets().to_vec(),
+        (std::net::IpAddr::V6(ip), true) => ip.octets().to_vec(),
+        (std::net::IpAddr::V6(ip), false) => match ip.to_ipv4_mapped() {
+            Some(ip) => ip.octets().to_vec(),
+            None => return json!({"path":path,"available":true,"rows":[]}),
+        },
+    };
+    let hex: String = octets
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|word| format!("{:08X}", u32::from_ne_bytes(*word)))
+        .collect();
+    let exact = format!("{hex}:{:04X}", address.port());
+    let wildcard = format!("{}:{:04X}", "0".repeat(hex.len()), address.port());
+    let mut bytes = vec![];
+    let read_error = file
+        .take(MAX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .err()
+        .map(|error| error.to_string());
+    let mut truncated = bytes.len() > MAX_BYTES || read_error.is_some();
+    if truncated {
+        bytes.truncate(MAX_BYTES);
+        // A size- or error-limited final fragment is not a complete proc row.
+        let complete = bytes
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+            .map_or(0, |i| i + 1);
+        bytes.truncate(complete);
+    }
+    let scanned_bytes = bytes.len();
+    let text = String::from_utf8_lossy(&bytes);
+    let mut rows = vec![];
+    let mut scanned_lines = 0;
+    for line in text.lines() {
+        if scanned_lines == MAX_LINES {
+            truncated = true;
+            break;
+        }
+        scanned_lines += 1;
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() < 10 || (fields[1] != exact && fields[1] != wildcard) {
+            continue;
+        }
+        rows.push(json!({
+            "local_endpoint_hex":fields[1], "state_hex":fields[3], "inode":fields[9],
+            "scope":if fields[1] == exact {"exact_or_mapped_endpoint"} else {"same_port_wildcard"}
+        }));
+        if rows.len() == MAX_MATCHES {
+            truncated = true;
+            break;
+        }
+    }
+    json!({
+        "path":path,"available":true,"rows":rows,"read_error":read_error,"truncated":truncated,
+        "scanned_bytes":scanned_bytes,"scanned_lines":scanned_lines,
+        "max_bytes":MAX_BYTES,"max_lines":MAX_LINES,"max_matches":MAX_MATCHES
+    })
+}
 async fn release(listener: TcpListener) {
     no_connection(&listener).await;
     let address = listener.local_addr().unwrap();
-    drop(listener);
-    let rebound = TcpListener::bind(address)
-        .await
-        .expect("fixture listener not released");
-    drop(rebound);
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&listener);
+    let descriptor = format!("/proc/self/fd/{fd}");
+    let metadata = fs::metadata(&descriptor);
+    let inode = metadata
+        .as_ref()
+        .ok()
+        .map(std::os::unix::fs::MetadataExt::ino);
+    let descriptor_target = fs::read_link(&descriptor);
+    let rebind_result = {
+        let _reaped_children = timeout(WAIT, CHILD_LIFETIMES.write())
+            .await
+            .expect("compiled Grok fixture child exit barrier timed out");
+        assert!(
+            !CHILD_REAP_FAILED.load(Ordering::Acquire),
+            "fixture child reaping failed; listener release cannot be qualified"
+        );
+        drop(listener);
+        // Keep the probe listener inside the barrier too, so a later child
+        // cannot inherit the socket created by this single rebind.
+        TcpListener::bind(address).await.map(drop)
+    };
+    rebind_result.unwrap_or_else(|error| {
+        let before = json!({
+            "pid":std::process::id(), "address":address.to_string(), "fd":fd, "socket_inode":inode,
+            "descriptor":descriptor_target.ok().map(|path| path.to_string_lossy().into_owned()),
+            "metadata_error":metadata.err().map(|error| error.to_string())
+        });
+        eprintln!("fixture listener not released: {error:?}; before_drop={before}");
+        let diagnostic = json!({
+            "before_drop":before, "original_inode_holders_after_drop":socket_holders(inode),
+            "tcp":tcp_endpoint_snapshot(address,false), "tcp6":tcp_endpoint_snapshot(address,true),
+            "bind_error_kind":format!("{:?}",error.kind()), "bind_raw_os_error":error.raw_os_error(),
+            "scope":"non-atomic post-failure snapshots; absent entries do not prove absence at bind time"
+        });
+        panic!("fixture listener not released: {error}; listener_release_diagnostic={diagnostic}")
+    });
 }
 async fn wire(ws: &mut Ws, mut value: Value) {
     static EVENT: AtomicU64 = AtomicU64::new(0);
@@ -330,7 +502,7 @@ async fn default_help_and_check_are_credential_free_and_effect_free() {
                 std::ffi::OsString::from_vec(vec![0xff; 5000]),
             )
             .env("XAI_API_KEY", "ambient-key-must-not-be-used");
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(
             result.status.success(),
             "{}",
@@ -357,7 +529,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
         let mut command = command(Some(listener.local_addr().unwrap()));
         command.env(name, value);
         active(&mut command, &input, &output);
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(!result.status.success());
         sanitized(&result);
         assert!(!output.exists());
@@ -367,7 +539,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
         .env_remove("GROK_PCM_API_KEY")
         .env("XAI_API_KEY", KEY);
     active(&mut no_key, &input, &output);
-    assert!(!collect(spawn(&mut no_key)).await.status.success());
+    assert!(!collect(spawn(&mut no_key).await).await.status.success());
     for args in [
         vec!["--enable"],
         vec!["--help", "extra"],
@@ -382,7 +554,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
     ] {
         let mut command = command(Some(listener.local_addr().unwrap()));
         command.args(args);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
     }
     assert!(!output.exists());
     release(listener).await;
@@ -398,7 +570,7 @@ async fn aligned_regular_bounded_input_and_create_new_paths_preflight_before_con
         fs::write(&input, bytes).unwrap();
         let mut command = command(Some(listener.local_addr().unwrap()));
         active(&mut command, &input, &output);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
         assert!(!output.exists());
     }
     fs::write(&input, [0, 0]).unwrap();
@@ -424,7 +596,7 @@ async fn aligned_regular_bounded_input_and_create_new_paths_preflight_before_con
     ] {
         let mut command = command(Some(listener.local_addr().unwrap()));
         active(&mut command, &source, &target);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
     }
     assert_eq!(fs::read(&input).unwrap(), [0, 0]);
     assert_eq!(fs::read(&existing).unwrap(), b"keep");
@@ -450,7 +622,7 @@ async fn actual_binary_explicit_run_records_fragmented_pcm_and_joins() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.arg("--run");
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     peer.await.unwrap();
 }
@@ -489,7 +661,7 @@ async fn actual_binary_server_vad_does_not_invent_explicit_run_or_playback() {
     });
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     assert!(!String::from_utf8_lossy(&result.stdout).contains("private-user-transcript"));
     peer.await.unwrap();
@@ -530,7 +702,7 @@ async fn actual_binary_server_vad_rapid_burst_preserves_speech_and_joins() {
     });
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     assert!(!String::from_utf8_lossy(&result.stdout).contains("private-user-transcript"));
     peer.await.unwrap();
@@ -570,7 +742,7 @@ async fn actual_binary_final_echo_requires_assistant_continuation_and_generated_
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.args(["--run", "--echo-tool"]);
-    let mut child = spawn(&mut command);
+    let mut child = spawn(&mut command).await;
     timeout(WAIT, observed).await.unwrap().unwrap();
     assert!(
         child.0.as_mut().unwrap().try_wait().unwrap().is_none(),
@@ -606,7 +778,7 @@ async fn actual_binary_absent_required_speech_times_out_cancels_and_retains_part
         .arg("--output")
         .arg(&output)
         .args(["--responses", "1", "--timeout-ms", "500", "--run"]);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     assert!(!result.status.success());
     sanitized(&result);
     assert_eq!(report(&result)["status"], "partial");
@@ -645,7 +817,7 @@ async fn actual_binary_readiness_provider_and_protocol_failures_are_sanitized_pa
         let mut command = command(Some(address));
         active(&mut command, &input, &output);
         command.arg("--run");
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(!result.status.success());
         sanitized(&result);
         assert_eq!(report(&result)["status"], "partial");
@@ -715,7 +887,7 @@ async fn actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_af
                 "--run",
                 "--echo-tool",
             ]);
-        let mut child = spawn(&mut command);
+        let mut child = spawn(&mut command).await;
         timeout(WAIT, observed).await.unwrap().unwrap();
         assert!(child.0.as_mut().unwrap().try_wait().unwrap().is_none());
         let original = fs::metadata(&output).unwrap();
@@ -767,7 +939,7 @@ async fn actual_binary_output_exhaustion_retains_bounded_partial_bytes() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.args(["--run", "--max-output-bytes", "2"]);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     assert!(!result.status.success());
     sanitized(&result);
     assert_eq!(report(&result)["status"], "partial");
@@ -801,7 +973,7 @@ async fn actual_binary_output_path_swap_does_not_write_replacement() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.arg("--run");
-    let child = spawn(&mut command);
+    let child = spawn(&mut command).await;
     timeout(WAIT, observed).await.unwrap().unwrap();
     fs::rename(&output, &retained).unwrap();
     fs::write(&output, b"replacement remains untouched").unwrap();

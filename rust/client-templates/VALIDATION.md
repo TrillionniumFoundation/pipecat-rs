@@ -2,6 +2,92 @@
 
 Environment: Rust 1.99.0, wasm32-unknown-unknown, wasm-bindgen CLI 0.2.129.
 
+## Latest actual browser execution, 2026-11-06
+
+The deployed Rust/WASM bundle ran on the configured `desktop` with Chrome
+156.0.8078.79 and the normal Chromium sandbox. Durable job
+`1a1b0db389b-fc05-7360` completed successfully with exit 0 and complete output.
+`protocol-r4` passed all 23 reported check groups in 204.55 seconds;
+`input-r3` passed all four groups in 4.29 seconds. Both record no page errors,
+cleanup errors or failure. These are fixture groups, not a sum of independent
+native test cases.
+
+The protocol fixture executes actual WebSocket/protobuf and paired browser
+WebRTC, RTVI text/image/transcript/toast/job-group DOM, cancellation, receive-only
+text mode, media counters and resource cleanup. It uses synthetic devices and an
+autoplay override. The separate text-input fixture has no autoplay override: a
+trusted Connect click resumes the native AudioContext and synthetic PCM reaches
+its ended event, with output muted. It also checks Chromium CDP Chinese
+composition, exact Chinese/emoji/newline text, one explicit Send, actual loopback
+TCP abort and manual reconnect without draft/message replay. This is neither
+physical audio/user-hearing acceptance nor OS Pinyin/WAN recovery qualification.
+
+The actual bundled WASM SHA-256 is
+`6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d`.
+Its Rust source and locked dependencies are unchanged from `e526aab`; final
+fixture code was published at `478ab3b` and is byte-identical through `7105367`.
+The original 114 protocol Python assert nodes remain identical. Earlier fixture
+failures, their exact helpers and the independent native-textarea IME control
+are retained; corrected passes do not erase them. The control observes
+`compositionend.isTrusted=false` in this Chrome profile, while start/update and
+composing input are trusted.
+
+See the [complete browser evidence and limits](../docs/qualification-hmi-full-sweep-20261106/browser/README.md),
+[final protocol JSON](../docs/qualification-hmi-full-sweep-20261106/browser/final/protocol-r4.json),
+[input JSON](../docs/qualification-hmi-full-sweep-20261106/browser/final/input-r3.json),
+[run receipts](../docs/qualification-hmi-full-sweep-20261106/browser/final/results.json)
+and [actual 960-by-480 screenshot](../docs/qualification-hmi-full-sweep-20261106/browser/final/browser-acceptance.png).
+The later native/WASM requalification below has its own source/run identity;
+it does not repeat or add to these two browser runs.
+
+## New native/WASM requalification, 2026-11-06
+
+An independent `source-browser` checkout and `target-browser` ran with exact
+Rust 1.99.0 at commit `7105367d7d607653c3ab758f0131c029c4373faf`, tree
+`19a5c08fc2cbfeabacd344668fc7b25d03a282c2`. This is new raw evidence after the
+local executor replacement, not a reconstruction of unavailable older logs.
+
+| Run / phase | Exact Cargo arguments | Observed result |
+| --- | --- | --- |
+| r1 native tests | `test --locked --offline` | Existing 54 passed, 0 failed, 0 ignored; 23.763411 s |
+| r1 native strict Clippy | `clippy --locked --offline --all-targets -- -D warnings` | exit 0; 8.087912 s |
+| r1 subsequent WASM preparation | Official Rust WASM standard-library download | Truncated archive, failed checksum; **overall r1 failed** |
+| Separate r2 WASM-only strict Clippy | `clippy --locked --offline --target wasm32-unknown-unknown -- -D warnings` | exit 0; 42.282510 s |
+
+The first archive contained 8,338,068 of the expected 23,152,600 bytes and failed
+XZ integrity. Its bytes and failure record were retained. r2 used 23 ordinary
+HTTP ranges, checked each exact 206 response/range/length, and verified the full
+archive against the official manifest before installation into a new private
+WASM sysroot. It did not repeat the native tests, native Clippy, release packaging,
+or either Chromium fixture.
+
+The recorded 72-file source scope is unchanged across all before/after maps.
+r2 also records equal before/after hashes for six native tool binaries and the
+retained r1 records/bad archive. r1 recorded exact native tool versions but did
+not persist its tool-binary before/after hash dictionary before the download
+failure; the r2 observation is not backdated into r1.
+
+Jobs are `1a1b11b87e0-fc05-75d5` for r1 and `1a1b134cc7a-fc05-76e6` for r2.
+The [complete requalification record](../docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md)
+links all raw logs, stage results, exact argv/environment, source maps, official
+manifest, range receipts and runtime terminal records. Its target-owner index
+is explicitly generated after completion from those original records.
+
+Comparing the recorded source with current freeze
+`272671b95297313d24db921eceda8e95f3a8d545` / tree
+`94424ffa2a8fbcda0f81321ee68e7461663e191c` finds only README/VALIDATION changes
+in the tracked browser/JPEG/toolchain-file scope. Neither Markdown file is a
+Rust include input. Rust, Cargo/lock files, static assets, fixtures and vendored
+JPEG are unchanged. These documentation updates are not another execution of
+the tests or the browser bundle; the phase results above remain bound to `7105367`.
+
+## Historical records below
+
+The following older source slices and host restrictions remain historical.
+Their statements that Chromium could not launch describe those executions;
+they do not replace the 2026-11-06 executed result above. Native test counts from
+different source slices are not added together.
+
 ## Replacement-host checks, 2026-10-10 UTC
 
 The isolated recovered browser workspace again passed its 11 native tests,

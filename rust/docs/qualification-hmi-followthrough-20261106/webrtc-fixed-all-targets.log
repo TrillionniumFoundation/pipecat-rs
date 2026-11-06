@@ -1,0 +1,113 @@
+   Compiling webrtc v0.14.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/vendor/webrtc-0.14.0)
+   Compiling pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+    Finished `test` profile [unoptimized] target(s) in 18.91s
+     Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_webrtc-6e5b96744b3c439a)
+
+running 20 tests
+receive-only initial ownership=Ok(Ok((0, 1, true, 0))); close=Ok(Ok(()))
+test connection::tests::receive_only_has_no_local_track_or_audio_worker ... ok
+receive-only answering=false; held actual gathering Pending; cancel outcome=Ok(Err(Closed))
+receive-only cancelled negotiation=Ok(Ok(())); joins=Ok(Ok(()))/Ok(Ok(())); candidate_count=2; release=Ok(())
+test connection::tests::rejected_or_cancelled_message_admission_is_not_counted ... ok
+test connection::tests::shutdown_normalization_preserves_mixed_real_and_unclosed_errors ... ok
+test connection::tests::receive_only_cancel_during_pending_offer_gathering_joins ... ok
+receive-only answering=true; held actual gathering Pending; cancel outcome=Ok(Err(Closed))
+receive-only cancelled negotiation=Ok(Ok(())); joins=Ok(Ok(()))/Ok(Ok(())); candidate_count=4; release=Ok(())
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::tests::receive_only_cancel_during_pending_answer_gathering_joins ... ok
+test connection::tests::close_during_dtls_connected_callback_cannot_admit_late_srtp ... ok
+test connection::tests::close_after_stopped_sctp_association_releases_native_udp_socket ... ok
+test connection::worker_close_tests::native_and_worker_errors_are_both_preserved_without_panic_payloads ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+test connection::tests::malformed_binary_and_json_messages_are_reported_without_losing_channel ... ok
+test connection::tests::stopped_sctp_transport_rejects_late_association_start ... ok
+test connection::tests::close_during_data_channel_callback_cannot_lose_sctp_shutdown ... ok
+
+thread 'tokio-rt-worker' (259) panicked at crates/pipecat-webrtc/src/worker_close_tests.rs:123:21:
+deliberately injected owned worker panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+worker-close mode=InjectedOwnedPanic; observation=Ok(Ok(())); first=Ok(Err(Shutdown("owned transport worker failures: panicked=1, cancelled=0, timed_out=0"))); concurrent=Ok(Err(Shutdown("owned transport worker failures: panicked=1, cancelled=0, timed_out=0"))); cached=Ok(Err(Shutdown("owned transport worker failures: panicked=1, cancelled=0, timed_out=0"))); other=Ok(Ok(())); states=(Closed, Closed); owned_tasks=0; pending=0; events_empty=true; channel_released=true; peer_released=true; output_closed=true; owned_drop=true; sockets=Ok(())
+test connection::worker_close_tests::injected_owned_worker_panic_is_reported_after_resource_release ... ok
+worker-close mode=ActualWriterAbort; observation=Ok(Ok(())); first=Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))); concurrent=Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))); cached=Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))); other=Ok(Ok(())); states=(Closed, Closed); owned_tasks=0; pending=0; events_empty=true; channel_released=true; peer_released=true; output_closed=true; owned_drop=false; sockets=Ok(())
+test connection::worker_close_tests::actual_message_writer_abort_is_reported_after_resource_release ... ok
+worker-close mode=NormalCancellation; observation=Ok(Ok(())); first=Ok(Ok(())); concurrent=Ok(Ok(())); cached=Ok(Ok(())); other=Ok(Ok(())); states=(Closed, Closed); owned_tasks=0; pending=0; events_empty=true; channel_released=true; peer_released=true; output_closed=true; owned_drop=false; sockets=Ok(())
+test connection::worker_close_tests::normal_token_cancellation_preserves_success_and_releases_native_resources ... ok
+registry-worker observation=Ok(Ok(())); first=Ok(Err(Shutdown("peer shutdown failed: owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))); cached=Ok(Err(Shutdown("peer shutdown failed: owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))); clients=[Ok(Ok(())), Ok(Ok(()))]; servers=[Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=1, timed_out=0"))), Ok(Ok(()))]; registry_empty=true; resources=true; sockets=true
+test connection::worker_close_tests::registry_reports_worker_failure_after_closing_every_admitted_peer ... ok
+
+thread 'tokio-rt-worker' (279) panicked at crates/pipecat-webrtc/src/worker_close_tests.rs:252:9:
+deliberate panic during owned task abort
+worker-deadline panic_on_abort=false; observation=Ok(Ok(())); first=Ok(Err(Timeout("peer shutdown"))); concurrent=Ok(Err(Timeout("peer shutdown"))); settled=Ok(Ok(())); cached=Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=0, timed_out=2"))); repeated=Ok(Err(Shutdown("owned transport worker failures: panicked=0, cancelled=0, timed_out=2"))); other=Ok(Ok(())); resources=true; sockets=true; owned_drops=true
+test connection::worker_close_tests::forced_worker_abort_survives_cancelled_and_concurrent_close_callers ... ok
+worker-deadline panic_on_abort=true; observation=Ok(Ok(())); first=Ok(Err(Timeout("peer shutdown"))); concurrent=Ok(Err(Timeout("peer shutdown"))); settled=Ok(Ok(())); cached=Ok(Err(Shutdown("owned transport worker failures: panicked=1, cancelled=0, timed_out=2"))); repeated=Ok(Err(Shutdown("owned transport worker failures: panicked=1, cancelled=0, timed_out=2"))); other=Ok(Ok(())); resources=true; sockets=true; owned_drops=true
+test connection::worker_close_tests::panic_during_fallback_abort_is_preserved_after_all_joins ... ok
+test connection::tests::source_ping_heartbeat_is_bounded_text_and_not_an_application_message ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+
+     Running tests/localhost.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/localhost-df724e1d4c6dd3ff)
+
+running 16 tests
+test candidate_json_supports_browser_camel_case_and_source_snake_case ... ok
+test detailed_cancel_discards_preconnection_queue_without_waiting_for_drain ... ok
+test incompatible_audio_codecs_fail_negotiation_explicitly ... ok
+test invalid_configuration_sdp_and_bounded_flush_fail_explicitly ... ok
+test connection_timeout_retains_fatal_reason_after_cancellation ... ok
+test bounded_preopen_queue_cancel_and_input_validation ... ok
+test interruption_discards_queued_audio_before_negotiation_and_flush_drains_new_audio ... ok
+test real_data_channel_preserves_rtvi_json_bidirectionally ... ok
+test opus_audio_is_encoded_decoded_and_clocked_at_48khz ... ok
+test signaling_handler_aliases_reuse_limits_and_end_of_candidates ... ok
+test pcma_audio_uses_real_srtp_and_g711 ... ok
+test pcmu_audio_uses_real_srtp_and_g711 ... ok
+test detailed_end_drains_accepted_audio_before_closing_real_peer ... ok
+test audio_track_status_disables_and_resumes_incoming_pcm ... ok
+test registry_reuses_existing_peer_and_restart_closes_old_peer ... ok
+test trickle_candidates_negotiate_without_external_servers ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+
+     Running tests/receive_only.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/receive_only-e15088957a828df1)
+
+running 4 tests
+receive-only invalid configuration exact=true; cleanup=None
+test receive_only_requires_an_audio_codec_before_peer_setup ... ok
+receive-only concurrent End=Ok(true); closes=Ok(())/Ok(())
+receive-only first close=Ok(Ok(()))
+receive-only second close=Ok(Ok(()))
+receive-only concurrent observation=Ok(Ok(())); cleanup=[]
+test receive_only_end_and_concurrent_close_join_while_wrapper_is_retained ... ok
+receive-only codec=Pcmu; client transport counters=TransportStats { audio_packets_sent: 0, audio_packets_received: 3, audio_packets_dropped: 0, audio_packets_out_of_order: 0, audio_packets_missing: 0, app_messages_sent: 2, app_messages_received: 3, malformed_messages: 0, events_dropped: 0 }; opposite transport counters=TransportStats { audio_packets_sent: 3, audio_packets_received: 0, audio_packets_dropped: 0, audio_packets_out_of_order: 0, audio_packets_missing: 0, app_messages_sent: 3, app_messages_received: 2, malformed_messages: 0, events_dropped: 0 }
+receive-only producer=Ok(()); opposite observation=Ok(())
+receive-only codec=Opus; client transport counters=TransportStats { audio_packets_sent: 0, audio_packets_received: 3, audio_packets_dropped: 0, audio_packets_out_of_order: 0, audio_packets_missing: 0, app_messages_sent: 2, app_messages_received: 3, malformed_messages: 0, events_dropped: 0 }; opposite transport counters=TransportStats { audio_packets_sent: 3, audio_packets_received: 0, audio_packets_dropped: 0, audio_packets_out_of_order: 0, audio_packets_missing: 0, app_messages_sent: 3, app_messages_received: 2, malformed_messages: 0, events_dropped: 0 }
+receive-only producer=Ok(()); opposite observation=Ok(())
+receive-only first close=Ok(Ok(()))
+receive-only first close=Ok(Ok(()))
+receive-only second close=Ok(Ok(()))
+receive-only observation=Ok(Ok(())); cleanup=[]
+receive-only second close=Ok(Ok(()))
+receive-only observation=Ok(Ok(())); cleanup=[]
+test opus_receive_only_has_no_audio_uplink_and_client_first_close ... ok
+test pcmu_receive_only_has_no_audio_uplink_and_peer_first_close ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/review_lifecycle.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_lifecycle-a62df5bca02abea8)
+
+running 6 tests
+test cancelling_registry_close_does_not_leave_retained_peers_running ... ok
+test cancelled_close_followed_by_drop_keeps_cleanup_owned ... ok
+short-close first=Ok(()); other_first=Ok(()); settled=Ok(Ok(())); final_a=Ok(()); final_b=Ok(()); cached_a=Ok(())
+test short_close_deadline_keeps_cleanup_owned_for_a_retry ... ok
+test normal_close_releases_native_peer_while_public_wrapper_is_retained ... ok
+test cancelling_then_retrying_close_releases_all_gathered_udp_sockets ... ok
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+
+     Running unittests examples/loopback.rs (/tmp/pipecat-hmi-native-27653505a519/debug/examples/loopback-0eea7c4f79669514)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

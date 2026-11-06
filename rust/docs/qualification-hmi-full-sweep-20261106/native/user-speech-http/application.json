@@ -1,0 +1,19 @@
+{
+  "schema": "pipecat-user-speech-http-fixture-application-v1",
+  "created_utc": "2026-11-06T16:44:08.331688+00:00",
+  "parent_head": "52243a392065d474ea0d0aead585891c6010bb3d",
+  "source_file": "rust/crates/pipecat-evals/tests/user_speech.rs",
+  "candidate": {
+    "bytes": 30969,
+    "sha256": "1b45c80e8d220aff0b42ce0b556034d0e468b838f64f7059b40b8667fb9b0d95",
+    "git_blob_sha1": "56721a90b01d928fc71b3af6b7c85a2cc815a7d5"
+  },
+  "root_checks": {
+    "patch_check_passed": true,
+    "applied_exact_candidate": true,
+    "reversing_only_the_two_declared_edits_restores_original_bytes": true
+  },
+  "scope": "Select Disabled cache only for the explicitly silent HTTP timeout scenario. Original 180ms budget, 1500ms upper bound, both chatty branches, exact error and actual HTTP request/close witnesses unchanged. No product change.",
+  "limits": "Original Private-cache timeout remains a failed run and is not reclassified as HTTP success. The untouched empty-cache assertion here is not cache reclamation qualification; separate cache scenarios retain their exact inputs.",
+  "native_qualification": "NOT_EXECUTED at application; subsequent new-source original gate required."
+}

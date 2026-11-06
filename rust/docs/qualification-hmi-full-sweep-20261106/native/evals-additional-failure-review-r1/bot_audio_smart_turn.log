@@ -1,0 +1,37 @@
+
+     Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)
+
+running 9 tests
+test injected_complete_cannot_emit_before_the_actual_http_response ... ok
+test cancellation_joins_the_blocked_predictor_before_the_owned_session_finishes ... ok
+test genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles ... FAILED
+test incomplete_retains_audio_across_short_pause_then_fresh_complete_releases_one_response ... ok
+test incomplete_uses_three_seconds_of_paced_pcm_silence_without_an_extra_model_verdict ... ok
+test optional_smart_turn_settings_are_strict_and_bad_graphs_fail_before_connect ... ok
+test genuine_smart_turn_prediction_is_on_the_wire_response_path_and_http_stays_authoritative ... ok
+test resumed_speech_invalidates_complete_while_old_http_is_pending_and_requires_fresh_complete ... ok
+test stale_epoch_endpoint_and_http_cannot_emit_into_the_next_wire_turn ... ok
+
+failures:
+
+---- genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles stdout ----
+Real model cleanup: [
+    WorkerObservation {
+        elapsed_ms: 0,
+        workers: Some(
+            [],
+        ),
+    },
+]
+
+thread 'genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles' (828657) panicked at crates/pipecat-evals/tests/bot_audio_smart_turn.rs:1007:9:
+assertion failed: (result.metrics.unwrap().probability - expected_tone).abs() < 1e-5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.02s
+
+error: test failed, to rerun pass `-p pipecat-evals --test bot_audio_smart_turn`

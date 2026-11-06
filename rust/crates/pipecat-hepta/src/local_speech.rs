@@ -3,7 +3,8 @@
 use crate::{MediaControl, OutputIdentity, StreamIdentity};
 use pipecat_audio::PcmFormat;
 use pipecat_core::{
-    AudioRawFrame, Direction, FrameData, Pipeline, PipelineConfig, PipelineWorker, WorkerReport,
+    AudioRawFrame, Direction, FrameData, PayloadLimits, Pipeline, PipelineConfig, PipelineWorker,
+    WorkerReport,
 };
 use pipecat_local_audio::{
     AudioLimits, DeviceSelector, LocalAudioOutput, LocalAudioTransport, LocalAudioTransportParams,
@@ -169,6 +170,10 @@ impl LocalSpeech {
         let mut config = PipelineConfig::default();
         config.start.audio_in_sample_rate = 16_000;
         let worker = Pipeline::new(vec![transport.input(), Arc::new(vad), Arc::new(stt)])
+            // This path carries PCM/transcription/control DTOs, not opaque LLM
+            // capabilities. Charge actual queue payloads, retaining independent
+            // Start/cancel/interruption capacity; native model allocations remain separate.
+            .with_payload_limits(PayloadLimits::default())
             .start(config)
             .await
             .map_err(native)?;

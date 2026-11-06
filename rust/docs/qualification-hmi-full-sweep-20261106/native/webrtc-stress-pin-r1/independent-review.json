@@ -1,0 +1,131 @@
+{
+  "schema": "pipecat-webrtc100-final-independent-review-v1",
+  "created_utc": "2026-11-06T18:36:23.000684+00:00",
+  "scope": "Read-only examination of recovered WebRTC100 raw evidence and its existing source/launcher; no native execution, probe, archive, upload, or MoQ review.",
+  "result": "No blocking inconsistency found in this recorded 100-repeat window.",
+  "inputs": {
+    "root": "/workspace/scratch/f9f576cc6c66/workspace-evidence/final-runtime-pin-r1",
+    "manifest_sha256": "e0fb4a353eb14b72cb6bd962105fbc2f71f356f7a56e4dbe21177fb1b3250611",
+    "selected_original_files_verified": 115,
+    "selected_original_bytes": 1945819,
+    "repetitions": {
+      "path": "originals/evidence/webrtc-stress-pin-r1/repetitions.json",
+      "bytes": 151686,
+      "sha256": "0a117dafca601af38f16541c6cecf515b31f702ab51706dd0acea52bba94c183"
+    },
+    "launcher": {
+      "path": "originals/requests/webrtc-stress-launch-pin-r1/launcher.json",
+      "bytes": 8785,
+      "sha256": "a4dc969f5e64f161c6ba1574956aee88db86ec82e1c061748543c6092c38d619"
+    }
+  },
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "canonical_before_and_after": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "files": 2327,
+    "complete_maps_equal": true,
+    "source_maps_raw_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+    "status_after": "",
+    "stress_source_file": "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs",
+    "stress_source_sha256": "1a7876c7c848c96dac9706cd96aea6059204eb8e30a66c3ea7e996cd3400c8c4",
+    "unchanged_oracle": "32 iterations x 6 schedules; setup-bearing schedules await A then B with 5s each; schedule 5 retains setup-time shutdown; UDP rebind remains 2s."
+  },
+  "binding": {
+    "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-webrtc#0.1.0",
+    "target": "review_lifecycle",
+    "target_kind": [
+      "test"
+    ],
+    "profile_test": true,
+    "features": [
+      "default",
+      "opus"
+    ],
+    "cargo_reported_fresh": false,
+    "unique_compiler_artifact": true,
+    "binary": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/review_lifecycle-a62df5bca02abea8",
+    "binary_bytes": 37666728,
+    "recorded_binary_sha256_before_and_after": "b833123a4df7cc24d1275b54eb35e418e70d78e489a56c1224d5796b4b0bbb86",
+    "metadata_sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8",
+    "binding_sha256": "8c5dd79f035545dac5392a750fa1787877b683a5d601d39de54cfe03e953652a",
+    "selection_sha256": "e62a6492a040aed83d5636aeebb6543b45b7975d640ac715c1cd21cd65ae265a",
+    "selection_exact_one_test": true
+  },
+  "toolchain_and_launcher": {
+    "recorded_pin": "1.99.0",
+    "cargo": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+    "rustc": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+    "rustdoc": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+    "runner_sha256_before_and_after": "f3e09db38d5f257892fa25cb1840a3cca99adfedfdcac98a24863ff2bb3eb318",
+    "manifest_helper_sha256_before_and_after": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+    "bootstrap_sha256": "229deb174f14cab62a5fa26f081d6f2de3e9d893cb76f3b6e7ecf6a26d137022",
+    "same_process_bootstrap": true,
+    "exclusive_owner_lock_and_target_marker_guard_in_executed_runner": true,
+    "preceding_model_terminal_and_contained": true,
+    "own_window_compiler_tool_executable_hashes_recorded": false
+  },
+  "rounds": {
+    "requested": 100,
+    "attempted": 100,
+    "launched": 100,
+    "completed": 100,
+    "passed": 100,
+    "unique_case": "repeated_peer_shutdown_schedules_release_both_udp_ports",
+    "unique_case_count": 1,
+    "each_summary": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 5
+    },
+    "exact_argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/review_lifecycle-a62df5bca02abea8",
+      "repeated_peer_shutdown_schedules_release_both_udp_ports",
+      "--exact",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "all_100_original_case_lines_and_summaries_verified": true,
+    "all_100_log_sizes_hashes_match_receipt_and_manifest": true,
+    "combined_stdout_stderr_files": 100,
+    "combined_log_bytes": 18000,
+    "round_log_index_canonical_sha256": "84b5747d2d306b311545cd04145efe5c19ccc2330bf11d60e84d043d08f3d500",
+    "serial_recorded_intervals": true,
+    "replacement_rounds": 0
+  },
+  "containment": {
+    "owned_processes_including_metadata_binding_selection": 103,
+    "all_original_execution_phase_and_leader_exits_zero": true,
+    "all_leaders_reaped": true,
+    "all_final_group_probes_absent": true,
+    "signal_requests": 0,
+    "cleanup_attempts": 0,
+    "timeout_or_cleanup_errors": 0,
+    "probe_scope": "Group presence is a non-atomic final observation; it is not an individual join of every descendant."
+  },
+  "time_and_resources": {
+    "whole_runner_seconds": 177.1593887170311,
+    "first_round_start_to_last_round_end_seconds": 139.72365140914917,
+    "binding_phase_execution_seconds": 36.21698522311635,
+    "libtest_round_seconds_min_max": [
+      1.24,
+      1.45
+    ],
+    "internal_seconds": 870,
+    "outer_seconds": 900,
+    "per_round_process_limit_seconds": 120,
+    "requested_build_jobs": 4,
+    "requested_cpu_percent": 400,
+    "requested_memory_bytes": 17179869184,
+    "nice": 10,
+    "scope": "Whole-run time includes metadata/build binding and source-after checks; these are job-local intervals, not RPC delay, peer setup latency or inference time."
+  },
+  "limits": [
+    "This verifies 100 executions of one original case, not 100 distinct coverage items; historical setup and UDP failures remain open.",
+    "The test executable bytes were not exported in this raw package; its actual before/after SHA is taken from the original execution receipt and linked to the unique Cargo artifact. No live executable or tool probe was made.",
+    "The original window explicitly records the private Rust 1.99.0 cargo/RUSTC/RUSTDOC paths but has no separate per-window rustc/cargo executable before/after hashes; runner/helper and harness SHA closure are verified here."
+  ],
+  "historical_failures_cleared": false
+}

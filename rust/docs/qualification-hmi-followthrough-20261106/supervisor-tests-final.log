@@ -1,0 +1,32 @@
+   Compiling pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Finished `test` profile [unoptimized] target(s) in 2.45s
+     Running tests/process_supervision.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/process_supervision-3ae5b4f7350bb740)
+
+running 24 tests
+test invalid_deadlines_and_connection_are_rejected_before_spawn ... ok
+test private_control_ack_is_removed_and_command_sequence_counts_non_controls ... ok
+test forwards_exact_commands_and_events_but_hides_private_handshake ... ok
+test eof_allows_native_terminal_to_drain_without_fabricating_success ... ok
+test malformed_command_is_not_forwarded_or_resynchronized ... ok
+test partial_utf8_command_at_eof_is_a_terminal_failure ... ok
+test bare_or_failed_terminal_cannot_make_exit_zero_successful ... ok
+test ready_then_exit_without_protocol_terminal_is_not_success ... ok
+test rejected_input_cause_is_retained_in_the_childs_existing_terminal ... ok
+test oversized_native_event_is_rejected_without_unbounded_buffering ... ok
+test successful_exit_without_native_readiness_is_not_success ... ok
+test stalled_owner_output_does_not_leave_native_child_running ... ok
+test revoke_capture_is_a_total_deadline_without_waiting_for_ack ... ok
+test shutdown_kills_and_reaps_a_native_call_that_never_polls_tokio ... ok
+test unsolicited_private_control_ack_is_rejected ... ok
+test valid_private_control_ack_is_hidden_from_the_owner ... ok
+test wrong_connection_readiness_fails_without_exposing_child_output ... ok
+test stop_during_blocking_startup_uses_the_shorter_shutdown_deadline ... ok
+test stdout_eof_is_not_mistaken_for_native_thread_exit ... ok
+test turn_that_blocks_native_retirement_is_also_contained ... ok
+test startup_hang_is_contained_while_owner_input_is_still_open ... ok
+test retire_ack_requires_private_processed_command_sequence ... ok
+test timely_control_ack_survives_a_scheduling_stall_past_the_old_deadline ... ok
+test uncorrelated_vad_event_cannot_acknowledge_a_blocked_interrupt ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+

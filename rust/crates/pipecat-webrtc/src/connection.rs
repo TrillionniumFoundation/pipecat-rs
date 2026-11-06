@@ -1,8 +1,8 @@
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc, Mutex as StdMutex,
+    Arc, Mutex as StdMutex, Weak,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use pipecat_core::{AudioRawFrame, Frame, FrameData};
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,9 @@ use webrtc::{
     data_channel::{data_channel_state::RTCDataChannelState, RTCDataChannel},
     dtls_transport::dtls_transport_state::RTCDtlsTransportState,
     ice::network_type::NetworkType,
-    ice_transport::ice_transport_state::RTCIceTransportState,
+    ice_transport::{
+        ice_connection_state::RTCIceConnectionState, ice_transport_state::RTCIceTransportState,
+    },
     interceptor::registry::Registry,
     media::Sample,
     peer_connection::{
@@ -194,6 +196,86 @@ pub struct TransportStats {
     pub malformed_messages: u64,
     pub events_dropped: u64,
 }
+/// Read-only setup observations. Each field is sampled independently; this is
+/// not an atomic protocol snapshot. `Connected` on the peer does not imply that
+/// SCTP or the application channel has opened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionDiagnostics {
+    pub wrapper_state: ConnectionState,
+    pub peer_state: Option<RTCPeerConnectionState>,
+    pub ice_state: Option<RTCIceConnectionState>,
+    pub dtls_state: Option<RTCDtlsTransportState>,
+    pub sctp_state: Option<RTCSctpTransportState>,
+    pub sctp_started: Option<bool>,
+    /// Native state of the accepted channel, including before its open callback
+    /// publishes it to `wait_data_channel`. Inspection retains no channel owner.
+    pub channel_state: Option<RTCDataChannelState>,
+    pub channel_published: bool,
+    pub cancelled: bool,
+    pub milestones: SetupMilestones,
+}
+
+/// First observations measured from creation of this peer's context. These
+/// fixed-size timestamps retain no SDP, credentials, messages or media.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SetupMilestones {
+    pub channel_registered: Option<Duration>,
+    pub peer_connected_callback: Option<Duration>,
+    pub ice_connected_callback: Option<Duration>,
+    pub channel_open_callback: Option<Duration>,
+    pub channel_published: Option<Duration>,
+    pub channel_close_callback: Option<Duration>,
+}
+
+struct SetupTrace {
+    started: Instant,
+    channel: StdMutex<Weak<RTCDataChannel>>,
+    channel_registered: AtomicU64,
+    peer_connected_callback: AtomicU64,
+    ice_connected_callback: AtomicU64,
+    channel_open_callback: AtomicU64,
+    channel_published: AtomicU64,
+    channel_close_callback: AtomicU64,
+}
+impl SetupTrace {
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            channel: StdMutex::new(Weak::new()),
+            channel_registered: AtomicU64::new(0),
+            peer_connected_callback: AtomicU64::new(0),
+            ice_connected_callback: AtomicU64::new(0),
+            channel_open_callback: AtomicU64::new(0),
+            channel_published: AtomicU64::new(0),
+            channel_close_callback: AtomicU64::new(0),
+        }
+    }
+    fn mark(&self, slot: &AtomicU64) {
+        // Zero means absent, so even a sub-microsecond observation stores one.
+        let micros = self
+            .started
+            .elapsed()
+            .as_micros()
+            .min((u64::MAX - 1) as u128) as u64;
+        let _ = slot.compare_exchange(0, micros + 1, Ordering::Relaxed, Ordering::Relaxed);
+    }
+    fn snapshot(&self) -> SetupMilestones {
+        fn read(slot: &AtomicU64) -> Option<Duration> {
+            slot.load(Ordering::Relaxed)
+                .checked_sub(1)
+                .map(Duration::from_micros)
+        }
+        SetupMilestones {
+            channel_registered: read(&self.channel_registered),
+            peer_connected_callback: read(&self.peer_connected_callback),
+            ice_connected_callback: read(&self.ice_connected_callback),
+            channel_open_callback: read(&self.channel_open_callback),
+            channel_published: read(&self.channel_published),
+            channel_close_callback: read(&self.channel_close_callback),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Counters {
     audio_sent: AtomicU64,
@@ -220,6 +302,7 @@ struct Context {
     pending: Arc<Pending>,
     last_error: StdMutex<Option<String>>,
     counters: Counters,
+    setup: SetupTrace,
     config: SmallWebRtcConfig,
 }
 impl Context {
@@ -359,6 +442,7 @@ impl SmallWebRtcConnection {
             pending: Arc::new(Pending::default()),
             last_error: StdMutex::new(None),
             counters: Counters::default(),
+            setup: SetupTrace::new(),
             config: config.clone(),
         });
         let tasks: Tasks = Arc::new(StdMutex::new(Vec::new()));
@@ -479,6 +563,34 @@ impl SmallWebRtcConnection {
             events_dropped: c.events_dropped.load(Ordering::Relaxed),
         }
     }
+    /// Sample setup layers without waiting for protocol work or changing its
+    /// deadlines. `None` native peer/transport states mean close released the
+    /// peer; the bounded callback milestones remain available after close.
+    pub fn diagnostics(&self) -> ConnectionDiagnostics {
+        let peer = self.pc.lock().unwrap().clone();
+        let sctp = peer.as_ref().map(|pc| pc.sctp());
+        let channel_state = self
+            .ctx
+            .setup
+            .channel
+            .lock()
+            .unwrap()
+            .upgrade()
+            .map(|channel| channel.ready_state());
+        ConnectionDiagnostics {
+            wrapper_state: self.state(),
+            peer_state: peer.as_ref().map(|pc| pc.connection_state()),
+            ice_state: peer.as_ref().map(|pc| pc.ice_connection_state()),
+            dtls_state: sctp.as_ref().map(|sctp| sctp.transport().state()),
+            sctp_state: sctp.as_ref().map(|sctp| sctp.state()),
+            sctp_started: sctp.as_ref().map(|sctp| sctp.has_started()),
+            channel_state,
+            channel_published: self.ctx.channel.borrow().is_some(),
+            cancelled: self.is_cancelled(),
+            milestones: self.ctx.setup.snapshot(),
+        }
+    }
+
     fn peer(&self) -> Result<Arc<RTCPeerConnection>> {
         self.pc.lock().unwrap().clone().ok_or(Error::Closed)
     }
@@ -897,6 +1009,9 @@ fn install_callbacks(pc: &Arc<RTCPeerConnection>, ctx: &Arc<Context>, tasks: &Ta
     pc.on_peer_connection_state_change(Box::new(move |state| {
         let ctx = state_ctx.clone();
         Box::pin(async move {
+            if state == RTCPeerConnectionState::Connected {
+                ctx.setup.mark(&ctx.setup.peer_connected_callback);
+            }
             if !ctx.cancel.is_cancelled() {
                 ctx.state.send_replace(state.into());
             }
@@ -904,6 +1019,18 @@ fn install_callbacks(pc: &Arc<RTCPeerConnection>, ctx: &Arc<Context>, tasks: &Ta
                 ctx.fail("WebRTC peer connection failed".into());
             } else if state == RTCPeerConnectionState::Closed {
                 ctx.cancel.cancel();
+            }
+        })
+    }));
+    let ice_state_ctx = ctx.clone();
+    pc.on_ice_connection_state_change(Box::new(move |state| {
+        let ctx = ice_state_ctx.clone();
+        Box::pin(async move {
+            if matches!(
+                state,
+                RTCIceConnectionState::Connected | RTCIceConnectionState::Completed
+            ) {
+                ctx.setup.mark(&ctx.setup.ice_connected_callback);
             }
         })
     }));
@@ -981,22 +1108,20 @@ async fn install_channel(channel: Arc<RTCDataChannel>, ctx: Arc<Context>) {
         let _ = channel.close().await;
         return;
     }
+    *ctx.setup.channel.lock().unwrap() = Arc::downgrade(&channel);
+    ctx.setup.mark(&ctx.setup.channel_registered);
     let open_ctx = ctx.clone();
     let weak_channel = Arc::downgrade(&channel);
     channel.on_open(Box::new(move || {
         Box::pin(async move {
-            if let Some(channel) = weak_channel.upgrade() {
-                if !open_ctx.cancel.is_cancelled() {
-                    open_ctx.channel.send_replace(Some(channel));
-                    open_ctx.emit(TransportEvent::DataChannelOpen);
-                }
-            }
+            publish_channel(&open_ctx, weak_channel);
         })
     }));
     let close_ctx = ctx.clone();
     channel.on_close(Box::new(move || {
         let ctx = close_ctx.clone();
         Box::pin(async move {
+            ctx.setup.mark(&ctx.setup.channel_close_callback);
             ctx.channel.send_replace(None);
             ctx.emit(TransportEvent::DataChannelClosed);
         })
@@ -1075,6 +1200,17 @@ async fn deliver_message(ctx: &Context, event: TransportEvent) {
                 ctx.counters.messages_received.fetch_add(1, Ordering::Relaxed);
                 permit.send(event);
             }
+        }
+    }
+}
+
+fn publish_channel(ctx: &Context, channel: Weak<RTCDataChannel>) {
+    ctx.setup.mark(&ctx.setup.channel_open_callback);
+    if let Some(channel) = channel.upgrade() {
+        if !ctx.cancel.is_cancelled() {
+            ctx.channel.send_replace(Some(channel));
+            ctx.setup.mark(&ctx.setup.channel_published);
+            ctx.emit(TransportEvent::DataChannelOpen);
         }
     }
 }
@@ -1390,6 +1526,112 @@ mod tests {
         .is_err());
         a.close().await.unwrap();
         b.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn diagnostics_distinguish_native_open_from_delayed_publication() {
+        use std::{
+            future::{poll_fn, Future},
+            task::Poll,
+        };
+        use tokio::sync::oneshot;
+
+        let config = SmallWebRtcConfig {
+            localhost_only: true,
+            audio_codec: None,
+            ..Default::default()
+        };
+        let a = SmallWebRtcConnection::new(config.clone()).await.unwrap();
+        let b = SmallWebRtcConnection::new(config).await.unwrap();
+        let before = a.diagnostics();
+        assert_eq!(before.sctp_started, Some(false));
+        assert_eq!(before.channel_state, None);
+        assert!(!before.channel_published);
+
+        let offer = a.create_offer().await.unwrap();
+        let channel = a.ctx.setup.channel.lock().unwrap().upgrade().unwrap();
+        let weak_channel = Arc::downgrade(&channel);
+        let open_ctx = a.ctx.clone();
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        // A controlled fixture: the native callback is held before invoking
+        // the ordinary publication function. This proves the observed boundary,
+        // not that a historical unexplained timeout had this cause.
+        channel.on_open(Box::new(move || {
+            Box::pin(async move {
+                let _ = entered_tx.send(());
+                let _ = release_rx.await;
+                publish_channel(&open_ctx, weak_channel);
+            })
+        }));
+        drop(channel);
+        let answer = b.answer_offer(offer.sdp).await.unwrap();
+        a.accept_answer(answer).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), entered_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        b.wait_data_channel(Duration::from_secs(5)).await.unwrap();
+
+        let blocked = a.diagnostics();
+        assert_eq!(blocked.dtls_state, Some(RTCDtlsTransportState::Connected));
+        assert_eq!(blocked.sctp_state, Some(RTCSctpTransportState::Connected));
+        assert_eq!(blocked.sctp_started, Some(true));
+        assert_eq!(blocked.channel_state, Some(RTCDataChannelState::Open));
+        assert!(!blocked.channel_published);
+        assert!(blocked.milestones.channel_registered.is_some());
+        assert!(blocked.milestones.channel_open_callback.is_none());
+        assert!(blocked.milestones.channel_published.is_none());
+        assert!(matches!(
+            a.wait_data_channel(Duration::from_millis(30)).await,
+            Err(Error::Timeout("data channel"))
+        ));
+
+        // Register a real pending watch waiter before releasing publication.
+        // Also check the opposite order: a waiter created after publication.
+        let waiting = a.wait_data_channel(Duration::from_secs(5));
+        tokio::pin!(waiting);
+        poll_fn(|cx| {
+            assert!(waiting.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        release_tx.send(()).unwrap();
+        waiting.await.unwrap();
+        a.wait_data_channel(Duration::from_millis(30))
+            .await
+            .unwrap();
+        // watch readiness can be observed by another runtime thread before
+        // the subsequent diagnostic timestamp is stored. Inspect its eventual
+        // observation separately; never substitute it for channel readiness.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while a.diagnostics().milestones.channel_published.is_none() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let published = a.diagnostics();
+        assert!(published.channel_published);
+        assert!(published.milestones.channel_open_callback.is_some());
+        assert!(published.milestones.channel_published.is_some());
+        assert!(
+            published.milestones.channel_open_callback <= published.milestones.channel_published
+        );
+        a.close().await.unwrap();
+        b.close().await.unwrap();
+        let closed = a.diagnostics();
+        assert_eq!(closed.wrapper_state, ConnectionState::Closed);
+        assert_eq!(closed.peer_state, None);
+        assert_eq!(closed.sctp_state, None);
+        assert_eq!(
+            closed.milestones.channel_registered,
+            published.milestones.channel_registered
+        );
+        assert_eq!(
+            closed.milestones.channel_published,
+            published.milestones.channel_published
+        );
     }
 
     #[tokio::test]
@@ -1825,3 +2067,7 @@ mod tests {
 #[cfg(test)]
 #[path = "worker_close_tests.rs"]
 mod worker_close_tests;
+
+#[cfg(test)]
+#[path = "shutdown_start_tests.rs"]
+mod shutdown_start_tests;

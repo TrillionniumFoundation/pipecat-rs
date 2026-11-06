@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-11-06",
+  "scope": "read_only_environment_and_device_inventory_not_product_qualification",
+  "pipecat_base_commit": "ec40f982205cb2c87f61094d78d163c5c2febb39",
+  "original_project_environment": {
+    "source": "HMI_CLOUD_AUDIT_20261023.md",
+    "environment_id": "ccarenv_b64_Y2NhcmVudl85ZDBiZTQ3MjU3MjQ4MTkxOWY1N2Y5M2Y1ZDZhZWY1Mw",
+    "documented_paths": [
+      "/workspace/pipecat-rs",
+      "/workspace/hepta-private-ci",
+      "/workspace/.pipecat-env/activate.sh"
+    ],
+    "current_callable_executor": false,
+    "documented_paths_present_in_current_scratch_environment": false,
+    "conclusion": "Current scratch engineering checks cannot be represented as execution in the original dedicated cloud environment."
+  },
+  "runtime_host_inventory": ["ai395", "desktop", "mac", "main", "pocket4", "rog", "x230"],
+  "dot_host_configured": false,
+  "inventory_method": {
+    "host_access": "Administrator-configured HeptaRuntime operator host aliases only.",
+    "directory_scope": "Bounded directory-name checks under login home, workspace, work, src, repos, projects, /data, /workspace, /opt and /Volumes when present; not an exhaustive disk search.",
+    "toolchains": "Directory names under the existing per-host .rustup/toolchains; aliases require executable version verification before use.",
+    "devices": "Existing /dev/snd, /dev/video and /proc/asound/cards metadata only.",
+    "processes": "Process names without arguments; checked for Agentd, Pipecat and HMI on mac and x230.",
+    "device_effects_performed": false,
+    "credentials_or_private_audio_read": false,
+    "permissions_modified": false
+  },
+  "hosts": {
+    "x230": {
+      "observed_platform": "Linux x86_64",
+      "installed_toolchain_directory_versions": ["1.95.0", "1.96.0", "1.98.0"],
+      "pipecat_or_hmi_named_project_in_probed_directories": false,
+      "matching_owner_process_observed": false,
+      "audio_metadata": "HDA Intel PCH; capture and playback device nodes present",
+      "video_nodes_observed": ["/dev/video0", "/dev/video1"],
+      "probe_jobs": ["1a1b01e64d4-fc05-6e34", "1a1b02110ed-fc05-6e57", "1a1b021ede7-fc05-6e63"]
+    },
+    "mac": {
+      "observed_platform": "macOS 26.6.2 arm64",
+      "installed_toolchain_directory_versions": ["1.95.0", "1.96.0", "1.98.0", "nightly"],
+      "pipecat_or_hmi_named_project_in_probed_directories": false,
+      "matching_owner_process_observed": false,
+      "native_audio_route_queried": false,
+      "probe_jobs": ["1a1b01eab95-fc05-6e35", "1a1b02040c8-fc05-6e4d", "1a1b02225ff-fc05-6e64"]
+    },
+    "pocket4": {
+      "observed_platform": "Linux x86_64",
+      "installed_toolchain_directory_versions": ["1.93.0", "1.95.0", "1.96.0", "1.98.0", "stable", "nightly"],
+      "existing_project_path_relative_to_login_home": "hepta-pipecat-voice",
+      "existing_project_kind": "Python hepta_voice deployment; not identified as the Rust HMI closeout checkout",
+      "repository_identity": {
+        "git_checkout": false,
+        "head_branch_and_status": "git rev-parse, symbolic-ref and status each returned exit 128: not a git repository",
+        "rust_hmi_source_sha": "not established"
+      },
+      "verified_alias_toolchain_versions": {
+        "stable": "rustc 1.95.0 (59807616e 2026-04-14)",
+        "nightly": "rustc 1.100.0-nightly (787af2b8c 2026-08-25)"
+      },
+      "historical_project_document": "hepta_voice/POCKET4_SINGLE_HOST_20261009.md",
+      "historical_project_document_claims": {
+        "runtime": "Pipecat 1.12.0, SenseVoice CPU, Melo CPU, local Vulkan llama.cpp",
+        "evidence_scope": "Synthetic PCM to local GPU model to synthesized PCM; production_ready=False and phone_authority=False",
+        "state": "A historical independent SQLite voice ledger was migrated from the former account. It must not become a second authoritative Hepta conversation store."
+      },
+      "current_service_states": {
+        "method": "HeptaRuntime service_status; exact names from the existing project document, resolved uniquely to user units",
+        "hepta-pocket-llama.service": {"active_state": "active", "sub_state": "running", "unit_file_state": "enabled", "main_pid": 2803},
+        "hepta-pocket-voice-proxy.service": {"active_state": "active", "sub_state": "running", "unit_file_state": "enabled", "main_pid": 2806},
+        "hepta-pocket-voice-tools.service": {"active_state": "active", "sub_state": "running", "unit_file_state": "enabled", "main_pid": 2789},
+        "hepta-pocket-voice-agent.service": {"active_state": "active", "sub_state": "running", "unit_file_state": "enabled", "main_pid": 2809},
+        "qualification": "Service liveness only; no model, owner, thread, inference, recording or playback request was submitted."
+      },
+      "audio_metadata": ["HD-Audio Generic", "Quectel EG25-GC USB audio", "HD-Audio Generic", "Pocket4AndroidL loopback"],
+      "probe_jobs": ["1a1b01e435f-fc05-6e33", "1a1b020a809-fc05-6e52", "1a1b021ccf9-fc05-6e5f", "1a1b024d60c-fc05-6e85"]
+    },
+    "rog": {
+      "installed_toolchain_directory_versions": ["1.95.0", "1.96.0", "1.98.0", "stable"],
+      "pipecat_or_hmi_named_project_in_probed_directories": false,
+      "audio_metadata": ["HD-Audio Generic", "HD-Audio Generic"],
+      "probe_jobs": ["1a1b0238604-fc05-6e77"],
+      "probe_terminal": "succeeded",
+      "probe_exit_code": 0
+    },
+    "ai395": {
+      "installed_toolchain_directory_versions": ["1.95.0", "1.96.0", "1.98.0", "stable"],
+      "pipecat_or_hmi_named_project_in_probed_directories": false,
+      "audio_metadata": ["HD-Audio Generic", "HD-Audio Generic"],
+      "probe_jobs": ["1a1b0231920-fc05-6e70"],
+      "probe_terminal": "succeeded",
+      "probe_exit_code": 0
+    },
+    "desktop": {
+      "probe_job": "1a1b01f09b3-fc05-6e3b",
+      "probe_idempotency_key": "pipecat-env-audit-20261106-desktop-r1",
+      "launch_state": "launch_unknown",
+      "reconciliation": "process_status returned INVALID_ARGUMENT; bounded view of the returned job directory reported path not found",
+      "replayed": false,
+      "conclusion": "No reliable inventory or process result; preserve UNKNOWN."
+    },
+    "main": {
+      "state": "listed_not_independently_probed"
+    }
+  },
+  "probe_reconciliation": {
+    "durable_shell_probe_jobs_started": 13,
+    "authoritative_succeeded_exit_zero_jobs": 12,
+    "authoritative_running_jobs": 0,
+    "unresolved_launch_unknown_jobs": ["1a1b01f09b3-fc05-6e3b"],
+    "unreconciled_unknown_replayed": false,
+    "all_tool_calls_returned": true,
+    "known_successful_jobs": [
+      "1a1b01eab95-fc05-6e35", "1a1b02040c8-fc05-6e4d", "1a1b02225ff-fc05-6e64",
+      "1a1b01e64d4-fc05-6e34", "1a1b02110ed-fc05-6e57", "1a1b021ede7-fc05-6e63",
+      "1a1b01e435f-fc05-6e33", "1a1b020a809-fc05-6e52", "1a1b021ccf9-fc05-6e5f",
+      "1a1b024d60c-fc05-6e85", "1a1b0238604-fc05-6e77", "1a1b0231920-fc05-6e70"
+    ]
+  },
+  "historical_physical_evidence_boundary": {
+    "source": "HMI_NATIVE_CLOSEOUT_20261029.md and hmi-native-evidence-20261029.json",
+    "documented_native_toolchain": "Rust 1.99.1",
+    "documented_device": "ALSA 1.2.11 / ALC897",
+    "host_identity_in_published_record": "not specified",
+    "production_owner_present_in_that_run": false,
+    "jack_states": "front/rear microphone, line-in, line-out and front headphone all off",
+    "qualification": "ALSA capture and CPAL callback submission do not establish acoustic microphone/speaker attachment, hearing, echo cancellation, hotplug, permission recovery or a live Hepta owner conversation."
+  },
+  "product_qualification": {
+    "real_owner_device_thread_combination": "not established by this inventory",
+    "cross_platform_end_to_end_latency": "not measured",
+    "physical_hotplug_and_permission_revocation": "not tested",
+    "human_chinese_speech_and_hearing": "not tested",
+    "neuron_shadow": "not activated",
+    "production_organ": "HOLD"
+  }
+}

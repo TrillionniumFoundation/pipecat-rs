@@ -1,0 +1,5 @@
+    Checking pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+    Checking pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Checking pipecat-pipeline v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-pipeline)
+    Checking pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+    Finished `dev` profile [unoptimized] target(s) in 1m 02s

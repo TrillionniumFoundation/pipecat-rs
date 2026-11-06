@@ -1,0 +1,5 @@
+install: creating uninstall script at /home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/sysroot-browser-wasm-1.99.0-r2/lib/rustlib/uninstall.sh
+install: installing component 'rust-std-wasm32-unknown-unknown'
+
+    rust std installed.
+

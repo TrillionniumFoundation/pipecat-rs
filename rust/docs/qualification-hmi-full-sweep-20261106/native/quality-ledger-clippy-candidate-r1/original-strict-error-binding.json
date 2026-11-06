@@ -1,0 +1,10 @@
+{
+  "schema": "pipecat-original-log-slice-binding-v1",
+  "full_raw_sha256": "a7f0dd43af2af36db03dfb5f835a939bc718c17c5ed8f1935824e254543a0444",
+  "full_raw_bytes": 17381,
+  "start_byte": 16313,
+  "end_byte": 17322,
+  "slice_sha256": "4ed9a650f4152072377147db42448321946032638ac096acfc0b43615ef21ee6",
+  "slice_bytes": 1009,
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac"
+}

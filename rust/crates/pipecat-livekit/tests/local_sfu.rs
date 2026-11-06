@@ -1,8 +1,11 @@
 //! Opt-in real-SFU qualification. This test is compiled by default and executed
 //! only with --ignored and PIPECAT_LIVEKIT_SERVER pointing to the pinned binary.
 //! It never connects to an existing service or uses account credentials.
+//! Run this integration binary with --test-threads=1: the SDK WebSocket client is global.
 #[path = "support/loopback_ws.rs"]
 mod loopback_ws;
+#[path = "local_sfu/media_control.rs"]
+mod media_control;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, Mac};
@@ -11,11 +14,15 @@ use pipecat_core::{AudioRawFrame, FrameData};
 use pipecat_livekit::{ConnectionState, LiveKitConfig, LiveKitConnection, LiveKitEvent};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::Write,
     net::{TcpListener, UdpSocket},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -25,12 +32,16 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 const DEADLINE: Duration = Duration::from_secs(10);
+const SFU_REAP_DEADLINE: Duration = Duration::from_secs(3);
 const BINARY_SHA256: &str = "0fbb1246f555fc3d27ae92530273f53d9463bbccd93c7edb398e0c6ccfe1536b";
+static NEXT_SERVER: AtomicU64 = AtomicU64::new(0);
 
 struct Server {
     child: Child,
     directory: PathBuf,
     port: u16,
+    reaped: bool,
+    cleanup_failed: bool,
 }
 impl Server {
     async fn start() -> Self {
@@ -46,9 +57,10 @@ impl Server {
         let rtc_udp = UdpSocket::bind("127.0.0.1:0").unwrap();
         let port = tcp.local_addr().unwrap().port();
         let directory = std::env::temp_dir().join(format!(
-            "pipecat-livekit-sfu-{}-{}",
+            "pipecat-livekit-sfu-{}-{}-{}",
             std::process::id(),
-            now()
+            now(),
+            NEXT_SERVER.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&directory).unwrap();
         let config = directory.join("loopback.yaml");
@@ -81,6 +93,8 @@ impl Server {
             child,
             directory,
             port,
+            reaped: false,
+            cleanup_failed: false,
         };
         timeout(DEADLINE, async {
             loop {
@@ -116,12 +130,93 @@ impl Server {
     fn url(&self) -> String {
         format!("ws://127.0.0.1:{}", self.port)
     }
+
+    /// Synchronous so the Drop fallback uses the same bounded reap attempt.
+    /// A kill request is not proof of exit; only try_wait returning a status is.
+    fn stop_and_reap(&mut self, stage: &str) -> Result<serde_json::Value, String> {
+        let started = std::time::Instant::now();
+        let kill_error = self.child.kill().err().map(|error| error.to_string());
+        let mut wait_error = None;
+        let mut exit_status = None;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => {
+                    self.reaped = true;
+                    exit_status = Some(status.to_string());
+                    break;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    wait_error = Some(error.to_string());
+                    break;
+                }
+            }
+            let remaining = SFU_REAP_DEADLINE.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                break;
+            }
+            std::thread::sleep(remaining.min(Duration::from_millis(10)));
+        }
+        let details = serde_json::json!({
+            "stage": stage, "pid": self.child.id(), "reaped": self.reaped,
+            "kill_requested": true, "kill_error": kill_error,
+            "wait_error": wait_error, "exit_status": exit_status,
+            "timed_out": !self.reaped && wait_error.is_none(),
+            "deadline_ms": SFU_REAP_DEADLINE.as_millis(),
+            "elapsed_ms": started.elapsed().as_millis(),
+            "outer_owned_job_deadline_required": !self.reaped,
+        });
+        let written = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.directory.join("server-cleanup.jsonl"))
+            .and_then(|mut file| {
+                writeln!(file, "{details}")?;
+                file.flush()
+            });
+        if !self.reaped || written.is_err() {
+            self.cleanup_failed = true;
+            let error = format!(
+                "owned SFU cleanup incomplete: {details}; evidence_error={:?}; evidence={}; outer owned-job hard deadline remains the final process boundary",
+                written.err(), self.directory.display()
+            );
+            eprintln!("{error}");
+            Err(error)
+        } else {
+            Ok(details)
+        }
+    }
 }
 impl Drop for Server {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-        let _ = fs::remove_dir_all(&self.directory);
+        let cleanup_error = if self.reaped {
+            None
+        } else {
+            self.stop_and_reap("drop_fallback").err()
+        };
+        // A later media assertion must not erase the SFU's original log while
+        // unwinding. Explicit qualification runs may retain successful evidence
+        // too; this affects files only, never process ownership or test verdicts.
+        let keep =
+            std::env::var_os("PIPECAT_LIVEKIT_KEEP_EVIDENCE").is_some_and(|value| value == "1");
+        if keep || std::thread::panicking() || self.cleanup_failed {
+            eprintln!(
+                "owned local SFU pid={} reaped={}; evidence retained at {}",
+                self.child.id(),
+                self.reaped,
+                self.directory.display()
+            );
+        } else {
+            let _ = fs::remove_dir_all(&self.directory);
+        }
+        // Preserve the first panic rather than double-panicking during unwind.
+        // A normal Drop must not let the unchanged audio/data test pass after
+        // an unconfirmed reap. The outer owned job contains any remaining child.
+        if let Some(error) = cleanup_error {
+            if !std::thread::panicking() {
+                panic!("{error}");
+            }
+        }
     }
 }
 fn now() -> u64 {

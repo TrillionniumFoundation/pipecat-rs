@@ -1,0 +1,12 @@
+{
+  "archive": "source-manifests-and-pin-r2.tar.xz",
+  "archive_bytes": 203088,
+  "archive_sha256": "07d7a94198f9bea16309c5c832fa6d75e3e7469afd2c0392bcbdb880cdbe70d0",
+  "original_files_in_archive": 22,
+  "original_file_bytes_in_archive": 7869197,
+  "original_files_verified_against_index": 21,
+  "source_manifests_verified": 16,
+  "raw_and_canonical_digests_independently_verified": true,
+  "index_sha256": "6fdcb0046b86b7ee38029a2c3d4055c3afbc8f2e9c9bdce48c4534459e802f0d",
+  "scope": "All 21 listed original files and their 22nd original manifest are present. The archive hash binds the manifest itself. Original JSON and log bytes are not rewritten."
+}

@@ -1,0 +1,17 @@
+{
+  "scope": "Separate local scratch Linux control; not the desktop full-workspace r3 invocation",
+  "recorded_files": [
+    {
+      "path": "grok-rebind-control.py",
+      "bytes": 7759,
+      "sha256": "4dd4f1adb71246b3d5ce30cec8276a50ae7a111bca198c5d88e9d028ca258db8"
+    },
+    {
+      "path": "grok-rebind-control.json",
+      "bytes": 3559,
+      "sha256": "350c061f7c9f09869a135e63f3b2ec07e0534d03d26faadcfe36c45cef01cb10"
+    }
+  ],
+  "original_oracle_changed": false,
+  "original_r3_cause": "unresolved; control establishes non-unique attribution of EADDRINUSE only"
+}

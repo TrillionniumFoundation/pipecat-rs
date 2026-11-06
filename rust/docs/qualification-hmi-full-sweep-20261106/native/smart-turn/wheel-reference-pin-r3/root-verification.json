@@ -1,0 +1,95 @@
+{
+  "schema": "pipecat-root-smart-turn-c3-output-verification-v1",
+  "created_utc": "2026-11-06T18:07:43.317861+00:00",
+  "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "source_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "observed_immutable_files": 24,
+  "raw_stdout_exactly_equals_recorded_json": true,
+  "native_exit_code": 0,
+  "comparison_exit_code": 1,
+  "fixed_three_run_single_session": true,
+  "comparisons": [
+    {
+      "case": "speech",
+      "expected_f32": 0.9823201894760132,
+      "actual_f32": 0.9685282111167908,
+      "f32_bits": "3f77f177",
+      "signed_delta": -0.013791978359222412,
+      "same_bits_as_c1_all": true,
+      "within_original_tolerance": false
+    },
+    {
+      "case": "tone",
+      "expected_f32": 0.09577557444572449,
+      "actual_f32": 0.28783851861953735,
+      "f32_bits": "3e935f92",
+      "signed_delta": 0.19206294417381287,
+      "same_bits_as_c1_all": true,
+      "within_original_tolerance": false
+    },
+    {
+      "case": "silence",
+      "expected_f32": 0.9870367050170898,
+      "actual_f32": 0.9880069494247437,
+      "f32_bits": "3f7cee06",
+      "signed_delta": 0.0009702444076538086,
+      "same_bits_as_c1_all": true,
+      "within_original_tolerance": false
+    }
+  ],
+  "cleanup": {
+    "pid": 1300318,
+    "pgid": 1300318,
+    "requests": [],
+    "errors": [],
+    "group_before": {
+      "present": false
+    },
+    "leader_exit_before": 0,
+    "surviving_group_after_normal_exit": false,
+    "leader_reaped": true,
+    "leader_exit_after": 0,
+    "group_after": {
+      "present": false
+    },
+    "checks_succeeded": true,
+    "scope": "Owned-PGID signal requests, actual leader reap and non-atomic group probes; never a claim that every descendant was individually joined."
+  },
+  "whole_runner_seconds_including_download": 13.457367914961651,
+  "python_execution": false,
+  "historical_python_oracle_reproduced": false,
+  "earlier_failures_cleared": false,
+  "files": [
+    {
+      "file": "reference.json",
+      "bytes": 40137,
+      "sha256": "db6ce0db08d63c04adaaf15c63af31ccb9a3f2ada54ec2ba54a7600d22eeea59"
+    },
+    {
+      "file": "runtime-start.json",
+      "bytes": 5970,
+      "sha256": "512c7d4103556d391e59a896203c237087a2f39549deb617cec7b8589ef33b93"
+    },
+    {
+      "file": "runtime-status.json",
+      "bytes": 949,
+      "sha256": "e897c91267400a0f67e1a8ac3dd4eac8aa4ae2aab8f7f40b76dff87f473aead8"
+    },
+    {
+      "file": "probe.stdout.log",
+      "bytes": 1837,
+      "sha256": "0420eeb5d615052207b8680e3436f44c297f9337e7b6119f1bea785eeb27e78b"
+    },
+    {
+      "file": "probe.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "independent-review.json",
+      "bytes": 14873,
+      "sha256": "8ca00f0f17807354db19b1a98dac37f1b9aca02764d1804dba2f7b06e0e71eca"
+    }
+  ]
+}

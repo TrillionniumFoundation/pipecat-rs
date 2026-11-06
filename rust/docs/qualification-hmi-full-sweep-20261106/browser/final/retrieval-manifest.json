@@ -1,0 +1,49 @@
+{
+  "host": "desktop",
+  "job_id": "1a1b0db389b-fc05-7360",
+  "files": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/input-evidence-r3/browser-input-acceptance.json",
+      "local": "input-r3.json",
+      "sha256": "97d9dc18fcaff0f3b74e940e8df35875c1caeaa85991020cfce63cad29bf67bf",
+      "size": 14037,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/evidence-r4/browser-acceptance.json",
+      "local": "protocol-r4.json",
+      "sha256": "941a1df589d593719959d18bb2b3645c8f1578cce74ba0e18592c27d6b695869",
+      "size": 7552,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/input-r3.log",
+      "local": null,
+      "sha256": "97d9dc18fcaff0f3b74e940e8df35875c1caeaa85991020cfce63cad29bf67bf",
+      "size": 14037,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/protocol-r4.log",
+      "local": null,
+      "sha256": "941a1df589d593719959d18bb2b3645c8f1578cce74ba0e18592c27d6b695869",
+      "size": 7552,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-input-r3-protocol-r4-results.json",
+      "local": "results.json",
+      "sha256": "eec5e0255e3df0883f365f94656df289e76f9b8fb1744e233f3386c9323174ff",
+      "size": 1135,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/final-browser-source-binding.json",
+      "local": "source-binding.json",
+      "sha256": "c87339cfa701c4902a2b80cba1f93ed009fa956eea6d25161dfbdf578ef10d08",
+      "size": 862,
+      "eof": true
+    }
+  ],
+  "recovery": "Exact retained MCP file text restored after local execution entrance replacement; SHA256/bytes rechecked."
+}

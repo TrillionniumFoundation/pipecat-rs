@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-11-06",
+  "scope": "read_only_device_and_deployment_inventory_not_product_qualification",
+  "baseline_source": "rust/docs/ENVIRONMENT_AUDIT_20261106.json at 5e889453a6956b03c6d0745663a87b0e604adebd",
+  "device_effects_performed": false,
+  "credentials_read": false,
+  "permissions_modified": false,
+  "production_writes": false,
+  "original_project_environment": {
+    "environment_id": "ccarenv_b64_Y2NhcmVudl85ZDBiZTQ3MjU3MjQ4MTkxOWY1N2Y5M2Y1ZDZhZWY1Mw",
+    "callable_executor_found": false,
+    "identity_recovered": false,
+    "historical_codec": "ALC897",
+    "historical_owners_present": false
+  },
+  "unknowns": [
+    {
+      "host": "desktop",
+      "job_id": "1a1b01f09b3-fc05-6e3b",
+      "historical": true,
+      "reconciliation": "process_status INVALID_ARGUMENT/FileNotFoundError; same original id retained",
+      "replayed": false
+    },
+    {
+      "host": "ai395",
+      "job_id": "1a1b04f07ab-fc05-6fa9",
+      "idempotency_key": "pipecat-codec-identity-20261106-ai395-r1",
+      "scope": "read-only codec identity request",
+      "launch_state": "launch_unknown",
+      "reconciliation": "process_status INVALID_ARGUMENT/FileNotFoundError",
+      "replayed": false
+    }
+  ],
+  "findings": {
+    "pocket4_codec": "ALC245",
+    "rog_codec": "ALC294",
+    "historic_ALC897_host": "not established",
+    "pocket4_runtime": "existing Python Pipecat 1.12.0 / SenseVoice / Melo deployment, not the Rust HMI checkout",
+    "pocket4_container": "hepta-pocket-voice-lab",
+    "container_devices": [],
+    "container_network": "none",
+    "container_read_only_root": true,
+    "pocket4_owner": "existing local SQLite voice ledger and private sockets; does not establish canonical Hepta conversation owner",
+    "native_models_required": "adopted Whisper/Piper/Silero manifests and immutable digests not located in this deployment",
+    "rust_hmi_owner_socket": "not established",
+    "product_qualification": "HOLD"
+  },
+  "evidence_selection": {
+    "source_capture_sha256": "0418663bd69e761e280f9bb440c5e1fa2414c6eb879b7baaf53e4932e0069850",
+    "policy": "Fresh job identity/status and qualification-relevant JSON output selected; the embedded historical deployment narrative is not reused as current Rust acceptance. Unrelated deployment narrative and credential-path listings are omitted. No success or failure state is changed."
+  },
+  "observations": [
+    {
+      "host": "pocket4",
+      "job_id": "1a1b04cee32-fc05-6f99",
+      "state": "succeeded",
+      "exit_code": 0,
+      "output_complete": true,
+      "selected_output": [
+        {
+          "project": "/home/alex/hepta-pipecat-voice",
+          "exists": true
+        },
+        {
+          "tool": "whisper-cli",
+          "path": null
+        },
+        {
+          "tool": "piper",
+          "path": null
+        },
+        {
+          "command": [
+            "aplay",
+            "-l"
+          ],
+          "rc": 0,
+          "stdout": "**** List of PLAYBACK Hardware Devices ****\ncard 0: Generic [HD-Audio Generic], device 3: HDMI 0 [HDMI 0]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 0: Generic [HD-Audio Generic], device 7: HDMI 1 [HDMI 1]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 0: Generic [HD-Audio Generic], device 8: HDMI 2 [HDMI 2]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 0: Generic [HD-Audio Generic], device 9: HDMI 3 [HDMI 3]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 1: EG25GC [EG25-GC], device 0: USB Audio [USB Audio]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 2: Generic_1 [HD-Audio Generic], device 0: ALC245 Analog [ALC245 Analog]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 3: Pocket4AndroidL [Loopback], device 0: Loopback PCM [Loopback PCM]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 3: Pocket4AndroidL [Loopback], device 1: Loopback PCM [Loopback PCM]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\n",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "arecord",
+            "-l"
+          ],
+          "rc": 0,
+          "stdout": "**** List of CAPTURE Hardware Devices ****\ncard 1: EG25GC [EG25-GC], device 0: USB Audio [USB Audio]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 2: Generic_1 [HD-Audio Generic], device 0: ALC245 Analog [ALC245 Analog]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 3: Pocket4AndroidL [Loopback], device 0: Loopback PCM [Loopback PCM]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\ncard 3: Pocket4AndroidL [Loopback], device 1: Loopback PCM [Loopback PCM]\n  Subdevices: 1/1\n  Subdevice #0: subdevice #0\n",
+          "stderr": ""
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "host": "rog",
+      "job_id": "1a1b04eccf8-fc05-6fa4",
+      "state": "succeeded",
+      "exit_code": 0,
+      "output_complete": true,
+      "selected_output": [
+        {
+          "path": "/proc/asound/card0/codec#0",
+          "identity": [
+            "Codec: ATI R6xx HDMI",
+            "Address: 0",
+            "Vendor Id: 0x1002aa01",
+            "Subsystem Id: 0x00aa0100"
+          ]
+        },
+        {
+          "path": "/proc/asound/card1/codec#0",
+          "identity": [
+            "Codec: Realtek ALC294",
+            "Address: 0",
+            "Vendor Id: 0x10ec0294",
+            "Subsystem Id: 0x10431fb3"
+          ]
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "host": "pocket4",
+      "job_id": "1a1b0503d31-fc05-6fb1",
+      "state": "succeeded",
+      "exit_code": 0,
+      "output_complete": true,
+      "selected_output": [
+        {
+          "source": "/home/alex/hepta-pipecat-voice/hepta_voice/models.py",
+          "path_lines": [
+            "        self.asr=sherpa_onnx.OfflineRecognizer.from_sense_voice(model=str(p/'model.int8.onnx'),tokens=str(p/'tokens.txt'),num_threads=2,provider='cpu',language='zh',use_itn=False)",
+            "        cfg=sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=str(p/'model.onnx'),tokens=str(p/'tokens.txt'),lexicon=str(p/'lexicon.txt')),num_threads=2,provider='cpu'),rule_fsts=','.join(str(p/x) for x in ('phone.fst','date.fst','number.fst')),max_num_sentences=1)"
+          ]
+        },
+        {
+          "directory": "/home/alex/.local/share/hepta-pipecat/models",
+          "entries": [
+            "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
+            "vits-melo-tts-zh_en"
+          ]
+        },
+        {
+          "command": "podman ps names",
+          "rc": 0,
+          "stdout": "hepta-pocket-voice-lab\n",
+          "stderr": ""
+        },
+        {
+          "container": "hepta-pocket-voice-lab",
+          "inspect_devices_network_root": "[] none true\n",
+          "rc": 0
+        }
+      ],
+      "stderr": ""
+    }
+  ]
+}

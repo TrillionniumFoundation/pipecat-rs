@@ -1,0 +1,2267 @@
+{
+  "schema": "pipecat-final-runtime-originals-v1",
+  "observed_unix": 1793989647.8996677,
+  "directories": [
+    "evidence/webrtc-stress-pin-r1",
+    "requests/webrtc-stress-launch-pin-r1",
+    "evidence/aishell-human-pin-r1",
+    "requests/aishell-human-launch-pin-r1",
+    "evidence/smart-turn-wheel-reference-pin-r3",
+    "requests/smart-turn-wheel-reference-pin-r3",
+    "requests/smart-turn-wheel-launch-pin-r3",
+    "evidence/final-diagnostic-source-preparation-r1",
+    "requests/moq-diagnostic-launch-pin-r1",
+    "evidence/moq-diagnostic-pin-r1",
+    "requests/local-sfu-pin-r2",
+    "requests/chinese-synthetic-pin-r2",
+    "requests/piper-genuine-owner-pin-r2",
+    "requests/piper-invalid-bounds-pin-r2",
+    "requests/piper-cancel-reload-pin-r2",
+    "requests/piper-long-pipeline-pin-r2",
+    "requests/whisper-owner-01-pin-r2",
+    "requests/whisper-owner-02-pin-r2",
+    "requests/whisper-owner-03-pin-r2",
+    "requests/whisper-owner-04-pin-r2",
+    "requests/whisper-owner-05-pin-r2",
+    "requests/whisper-owner-06-pin-r2",
+    "requests/whisper-owner-07-pin-r2",
+    "requests/whisper-owner-08-pin-r2",
+    "requests/whisper-owner-09-pin-r2",
+    "requests/whisper-owner-10-pin-r2",
+    "requests/whisper-owner-11-pin-r2",
+    "requests/whisper-owner-12-pin-r2",
+    "requests/whisper-owner-13-pin-r2"
+  ],
+  "files": [
+    {
+      "name": "desktop_moq_diagnostic_pin_r1.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_moq_diagnostic_pin_r1.py",
+      "bytes": 33499,
+      "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/SHA256SUMS",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/SHA256SUMS",
+      "bytes": 1775,
+      "sha256": "e9a5fff7d3a8d8c2fda0aa15c1d251d18534531586672b10b88c7918ed945f0f"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/build-normal-example.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/build-normal-example.stderr.log",
+      "bytes": 188,
+      "sha256": "c90e912c87326f52d038628e9d96445d23f51159b77577d23900e852641ed07e"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/build-normal-example.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/build-normal-example.stdout.log",
+      "bytes": 200500,
+      "sha256": "c88d7ac34b25c22f626e825074a42e64b4216979cd89e1a98d6a68a5a1f0b45c"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/cargo-version.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/cargo-version.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/cargo-version.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/cargo-version.stdout.log",
+      "bytes": 36,
+      "sha256": "1f88eaf7fe1aaec83184752cf4c944cd22f00184136ff36a3e4c318cc60ef566"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/compiler-artifact.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/compiler-artifact.json",
+      "bytes": 1156,
+      "sha256": "5b0d8f04b88fbd57ff53cbe7e67860e96d54c714729fb9e8c606e9834e831a77"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/executed-manifest_helper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/executed-manifest_helper.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/executed-script.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/executed-script.py",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/human-chinese-source-actual.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/human-chinese-source-actual.json",
+      "bytes": 700,
+      "sha256": "1f67bee54368ee8319a2c4bdd0087b5141dfce32fcaf9430423de37d4c1c17e2"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/inference.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/inference.json",
+      "bytes": 715,
+      "sha256": "0bfd1a9ad0817f17b8f5da1555dd75a29f3ad841774159c9571b22b5d34b5817"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/inference.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/inference.stderr.log",
+      "bytes": 28614,
+      "sha256": "1b9a732f3550df75b2683e62a9c177f28eb1cfbabcc3423203709b32d96e5705"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/inference.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/inference.stdout.log",
+      "bytes": 715,
+      "sha256": "0bfd1a9ad0817f17b8f5da1555dd75a29f3ad841774159c9571b22b5d34b5817"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/metadata.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/metadata.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/metadata.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/metadata.stdout.log",
+      "bytes": 454312,
+      "sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/preceding-default.gate.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/preceding-default.gate.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/reference.txt",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/reference.txt",
+      "bytes": 36,
+      "sha256": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/result.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/result.json",
+      "bytes": 21639,
+      "sha256": "63e3a40d1075d53f65c95b3877d71d34f632b9667540f726a994379d1ca49b35"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/rustc-version.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/rustc-version.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/rustc-version.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/rustc-version.stdout.log",
+      "bytes": 36,
+      "sha256": "8dc912acd5bfeafc70b01b1d2a2afb0844afa02f5dba2f1ae8d5c212d005afb6"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/source-after.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/source-before.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/base-head.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/base-head.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/base-head.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/base-head.stdout.log",
+      "bytes": 41,
+      "sha256": "f328976775aea0810d4fb332f904eb9661deeefc8c462d4347ed821e1c0ecc10"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/base-status.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/base-status.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/base-status.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/base-status.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/checkout-published.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/checkout-published.stderr.log",
+      "bytes": 199,
+      "sha256": "84d06d39c51fbd90f5bb0ae33246777a93bad7c74717501c51cda2e6676d903f"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/checkout-published.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/checkout-published.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/contract.original",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/contract.original",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/executed-preparation.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/executed-preparation.py",
+      "bytes": 10621,
+      "sha256": "34133aef00c41d9f2beb767e6274fadd811ffcf81a008d3932733861dd8f058f"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/fetch-published.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/fetch-published.stderr.log",
+      "bytes": 136,
+      "sha256": "d8926e3ec67df5dda75b054af25c16210a8440e547ccc73a2527f79e3e0c085e"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/fetch-published.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/fetch-published.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/final-head.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/final-head.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/final-head.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/final-head.stdout.log",
+      "bytes": 41,
+      "sha256": "c23c5fd5fb1c597470b303b60ed6b808b93bc4a869875bc4576bd6003fe1eb00"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/final-status.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/final-status.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/final-status.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/final-status.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/names.original",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/names.original",
+      "bytes": 6882,
+      "sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/preceding-c3.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/preceding-c3.json",
+      "bytes": 40137,
+      "sha256": "db6ce0db08d63c04adaaf15c63af31ccb9a3f2ada54ec2ba54a7600d22eeea59"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/preparation.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/preparation.json",
+      "bytes": 22411,
+      "sha256": "af9654f672c7aa6d348531e225c5d94bfd92f993b81f7c32b55810fdf6a52abf"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/published-diff.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/published-diff.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/published-diff.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/published-diff.stdout.log",
+      "bytes": 10131,
+      "sha256": "bab452b5e685f78372ae4ef742802658183a5b06763964ba152d52b2a6e3058d"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/published-tree.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/published-tree.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/published-tree.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/published-tree.stdout.log",
+      "bytes": 41,
+      "sha256": "ad76d29f490ceff344dad0d0d582faf1cf9ff29a584180fd371d1e785115627c"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/run_full_gate.py.after",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/run_full_gate.py.after",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/run_full_gate.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/run_full_gate.py.before",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/runner.original",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/runner.original",
+      "bytes": 33499,
+      "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/source-after.json",
+      "bytes": 516509,
+      "sha256": "39646109ab95f26af2058228442972c1e6844b7c15d836ca4b9c3c3135905966",
+      "source_files_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/final-diagnostic-source-preparation-r1/source-before.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/base-tree.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/base-tree.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/base-tree.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/base-tree.stdout.log",
+      "bytes": 41,
+      "sha256": "13a4ee5a02706fd2801a316df5293b544aaa8ee16835e44b6a5eea2a86b8fccb"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/binding.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/binding.stdout.log",
+      "bytes": 1254750,
+      "sha256": "90f98749912b4dfe9433580ff2386e5ed0b1c811437c593683268ef5ef2a2f8f"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/compiler-artifact.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/compiler-artifact.json",
+      "bytes": 1036,
+      "sha256": "921b861725079a37dac6085b3813a4064963cccff189ec701cc6d2ee90574a4c"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/environment.json",
+      "bytes": 2094,
+      "sha256": "16c5f7328e5bae8baee2427e4a82269d400432bc9fd763a61e02a08d325c9355"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/head_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/head_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/head_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/head_after.stdout.log",
+      "bytes": 41,
+      "sha256": "c23c5fd5fb1c597470b303b60ed6b808b93bc4a869875bc4576bd6003fe1eb00"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/metadata.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/metadata.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/metadata.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/metadata.stdout.log",
+      "bytes": 454312,
+      "sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/original-case-names.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/original-case-names.json",
+      "bytes": 6882,
+      "sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/preceding-c3.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/preceding-c3.json",
+      "bytes": 40137,
+      "sha256": "db6ce0db08d63c04adaaf15c63af31ccb9a3f2ada54ec2ba54a7600d22eeea59"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/repetitions.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/repetitions.json",
+      "bytes": 351652,
+      "sha256": "c9fe5d9258c85932e57a768c9c7015f7161c90354ac7dbcea078fbc028ab5967"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-01.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-01.stdout.log",
+      "bytes": 7561,
+      "sha256": "08046938160ecbb5223d3178ebccfa532a90c8a765f27345c339bc02a581edc5"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-02.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-02.stdout.log",
+      "bytes": 7561,
+      "sha256": "27444c3a080f1ef5b841a68157facb04b94f8aab6901f506107cf4ddd8f2e4dc"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-03.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-03.stdout.log",
+      "bytes": 7561,
+      "sha256": "014c5171c2d723b62f27f5b3cba25de5ec1858b0c416dbaae054709cc98670cc"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-04.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-04.stdout.log",
+      "bytes": 7561,
+      "sha256": "e89310ba787a1fdb0a45321b445840724f7377124fe0d5cbf1d85576a6397c67"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-05.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-05.stdout.log",
+      "bytes": 7561,
+      "sha256": "de2fa12930370f8c9c126b7fd560c6062c359e319ef00cd40c01b26fe89dc1bb"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-06.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-06.stdout.log",
+      "bytes": 7561,
+      "sha256": "dbff08c3deec246b94288d6ce0d83053cea895d4c0f4edce38f7ba3852ee2f3f"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-07.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-07.stdout.log",
+      "bytes": 7561,
+      "sha256": "4f19be2d62f618884bcc41b02adf0e175568f395ddb09fc8e9434586d129ada4"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-08.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-08.stdout.log",
+      "bytes": 7561,
+      "sha256": "0a22bad660018f6c99f855f5ce5cb69875ee2c2ad9273595dee83f74d8cb5fd9"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-09.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-09.stdout.log",
+      "bytes": 7561,
+      "sha256": "62375abc9c7c8266d2be2336a27f8380a58b47760b1f84c0ed6f3040845c4227"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-10.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-10.stdout.log",
+      "bytes": 7561,
+      "sha256": "98efc94748e9ee1e9c49c8a769a8c87ce3d54522dbc3855403eac445238a1b83"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-11.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-11.stdout.log",
+      "bytes": 7561,
+      "sha256": "5bc976bd611c2d6149eab80edbc0052bcefe8c8c2048cb832b7385bc4f8e67a0"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-12.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-12.stdout.log",
+      "bytes": 7561,
+      "sha256": "4b16193ee9acb9a29c0930ca1cda8cc43cbccdc7491e604b08684e41ab94fe84"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-13.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-13.stdout.log",
+      "bytes": 7561,
+      "sha256": "7a11dabc247ce6e70b98078f5a4fdb432cb73ef827fa3ab62f8f885706eef77c"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-14.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-14.stdout.log",
+      "bytes": 7561,
+      "sha256": "e40aae6c4b2abf4bc3ef65b2a9ae35d494c9b55ab398c937fe9bfb1877e94b9e"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-15.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-15.stdout.log",
+      "bytes": 7561,
+      "sha256": "a87574b2ca8a2078ac10a28139d6dfe174ea526fd87cef36dfcdaf76d04cd98e"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-16.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-16.stdout.log",
+      "bytes": 7561,
+      "sha256": "dd60987f5200740b8588447b3f1439c62738ace27e0ac2bcc5efbbe4f86998dc"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-17.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-17.stdout.log",
+      "bytes": 7561,
+      "sha256": "a9721b602d4154df069c1806171cefa93c2f3baa2e99039853cb9abb5bd13631"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-18.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-18.stdout.log",
+      "bytes": 7561,
+      "sha256": "eb4379b97bd18a0030d276a5b7cc68a300201990725aa69cefc259c60699b9b5"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-19.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-19.stdout.log",
+      "bytes": 7561,
+      "sha256": "f5560f19eaf5aa3963d09b9fa88aa49f28af970e07b4b28cc7bb77a58fa69797"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/round-20.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/round-20.stdout.log",
+      "bytes": 7561,
+      "sha256": "d988d9fec29da5adeddfeb9bae26603fde6c1ab223ca49f12f99eb1ebb120afc"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/selection.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/selection.stdout.log",
+      "bytes": 6984,
+      "sha256": "64cc302945e15f88ba099d57e1740f25c32ef9435858cea2007239462ab512c1"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-after-paths.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-after-paths.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-after-paths.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-after-paths.stdout.log",
+      "bytes": 140122,
+      "sha256": "98c82af82d27ff9ecba9d855aa4225442505850b9de4bfd5f51ec551d25384eb"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-after.json",
+      "bytes": 516509,
+      "sha256": "39646109ab95f26af2058228442972c1e6844b7c15d836ca4b9c3c3135905966",
+      "source_files_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-before-paths.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-before-paths.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-before-paths.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-before-paths.stdout.log",
+      "bytes": 140122,
+      "sha256": "98c82af82d27ff9ecba9d855aa4225442505850b9de4bfd5f51ec551d25384eb"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-before.json",
+      "bytes": 516509,
+      "sha256": "39646109ab95f26af2058228442972c1e6844b7c15d836ca4b9c3c3135905966",
+      "source_files_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-contract.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-contract.json",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-diff.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-diff.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-diff.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-diff.stdout.log",
+      "bytes": 10131,
+      "sha256": "bab452b5e685f78372ae4ef742802658183a5b06763964ba152d52b2a6e3058d"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-head.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-head.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-head.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-head.stdout.log",
+      "bytes": 41,
+      "sha256": "c23c5fd5fb1c597470b303b60ed6b808b93bc4a869875bc4576bd6003fe1eb00"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-status.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-status.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-status.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-status.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-tree.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-tree.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-tree.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/source-tree.stdout.log",
+      "bytes": 41,
+      "sha256": "ad76d29f490ceff344dad0d0d582faf1cf9ff29a584180fd371d1e785115627c"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/status_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/status_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/status_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/status_after.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/tree_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/tree_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/tree_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/moq-diagnostic-pin-r1/tree_after.stdout.log",
+      "bytes": 41,
+      "sha256": "ad76d29f490ceff344dad0d0d582faf1cf9ff29a584180fd371d1e785115627c"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/executed-runner.py",
+      "bytes": 36363,
+      "sha256": "7d23169a11c4790a4cb7294932fb43143d6933c08e1f041ef34daee5b7b22e98"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-aishell.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-aishell.json",
+      "bytes": 21639,
+      "sha256": "63e3a40d1075d53f65c95b3877d71d34f632b9667540f726a994379d1ca49b35"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-default.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-expanded.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-expanded.json",
+      "bytes": 11363,
+      "sha256": "ce4d81055dd92eccb6b3b3b259b649c8359c9c6b291d94e1937f7c66d70fd40a"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-grok.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-grok.json",
+      "bytes": 42841,
+      "sha256": "f514f9b21487e9937f7f94de1f469e8ca167d8870c427daea813600a6b87253a"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-models.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-models.json",
+      "bytes": 34345,
+      "sha256": "633b91da9cf5c65211cb2cbf3c978c260273e5eacb4aa0b5197ad0f6234656a7"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/preceding-webrtc.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/preceding-webrtc.json",
+      "bytes": 151686,
+      "sha256": "0a117dafca601af38f16541c6cecf515b31f702ab51706dd0acea52bba94c183"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/probe.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/probe.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/probe.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/probe.stdout.log",
+      "bytes": 1837,
+      "sha256": "0420eeb5d615052207b8680e3436f44c297f9337e7b6119f1bea785eeb27e78b"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/reference.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/reference.json",
+      "bytes": 40137,
+      "sha256": "db6ce0db08d63c04adaaf15c63af31ccb9a3f2ada54ec2ba54a7600d22eeea59"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/source-after.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3/source-before.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/binding.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/binding.log",
+      "bytes": 217799,
+      "sha256": "8c5dd79f035545dac5392a750fa1787877b683a5d601d39de54cfe03e953652a"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/metadata.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/metadata.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/metadata.stdout.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/metadata.stdout.json",
+      "bytes": 454312,
+      "sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/repetitions.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/repetitions.json",
+      "bytes": 151686,
+      "sha256": "0a117dafca601af38f16541c6cecf515b31f702ab51706dd0acea52bba94c183"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-001.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-001.log",
+      "bytes": 180,
+      "sha256": "44206e0353e43f44e08dcfdc74c532c2ddb2e9fe2d5091b62f23bfcd1547249e"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-002.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-002.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-003.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-003.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-004.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-004.log",
+      "bytes": 180,
+      "sha256": "ef6397bf3e89e6091aa74377a257841438ed30199b05c3a53cf62a620dc669d2"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-005.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-005.log",
+      "bytes": 180,
+      "sha256": "9de81853d66460f532a458db1416968e2e187271d603914d8b8049774c5f3517"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-006.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-006.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-007.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-007.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-008.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-008.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-009.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-009.log",
+      "bytes": 180,
+      "sha256": "83adb6eaf88fd24dd39994905ef49e67cac5303aaed97be962792e20603c4d93"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-010.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-010.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-011.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-011.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-012.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-012.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-013.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-013.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-014.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-014.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-015.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-015.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-016.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-016.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-017.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-017.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-018.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-018.log",
+      "bytes": 180,
+      "sha256": "dd0c590d4e9fa708098af0112e15e795972763caa40b4b3d9066d02cc79b206f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-019.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-019.log",
+      "bytes": 180,
+      "sha256": "83adb6eaf88fd24dd39994905ef49e67cac5303aaed97be962792e20603c4d93"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-020.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-020.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-021.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-021.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-022.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-022.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-023.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-023.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-024.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-024.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-025.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-025.log",
+      "bytes": 180,
+      "sha256": "83adb6eaf88fd24dd39994905ef49e67cac5303aaed97be962792e20603c4d93"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-026.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-026.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-027.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-027.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-028.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-028.log",
+      "bytes": 180,
+      "sha256": "dd0c590d4e9fa708098af0112e15e795972763caa40b4b3d9066d02cc79b206f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-029.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-029.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-030.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-030.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-031.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-031.log",
+      "bytes": 180,
+      "sha256": "83adb6eaf88fd24dd39994905ef49e67cac5303aaed97be962792e20603c4d93"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-032.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-032.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-033.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-033.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-034.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-034.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-035.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-035.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-036.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-036.log",
+      "bytes": 180,
+      "sha256": "83adb6eaf88fd24dd39994905ef49e67cac5303aaed97be962792e20603c4d93"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-037.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-037.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-038.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-038.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-039.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-039.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-040.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-040.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-041.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-041.log",
+      "bytes": 180,
+      "sha256": "c6b20a1b3eafcbd7ec74cef5a08da1bf751eda14ac4bd0ecd934aed4affcfcc0"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-042.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-042.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-043.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-043.log",
+      "bytes": 180,
+      "sha256": "4a3d05e7bd4f2d1ed6f7f3199e03858e67adc0fbed27109aa6ed24072f9b8375"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-044.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-044.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-045.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-045.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-046.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-046.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-047.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-047.log",
+      "bytes": 180,
+      "sha256": "ba316bd93ff8bc8ab305adc93d2fd6dbd7515766bf9d9696b5a4a04436bdbb77"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-048.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-048.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-049.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-049.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-050.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-050.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-051.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-051.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-052.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-052.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-053.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-053.log",
+      "bytes": 180,
+      "sha256": "ba316bd93ff8bc8ab305adc93d2fd6dbd7515766bf9d9696b5a4a04436bdbb77"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-054.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-054.log",
+      "bytes": 180,
+      "sha256": "b8a9902e93ae2c473c049f140b5273b8fa55e6b9e878ed2a85b84661a79253d9"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-055.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-055.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-056.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-056.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-057.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-057.log",
+      "bytes": 180,
+      "sha256": "dd0c590d4e9fa708098af0112e15e795972763caa40b4b3d9066d02cc79b206f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-058.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-058.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-059.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-059.log",
+      "bytes": 180,
+      "sha256": "fb0975a2ef8b18c83a3283283a1e5ffe4cb586d608e791c8818da15df84a6fe4"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-060.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-060.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-061.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-061.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-062.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-062.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-063.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-063.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-064.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-064.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-065.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-065.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-066.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-066.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-067.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-067.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-068.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-068.log",
+      "bytes": 180,
+      "sha256": "3d1b8c49f82c9640fcc6e767dd3cc6e31f21a54f0193d12f49c5e0fdbd77a862"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-069.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-069.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-070.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-070.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-071.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-071.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-072.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-072.log",
+      "bytes": 180,
+      "sha256": "b8a9902e93ae2c473c049f140b5273b8fa55e6b9e878ed2a85b84661a79253d9"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-073.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-073.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-074.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-074.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-075.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-075.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-076.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-076.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-077.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-077.log",
+      "bytes": 180,
+      "sha256": "dd0c590d4e9fa708098af0112e15e795972763caa40b4b3d9066d02cc79b206f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-078.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-078.log",
+      "bytes": 180,
+      "sha256": "b8a9902e93ae2c473c049f140b5273b8fa55e6b9e878ed2a85b84661a79253d9"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-079.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-079.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-080.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-080.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-081.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-081.log",
+      "bytes": 180,
+      "sha256": "64c63e0b6d58ebf1c682c083a3165772e5eae6bb1023b8aab8587922e70f4759"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-082.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-082.log",
+      "bytes": 180,
+      "sha256": "faf07492aae6fef3be37d5a9d7272eb41a84f5164a93992c4f4b9bc5d02ccab3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-083.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-083.log",
+      "bytes": 180,
+      "sha256": "c8510156418f7fb66e2848759ef1d12c9423def7dcb30699b940b2681c651793"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-084.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-084.log",
+      "bytes": 180,
+      "sha256": "9de81853d66460f532a458db1416968e2e187271d603914d8b8049774c5f3517"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-085.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-085.log",
+      "bytes": 180,
+      "sha256": "b8a9902e93ae2c473c049f140b5273b8fa55e6b9e878ed2a85b84661a79253d9"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-086.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-086.log",
+      "bytes": 180,
+      "sha256": "fb0975a2ef8b18c83a3283283a1e5ffe4cb586d608e791c8818da15df84a6fe4"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-087.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-087.log",
+      "bytes": 180,
+      "sha256": "8cf57e617b696636b23057a293870a338c286325c5defdb936a1a07a5b44c54d"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-088.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-088.log",
+      "bytes": 180,
+      "sha256": "4a3d05e7bd4f2d1ed6f7f3199e03858e67adc0fbed27109aa6ed24072f9b8375"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-089.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-089.log",
+      "bytes": 180,
+      "sha256": "831e274a6abc2e294fd0e034aae4a924835f5672449745d45f0fa5ab27b4afe3"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-090.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-090.log",
+      "bytes": 180,
+      "sha256": "fb0975a2ef8b18c83a3283283a1e5ffe4cb586d608e791c8818da15df84a6fe4"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-091.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-091.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-092.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-092.log",
+      "bytes": 180,
+      "sha256": "c6b20a1b3eafcbd7ec74cef5a08da1bf751eda14ac4bd0ecd934aed4affcfcc0"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-093.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-093.log",
+      "bytes": 180,
+      "sha256": "ba316bd93ff8bc8ab305adc93d2fd6dbd7515766bf9d9696b5a4a04436bdbb77"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-094.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-094.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-095.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-095.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-096.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-096.log",
+      "bytes": 180,
+      "sha256": "b8a9902e93ae2c473c049f140b5273b8fa55e6b9e878ed2a85b84661a79253d9"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-097.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-097.log",
+      "bytes": 180,
+      "sha256": "701eece5974948fa67eb6d744f2977b04e1187a6dbff4119be3a7ed063de1da6"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-098.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-098.log",
+      "bytes": 180,
+      "sha256": "4a3d05e7bd4f2d1ed6f7f3199e03858e67adc0fbed27109aa6ed24072f9b8375"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-099.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-099.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/round-100.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/round-100.log",
+      "bytes": 180,
+      "sha256": "9b63a6a77ae1ea07065e3ba5f619551ed71f28f55c5c2c7985fb3484312c801f"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/selection.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/selection.log",
+      "bytes": 84,
+      "sha256": "e62a6492a040aed83d5636aeebb6543b45b7975d640ac715c1cd21cd65ae265a"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/source-after.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/source-before.json",
+      "bytes": 492043,
+      "sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "source_files_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/bootstrap.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/bootstrap.py",
+      "bytes": 6951,
+      "sha256": "9a1a71a84c80ad052fe1deca6b1b518d977cfabb34257c8f906161b0c7369f9c"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py.after",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py.after",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py.before",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/launcher.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/launcher.json",
+      "bytes": 10239,
+      "sha256": "a00bb9b8a3dd81e141a6769fffcb15d914e3e3a516409137be386201fbaa15fa"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/preceding-webrtc-launcher.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/preceding-webrtc-launcher.json",
+      "bytes": 8785,
+      "sha256": "a4dc969f5e64f161c6ba1574956aee88db86ec82e1c061748543c6092c38d619"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/preceding-webrtc-repetitions.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/preceding-webrtc-repetitions.json",
+      "bytes": 151686,
+      "sha256": "0a117dafca601af38f16541c6cecf515b31f702ab51706dd0acea52bba94c183"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/run_full_gate.py.after",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/run_full_gate.py.after",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/aishell-human-launch-pin-r1/run_full_gate.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/run_full_gate.py.before",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/argv.json",
+      "bytes": 355,
+      "sha256": "57449b91affad77f24a45d96b4d7d0793e78d6eeb349dc779118bd942cf007d9"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/environment.json",
+      "bytes": 2231,
+      "sha256": "83f52501f49d2dc2351a7fb1c44d095d84bbe819f40475be08441c1bf62af837"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/chinese-synthetic-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/chinese-synthetic-pin-r2/runner-execution.json",
+      "bytes": 2809,
+      "sha256": "508b3d6b7bf9254f539c43b6dea7c2d26cc15812daff6bc6b376506ab51857ce"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/argv.json",
+      "bytes": 236,
+      "sha256": "bbbfcde2cb21d9220283df56349e0def8ed7f88934a11fc1f9b156f4dbf28c9a"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/environment.json",
+      "bytes": 2258,
+      "sha256": "c6043719330a534061461ecd723b8c1c5f4b58b3a431c06f6b346c836e9ae716"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/local-sfu-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/local-sfu-pin-r2/runner-execution.json",
+      "bytes": 2652,
+      "sha256": "95b9a0b520af040423f2060ed5b09d638c58050aeea739146a8127d3c12e47e0"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/bootstrap.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/bootstrap.json",
+      "bytes": 2590,
+      "sha256": "566ca051c8518e8ccdc8a856676942e2fcb3c5e69d0dd33b84c078ff8e71174a"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/bootstrap.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/bootstrap.py",
+      "bytes": 4160,
+      "sha256": "7c44f6c6094663205a3e1598f8e4f1ffbc0b25722a1b225850ad760667aa68aa"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/desktop_moq_diagnostic_pin_r1.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/desktop_moq_diagnostic_pin_r1.py.before",
+      "bytes": 33499,
+      "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/moq-diagnostic-pin-r1.case-names.json.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/moq-diagnostic-pin-r1.case-names.json.before",
+      "bytes": 6882,
+      "sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/moq-diagnostic-pin-r1.source-contract.json.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/moq-diagnostic-pin-r1.source-contract.json.before",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/run_full_gate.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/run_full_gate.py.before",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/moq-diagnostic-launch-pin-r1/source-preparation.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-launch-pin-r1/source-preparation.json",
+      "bytes": 22411,
+      "sha256": "af9654f672c7aa6d348531e225c5d94bfd92f993b81f7c32b55810fdf6a52abf"
+    },
+    {
+      "name": "requests/moq-diagnostic-pin-r1.case-names.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-pin-r1.case-names.json",
+      "bytes": 6882,
+      "sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+    },
+    {
+      "name": "requests/moq-diagnostic-pin-r1.source-contract.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/moq-diagnostic-pin-r1.source-contract.json",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/argv.json",
+      "bytes": 358,
+      "sha256": "82cf1f5870da86dedd1e7ed092082df36e819b35480c2a48571beb3779fa7547"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/environment.json",
+      "bytes": 2232,
+      "sha256": "9e4da75997568bf32f10e0ead258794074bd1fdee74b3ab6a5c59e160d61bb19"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/piper-cancel-reload-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-cancel-reload-pin-r2/runner-execution.json",
+      "bytes": 2822,
+      "sha256": "908ffc500d9efb6f9cab7899725e6ed0649e727980f7f8762bba59238fcb1d43"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/argv.json",
+      "bytes": 357,
+      "sha256": "da1da8251b33523a20d6f676c901e159acb7cce0ef96084f409a0abb0c15c408"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/environment.json",
+      "bytes": 2232,
+      "sha256": "9e4da75997568bf32f10e0ead258794074bd1fdee74b3ab6a5c59e160d61bb19"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/piper-genuine-owner-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-genuine-owner-pin-r2/runner-execution.json",
+      "bytes": 2821,
+      "sha256": "572ba884de18f4249b8fe0301064ef791a473b5d40d6206c3fa77f523d1b0c24"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/argv.json",
+      "bytes": 351,
+      "sha256": "60412d32dab31e78b0a97bc3a8566f91d1571cebe7d7f9f4ae04b7519526e165"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/environment.json",
+      "bytes": 2232,
+      "sha256": "9e4da75997568bf32f10e0ead258794074bd1fdee74b3ab6a5c59e160d61bb19"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/piper-invalid-bounds-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-invalid-bounds-pin-r2/runner-execution.json",
+      "bytes": 2819,
+      "sha256": "c4d8b3af1f3c14d35a6d44c38c9edf910a632ac396cfa26bd4381ff925534491"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/argv.json",
+      "bytes": 368,
+      "sha256": "8cfd763de3eb26a12157943f965086f764bce6839d83400d3a1a8e99cb3659de"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/environment.json",
+      "bytes": 2232,
+      "sha256": "9e4da75997568bf32f10e0ead258794074bd1fdee74b3ab6a5c59e160d61bb19"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/piper-long-pipeline-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/piper-long-pipeline-pin-r2/runner-execution.json",
+      "bytes": 2832,
+      "sha256": "a123cfc762e93bf74f03b7a3dcf204046a675c382db2a13cb490ca1baf675cf3"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/bootstrap.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/bootstrap.json",
+      "bytes": 1783,
+      "sha256": "7411e2191b4f6ace67f40020f797292e65fca7ac8c01bbaae60d98626e3bdc25"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/bootstrap.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/bootstrap.py",
+      "bytes": 4536,
+      "sha256": "162531cbcbc980aed32ea1ac391a1a6f65ca3a5b4ea3a02ecdb9841b0c71dac4"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/executed-runner.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/executed-runner.py.before",
+      "bytes": 36363,
+      "sha256": "7d23169a11c4790a4cb7294932fb43143d6933c08e1f041ef34daee5b7b22e98"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/preceding-aishell-launcher.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/preceding-aishell-launcher.json",
+      "bytes": 10239,
+      "sha256": "a00bb9b8a3dd81e141a6769fffcb15d914e3e3a516409137be386201fbaa15fa"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/preceding-aishell-result.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/preceding-aishell-result.json",
+      "bytes": 21639,
+      "sha256": "63e3a40d1075d53f65c95b3877d71d34f632b9667540f726a994379d1ca49b35"
+    },
+    {
+      "name": "requests/smart-turn-wheel-launch-pin-r3/run_full_gate.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-launch-pin-r3/run_full_gate.py.before",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/bootstrap.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/bootstrap.py",
+      "bytes": 5920,
+      "sha256": "229deb174f14cab62a5fa26f081d6f2de3e9d893cb76f3b6e7ecf6a26d137022"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py",
+      "bytes": 20150,
+      "sha256": "f3e09db38d5f257892fa25cb1840a3cca99adfedfdcac98a24863ff2bb3eb318"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py.after",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py.after",
+      "bytes": 20150,
+      "sha256": "f3e09db38d5f257892fa25cb1840a3cca99adfedfdcac98a24863ff2bb3eb318"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/desktop_webrtc_stress_pin_r3.py.before",
+      "bytes": 20150,
+      "sha256": "f3e09db38d5f257892fa25cb1840a3cca99adfedfdcac98a24863ff2bb3eb318"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/launcher.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/launcher.json",
+      "bytes": 8785,
+      "sha256": "a4dc969f5e64f161c6ba1574956aee88db86ec82e1c061748543c6092c38d619"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/preceding-model-inputs.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/preceding-model-inputs.json",
+      "bytes": 34345,
+      "sha256": "633b91da9cf5c65211cb2cbf3c978c260273e5eacb4aa0b5197ad0f6234656a7"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/run_full_gate.py.after",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/run_full_gate.py.after",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/webrtc-stress-launch-pin-r1/run_full_gate.py.before",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/webrtc-stress-launch-pin-r1/run_full_gate.py.before",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/argv.json",
+      "bytes": 351,
+      "sha256": "8f5fa0878602f8b2fe0c68ec2b59b8f4bd3af21f69041aac0f01618d9d01b229"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-01-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-01-pin-r2/runner-execution.json",
+      "bytes": 2801,
+      "sha256": "21155ccbabf3155cc47b5e241a257a38c1db7ae12dd1a43342481db48611e04c"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/argv.json",
+      "bytes": 364,
+      "sha256": "4d075699a38df54fdb2c5a7e2bbec9c9896adaec58d9f62730a3f8a2e8c8ee76"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-02-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-02-pin-r2/runner-execution.json",
+      "bytes": 2816,
+      "sha256": "7df19165aa7796f59069f634c796f956d3c55966608bdb9aaf718daf53779bdb"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/argv.json",
+      "bytes": 341,
+      "sha256": "307f99f83e7493731db192232f617075130885facd797e2f3f376db8fdf4b8f0"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-03-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-03-pin-r2/runner-execution.json",
+      "bytes": 2793,
+      "sha256": "32a56b6b34c92b9fb4ee4d62a5baf5a2546659e2928ff423196161de21596d84"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/argv.json",
+      "bytes": 348,
+      "sha256": "271830ceab16f1b6e561aa21c4c670b9c71dcad4f06022ed1f523cba255d92bc"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-04-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-04-pin-r2/runner-execution.json",
+      "bytes": 2800,
+      "sha256": "92d88c5f5d8f9e69901c51418208ade15bfd6389d8c43d364a1c92eb3f9815af"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/argv.json",
+      "bytes": 344,
+      "sha256": "b7150f15b456a3f2d570772324f04f5cfcd8e326c1ada9cb228c2efd8627e5dc"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-05-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-05-pin-r2/runner-execution.json",
+      "bytes": 2796,
+      "sha256": "d3678cfda7ae6a5e632de78fd827299c4d5b2599dab17c91a728ffc8aca61905"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/argv.json",
+      "bytes": 337,
+      "sha256": "9096ad8acc11f452a1e735aa943c424c2e7f85757c12f89c9af4c93af3823260"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-06-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-06-pin-r2/runner-execution.json",
+      "bytes": 2789,
+      "sha256": "f0279f20db56d3cbb1a04149e8f7131341ffa96da9002b726babd9ea9249e4db"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/argv.json",
+      "bytes": 352,
+      "sha256": "e4c0496a64e7a8acf7d0acfe24e710d8d9a1203cbf162af35f6dc4982eeaf5cb"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-07-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-07-pin-r2/runner-execution.json",
+      "bytes": 2804,
+      "sha256": "c41e1ea2ea65d3b690be6342791c92338b75bc46e4853f22d5cf928cd0bc82fa"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/argv.json",
+      "bytes": 357,
+      "sha256": "7dd5f50775bfd76ef1a05a71484e1349a1d7921852ddf4a93dd11179ecb122f7"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-08-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-08-pin-r2/runner-execution.json",
+      "bytes": 2807,
+      "sha256": "2687f549cc03a11e5c5d6b33913ca0642c9c36b1148dd40b8ab1ffdfe1baa768"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/argv.json",
+      "bytes": 351,
+      "sha256": "a9c0fad54b629f6bbdd0aa18e8310ae1df72de656cda48a8a4d7680425d0be4e"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-09-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-09-pin-r2/runner-execution.json",
+      "bytes": 2801,
+      "sha256": "c8f9a3d3a7d48d18a800a5bd5009cd39f3546b0ae32fb2a821bede76220f7014"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/argv.json",
+      "bytes": 365,
+      "sha256": "ec791f1ecac69c49fe95dfbb45e27fc0a0ad4ba5c5d725b48dc419e839e5d09c"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-10-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-10-pin-r2/runner-execution.json",
+      "bytes": 2817,
+      "sha256": "ae160b3b93ccd23252c42b9b04aa2dbecc0986b1238618b44a29b2bab8d50310"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/argv.json",
+      "bytes": 375,
+      "sha256": "2208eef4700a57ea87d30a0b23a497ac7633e2e57ba4a70473164489e97aea1a"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-11-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-11-pin-r2/runner-execution.json",
+      "bytes": 2827,
+      "sha256": "f828806d1b6f5f8ea32085bbb354edf5aff91122b8056a522df03701dd431185"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/argv.json",
+      "bytes": 361,
+      "sha256": "6e3a0e62cb65e583f98cbb51df3c66f071fce3f2ca26e665ff7cafd029a9e9a1"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-12-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-12-pin-r2/runner-execution.json",
+      "bytes": 2813,
+      "sha256": "057a5691b8ff9ed6543fc6027139445aa22c301e8b40f75bd24b38ae01d2dbd5"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/argv.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/argv.json",
+      "bytes": 366,
+      "sha256": "ba42133016f7cc1bdde122319d4c5a223fc71a3c96844ae5f152ef76213f88b7"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/environment.json",
+      "bytes": 2191,
+      "sha256": "f833250e83c90548bb948211eb563975a66df5bd93436ec8648748f5c0fd56de"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/executed-runner.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/executed-runner.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/executed-wrapper.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/executed-wrapper.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/preceding-default.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/preceding-default.json",
+      "bytes": 376,
+      "sha256": "5b04f034ca59b18b3ac2e9f53744b6e734fa6b0c2decb9f5815c944966bca189"
+    },
+    {
+      "name": "requests/whisper-owner-13-pin-r2/runner-execution.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/whisper-owner-13-pin-r2/runner-execution.json",
+      "bytes": 2818,
+      "sha256": "57502424e1eec3db9fd4e28bf1f669933c70cae53e34dc30d3d98a64b5667baf"
+    },
+    {
+      "name": "run_full_gate.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "excluded_retained_artifacts": [
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "bytes": 16019285,
+      "sha256": "9a04aafb802c1e5573ba4552f8babcb5021b041eb4cfa802c9b7644ca3510eca",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    },
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "bytes": 20571088,
+      "sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    }
+  ],
+  "skipped": [],
+  "source_groups": {
+    "original_qualification": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "final_diagnostic_and_lint": "c1c3addb07dde0a143462c10961ff2494eeba90a"
+  },
+  "canonical_scope": "source_files_canonical_sha256 hashes canonical files content; sha256 always hashes the complete original file bytes.",
+  "original_count": 366,
+  "original_bytes": 10683065
+}

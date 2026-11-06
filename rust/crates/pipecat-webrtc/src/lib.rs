@@ -10,8 +10,8 @@ mod signaling;
 
 pub use codec::AudioCodec;
 pub use connection::{
-    ConnectionState, IncomingAudio, SmallWebRtcConfig, SmallWebRtcConnection, TransportEvent,
-    TransportStats,
+    ConnectionDiagnostics, ConnectionState, IncomingAudio, SetupMilestones, SmallWebRtcConfig,
+    SmallWebRtcConnection, TransportEvent, TransportStats,
 };
 pub use signaling::{
     ConnectionMode, IceCandidate, SmallWebRtcAnswer, SmallWebRtcPatchRequest, SmallWebRtcRequest,

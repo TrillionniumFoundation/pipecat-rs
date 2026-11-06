@@ -1,0 +1,86 @@
+{
+  "baseline_commit": "5e889453a6956b03c6d0745663a87b0e604adebd",
+  "scope": "local DTLS start/stop ownership and real localhost UDP release; not full-workspace or remote/production qualification",
+  "toolchain": "Rust 1.99.0; locked offline dependencies; default features; jobs2; debug0",
+  "baseline_exact_historical_stress": {
+    "initial_pass": 1,
+    "additional_passes": 50,
+    "historical_failure_reproduced": false
+  },
+  "baseline_deterministic": {
+    "passed": 0,
+    "failed": 2,
+    "failures": [
+      "post-close real UDP rebind timeout with both Connecting callbacks held",
+      "pending native DTLS start does not complete after stop"
+    ]
+  },
+  "fixed_all_targets": {
+    "passed": 46,
+    "failed": 0,
+    "ignored": 0,
+    "targets": {
+      "lib": 20,
+      "localhost": 16,
+      "receive_only": 4,
+      "review_lifecycle": 6
+    }
+  },
+  "fixed_deterministic_repeats": {
+    "invocations": 30,
+    "test_executions": 60,
+    "failed": 0
+  },
+  "fixed_original_stress": {
+    "first_series_passes": 24,
+    "failure_invocation": 25,
+    "failure": "Timeout(data channel) before shutdown at original5s setup deadline; no UDP rebind failure",
+    "followup_passes": 30,
+    "test_deadlines_unchanged": true,
+    "failure_attribution": "not established; executor delays were observed but resource pressure was not proven"
+  },
+  "source_sha256": {
+    "rust/vendor/webrtc-0.14.0/src/dtls_transport/mod.rs": "81d247590b5840a98cd845247699c49bea8b2fe2bcadc03898bf35e90ae95574",
+    "rust/crates/pipecat-webrtc/src/connection.rs": "ae208b14ed0bb388a69f767f7706c71bc9d41f688e8bd0cbab0bcd2873163ede",
+    "rust/crates/pipecat-webrtc/src/shutdown_start_tests.rs": "d8f090a66915833aedeebbaa0fdbd30cf4a9cfb248ba59dd7e0647c395ba4260",
+    "rust/vendor/webrtc-0.14.0/PATCHES.md": "4158e8dff7d52c98f13deb481d102f6089ec67d9e097e34eb11647d3ae01774b",
+    "rust/crates/pipecat-webrtc/SHUTDOWN_REGRESSION.md": "917f6ac58007e00850233dcc9130160f06b3cd48d7e70f319e038d5b0c1ecd61",
+    "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs": "74a7ae300aa221a2a5e8ad3847b7fa226e7385d64bea436cbb9683ed7045670e"
+  },
+  "log_sha256": {
+    "webrtc-baseline-both-regressions.log": "1d24b5e4841cd07a93c99b4dbcd06088e48b2461f325c739574a665836e6df36",
+    "webrtc-baseline-repeated.log": "1d8f43a36eab51419a34daac229b3ba7028e4a89ed61a7107a1699e11cf5f5dc",
+    "webrtc-fixed-all-targets.log": "6eab137be8f7c23b6f5cb94ed7c1761fd66ea43b0aed963ddc8cd3eda1dd1d68",
+    "webrtc-fixed-repeat.log": "0e676432fc2147d5ea1defd90d19093c4153a5f1c18719277f81c64762da8296",
+    "webrtc-fixed-repeat-retry.log": "4bd3905e59cb276caf1c3be1adfbdc771314257c68c9dfdd3f5d74948917f728"
+  },
+  "excluded": "Initial build/ENOSPC failures, harness compile/candidate-count corrections and unattributed copied-artifact execution do not count as qualification evidence.",
+  "branch_commit_push_performed": false,
+  "source_sha256_at_initial_handoff": {
+    "rust/vendor/webrtc-0.14.0/src/dtls_transport/mod.rs": "81d247590b5840a98cd845247699c49bea8b2fe2bcadc03898bf35e90ae95574",
+    "rust/crates/pipecat-webrtc/src/connection.rs": "ae208b14ed0bb388a69f767f7706c71bc9d41f688e8bd0cbab0bcd2873163ede",
+    "rust/crates/pipecat-webrtc/src/shutdown_start_tests.rs": "d8f090a66915833aedeebbaa0fdbd30cf4a9cfb248ba59dd7e0647c395ba4260",
+    "rust/vendor/webrtc-0.14.0/PATCHES.md": "4158e8dff7d52c98f13deb481d102f6089ec67d9e097e34eb11647d3ae01774b",
+    "rust/crates/pipecat-webrtc/SHUTDOWN_REGRESSION.md": "7924c9086f5a57e1184479d721abd447b8aa2612d567088810ec5c9b6ec7fbbc"
+  },
+  "original_stress_source_unchanged_at_recorded_runs": true,
+  "post_validation_diagnostic_edit": {
+    "file": "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs",
+    "change": "Failure context only: schedule, iteration, A/B side, monotonic wait elapsed, both public peer states, cancellation, last_error and counters before panic/drop.",
+    "acceptance_criteria_unchanged": true,
+    "wait_order": "A then B; unchanged",
+    "per_peer_setup_timeout_seconds": 5,
+    "udp_release_timeout_seconds": 2,
+    "production_data_channel_changes": false,
+    "original_sha256": "a1bf5492e032efec0df2d729a3826ecec8b6e968561c75068f51c6689ec79c7d",
+    "diagnostic_sha256": "74a7ae300aa221a2a5e8ad3847b7fa226e7385d64bea436cbb9683ed7045670e",
+    "validation": "rustfmt --check and git diff --check passed; compile/test of this edit delegated to parent unified frozen-source run, not included in earlier 46-pass evidence.",
+    "read_only_review": {
+      "wait_notification": "No direct lost-wakeup window identified in watch borrow_and_update/changed or native on_open registration/recheck.",
+      "timeout_location": "Original A/offerer first data-channel wait, before this pair shutdown; no schedule/iteration/state was retained.",
+      "native_state_limitation": "Public peer Connected summarizes ICE/DTLS; native SCTP startup errors only log internally; native Open publication callback is asynchronous.",
+      "attribution": "Unresolved. Neither a protocol race nor resource-pressure cause is established.",
+      "next_evidence": "Same failure context plus paired ICE/DTLS/SCTP/channel-open/publication phase timeline and scheduling-delay evidence during that exact wait; later passes do not resolve the retained failure."
+    }
+  }
+}

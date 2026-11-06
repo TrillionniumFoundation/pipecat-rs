@@ -1,5 +1,6 @@
 //! Bounded frame admission with a reserved system lane and stable priorities.
-use crate::{DirectedFrame, FrameData, FramePriority};
+use crate::payload_budget::{ByteLane, ByteLease};
+use crate::{DirectedFrame, FrameData, FramePriority, PayloadLimits};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -13,6 +14,10 @@ pub enum QueueError {
     Full,
     #[error("frame queue is closed")]
     Closed,
+    #[error("frame payload exceeds its byte limit")]
+    PayloadTooLarge,
+    #[error("frame payload is opaque or exceeds the supported nesting limit")]
+    UnmeasurablePayload,
 }
 /// Shared logical epochs make cutoffs comparable across bidirectional nodes.
 #[derive(Default)]
@@ -54,17 +59,34 @@ impl InterruptionRegistry {
         epoch
     }
 }
+struct QueuedFrame {
+    item: DirectedFrame,
+    _lease: Option<ByteLease>,
+    reserved_control: bool,
+}
+impl QueuedFrame {
+    fn into_inner(self) -> DirectedFrame {
+        self.item
+    }
+}
+impl std::ops::Deref for QueuedFrame {
+    type Target = DirectedFrame;
+    fn deref(&self) -> &DirectedFrame {
+        &self.item
+    }
+}
 #[derive(Default)]
 struct Queues {
-    start: VecDeque<DirectedFrame>,
-    system: VecDeque<(u64, DirectedFrame)>,
-    normal: VecDeque<(u64, DirectedFrame)>,
+    start: VecDeque<QueuedFrame>,
+    system: VecDeque<(u64, QueuedFrame)>,
+    normal: VecDeque<(u64, QueuedFrame)>,
     generation: u64,
     interruptions: VecDeque<u64>,
     interruption_ids: BTreeSet<u64>,
     normal_paused: bool,
     system_in_progress: bool,
     normal_in_progress: bool,
+    reserved_control_queued: bool,
     closed: bool,
 }
 
@@ -80,7 +102,9 @@ pub struct FrameQueue {
     dropped: Arc<AtomicU64>,
     normal_capacity: usize,
     system_capacity: usize,
-    changed: Notify,
+    changed: Arc<Notify>,
+    payload_limits: Option<PayloadLimits>,
+    payload_lanes: Option<[Arc<ByteLane>; 4]>,
 }
 impl FrameQueue {
     pub fn new(capacity: usize) -> Self {
@@ -90,14 +114,51 @@ impl FrameQueue {
         Self::with_admission(
             normal_capacity,
             system_capacity,
+            None,
             Arc::new(Mutex::new(())),
             Arc::new(Mutex::new(InterruptionRegistry::default())),
             Arc::new(AtomicU64::new(0)),
         )
     }
+    /// Enable strict serializable-payload admission on this queue.
+    pub fn with_payload_limits(
+        normal_capacity: usize,
+        system_capacity: usize,
+        limits: PayloadLimits,
+    ) -> Result<Self, &'static str> {
+        limits.validate()?;
+        if normal_capacity == 0 || system_capacity == 0 {
+            return Err("capacities must be positive");
+        }
+        Ok(Self::with_admission(
+            normal_capacity,
+            system_capacity,
+            Some(limits),
+            Arc::new(Mutex::new(())),
+            Arc::new(Mutex::new(InterruptionRegistry::default())),
+            Arc::new(AtomicU64::new(0)),
+        ))
+    }
+    /// Current queued charges in (start, reserved control, system, normal)
+    /// compact JSON bytes.
+    /// Dequeued/processor-owned frames are outside these queue reservations.
+    pub fn queued_payload_bytes(&self) -> (usize, usize, usize, usize) {
+        self.payload_lanes
+            .as_ref()
+            .map(|lanes| {
+                (
+                    lanes[0].used(),
+                    lanes[1].used(),
+                    lanes[2].used(),
+                    lanes[3].used(),
+                )
+            })
+            .unwrap_or_default()
+    }
     pub(crate) fn with_admission(
         normal_capacity: usize,
         system_capacity: usize,
+        payload_limits: Option<PayloadLimits>,
         admission: Arc<Mutex<()>>,
         interruptions: Arc<Mutex<InterruptionRegistry>>,
         dropped: Arc<AtomicU64>,
@@ -106,6 +167,15 @@ impl FrameQueue {
             normal_capacity > 0 && system_capacity > 0,
             "capacities must be positive"
         );
+        let changed = Arc::new(Notify::new());
+        let payload_lanes = payload_limits.map(|limits| {
+            [
+                ByteLane::new(limits.max_frame_bytes, changed.clone()),
+                ByteLane::new(limits.max_frame_bytes, changed.clone()),
+                ByteLane::new(limits.system_queue_bytes, changed.clone()),
+                ByteLane::new(limits.normal_queue_bytes, changed.clone()),
+            ]
+        });
         Self {
             queues: Mutex::new(Queues::default()),
             observed_generation: AtomicU64::new(0),
@@ -114,7 +184,9 @@ impl FrameQueue {
             dropped,
             normal_capacity,
             system_capacity,
-            changed: Notify::new(),
+            changed,
+            payload_limits,
+            payload_lanes,
         }
     }
     pub fn try_send(&self, item: DirectedFrame) -> Result<(), (QueueError, Box<DirectedFrame>)> {
@@ -131,6 +203,14 @@ impl FrameQueue {
         if item.frame.validate_selected_tool_authority().is_err() {
             return Err((QueueError::Closed, Box::new(item)));
         }
+        let payload_bytes = match self
+            .payload_limits
+            .map(|limits| limits.measure(&item.frame))
+            .transpose()
+        {
+            Ok(bytes) => bytes,
+            Err(error) => return Err((error, Box::new(item))),
+        };
         let mut queues = self.queues.lock().unwrap();
         if queues.closed {
             return Err((QueueError::Closed, Box::new(item)));
@@ -152,14 +232,41 @@ impl FrameQueue {
             return Ok(());
         }
         let priority = item.frame.priority();
+        // InputAudio/InputImage and several transport payloads use the system
+        // priority too. Strict mode keeps one additional control slot and byte
+        // reservation which those payloads cannot consume.
+        let reserved_control = self.payload_limits.is_some() && reserve_control(&item.frame.data);
         let full = match priority {
             FramePriority::Start => !queues.start.is_empty(),
-            FramePriority::System => queues.system.len() >= self.system_capacity,
+            FramePriority::System if reserved_control => queues.reserved_control_queued,
+            FramePriority::System => {
+                queues.system.len() - usize::from(queues.reserved_control_queued)
+                    >= self.system_capacity
+            }
             FramePriority::Normal => queues.normal.len() >= self.normal_capacity,
         };
         if full {
             return Err((QueueError::Full, Box::new(item)));
         }
+        let lease = if let (Some(lanes), Some(bytes)) = (&self.payload_lanes, payload_bytes) {
+            let index = match priority {
+                FramePriority::Start => 0,
+                FramePriority::System if reserved_control => 1,
+                FramePriority::System => 2,
+                FramePriority::Normal => 3,
+            };
+            match lanes[index].reserve(bytes) {
+                Some(lease) => Some(lease),
+                None => return Err((QueueError::Full, Box::new(item))),
+            }
+        } else {
+            None
+        };
+        let item = QueuedFrame {
+            item,
+            _lease: lease,
+            reserved_control,
+        };
         match priority {
             FramePriority::Start => queues.start.push_back(item),
             FramePriority::System => {
@@ -183,6 +290,7 @@ impl FrameQueue {
                     origin_generation
                         .unwrap_or_else(|| self.interruptions.lock().unwrap().generation)
                 };
+                queues.reserved_control_queued |= item.reserved_control;
                 queues.system.push_back((generation, item));
             }
             FramePriority::Normal => {
@@ -223,8 +331,8 @@ impl FrameQueue {
             };
             match result {
                 Ok(()) => return Ok(()),
-                Err((QueueError::Closed, _)) => return Err(QueueError::Closed),
                 Err((QueueError::Full, returned)) => item = *returned,
+                Err((error, _)) => return Err(error),
             }
             notified.await;
         }
@@ -262,7 +370,7 @@ impl FrameQueue {
                         if start_only {
                             None
                         } else {
-                            queues.system.pop_front()
+                            pop_system(&mut queues)
                         }
                     });
                 if item.is_some() {
@@ -272,7 +380,7 @@ impl FrameQueue {
             };
             if item.is_some() {
                 self.changed.notify_waiters();
-                return item;
+                return item.map(|(generation, item)| (generation, item.into_inner()));
             }
             if closed {
                 return None;
@@ -307,7 +415,7 @@ impl FrameQueue {
             };
             if item.is_some() {
                 self.changed.notify_waiters();
-                return item;
+                return item.map(|(generation, item)| (generation, item.into_inner()));
             }
             if closed {
                 return None;
@@ -367,13 +475,13 @@ impl FrameQueue {
         let item = queues
             .start
             .pop_front()
-            .or_else(|| queues.system.pop_front().map(|(_, item)| item))
+            .or_else(|| pop_system(&mut queues).map(|(_, item)| item))
             .or_else(|| queues.normal.pop_front().map(|(_, item)| item));
         drop(queues);
         if item.is_some() {
             self.changed.notify_waiters();
         }
-        item
+        item.map(QueuedFrame::into_inner)
     }
     /// Drop only interruptible normal frames. System frames remain queued.
     pub fn reset_interruptible(&self) -> usize {
@@ -439,6 +547,34 @@ impl FrameQueue {
         drop(queues);
         self.changed.notify_waiters();
         removed
+    }
+}
+// Only actual cancellation/interruption and urgent resume operations can claim
+// the dedicated slot. Arbitrary system-priority data retain their own lane.
+fn reserve_control(data: &FrameData) -> bool {
+    matches!(
+        data,
+        FrameData::Cancel(_)
+            | FrameData::CancelDetailed(_)
+            | FrameData::CancelWorker(_)
+            | FrameData::Interruption
+            | FrameData::InterruptionWorker
+            | FrameData::ProcessorResume { .. }
+            | FrameData::ProcessorResumeUrgent { .. }
+            | FrameData::ProcessorResumeTarget(_)
+    )
+}
+fn pop_system(queues: &mut Queues) -> Option<(u64, QueuedFrame)> {
+    if queues.reserved_control_queued {
+        let position = queues
+            .system
+            .iter()
+            .position(|(_, item)| item.reserved_control)
+            .expect("reserved control slot invariant");
+        queues.reserved_control_queued = false;
+        queues.system.remove(position)
+    } else {
+        queues.system.pop_front()
     }
 }
 #[cfg(test)]

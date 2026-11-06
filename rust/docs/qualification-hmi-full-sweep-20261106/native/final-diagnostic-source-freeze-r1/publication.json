@@ -1,0 +1,846 @@
+{
+  "schema": "pipecat-final-diagnostic-freeze-publication-v1",
+  "created_utc": "2026-11-06T17:57:59.558081+00:00",
+  "head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+  "tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+  "parent": "5d3f6e1a25d64655c2e6d66e7b8c649a1cc98d7f",
+  "source_base": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "source_base_manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "source_manifest_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+  "source_file_count": 2422,
+  "all_102_changed_paths_applied_from_published_git_objects": true,
+  "compiled_source_changed_paths": [
+    "rust/crates/pipecat-evals/src/simulation/quality.rs",
+    "rust/crates/pipecat-moq/src/tests.rs"
+  ],
+  "all_other_100_changed_paths_are_docs": true,
+  "source_sha256": {
+    "rust/crates/pipecat-evals/src/simulation/quality.rs": "4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780",
+    "rust/crates/pipecat-moq/src/tests.rs": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219"
+  },
+  "contract": {
+    "file": "source-contract.json",
+    "bytes": 11511,
+    "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+  },
+  "derivation": "Start from the verified original0cc full source map, apply every actual0cc-to-published-commit Git change (including100 docs), require exact published tree path set, then reproduce the original helper canonical JSON. Current uncommitted local docs are not part of the expected remote snapshot.",
+  "changed_identities": [
+    {
+      "path": "rust/crates/pipecat-evals/src/simulation/quality.rs",
+      "kind": "file",
+      "size": 10190,
+      "sha256": "4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780",
+      "git_blob_sha1": "b53f9272a5938144908e84ff6351467c14b64da9",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/crates/pipecat-moq/src/tests.rs",
+      "kind": "file",
+      "size": 28377,
+      "sha256": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219",
+      "git_blob_sha1": "deb00799ba0f38c6eaa12a65977df5a2dca9eda2",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/HMI_FULL_SWEEP_20261106.md",
+      "kind": "file",
+      "size": 48247,
+      "sha256": "5d177afffbd5e1f0eb22102ed438ccf0359ea3e6c29e27e3acd62a670b5b9368",
+      "git_blob_sha1": "6a554752d2815107f1eeeb35bbbeafed1d8e8c88",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/EVIDENCE_AVAILABILITY.md",
+      "kind": "file",
+      "size": 5243,
+      "sha256": "bdf1f189457125805e9819f796716eb8d715bfbaf36e79835743a10d2b9349fa",
+      "git_blob_sha1": "f2efff08d786f67d9453a25085ce1cc2ddd9c84d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/README.md",
+      "kind": "file",
+      "size": 4764,
+      "sha256": "5e58118f5ffda026088bdf98112f8a73f6620667b4dd137b4ef6562192142832",
+      "git_blob_sha1": "a7e9b4c38e811f29701a6912777c07e0a5b2d7ee",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/fifth-entrance-recovery.json",
+      "kind": "file",
+      "size": 1145,
+      "sha256": "c79161da1c0cca25a828f5dbccfa416f291897057133e426e042df7f549a4bf9",
+      "git_blob_sha1": "216744b3885c1655019187273320542b24247e89",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/fixture-source-freeze.json",
+      "kind": "file",
+      "size": 12524,
+      "sha256": "90420bf17201ba51bea964e29647b67ae65c0e3f800e3ef2b9966b509d3912a6",
+      "git_blob_sha1": "a23a5dbcad8abf2b2df280e98c64ecf528757b8e",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/README.md",
+      "kind": "file",
+      "size": 10988,
+      "sha256": "9d8b20ef0b55153336ac4d2eb0189d381520a4bd86f249982ed8d075cef05ee7",
+      "git_blob_sha1": "2e84adb5af675e1776db9475d94d59a5c78407b0",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/application.json",
+      "kind": "file",
+      "size": 1150,
+      "sha256": "67ad59a3e3c4ec2464726d5e7e78a1eeac720efb46c841ccf9891fede27af510",
+      "git_blob_sha1": "622775f8f3db489a90a0a66f0009e431aaad4a82",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/gate-candidate-r1/audit.json",
+      "kind": "file",
+      "size": 4609,
+      "sha256": "0abdb7a0503e6e0584a3bc0904fcc2c098783f16bfb223d72e312b9d433242fd",
+      "git_blob_sha1": "a6b06ca8db73f4bf1ac8e984724d0d341006591c",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/gate-candidate-r1/candidate.patch",
+      "kind": "file",
+      "size": 5423,
+      "sha256": "1341782d9929d2d29fbbb8d74f1eb4f7f414669d135f2e8757905ba9d0c8e25c",
+      "git_blob_sha1": "0d0b3d90b9c2990c1d6109490aee5c524ff25774",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/original-raw-review-r1.json",
+      "kind": "file",
+      "size": 49520,
+      "sha256": "d465302748c6103317562e57533a39793e37a30476ac9ceb21788add9c43d4b4",
+      "git_blob_sha1": "7498b3978a46a8c4bfc2d75ec50443e86b438d46",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/raw-case-extraction-r1.json",
+      "kind": "file",
+      "size": 29913,
+      "sha256": "540a5890e78fefafde2ee918591957c38b27039e08fd4982ed7fc5549275a091",
+      "git_blob_sha1": "214156d9af6f5182ad36d1d95bd6341b2b83c236",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/bot-audio-response/static-review-r1.json",
+      "kind": "file",
+      "size": 3844,
+      "sha256": "cf55cd6505a4049be4d93e308035d29f4caa18613c6dfaf01f5a8577752b8343",
+      "git_blob_sha1": "b8217da2549e616a845d9e627bd42ac0cd6c12ea",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/README.md",
+      "kind": "file",
+      "size": 3206,
+      "sha256": "a81a4fb40e7eee028c89fac2475adde9a9f83b527032dc0980055069db062e84",
+      "git_blob_sha1": "ea8b2d44e9e122f937a2a45e2fdaf03ffe511679",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/actual-anthropic-next-request.json",
+      "kind": "file",
+      "size": 654,
+      "sha256": "801b8ac2bf0400a83e4a4e4a8bc6650e08b10a8c2161ba81aa7a12338b2b0247",
+      "git_blob_sha1": "5603da1e65859cd0da0ede96dc5b780d8d313f17",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/application.json",
+      "kind": "file",
+      "size": 1104,
+      "sha256": "19dd92afa3d1c899fde43f28919c561371b0a623c30f23434105fa6e043c272a",
+      "git_blob_sha1": "f31bcf42a4882130c136a46f38c11a3c69662951",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/crosssocket_effects.rs.candidate",
+      "kind": "file",
+      "size": 23727,
+      "sha256": "96ad703190d83041feea27fe1570d158d503491a958fd80b614615c668c77cf0",
+      "git_blob_sha1": "0f3f67e7f7bddf3ae2051c99600c651d5bd256c6",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/diagnosis.json",
+      "kind": "file",
+      "size": 2099,
+      "sha256": "56baff4f6c9bc377b105803788299f652290ecb7b06302a5d617be6256360c1d",
+      "git_blob_sha1": "6e3c9177bf133be870b48e1f7e881a854934fe9a",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/exact-wire-history.patch",
+      "kind": "file",
+      "size": 1418,
+      "sha256": "df3d82963a338e8ed8c604094ef2ec192f08db7852adcd2cf04afdc7fd5806c3",
+      "git_blob_sha1": "5195ca1d541da08a69520c42cbd10c74ebb4cbb0",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/immutable-manifest.json",
+      "kind": "file",
+      "size": 3251,
+      "sha256": "51bf95a937a77daac4def2f16cedef4e54e998040f715d11c592220f2ff35f16",
+      "git_blob_sha1": "70df8f6adcaa9241fca0fb4aa9fdcee9ab494a3b",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/original-gate.json",
+      "kind": "file",
+      "size": 3221,
+      "sha256": "cb489696a0f52d5ed019402ff0e9ac7b01681ed22f48135beb3659203ed68d3a",
+      "git_blob_sha1": "50abf5854e307e3824d3d5bcca4cedb79bb29fc3",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/slice.json",
+      "kind": "file",
+      "size": 541,
+      "sha256": "c67722c9326a371b269f974573548b4219a58dcbd752921a691ae1d58d6ebd6b",
+      "git_blob_sha1": "6dbd4f16bb879a52bf18795399131edcb189ee00",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/source-bindings.json",
+      "kind": "file",
+      "size": 3213,
+      "sha256": "4d23dc334a12b547aab4a917ca98e435f06d3c14ff8615754d8bc3add9f7dc0d",
+      "git_blob_sha1": "4b6d45cbcbb20363c38ef1cba277c4b72638fbf1",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/cartesia-eager/target-original.log",
+      "kind": "file",
+      "size": 4767,
+      "sha256": "f0f294a6f4358aabef125cf30738c172135b06a41412518ff0f9f51cabfdb232",
+      "git_blob_sha1": "f523bf36e8e80590fe579e6f05c405f541d59e75",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/evals-additional-failure-review-r1/bot_audio_smart_turn.log",
+      "kind": "file",
+      "size": 1838,
+      "sha256": "3ca07d93a572aea5cb60c70b57b1510e3a6cd6918c3876e8ddfb976c3459eaa8",
+      "git_blob_sha1": "69e13223595eed210bcbd37a2e020a738b6a4742",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/evals-additional-failure-review-r1/independent-review.json",
+      "kind": "file",
+      "size": 6937,
+      "sha256": "ba1c6a5bc150ff7c7da7db0604c95015ff55da7d817e688dd7e8db26b49ef9d9",
+      "git_blob_sha1": "db6e633402a1d879c6927deb30ec2e5ef1488935",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/evals-additional-failure-review-r1/slices.json",
+      "kind": "file",
+      "size": 745,
+      "sha256": "ded40bd66eee6e3eb78a95fc17e0109876cd25754625235402ea0e33f3e5356a",
+      "git_blob_sha1": "39c3b3d73ab28750c9946cf3ff14bdd2a882fc4a",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/evals-additional-failure-review-r1/user_speech.log",
+      "kind": "file",
+      "size": 2922,
+      "sha256": "1d72ff6fd1eacf4f4e7ad9c6aaeff1cd7d93412d4c629d4d79776004d58961d1",
+      "git_blob_sha1": "724c5fa62a636289fdf42443c202bfeb8e0d44ff",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/expanded-and-reference-pin-r1.delivery.json",
+      "kind": "file",
+      "size": 7855,
+      "sha256": "06f313d9f9c0d2201a9a77b8d18aa4617116be212b3732d161ee32b65c45b24f",
+      "git_blob_sha1": "3d870b7b70f26d4e3c9fcf0fdd688bf5656e778d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/expanded-and-reference-pin-r1.original-manifest.json",
+      "kind": "file",
+      "size": 39183,
+      "sha256": "4b0971622eef1cbb34eb1f90c1ac57e9d35a1e1ee64751692b6d7b5aa49baa69",
+      "git_blob_sha1": "45993b9f59bcb9925db029c78f494c2bf55b0131",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/expanded-and-reference-pin-r1.root-verification.json",
+      "kind": "file",
+      "size": 22429,
+      "sha256": "490dc40961aa10668ca3b61a9958771985cceacac094d40f8ef1cd48415bf3dc",
+      "git_blob_sha1": "f04e969e5d0d23fd963335b48958a22393868418",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/expanded-and-reference-pin-r1.tar.xz",
+      "kind": "file",
+      "size": 1071708,
+      "sha256": "a3442d8ccaa03134c124c58893102635346a7541d64eb3a9c13395c30cc74982",
+      "git_blob_sha1": "66d8e1afd8a84b63f22f8b41c9c0449f9a07d79a",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/DESIGN.md",
+      "kind": "file",
+      "size": 8482,
+      "sha256": "700bee4098bf490374a3f0d67112b9edd06aae914ddb0536b201773fd7f4eb79",
+      "git_blob_sha1": "74d89a378cb67bd03655ee037a2377118bf928e4",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/README.md",
+      "kind": "file",
+      "size": 4440,
+      "sha256": "a012716a25237764e56e051d4f7b778c26785475e642eb3445ec56d40492840b",
+      "git_blob_sha1": "0c936cc0cdcf46afde774f06c635a622997f501d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/SHA256SUMS",
+      "kind": "file",
+      "size": 1425,
+      "sha256": "279b4935b3c8c443551b2fed803a5b43eb9aec6a98dac99f45a6df178be877a7",
+      "git_blob_sha1": "a9153027393fce5431f01237d9bdacaf414f7448",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/application.json",
+      "kind": "file",
+      "size": 1501,
+      "sha256": "4b5e7361ecadda964b22719ed6157c41dceb7e327bc546a744e8c526c58a8f22",
+      "git_blob_sha1": "bc3905cd18851396017326d8c5f7016307c452f7",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/archive-verification.json",
+      "kind": "file",
+      "size": 13641,
+      "sha256": "87cb0ab42e9f13a6f76fcf9bcfa09134d1b3c9bf55621dfd5e4e8223a42014b1",
+      "git_blob_sha1": "b423f012e32cbc53437cbd28d74c2fb4dbd680b6",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/audit.json",
+      "kind": "file",
+      "size": 1598,
+      "sha256": "d1be21a6f2dd9997251e62e6f10ddbc920b8a12593d554295e5bcd12119fd4ff",
+      "git_blob_sha1": "173045ba10494b24732da0605b6d24bf15580caa",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/clippy-fix.json",
+      "kind": "file",
+      "size": 1387,
+      "sha256": "78b406cfb3ea7e40c241632e464aa6c59105681943872aa9ae0c3e1b2b6dd6e3",
+      "git_blob_sha1": "d2b32f0b601e1955df2be28111993cdbd5326235",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/controlled_inheritance.py",
+      "kind": "file",
+      "size": 10157,
+      "sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+      "git_blob_sha1": "eeb49539405574b74e4efaddd9b891030c085a2b",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/execution.json",
+      "kind": "file",
+      "size": 1141,
+      "sha256": "fac8f9534c0737c40547782279381055aa7d7d6c2e4d3aef1af1cc39d4901a50",
+      "git_blob_sha1": "5ec14f73d7c39854d4140cb9c2af91114f597fa4",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/experiment.json",
+      "kind": "file",
+      "size": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob_sha1": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/stderr.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/stdout.log",
+      "kind": "file",
+      "size": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob_sha1": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/delivery-blobs.json",
+      "kind": "file",
+      "size": 8987,
+      "sha256": "1bb8cb8e293f168febe331d8247dbf9c3e60868ceb4ee3c81a8586b1a9cdd9b0",
+      "git_blob_sha1": "6198944cd796b9f5ca80062cd4bc90c3c476a3ca",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-check-r2.json",
+      "kind": "file",
+      "size": 1131,
+      "sha256": "352b1e3f3d1a60045fb466ac762145061c01c97c42114cda08466a10f882faec",
+      "git_blob_sha1": "61e85a78c9adf6759ba980a991e4f9120f960b58",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-r2.stderr.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-r2.stdout.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/frozen-evidence.tar.xz",
+      "kind": "file",
+      "size": 89444,
+      "sha256": "2ab1f9fd30d57085d688f5010e5048e50968e5debb49f8bfd8c5ae6b07f848d3",
+      "git_blob_sha1": "6dcf00e429e9e9fe3a9301a6ae266e87cdc2df5f",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/immutable-backup-manifest.json",
+      "kind": "file",
+      "size": 11923,
+      "sha256": "5e14937ab49e1c759aab6f8214a8cdfd6b72e604a5cdb02f5cb97ce8f1968c0e",
+      "git_blob_sha1": "1cd42a4bcb318f9cae01270b64846566b037b99e",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/primary-boundaries.json",
+      "kind": "file",
+      "size": 6584,
+      "sha256": "7e82b0f0c6727de1a8aae6d7e7856f273d8273549450ab1125e064c2ec42e415",
+      "git_blob_sha1": "ddcfbd717a15c171a705f7beb9d04af05bcb532e",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/root-verification.json",
+      "kind": "file",
+      "size": 869,
+      "sha256": "5c028a0191bb8315fad218be0a2a4848091c92dc283182bed13ba1fefa41b7d8",
+      "git_blob_sha1": "6345fce0fc3f237c06bd8e777c452b157f610337",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/README.md",
+      "kind": "file",
+      "size": 2778,
+      "sha256": "753cbebf0c6dbae27d196bb192df2358af14a57b698c45bb766698706bce0cf9",
+      "git_blob_sha1": "da52139243f21b59b3e7102d58203affcf0b6d55",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/launcher.json",
+      "kind": "file",
+      "size": 1754,
+      "sha256": "3d7b5f34e1b8461c6487978525e962764b34a1ff7aa6824b46d0a50dee518c2c",
+      "git_blob_sha1": "9acfc60df220e11aaf7df604447bffa851162786",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/readonly-analysis.json",
+      "kind": "file",
+      "size": 10387,
+      "sha256": "dd6d373b62d80063d9025e1d067e428431f39c53b0c40120c4ab75767fdf3152",
+      "git_blob_sha1": "e69e2ef383463df7d66012862e3d0ea1386ce55e",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/runtime-launch.json",
+      "kind": "file",
+      "size": 5288,
+      "sha256": "dc44f8b5b3326eed39bbc70f3ef78ae420aea7f8c9345644ba8ddf286143561a",
+      "git_blob_sha1": "931a67f36d1921548dde98951590d6aaa431172d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/runtime-status.json",
+      "kind": "file",
+      "size": 730,
+      "sha256": "daa5604d0615fb72f8c2a8af36e9f159fb756fc56eca1d345b6dc592da0fa75f",
+      "git_blob_sha1": "1874b8f6286dc83e045a4d6ca75e4beefbe9f0d7",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/trace-analysis.manifest.json",
+      "kind": "file",
+      "size": 2055,
+      "sha256": "efeb80ab3095ba954f2f8108f33cbeec2fad0ad6a24c9a17526993269ae80469",
+      "git_blob_sha1": "c8cb1ef85fb7fc2d8f5117f4964866e2a25e01c0",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/trace-analysis.tar.xz",
+      "kind": "file",
+      "size": 34996,
+      "sha256": "ee270d3f0bd7de4457ad4c059f42c3745ad9b4201f538178a69dc62bb1227e00",
+      "git_blob_sha1": "0372f6229378b757c09af44813adc0c1ae48877e",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/trace-window.json",
+      "kind": "file",
+      "size": 17155,
+      "sha256": "9f482686eeb83fbb653b668ea6ff79edd282d3c39b287192c8947a6fe35f4e55",
+      "git_blob_sha1": "dd950c97c0ca84e30124c15ab8c8ff733a5a4731",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/native-through-default-r4-r1.delivery.json",
+      "kind": "file",
+      "size": 3478,
+      "sha256": "0732708b5d5eac580827595342cfc34196fc787f7104e6a782b7e9055f681c33",
+      "git_blob_sha1": "0bf08e37f1f41b83763bdd2df876a004622ea076",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/native-through-default-r4-r1.original-manifest.json",
+      "kind": "file",
+      "size": 18344,
+      "sha256": "31be575dc7956e6cb8b397206473ed4d0fff01e968be483ad04d8dba79d5c74b",
+      "git_blob_sha1": "6e96158342524765ef32397de7349e8e5ce8da2d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/native-through-default-r4-r1.retrieval-receipt.json",
+      "kind": "file",
+      "size": 3731,
+      "sha256": "713bcaee81c2979016734008917062e23d8276ca5a8bd8e1b5dfe87b342cdca7",
+      "git_blob_sha1": "94e456ec346be6f06d72c47821a3a9787892496c",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/native-through-default-r4-r1.root-verification.json",
+      "kind": "file",
+      "size": 10966,
+      "sha256": "82524130f151bddef551d4d86850094c3f3112f13b08d0962488cd28258c22a3",
+      "git_blob_sha1": "807b6cfcec2bdd6aa5e5c197da6ccf3a86508aac",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/native-through-default-r4-r1.tar.xz",
+      "kind": "file",
+      "size": 407932,
+      "sha256": "72d5de97465c18df89f9ce261f609d25568b0de19c83d3abb141396b1350c890",
+      "git_blob_sha1": "bb28e9d90004ba840e9fd189c52cd3437798a3d2",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/c-api-root-verification.json",
+      "kind": "file",
+      "size": 3914,
+      "sha256": "18026fae63ad3858ddae53441211d6799ee09efeb7c2e2d50130bce494ba5e01",
+      "git_blob_sha1": "dcaae85e1e46b867dd9a4ae909802e6ad907b5ea",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/default-no-fail-fast-slices-r1/smart-turn-analyzer.log",
+      "kind": "file",
+      "size": 1106,
+      "sha256": "78ec7bbcdb81a1fefedbc2163eacad216e61f01d910451d114d0ee3f39136735",
+      "git_blob_sha1": "5282c34975406408b7883f22e6992946be145a70",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/default-no-fail-fast-slices-r1/smart-turn-log-slices.json",
+      "kind": "file",
+      "size": 1789,
+      "sha256": "37c1bf03e6bb7d1e53f842563030638afccc5337fa07dafd08c89ba4aa3b028e",
+      "git_blob_sha1": "766c1bc750dce52ada2520d9581ee8c0e84c83e8",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/default-no-fail-fast-slices-r1/smart-turn-pipeline.log",
+      "kind": "file",
+      "size": 1337,
+      "sha256": "88e8ec28874e113e477b91ae78f04b098048e14cc1ff633b6aa8d38c9f3b9f3c",
+      "git_blob_sha1": "5b4bc791f0d9327a100899f3020ca18efeb3dbd9",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/default-no-fail-fast-slices-r1/vad-lib.log",
+      "kind": "file",
+      "size": 1431,
+      "sha256": "8ef2cebb834d94f581320ce6fba0505dd3ee358982f55e0194114db09169bfd6",
+      "git_blob_sha1": "4fe5af47ed87b62f28c8b7ab6975c858e0572601",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/fixed-feature-independent-review-r2.json",
+      "kind": "file",
+      "size": 14813,
+      "sha256": "3e8fef59b0c1d340fdb52566e5aa9f0f72c8ada3edc53886a50915f95a6cbe67",
+      "git_blob_sha1": "deabb84faef61845376a2cc4f1845a5a111090f9",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/basic-probe.stdout.log",
+      "kind": "file",
+      "size": 1817,
+      "sha256": "1f8aa0ba6e6040afb7702b2b98f4cab73e4756a87b9101ca646de9c3ff10502b",
+      "git_blob_sha1": "206371b10ad9e3276a9a9748d85cf1afe09c8400",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/disable-probe.stdout.log",
+      "kind": "file",
+      "size": 1816,
+      "sha256": "867b32281f9f54a6057b362dbdd7a121b954b23ce4a7ae5ac43c2673ccdae451",
+      "git_blob_sha1": "b421a1c96ca9a34c9ee6022c9ec3a17615d809a0",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/launcher.json",
+      "kind": "file",
+      "size": 4073,
+      "sha256": "536bc3859a6167835e03842161d4203c82f0479e7dc962b228dfd66c9866c1b0",
+      "git_blob_sha1": "ccd43439a34433a2141a622d5341609094f162cb",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/levels.json",
+      "kind": "file",
+      "size": 90134,
+      "sha256": "dd3c6c9a12efa88b451d68839bae202fd89bf2e2f53eaaa648562009358810e8",
+      "git_blob_sha1": "151ba85475c243e347f7b6d05641131e860e836d",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/runtime-read.json",
+      "kind": "file",
+      "size": 16828,
+      "sha256": "1337898aa33e1a485196d5dfda138823fae273fa9126353adccbea561d5d073a",
+      "git_blob_sha1": "f4a70c8c31480dbf6eb1fec5a82e7cbf06c6c401",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/runtime-start.json",
+      "kind": "file",
+      "size": 5061,
+      "sha256": "b9a94c29f1e21c080ba802d162676eb9938e68aa174358cec7ccce3e892c89e3",
+      "git_blob_sha1": "daafe37e9d8219909adb4e98327a5afc8180f111",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/runtime-status.json",
+      "kind": "file",
+      "size": 951,
+      "sha256": "a9c72d9bb021ded6030bb64a8db09b2ea41b60f61f1dc5d285b957c13c23097d",
+      "git_blob_sha1": "ad5796704ae531eece33e36f7f1e0384a3cc4498",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/compile.stderr.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/compile.stdout.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/launcher.json",
+      "kind": "file",
+      "size": 3453,
+      "sha256": "2e87a474b890a006d755b6492baec2c01994ab92eb02a92b06ff9c667d7907a1",
+      "git_blob_sha1": "87883eee5117da7034d8035f6b6634d800864464",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/probe.stderr.log",
+      "kind": "file",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/probe.stdout.log",
+      "kind": "file",
+      "size": 1814,
+      "sha256": "09afb06777afba21d8055a6ecb08712ab6a077e2b6829382f12ef5d9837a1780",
+      "git_blob_sha1": "cceadd9adc7655dceb96b5b5a4bf1ebc003ef129",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/reference.json",
+      "kind": "file",
+      "size": 27385,
+      "sha256": "7c0720620aaea61615e1a50795ad84118c6881563198e4d42534f9e565c67b4e",
+      "git_blob_sha1": "94a534c6aab973342ea891b45815a5d0d4a3cee7",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/qdq-static-analysis-r1.json",
+      "kind": "file",
+      "size": 8251,
+      "sha256": "c469810613cc97d7434e89743ccba417c05a8f4e0a8ba4193d3e5478610753e1",
+      "git_blob_sha1": "b674469d3f98ee99dab835940e444a9d9a0045aa",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-levels-r2/desktop_smart_turn_levels_pin_r2.py",
+      "kind": "file",
+      "size": 30275,
+      "sha256": "51eb47b6ed022620d98074e0063afa52c547cfa5f2086e67e130d0c526be6450",
+      "git_blob_sha1": "6cff6aee2041190744b93474426a0832a5f26e24",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-levels-r2/launch-manifest.json",
+      "kind": "file",
+      "size": 792,
+      "sha256": "bd683edec5e308ffcc27e8b031449d29715b3c56e7144b47e46a3e240bf965b3",
+      "git_blob_sha1": "fdcf390dfabe8940f5174f706592dd9146585084",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-levels-r2/launcher.py",
+      "kind": "file",
+      "size": 3663,
+      "sha256": "9d8a4fdac9e31b840e70cbe5a1644935eceebdcf8e604cfac765a38a9b8b027e",
+      "git_blob_sha1": "14f76d48743d8fd6bd63fb660bfd29ad9af872a5",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-levels-r2/ort_reference_probe_basic.c",
+      "kind": "file",
+      "size": 11818,
+      "sha256": "d110fe4fd5e76856f8d9874a16da2899e9c92437659b0af289b17d675d7e35b1",
+      "git_blob_sha1": "c949756363bae14590fea4deb765110fac1407fd",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-levels-r2/ort_reference_probe_disable.c",
+      "kind": "file",
+      "size": 11816,
+      "sha256": "4e5623210792a87b71509d0ff2ba538ec9fd73baef4cab897c72f132abfc7844",
+      "git_blob_sha1": "bc31c2a0061253bad0c7c35a446e18a7bf22beb9",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-probe-r1/desktop_smart_turn_reference_pin_r1.py",
+      "kind": "file",
+      "size": 21084,
+      "sha256": "883d255905821c7e1b70141dd1b841d2dd16eeee26ba9ba1cf34b3eb09cf5abc",
+      "git_blob_sha1": "c0f73e5facebe14f65f48e86468749ea230d1005",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-probe-r1/onnxruntime_c_api.h",
+      "kind": "file",
+      "size": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882",
+      "git_blob_sha1": "b2f3d95e00a88a348b4590fb16ff153cdfa10a29",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-probe-r1/ort_reference_probe.c",
+      "kind": "file",
+      "size": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547",
+      "git_blob_sha1": "9fb2f9668a52d22f2da48dd714a8f1894130093a",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/reference-probe-r1/plan.json",
+      "kind": "file",
+      "size": 14355,
+      "sha256": "98f95287a79a3c9f1f4babebf4a418f34121771268699a33677d8cc1247b4d80",
+      "git_blob_sha1": "d4fd29fa2231c7cf9cd159cfe75fb74058632af3",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/smart-turn/static-review-r1.json",
+      "kind": "file",
+      "size": 11065,
+      "sha256": "5606e8c82039427f25fefe9bec9b1c61e6ded2dde51bc3d9708f8cbf7874990d",
+      "git_blob_sha1": "73ef7d28a2d37bcb10906b0dfdda6122f71da1f0",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/user-speech-http/application.json",
+      "kind": "file",
+      "size": 1184,
+      "sha256": "8ed3cdf5e9855727457b7a54ce4c40250739040df901bc981b83cfa5b3648732",
+      "git_blob_sha1": "7812072ca85b68e0fa467f9149bd098d903f67f3",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/user-speech-http/audit.json",
+      "kind": "file",
+      "size": 3247,
+      "sha256": "af5ccca1aa82ae6ddc9355c907a48bdff6ba453cf05181c7cecab3601e9ea9a1",
+      "git_blob_sha1": "fee6534d77210c04d0cddddf1ac0249efbcbb053",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/native/user-speech-http/candidate.patch",
+      "kind": "file",
+      "size": 651,
+      "sha256": "62f0f4587f5c4f70090178396cee78d65a18b3211085e28b0ecacd643a218974",
+      "git_blob_sha1": "fbd43ca4bddaf728c6ad9fafcac2b9616e496002",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/provider-examples/README.md",
+      "kind": "file",
+      "size": 3816,
+      "sha256": "69321c72863630b4bc1d62999a8a0d96e7b79d9a00b92783f8dc90e2ac8049d1",
+      "git_blob_sha1": "8710805bbd5520f6d533e1fcc0711aaf336bfb53",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/provider-examples/normal-build-pin-r1/gate.json",
+      "kind": "file",
+      "size": 3228,
+      "sha256": "4b16c8e40820db992014d75d7ef0fa4c42948fc714e36f48d398d51b85811aaf",
+      "git_blob_sha1": "3fb9289e5a75a83959b6648768de3af9c0e42dfa",
+      "git_mode": "100644"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/provider-examples/normal-build-pin-r1/provider-example-artifacts.json",
+      "kind": "file",
+      "size": 4703,
+      "sha256": "41df11373085398c9dc40f39197bb6d983ac7f3d43dede4b1ae917bd294ac223",
+      "git_blob_sha1": "7113a9a3ec4e35e1b1cd6857d78d252aedf06d2f",
+      "git_mode": "100644"
+    }
+  ],
+  "native_execution_binding": "All earlier matrix/models/WebRTC/AISHELL/C3 still belong to0cc. This two-source test-only diagnostic/lint commit is a new identity; only later MoQ/strict/format checks may claim it."
+}

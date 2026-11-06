@@ -1,0 +1,82 @@
+{
+  "schema": "cartesia-eager-expanded-failure-immutable-backup-v1",
+  "repository": "TrillionniumFoundation/pipecat-rs",
+  "source_directory": "/workspace/scratch/f9f576cc6c66/workspace-evidence/cartesia-eager-expanded-failure-r1",
+  "scope": "Read-only original-log diagnosis and isolated candidate backup. The candidate/diagnosis scope remains the generation-time unapplied state; root subsequently reported applying exact 96ad7031 bytes separately. No source mutation, native run, tree/ref update by this agent.",
+  "file_count": 9,
+  "total_bytes": 42846,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3206,
+      "sha256": "a81a4fb40e7eee028c89fac2475adde9a9f83b527032dc0980055069db062e84",
+      "git_blob": "ea8b2d44e9e122f937a2a45e2fdaf03ffe511679",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "actual-anthropic-next-request.json",
+      "bytes": 654,
+      "sha256": "801b8ac2bf0400a83e4a4e4a8bc6650e08b10a8c2161ba81aa7a12338b2b0247",
+      "git_blob": "5603da1e65859cd0da0ede96dc5b780d8d313f17",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "crosssocket_effects.rs.candidate",
+      "bytes": 23727,
+      "sha256": "96ad703190d83041feea27fe1570d158d503491a958fd80b614615c668c77cf0",
+      "git_blob": "0f3f67e7f7bddf3ae2051c99600c651d5bd256c6",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "diagnosis.json",
+      "bytes": 2099,
+      "sha256": "56baff4f6c9bc377b105803788299f652290ecb7b06302a5d617be6256360c1d",
+      "git_blob": "6e3c9177bf133be870b48e1f7e881a854934fe9a",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "exact-wire-history.patch",
+      "bytes": 1418,
+      "sha256": "df3d82963a338e8ed8c604094ef2ec192f08db7852adcd2cf04afdc7fd5806c3",
+      "git_blob": "5195ca1d541da08a69520c42cbd10c74ebb4cbb0",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "original-gate.json",
+      "bytes": 3221,
+      "sha256": "cb489696a0f52d5ed019402ff0e9ac7b01681ed22f48135beb3659203ed68d3a",
+      "git_blob": "50abf5854e307e3824d3d5bcca4cedb79bb29fc3",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "slice.json",
+      "bytes": 541,
+      "sha256": "c67722c9326a371b269f974573548b4219a58dcbd752921a691ae1d58d6ebd6b",
+      "git_blob": "6dbd4f16bb879a52bf18795399131edcb189ee00",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "source-bindings.json",
+      "bytes": 3213,
+      "sha256": "4d23dc334a12b547aab4a917ca98e435f06d3c14ff8615754d8bc3add9f7dc0d",
+      "git_blob": "4b6d45cbcbb20363c38ef1cba277c4b72638fbf1",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    },
+    {
+      "path": "target-original.log",
+      "bytes": 4767,
+      "sha256": "f0f294a6f4358aabef125cf30738c172135b06a41412518ff0f9f51cabfdb232",
+      "git_blob": "f523bf36e8e80590fe579e6f05c405f541d59e75",
+      "local_git_identity_verified": true,
+      "github_readback_exact": true
+    }
+  ]
+}

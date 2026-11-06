@@ -1,0 +1,28 @@
+{
+  "source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "path": "rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+  "before_source_commit": "ae134e942411c6b0ad64d7f5b6caa1c603919c57",
+  "before_sha256": "51527283bc0108ecdddc6dade5a789f7e90938a917bd765c8b64fc92e8fd99ae",
+  "after_sha256": "5f5d2cba7774aa4644cd7dd6dc67d86daf256223c78e65761705f59b67bf953f",
+  "after_bytes": 39321,
+  "scenario_bodies_and_prefix_byte_identical": true,
+  "original_scenario_count": 12,
+  "original_release_oracle": "no_connection 60ms; drop original listener; one immediate TcpListener::bind; error fails",
+  "drop_to_bind_has_no_inserted_operation": true,
+  "diagnostic_limits": {
+    "self_fd_entries": 4096,
+    "self_fd_matches": 64,
+    "tcp_table_bytes": 1048576,
+    "tcp_table_lines": 8192,
+    "tcp_table_matches": 64
+  },
+  "qualification": "Source review only. Actual format/build and repetition results are separately recorded; no runtime result is inferred here.",
+  "limits": [
+    "Pre-drop metadata reads may affect scheduling.",
+    "Post-failure fd and TCP snapshots are non-atomic.",
+    "No match after failure does not establish absence at bind time.",
+    "This change does not assign a cause to original r3 AddrInUse.",
+    "The separate controlled competitor example ran in local scratch, not the desktop r3 invocation."
+  ]
+}

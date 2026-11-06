@@ -137,8 +137,9 @@ Readiness, draft limits and no-replay behavior are unchanged. Disconnect closes
 the socket/peer and AudioContext even when no microphone stream exists. Native provider
 setup, including configured STT, is unchanged: this option does not promise fewer
 server STT connections, different credentials or lower provider cost. Actual
-browser permission/capture execution remains unqualified on the current blocked
-Chromium host; see VALIDATION.md.
+Chromium text-mode and synthetic-device execution is recorded in `VALIDATION.md`.
+Physical microphone permission, device capture and user-heard output remain
+separate acceptance gates.
 
 ## Ownership and bounds
 
@@ -180,20 +181,47 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings
 ./build.sh
 python3 tests/browser_acceptance.py
+python3 tests/browser_input_acceptance.py
 ```
 
-The browser fixture requires Python `aiohttp`, Python `playwright`, and system
-Chromium at `/usr/bin/chromium`. It starts only loopback HTTP/WebSocket services,
+The 2026-11-06 requalification used exact Rust 1.99.0, source `7105367`,
+and an independent source/target pair. Its first run passed the existing 54 native
+tests and native all-target strict Clippy, then failed overall when the official
+WASM standard-library download was truncated. A separate WASM-only run passed
+strict Clippy after complete official-hash verification; it did not rerun the
+native phases or the Chromium fixtures. The original failed run remains failed.
+See the [complete raw receipts and source binding](../docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md)
+and [validation record](VALIDATION.md) for the distinct phase results and limits.
+
+Both browser fixtures require Python `aiohttp`, Python `playwright`, and system
+Chromium at `/usr/bin/chromium`. Pass `--browser /path/to/chromium`,
+`--assets /path/to/dist`, and `--output /path/to/evidence` to select an existing
+browser, a built bundle, and a separate evidence directory. Both retain the normal
+Chromium sandbox. Success and failure JSON include completed checks, elapsed time,
+source and asset hashes, and browser version; cleanup errors fail the run.
+
+`browser_acceptance.py` starts only loopback HTTP/WebSocket services,
 uses Chromium's synthetic microphone and synthetic remote audio, and creates a
 real paired RTCPeerConnection. Test-only JavaScript implements the remote fixture
-and instrumentation; none is bundled in the app. Results and screenshot are
-written under ignored `target/`.
+and instrumentation; none is bundled in the app. Its autoplay override is part of
+this protocol fixture and does not qualify normal autoplay policy. Results and
+screenshot default to ignored `target/`.
+
+`browser_input_acceptance.py` uses explicit WebSocket text input without microphone
+capture and without an autoplay override. It checks that a trusted Connect click
+resumes the native AudioContext and that synthetic PCM is scheduled and ends;
+the browser output is muted. It drives Chromium's IME composition engine through
+CDP, verifies literal Chinese/emoji/newline text and one explicit Send, then aborts
+the loopback TCP connection and verifies cleanup and a manual reconnect without
+draft replay. It checks Chromium composition, not an OS Pinyin candidate UI, and
+native audio scheduling, not acoustic playback or user hearing. Each invocation
+has a bounded scenario deadline and retains partial evidence on failure.
 
 Unit tests cover wire-compatible protobuf golden bytes, PCM conversion and
 validation, URL/token handling, config/adapter validation, RTVI projection,
 connection generations and exhaustion, cancellation/reconnection, audio-flow limits,
 and the exact shared text readiness, UTF-8, request-ID and encoded-byte budgets.
-See `VALIDATION.md` for the recorded passed checks and blocked browser stage.
+See `VALIDATION.md` for the executed browser checks and their precise limits.
 Browser acceptance must be reported separately from live-provider, physical
 microphone/speaker, WAN TURN traversal, multi-browser, autoplay-restriction and
 production-auth acceptance. Those environments are not exercised by the fixture.
@@ -207,9 +235,11 @@ positive SCTP requests and PCMU/Opus downlink audio. These are transport-level
 observations, not packet captures or a claim of zero network traffic: ICE, DTLS,
 SCTP text and receiver RTCP still send. Default voice remains bidirectional.
 The actual child-hosted configuration is tested separately from its consumption
-by a native client with loopback provider services. The rebuilt WASM and updated
-Chromium fixture do not establish executed browser permission or autoplay behavior;
-that environment remains blocked as recorded in VALIDATION.md.
+by a native client with loopback provider services. The executed Chromium fixture
+also checks the browser's receive-only direction, absent microphone calls and
+downlink/uplink counters. A separate text-input run checks native audio scheduling
+after a trusted click without an autoplay override; output is muted. Physical
+permission and audible playback remain separate, as recorded in `VALIDATION.md`.
 
 ## Explicit PNG/JPEG image input
 
@@ -290,7 +320,8 @@ omission or eviction permanently marks the view as incomplete for that
 connection. The panel never claims that all work is finished or that retained
 rows are a full history. Events remain available in the bounded diagnostic log.
 
-Browser DOM execution remains unqualified on this host; see `VALIDATION.md`.
+Actual Chromium DOM checks for both transports are recorded in `VALIDATION.md`;
+the single 960-by-480 screenshot is not a multi-browser visual matrix.
 
 ## Plain-text toast notifications
 
@@ -331,6 +362,7 @@ background throttling or a blocked main thread can delay execution, so this is
 not an exact wall-clock removal guarantee. If timer/clock setup fails, toasts are
 rejected with a diagnostic while the existing conversation remains usable.
 
-DOM rendering, browser timer ownership, dismiss interaction and visual layout
-remain unqualified on this host; see `VALIDATION.md` for the distinction between
-native model/transport tests and the retained browser acceptance fixture.
+Actual Chromium checks cover literal DOM rendering, timer ownership, dismiss,
+expiry, duplicate notifications and disconnect clearing. See `VALIDATION.md`
+for the executed fixture, its single viewport and remaining physical/provider
+acceptance gates.

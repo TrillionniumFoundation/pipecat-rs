@@ -1,0 +1,992 @@
+{
+  "schema": "pipecat-root-final-matrix-originals-verification-v1",
+  "created_utc": "2026-11-06T17:42:30.565714+00:00",
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "source_tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "archive": {
+    "file": "final-matrix-pin-r1.tar.xz",
+    "bytes": 927996,
+    "sha256": "62f4b7b500766bd5e1afe027159be17c64a517d676c060226bec332f7a9c4ced",
+    "git_blob_sha1": "39e700b80735c317e5d918021aa9bec7f747d71c"
+  },
+  "original_count": 147,
+  "original_bytes": 23765300,
+  "archive_member_count": 187,
+  "archive_member_bytes": 25347216,
+  "derived_archive_members": 39,
+  "all_original_sizes_hashes_and_local_bytes_verified": true,
+  "embedded_original_manifest_exact": true,
+  "source_maps": [
+    {
+      "name": "evidence/all-features-all-targets-no-fail-fast-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/all-features-all-targets-no-fail-fast-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/all-features-all-targets-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/all-features-all-targets-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/build-normal-examples-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/build-normal-examples-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/default-no-fail-fast-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/default-no-fail-fast-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/format-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/format-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/full-workspace-rust-1.99.0-r5/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/full-workspace-rust-1.99.0-r5/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/grok-lifetime-qualification-pin-r1/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/grok-lifetime-qualification-pin-r1/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/owned-format-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/owned-format-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/smart-turn-ort-levels-pin-r2/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/smart-turn-ort-levels-pin-r2/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/strict-clippy-pin-r2/source-after.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    },
+    {
+      "name": "evidence/strict-clippy-pin-r2/source-before.json",
+      "file_sha256": "f9876ce5eac2399fbaf25b0af0e75320c4aaaf83f28b48931239bbd8c8371011",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+      "files": 2327
+    }
+  ],
+  "command_counts": [
+    {
+      "stage": "full-workspace-rust-1.99.0-r5",
+      "raw_file": "originals/evidence/full-workspace-rust-1.99.0-r5/cargo-test-workspace.log",
+      "raw_bytes": 436838,
+      "raw_sha256": "646703b53acac51ede7550e708a6b3ad664a875ac3441078d27c1fb2169f36e2",
+      "gate_sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "seconds": 185.08831572532654,
+      "harness_count": 325,
+      "counts": {
+        "passed": 3792,
+        "failed": 1,
+        "ignored": 11,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "one_summary_per_harness": true,
+      "individual_case_status_counts_match_each_summary": true,
+      "source_unchanged": true,
+      "failed_harnesses": [
+        {
+          "harness": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_moq-9303b098e3099349)",
+          "counts": {
+            "passed": 80,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 428673,
+          "end_byte": 436838,
+          "raw_sha256": "8a1fc305fac84714d2124c04c1af1aaeba6261e09c7214822d20e58a3e843c65",
+          "summary": "test result: FAILED. 80 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s",
+          "failed_case_names": [
+            "tests::absent_peer_has_a_bounded_deadline"
+          ],
+          "panic_sites": [
+            "thread 'tests::absent_peer_has_a_bounded_deadline' (1025677) panicked at crates/pipecat-moq/src/tests.rs:356:5:"
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "default-no-fail-fast-pin-r2",
+      "raw_file": "originals/evidence/default-no-fail-fast-pin-r2/command.log",
+      "raw_bytes": 893160,
+      "raw_sha256": "4855e50cd33d5e4f0ded7802fd3b28ce479713ff8ee162f6e9340acd0f493eac",
+      "gate_sha256": "f259b6863e04d9365f3c8404af665bd2210fb051b5b9cbd94ba4969d1dabcf59",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-fail-fast"
+      ],
+      "exit_code": 101,
+      "seconds": 392.45980525016785,
+      "harness_count": 755,
+      "counts": {
+        "passed": 7748,
+        "failed": 4,
+        "ignored": 33,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "one_summary_per_harness": true,
+      "individual_case_status_counts_match_each_summary": true,
+      "source_unchanged": true,
+      "failed_harnesses": [
+        {
+          "harness": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)",
+          "counts": {
+            "passed": 0,
+            "failed": 2,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 837745,
+          "end_byte": 839084,
+          "raw_sha256": "4978e7a0d200c1774fe6bf615867888dcb0fc3149e8fa4a459b06c4114c14f24",
+          "summary": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s",
+          "failed_case_names": [
+            "actual_smart_turn_onnx_drives_composable_analyzer_policy",
+            "actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context"
+          ],
+          "panic_sites": [
+            "thread 'actual_smart_turn_onnx_drives_composable_analyzer_policy' (1078855) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:",
+            "thread 'actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context' (1078856) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:"
+          ]
+        },
+        {
+          "harness": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-1ae35dd7b6b312e0)",
+          "counts": {
+            "passed": 7,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 857896,
+          "end_byte": 859328,
+          "raw_sha256": "acceb9c18a706da2e8694250bf1b469f40c672d5e46ecdf5b97a2e89b7f0f10b",
+          "summary": "test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s",
+          "failed_case_names": [
+            "smart_turn::tests::smart_turn_real_model_matches_python_probabilities"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn::tests::smart_turn_real_model_matches_python_probabilities' (1079285) panicked at crates/pipecat-vad/src/smart_turn.rs:501:13:"
+          ]
+        },
+        {
+          "harness": "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-2845e05916b76d58)",
+          "counts": {
+            "passed": 2,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 862058,
+          "end_byte": 863165,
+          "raw_sha256": "69e8ce7b68b411403fed207afded4c33ba491a9ae583811510f5263ef56bd624",
+          "summary": "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s",
+          "failed_case_names": [
+            "smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse' (1079541) panicked at crates/pipecat-vad/tests/smart_turn_model_analyzer.rs:45:9:"
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "all-features-all-targets-pin-r2",
+      "raw_file": "originals/evidence/all-features-all-targets-pin-r2/command.log",
+      "raw_bytes": 256042,
+      "raw_sha256": "5f6f79efa4877f729aa35e6e9a490cd6bd60aec24846eda3ea0fe85168caf006",
+      "gate_sha256": "30d8b1800f92e3bb38db5bf3cb27daee5d0269cf6886ab2b5f1a56b0a753fe04",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--all-features",
+        "--all-targets",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "seconds": 351.79068517684937,
+      "harness_count": 222,
+      "counts": {
+        "passed": 2221,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "one_summary_per_harness": true,
+      "individual_case_status_counts_match_each_summary": true,
+      "source_unchanged": true,
+      "failed_harnesses": [
+        {
+          "harness": "Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)",
+          "counts": {
+            "passed": 8,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 254204,
+          "end_byte": 256042,
+          "raw_sha256": "28c42a133e4e3824994e50cc741ef749cd4c910f5b62b115c9fc9852cb005c81",
+          "summary": "test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.98s",
+          "failed_case_names": [
+            "genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles"
+          ],
+          "panic_sites": [
+            "thread 'genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles' (1100999) panicked at crates/pipecat-evals/tests/bot_audio_smart_turn.rs:1007:9:"
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "all-features-all-targets-no-fail-fast-pin-r2",
+      "raw_file": "originals/evidence/all-features-all-targets-no-fail-fast-pin-r2/command.log",
+      "raw_bytes": 998609,
+      "raw_sha256": "32f0935dbbd2910f61cfbfbec89b7d6a807f60d27e734c45f87ea540f5b213ad",
+      "gate_sha256": "8f9ea00bb061445bc4e08d14f93cc06f1893058f7ac7d8cac967c543a259fba7",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--all-features",
+        "--all-targets",
+        "--locked",
+        "--no-fail-fast"
+      ],
+      "exit_code": 101,
+      "seconds": 534.0139462947845,
+      "harness_count": 731,
+      "counts": {
+        "passed": 8856,
+        "failed": 7,
+        "ignored": 63,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "one_summary_per_harness": true,
+      "individual_case_status_counts_match_each_summary": true,
+      "source_unchanged": true,
+      "failed_harnesses": [
+        {
+          "harness": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_evals-46a03f7eca78a082)",
+          "counts": {
+            "passed": 220,
+            "failed": 2,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 213785,
+          "end_byte": 237748,
+          "raw_sha256": "7199047625672730f71f39a16f02bba9f824b722a988b893924af26a977608d5",
+          "summary": "test result: FAILED. 220 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s",
+          "failed_case_names": [
+            "user_speech_cache::tests::late_commit_cannot_extend_the_original_production_deadline",
+            "user_speech_cache::tests::timely_command_between_empty_poll_and_timeout_is_not_discarded"
+          ],
+          "panic_sites": [
+            "thread 'user_speech_cache::tests::late_commit_cannot_extend_the_original_production_deadline' (1109011) panicked at crates/pipecat-evals/src/user_speech_cache.rs:1657:27:",
+            "thread 'user_speech_cache::tests::timely_command_between_empty_poll_and_timeout_is_not_discarded' (1109063) panicked at crates/pipecat-evals/src/user_speech_cache.rs:1630:27:"
+          ]
+        },
+        {
+          "harness": "Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)",
+          "counts": {
+            "passed": 8,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 254591,
+          "end_byte": 256429,
+          "raw_sha256": "09e0f2b754c3066e1fcea35fde4b738bd610869b6950589145c7b1b54324e5ec",
+          "summary": "test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.92s",
+          "failed_case_names": [
+            "genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles"
+          ],
+          "panic_sites": [
+            "thread 'genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles' (1115016) panicked at crates/pipecat-evals/tests/bot_audio_smart_turn.rs:1007:9:"
+          ]
+        },
+        {
+          "harness": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-adb22a02b2ba759a)",
+          "counts": {
+            "passed": 0,
+            "failed": 2,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 949986,
+          "end_byte": 951325,
+          "raw_sha256": "c398ca303c15060514ebd37dee3810fab168967b2619a9a13802c9da32908c18",
+          "summary": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s",
+          "failed_case_names": [
+            "actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context",
+            "actual_smart_turn_onnx_drives_composable_analyzer_policy"
+          ],
+          "panic_sites": [
+            "thread 'actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context' (1137611) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:",
+            "thread 'actual_smart_turn_onnx_drives_composable_analyzer_policy' (1137610) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:"
+          ]
+        },
+        {
+          "harness": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-23786cc7a223be1a)",
+          "counts": {
+            "passed": 17,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 970853,
+          "end_byte": 973199,
+          "raw_sha256": "dbb51c3c1c0f7fc522cea787e937075406183c70ecfa184aeb74abd96d52a6ca",
+          "summary": "test result: FAILED. 17 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+          "failed_case_names": [
+            "smart_turn::tests::smart_turn_real_model_matches_python_probabilities"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn::tests::smart_turn_real_model_matches_python_probabilities' (1137995) panicked at crates/pipecat-vad/src/smart_turn.rs:501:13:"
+          ]
+        },
+        {
+          "harness": "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-ffcc52f9b2c092a5)",
+          "counts": {
+            "passed": 2,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "start_byte": 976668,
+          "end_byte": 977775,
+          "raw_sha256": "8853a1312899e40f1b7bb139d976a4110131e1251d66ac1cb10a5abfad6e932e",
+          "summary": "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s",
+          "failed_case_names": [
+            "smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse' (1138452) panicked at crates/pipecat-vad/tests/smart_turn_model_analyzer.rs:45:9:"
+          ]
+        }
+      ]
+    }
+  ],
+  "other_commands": [
+    {
+      "stage": "build-normal-examples-pin-r2",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "build",
+        "--workspace",
+        "--all-features",
+        "--examples",
+        "--locked",
+        "--message-format=json-render-diagnostics"
+      ],
+      "exit_code": 0,
+      "seconds": 8.036619186401367,
+      "raw_bytes": 398467,
+      "raw_sha256": "c7e2524e5eb386235ec27cd0c48692c66dfebaea25303930aaa62866abaf652c",
+      "source_unchanged": true
+    },
+    {
+      "stage": "strict-clippy-pin-r2",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "seconds": 117.44434809684753,
+      "raw_bytes": 17381,
+      "raw_sha256": "a7f0dd43af2af36db03dfb5f835a939bc718c17c5ed8f1935824e254543a0444",
+      "source_unchanged": true
+    },
+    {
+      "stage": "format-pin-r2",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 1,
+      "seconds": 16.79295325279236,
+      "raw_bytes": 2573760,
+      "raw_sha256": "bfc8ec8628c5468431277e3a5d4c7b35c3ceac7ccf584e6e26f2b74d77c0ee55",
+      "source_unchanged": true
+    },
+    {
+      "stage": "owned-format-pin-r2",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "fmt",
+        "-p",
+        "pipecat",
+        "-p",
+        "pipecat-agent-workers",
+        "-p",
+        "pipecat-assemblyai",
+        "-p",
+        "pipecat-audio",
+        "-p",
+        "pipecat-aws-agentcore",
+        "-p",
+        "pipecat-aws-bedrock",
+        "-p",
+        "pipecat-aws-common",
+        "-p",
+        "pipecat-aws-nova-sonic",
+        "-p",
+        "pipecat-aws-sagemaker",
+        "-p",
+        "pipecat-aws-sagemaker-bidi-tts",
+        "-p",
+        "pipecat-aws-sagemaker-deepgram-stt",
+        "-p",
+        "pipecat-aws-sagemaker-stt",
+        "-p",
+        "pipecat-aws-speech",
+        "-p",
+        "pipecat-azure-realtime",
+        "-p",
+        "pipecat-azure-voice-live",
+        "-p",
+        "pipecat-classifiers",
+        "-p",
+        "pipecat-cli",
+        "-p",
+        "pipecat-client-server",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-deepgram-flux",
+        "-p",
+        "pipecat-elevenlabs",
+        "-p",
+        "pipecat-evals",
+        "-p",
+        "pipecat-flows",
+        "-p",
+        "pipecat-gemini-live",
+        "-p",
+        "pipecat-gladia",
+        "-p",
+        "pipecat-gradium",
+        "-p",
+        "pipecat-grok-realtime",
+        "-p",
+        "pipecat-hepta",
+        "-p",
+        "pipecat-images",
+        "-p",
+        "pipecat-inworld-realtime",
+        "-p",
+        "pipecat-livekit",
+        "-p",
+        "pipecat-local-audio",
+        "-p",
+        "pipecat-mcp",
+        "-p",
+        "pipecat-media-transport",
+        "-p",
+        "pipecat-moonshine",
+        "-p",
+        "pipecat-moq",
+        "-p",
+        "pipecat-network-bus",
+        "-p",
+        "pipecat-observers",
+        "-p",
+        "pipecat-openclaw",
+        "-p",
+        "pipecat-pipeline",
+        "-p",
+        "pipecat-piper",
+        "-p",
+        "pipecat-processors",
+        "-p",
+        "pipecat-project",
+        "-p",
+        "pipecat-protocol",
+        "-p",
+        "pipecat-realtime",
+        "-p",
+        "pipecat-responses",
+        "-p",
+        "pipecat-rnnoise",
+        "-p",
+        "pipecat-rtvi",
+        "-p",
+        "pipecat-runner",
+        "-p",
+        "pipecat-services",
+        "-p",
+        "pipecat-soniox",
+        "-p",
+        "pipecat-speech",
+        "-p",
+        "pipecat-speechmatics",
+        "-p",
+        "pipecat-streaming-speech",
+        "-p",
+        "pipecat-text",
+        "-p",
+        "pipecat-transports",
+        "-p",
+        "pipecat-turns",
+        "-p",
+        "pipecat-vad",
+        "-p",
+        "pipecat-webrtc",
+        "-p",
+        "pipecat-whisper",
+        "-p",
+        "pipecat-worker-proxy",
+        "-p",
+        "pipecat-workers",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 15.09061598777771,
+      "raw_bytes": 0,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_unchanged": true
+    }
+  ],
+  "grok_original_rounds": [
+    {
+      "round": 1,
+      "bytes": 1078,
+      "sha256": "1fb6905e31616e116f7a06a46b88e4fbb074ea4bd55d9bebf8b06f9f82fc53db",
+      "seconds": 1.2180107140447944,
+      "passed": 12
+    },
+    {
+      "round": 2,
+      "bytes": 1078,
+      "sha256": "7a9441ba58465dd31907fc3da091a33cfa8a892572530dde10c52c85bf9c7b59",
+      "seconds": 1.2697586629074067,
+      "passed": 12
+    },
+    {
+      "round": 3,
+      "bytes": 1078,
+      "sha256": "c7c2e8a334b568e2700353e9704690a2aafe531cfbe85aec9ac7559bf5e40a0b",
+      "seconds": 1.2698758959304541,
+      "passed": 12
+    },
+    {
+      "round": 4,
+      "bytes": 1078,
+      "sha256": "d469116e1b9882fec80fc3c539c14241a3ad346b0b7a1eaef05bfe7d0a874ab7",
+      "seconds": 1.2192084910348058,
+      "passed": 12
+    },
+    {
+      "round": 5,
+      "bytes": 1078,
+      "sha256": "3531fae56228f2ba6ec27464c41760a066c43af4d750f7311d6964746e0dffbe",
+      "seconds": 1.2697127999272197,
+      "passed": 12
+    },
+    {
+      "round": 6,
+      "bytes": 1078,
+      "sha256": "ff9ebca05af75c189785878f1d47df9b8d467c91135f4c83dfc33f489a3c57b1",
+      "seconds": 1.2685402890201658,
+      "passed": 12
+    },
+    {
+      "round": 7,
+      "bytes": 1078,
+      "sha256": "7d710a5efd48ba56f312fc39c1a36bc67acaa891a508ca22933d1f9e15374b31",
+      "seconds": 1.2684455791022629,
+      "passed": 12
+    },
+    {
+      "round": 8,
+      "bytes": 1078,
+      "sha256": "1fb6905e31616e116f7a06a46b88e4fbb074ea4bd55d9bebf8b06f9f82fc53db",
+      "seconds": 1.2190160579048097,
+      "passed": 12
+    },
+    {
+      "round": 9,
+      "bytes": 1078,
+      "sha256": "73d8e6cdb2572de3f70191ff0287690ec5491b9b44f3104059818e564a96ef84",
+      "seconds": 1.269572720862925,
+      "passed": 12
+    },
+    {
+      "round": 10,
+      "bytes": 1078,
+      "sha256": "6c14a279d92ae4713ccfa024777d7c31270fef6b435242695638ff38f4cc210d",
+      "seconds": 1.2187246750108898,
+      "passed": 12
+    },
+    {
+      "round": 11,
+      "bytes": 1078,
+      "sha256": "9f8c5054690e58f346fcbcb011f83b194ecd0f86300154f6135552cff7da857a",
+      "seconds": 1.2685809379909188,
+      "passed": 12
+    },
+    {
+      "round": 12,
+      "bytes": 1078,
+      "sha256": "ca4ae716d5f5ef99bf414b086de26a5cd701915c7bcd319bdad4da0aece128d1",
+      "seconds": 1.219420903827995,
+      "passed": 12
+    },
+    {
+      "round": 13,
+      "bytes": 1078,
+      "sha256": "f677137a97b55542d0b6402a5d33a8b3b520a220dab30d660a0d17825aa1b529",
+      "seconds": 1.2691838699392974,
+      "passed": 12
+    },
+    {
+      "round": 14,
+      "bytes": 1078,
+      "sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "seconds": 1.269605356035754,
+      "passed": 12
+    },
+    {
+      "round": 15,
+      "bytes": 1078,
+      "sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "seconds": 1.2689464669674635,
+      "passed": 12
+    },
+    {
+      "round": 16,
+      "bytes": 1078,
+      "sha256": "e8fc2489242a7b8adef52a752f018e31e8a9f066f659216316dc216927bb67b1",
+      "seconds": 1.269653765950352,
+      "passed": 12
+    },
+    {
+      "round": 17,
+      "bytes": 1078,
+      "sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "seconds": 1.2689456301741302,
+      "passed": 12
+    },
+    {
+      "round": 18,
+      "bytes": 1078,
+      "sha256": "eb0dc0677a4fbd9e942fbe98e28a6e1dbf66a6702ce10196f199a27115e9a72a",
+      "seconds": 1.2691816438455135,
+      "passed": 12
+    },
+    {
+      "round": 19,
+      "bytes": 1078,
+      "sha256": "8843d37a0f26cc8736c98c50256309308aebcb779ea8bc154c84dfe009eb3695",
+      "seconds": 1.2698308110702783,
+      "passed": 12
+    },
+    {
+      "round": 20,
+      "bytes": 1078,
+      "sha256": "6035a20f8e8307d3ed19f1d017f73c2a5fcac8b0171da65a0917da5da38be1e0",
+      "seconds": 1.218588697956875,
+      "passed": 12
+    }
+  ],
+  "grok_scope": "20 repeated executions of the same 12 cases; no unique coverage multiplication and no original failure is cleared.",
+  "normal_example_artifacts": [
+    {
+      "name": "aws_nova_sonic_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-aws-nova-sonic#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "aws_nova_sonic_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-aws-nova-sonic/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/aws_nova_sonic_pcm_session",
+      "bytes": 49430616,
+      "sha256": "c691ded85f7d554e3236ba83f1b8a58d47c3c16884544ccefc34722b06e812ee"
+    },
+    {
+      "name": "azure_realtime_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-realtime#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "azure_realtime_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-realtime/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/azure_realtime_pcm_session",
+      "bytes": 48070928,
+      "sha256": "cd4e90827240de7535abffb0b340dbeda59f1ffea2b6275b60c06912545f10b0"
+    },
+    {
+      "name": "azure_voice_live_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-voice-live#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "azure_voice_live_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-voice-live/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/azure_voice_live_pcm_session",
+      "bytes": 44848488,
+      "sha256": "0aaf5a60f65246d603c26294667ea5c7e4b67fdf9034fb4ade52c09b53d00675"
+    },
+    {
+      "name": "inworld_realtime_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-inworld-realtime#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "inworld_realtime_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-inworld-realtime/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/inworld_realtime_pcm_session",
+      "bytes": 45158072,
+      "sha256": "1365eede7bdb62ab1597cb24f14aec8de7bb587a8008e94259acf3e05931625b"
+    }
+  ],
+  "normal_examples_all_reused_fresh_true": true,
+  "four_fixture_targets_in_full_expanded_no_fail_fast": [
+    {
+      "harness": "Running tests/bot_audio_response.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_response-0b1505c6e9996230)",
+      "counts": {
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "start_byte": 250783,
+      "end_byte": 252282,
+      "raw_sha256": "4d98630bfb620cb209d94b16a4a260cec67e1548ed76a84f762178a6da092fc2",
+      "summary": "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.58s",
+      "failed_case_names": [],
+      "panic_sites": []
+    },
+    {
+      "harness": "Running tests/user_speech.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/user_speech-7329fd8d04281fe0)",
+      "counts": {
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "start_byte": 278570,
+      "end_byte": 280167,
+      "raw_sha256": "bb325d3da2778e88f878de2f112ce675e66b320d4d625f2734add1bcb6becab3",
+      "summary": "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.57s",
+      "failed_case_names": [],
+      "panic_sites": []
+    },
+    {
+      "harness": "Running tests/cartesia_turns_eager.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/cartesia_turns_eager-25f622cc5eb07119)",
+      "counts": {
+        "passed": 34,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "start_byte": 830181,
+      "end_byte": 833706,
+      "raw_sha256": "15084ec43c8e16fa520f3e5c410967055a8abb1a69d0504a173f5d1072c72388",
+      "summary": "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s",
+      "failed_case_names": [],
+      "panic_sites": []
+    },
+    {
+      "harness": "Running tests/app_cli.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-c683d574f664c3a8)",
+      "counts": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "start_byte": 407388,
+      "end_byte": 408600,
+      "raw_sha256": "281cb450f21f55939d0b36f4f458e15cb6cb23683e1ffcbe3f4a30200f530d5b",
+      "summary": "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s",
+      "failed_case_names": [],
+      "panic_sites": []
+    }
+  ],
+  "case_count_scope": "Independent commands and repeated/shared source functions are not summed as distinct coverage.",
+  "command_interval_scope": "Only command_counts[].seconds and other_commands[].seconds are gate.json end_unix minus start_unix. The original helpers set end_unix after source-after hashing/writing; these are not separately timed pure Cargo child durations and do not include control RPC waiting. Grok per-round seconds retain their distinct repetition-runner clock scope."
+}

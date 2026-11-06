@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "case": "actual_local_speech_supervisor_killed_during_native_config_open",
+  "scope": "same built entrypoint and Linux parent binding; no models/devices/owner",
+  "binary": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+  "binary_sha256": "24e44824bfeeed5ec5b8b2ee7f0153362b3b59e4409b3cd676e1a761de18516b",
+  "binary_mtime_ns": 1793960575821191155,
+  "device_effects_performed": false,
+  "model_load_attempted": false,
+  "native_emergency_cleanup": false,
+  "passed": true,
+  "supervisor_process": {
+    "pid": 7,
+    "parent_pid": 2,
+    "start_time_ticks": 3122986,
+    "state": "R"
+  },
+  "native_process": {
+    "pid": 8,
+    "parent_pid": 7,
+    "start_time_ticks": 3122987,
+    "state": "R"
+  },
+  "native_blocked_wchan": "wait_for_partner",
+  "native_open_descriptors": [
+    "anon_inode:[eventfd]",
+    "anon_inode:[eventpoll]",
+    "anon_inode:[eventpoll]",
+    "pipe:[7491372]",
+    "pipe:[7491373]",
+    "pipe:[7496017]",
+    "socket:[7497076]",
+    "socket:[7497076]",
+    "socket:[7497077]"
+  ],
+  "native_exit": {
+    "pid": 8,
+    "start_time_ticks": 3122987,
+    "observed_state": "absent",
+    "exited": true,
+    "waitpid_owned_by_harness": false
+  },
+  "parent_kill_to_native_exit_ms": 11.56,
+  "stdout_bytes": 0,
+  "stderr": "",
+  "native_terminal_observed": false,
+  "effects_status": "no device/model stage entered; no media terminal manufactured",
+  "binary_unchanged": true,
+  "workspace_source_sha256_at_probe": {
+    "rust/crates/pipecat-hepta/examples/local_speech.rs": "7674b99d516e7339c720ef69c18ff2d6ea7055390c2c8156a99da3bed474c374",
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "05770d4ca626ace39b8cf9de1d8b0d03a1a3ec604956bd2c7b83b175fafac87a",
+    "rust/scripts/qualify_hmi_media_process.py": "59e122430922f7f887550a73e9f088790717704bf288e0615ca4e00941aefdda"
+  },
+  "source_binding_note": "Workspace main changed after the frozen binary build. This run qualifies the recorded binary SHA and parent_guard behavior only; it is not final-source build evidence."
+}

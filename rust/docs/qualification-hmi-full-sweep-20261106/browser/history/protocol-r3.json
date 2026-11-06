@@ -1,0 +1,51 @@
+{
+  "result": "passed",
+  "checks": [
+    "WASM bootstrap, JSON configuration and original-layout controls render",
+    "Real WebSocket open, encoded token/query, protobuf client-ready, fake-microphone PCM capture and scheduled PCM playback",
+    "RTVI v2 final transcript projection, segment upsert and text-only injection-safe rendering",
+    "websocket literal toast display/dismiss/expiry, independent duplicates, no remote image request or navigation; later toast preserved",
+    "websocket job-group four-event literal DOM projection, terminal late/reused ID rejection, explicit incomplete warning",
+    "Actual websocket image input: explicit send, original JPEG bytes, dimensions/caption, rapid click, size/signature failures, cancellation and instrumented stale reads; WS queue/send failure keeps selection",
+    "Actual form/WS text: exact current ready, Chinese literal payload, newline, rapid-submit single send, UTF-8 cap; instrumented bufferedAmount/send failure preserves draft; local queue success is not a conversation row",
+    "Microphone mute/unmute controls capture and interruption stops scheduled audio",
+    "Simulated WebSocket backpressure gates capture, real scheduled playback has a three-second limit, and event rows are capped at 300",
+    "Disconnect/reconnect closes tracks, AudioContexts, WebSocket and capture graph",
+    "Cancel during pending HTTP start and immediate reconnect reject stale completion",
+    "Cancel during pending getUserMedia stops the late-arriving stream",
+    "HTTP start failure returns to usable idle state and releases microphone",
+    "Cancel during pending SDP offer and immediate reconnect reject the stale answer",
+    "smallwebrtc literal toast display/dismiss/expiry, independent duplicates, no remote image request or navigation; later toast preserved",
+    "smallwebrtc job-group four-event literal DOM projection, terminal late/reused ID rejection, explicit incomplete warning",
+    "Actual smallwebrtc image input: explicit send, original JPEG bytes, dimensions/caption, rapid click, size/signature failures, cancellation and instrumented stale reads; WS queue/send failure keeps selection",
+    "Actual browser WebRTC form emits the bounded RTVI send-text JSON on the paired data channel",
+    "Real paired RTCPeerConnection: SDP offer/answer, data-channel RTVI, incoming synthetic audio track, keepalive, track-status mute and peer close",
+    "Explicit WS text mode never calls throwing getUserMedia or creates capture nodes; real text/audio, inert mic control, reconnect, failure/cancel cleanup and unique session IDs",
+    "Text WebRTC: throwing permission trap untouched, no capture/local tracks, negotiated recvonly, exact RTVI text/downlink RTP, zero audio RTP uplink counters, inert mic, reconnect and pending-offer cancellation cleanup",
+    "Disconnect/reload with omitted input_mode restores the original microphone capture path",
+    "Unsupported Daily adapter fails explicitly before starting a session"
+  ],
+  "page_errors": [],
+  "failure": null,
+  "cleanup_errors": [],
+  "elapsed_seconds": 222.10881152097136,
+  "browser_executable": "/usr/bin/google-chrome",
+  "browser_version": "156.0.8078.79",
+  "chromium_sandbox": true,
+  "launch_args": [
+    "--use-fake-device-for-media-stream",
+    "--use-fake-ui-for-media-stream",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "fixture_sha256": "b44e646aa7179f4d7ab2d2e69362a17a7495b029a5695110c67325172661ae67",
+  "asset_sha256": {
+    "config.json": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+    "index.html": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+    "pkg/pipecat_browser_client.js": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+    "pkg/pipecat_browser_client_bg.wasm": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+    "style.css": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f"
+  },
+  "microphone": "Chromium synthetic device only",
+  "autoplay": "Policy override for synthetic transport fixture; normal autoplay restrictions are not qualified",
+  "provider": "Loopback transport fixtures only; no live bot/provider"
+}

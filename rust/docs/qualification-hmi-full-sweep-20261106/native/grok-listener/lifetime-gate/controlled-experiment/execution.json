@@ -1,0 +1,28 @@
+{
+  "scope": "One authorized local controlled fork/exec socket-inode mechanism experiment; no desktop/Cargo/Grok test run.",
+  "argv": [
+    "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+    "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-spawn-gate-candidate-r1/controlled_inheritance.py",
+    "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-spawn-gate-candidate-r1/controlled-run-r1/experiment"
+  ],
+  "cwd": "/workspace/scratch/f9f576cc6c66",
+  "script_sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+  "start_unix": 1793981243.858173,
+  "outer_timeout_seconds": 20,
+  "signal_requests": [],
+  "leader_pid": 6,
+  "exit_code": 0,
+  "leader_reaped": true,
+  "end_unix": 1793981244.0247114,
+  "script_sha256_after": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+  "outputs": {
+    "stdout.log": {
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9"
+    },
+    "stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

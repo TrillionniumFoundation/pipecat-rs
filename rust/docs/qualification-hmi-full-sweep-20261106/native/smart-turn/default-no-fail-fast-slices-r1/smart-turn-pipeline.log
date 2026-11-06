@@ -1,0 +1,27 @@
+     Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)
+
+running 2 tests
+test actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context ... FAILED
+test actual_smart_turn_onnx_drives_composable_analyzer_policy ... FAILED
+
+failures:
+
+---- actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context stdout ----
+
+thread 'actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context' (663075) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:
+assertion failed: (probability - expected).abs() < 1e-5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- actual_smart_turn_onnx_drives_composable_analyzer_policy stdout ----
+
+thread 'actual_smart_turn_onnx_drives_composable_analyzer_policy' (663074) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:
+assertion failed: (probability - expected).abs() < 1e-5
+
+
+failures:
+    actual_smart_turn_onnx_drives_composable_analyzer_policy
+    actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+error: test failed, to rerun pass `-p pipecat-turns --test smart_turn_onnx_pipeline`

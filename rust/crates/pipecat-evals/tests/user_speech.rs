@@ -317,10 +317,11 @@ async fn silent_http_production_deadline_is_fixed_even_when_bot_events_continue(
             {"user":"next turn must never synthesize","expect":[expected(2)]}
         ]));
         let now = tokio::time::Instant::now();
+        // Select the HTTP phase directly; cache lookup has a distinct timeout contract.
         let result = run(session(
             scenario,
             &host.url,
-            settings(&http.url, Some(&root), Duration::from_millis(180)),
+            settings(&http.url, None, Duration::from_millis(180)),
         ))
         .await;
         let elapsed = now.elapsed();

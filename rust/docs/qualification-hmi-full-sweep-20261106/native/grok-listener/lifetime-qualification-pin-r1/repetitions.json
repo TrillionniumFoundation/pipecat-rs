@@ -1,0 +1,661 @@
+{
+  "schema": "pipecat-grok-child-lifetime-window-v1",
+  "qualification_scope": "A finite window on the new child-lifetime fixture; it does not erase any earlier rebind failure.",
+  "prior_failures_retained": [
+    "full-workspace-rust-1.99.0-r3",
+    "grok-rebind-diagnostic-pin-r2",
+    "grok-strace-pin-r1"
+  ],
+  "expected_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "expected_tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "source_file_sha256": "6529eac0c56d6f3b0c6686d469d0305f672e516731b416b96afbd93f0dc76df5",
+  "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+  "target": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin",
+  "toolchain": "1.99.0",
+  "requested_rounds": 20,
+  "cases_per_round": 12,
+  "repetition_window_seconds": 300,
+  "outer_job_timeout_seconds": 900,
+  "binding_timeout_seconds": 570,
+  "internal_whole_job_budget_seconds": 870,
+  "resource_budget": {
+    "build_jobs": 8,
+    "cpu_quota_percent": 800,
+    "memory_max_bytes": 34359738368,
+    "nice": 10
+  },
+  "parallelism": "Unfiltered original 12-case harness, default libtest parallelism; no test-threads argument or environment override.",
+  "failure_policy": "Stop on the first nonzero exit, timeout or mismatched libtest summary. No replacement rounds.",
+  "schedule_caveat": "The fixture now coordinates listener release with every owned child lifetime. The admission lease can change scheduling; original 60ms wait, one rebind, product deadlines and all 12 scenario bodies remain unchanged.",
+  "phase": "completed",
+  "start_unix": 1793983782.1608021,
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+        "fetch",
+        "--no-tags",
+        "https://github.com/TrillionniumFoundation/pipecat-rs.git",
+        "0cc16e8123cb05aaad480d5ab7860a267d998bac"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "\u6765\u81ea https://github.com/TrillionniumFoundation/pipecat-rs\n * branch            0cc16e8123cb05aaad480d5ab7860a267d998bac -> FETCH_HEAD\n"
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+        "diff",
+        "--name-only",
+        "272671b95297313d24db921eceda8e95f3a8d545",
+        "0cc16e8123cb05aaad480d5ab7860a267d998bac"
+      ],
+      "exit_code": 0,
+      "stdout": "rust/client-templates/README.md\nrust/client-templates/VALIDATION.md\nrust/crates/pipecat-evals/tests/bot_audio_response.rs\nrust/crates/pipecat-evals/tests/user_speech.rs\nrust/crates/pipecat-grok-realtime/tests/app_cli.rs\nrust/crates/pipecat-livekit/VALIDATION.md\nrust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs\nrust/docs/HMI_FOLLOWTHROUGH_20261106.md\nrust/docs/HMI_FULL_SWEEP_20261106.md\nrust/docs/qualification-hmi-full-sweep-20261106/EVIDENCE_AVAILABILITY.md\nrust/docs/qualification-hmi-full-sweep-20261106/README.md\nrust/docs/qualification-hmi-full-sweep-20261106/browser/README.md\nrust/docs/qualification-hmi-full-sweep-20261106/browser/blob-publication.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/docs-closure-check.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/publication-inputs.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/SHA256SUMS\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/backup-receipt.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/SHA256SUMS\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/install-private-wasm-std.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/official-archive-xz-integrity.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-000-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-001-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-002-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-003-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-004-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-005-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-006-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-007-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-008-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-009-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-010-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-011-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-012-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-013-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-014-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-015-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-016-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-017-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-018-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-019-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-020-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-021-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-022-attempt-1.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.in-progress.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/SHA256SUMS\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/checkout.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/clone.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/dependency-readiness-offline.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/preparation-error.log\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.in-progress.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/wasm-download-diagnosis.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/export-receipt.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/index.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/local-verification.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml.sha256\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/raw-evidence.json.gz\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.launch.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.read.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.status.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.launch.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.read.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.status.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.launch.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.read.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.status.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.launch.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.read.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.status.json\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_gates_export_r2.py\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_requalification_r1.py\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_diagnosis_r1.py\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_r2.py\nrust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/target-owner.json\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.json\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.py\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.runtime.json\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.stdout.json\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/retrieval.json\nrust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/wenet-data.list\nrust/docs/qualification-hmi-full-sweep-20261106/fourth-entrance-recovery.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/README.md\nrust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/control-delivery.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/diagnostic-source.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/grok-rebind-control.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/grok-rebind-control.py\nrust/docs/qualification-hmi-full-sweep-20261106/native/pin-full-r2-counts.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-and-pin-r2.tar.xz\nrust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-delivery.json\nrust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-original-index.json\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+        "checkout",
+        "--detach",
+        "0cc16e8123cb05aaad480d5ab7860a267d998bac"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "\u4e4b\u524d\u7684 HEAD \u4f4d\u7f6e\u662f 272671b test(grok): preserve bounded listener-release failure diagnostics\nHEAD \u76ee\u524d\u4f4d\u4e8e 0cc16e8 Fix subprocess isolation and exact integration fixture contracts\n"
+    },
+    {
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-evals/tests/bot_audio_response.rs",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-evals/tests/user_speech.rs",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983835.8315253,
+      "harness_pid": 990275,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2180107140447944,
+      "log_sha256": "1fb6905e31616e116f7a06a46b88e4fbb074ea4bd55d9bebf8b06f9f82fc53db",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 2,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983837.0517845,
+      "harness_pid": 990374,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2697586629074067,
+      "log_sha256": "7a9441ba58465dd31907fc3da091a33cfa8a892572530dde10c52c85bf9c7b59",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 3,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983838.3229852,
+      "harness_pid": 990470,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2698758959304541,
+      "log_sha256": "c7c2e8a334b568e2700353e9704690a2aafe531cfbe85aec9ac7559bf5e40a0b",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 4,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983839.5945754,
+      "harness_pid": 990552,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2192084910348058,
+      "log_sha256": "d469116e1b9882fec80fc3c539c14241a3ad346b0b7a1eaef05bfe7d0a874ab7",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 5,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983840.8158367,
+      "harness_pid": 990654,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2697127999272197,
+      "log_sha256": "3531fae56228f2ba6ec27464c41760a066c43af4d750f7311d6964746e0dffbe",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 6,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983842.087597,
+      "harness_pid": 990765,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2685402890201658,
+      "log_sha256": "ff9ebca05af75c189785878f1d47df9b8d467c91135f4c83dfc33f489a3c57b1",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 7,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983843.3577375,
+      "harness_pid": 990929,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2684455791022629,
+      "log_sha256": "7d710a5efd48ba56f312fc39c1a36bc67acaa891a508ca22933d1f9e15374b31",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 8,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983844.6276093,
+      "harness_pid": 991025,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2190160579048097,
+      "log_sha256": "1fb6905e31616e116f7a06a46b88e4fbb074ea4bd55d9bebf8b06f9f82fc53db",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 9,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983845.848678,
+      "harness_pid": 991119,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.269572720862925,
+      "log_sha256": "73d8e6cdb2572de3f70191ff0287690ec5491b9b44f3104059818e564a96ef84",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 10,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983847.1216207,
+      "harness_pid": 991277,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2187246750108898,
+      "log_sha256": "6c14a279d92ae4713ccfa024777d7c31270fef6b435242695638ff38f4cc210d",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 11,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983848.3422337,
+      "harness_pid": 991432,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2685809379909188,
+      "log_sha256": "9f8c5054690e58f346fcbcb011f83b194ecd0f86300154f6135552cff7da857a",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 12,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983849.6128337,
+      "harness_pid": 991575,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.219420903827995,
+      "log_sha256": "ca4ae716d5f5ef99bf414b086de26a5cd701915c7bcd319bdad4da0aece128d1",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 13,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983850.8342233,
+      "harness_pid": 991703,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2691838699392974,
+      "log_sha256": "f677137a97b55542d0b6402a5d33a8b3b520a220dab30d660a0d17825aa1b529",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 14,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983852.1055887,
+      "harness_pid": 991802,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.269605356035754,
+      "log_sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 15,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983853.3766797,
+      "harness_pid": 991995,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2689464669674635,
+      "log_sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 16,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983854.6477478,
+      "harness_pid": 992172,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.269653765950352,
+      "log_sha256": "e8fc2489242a7b8adef52a752f018e31e8a9f066f659216316dc216927bb67b1",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 17,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983855.9193132,
+      "harness_pid": 992336,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2689456301741302,
+      "log_sha256": "c6804c2c28d55e218cdca81983c93ab3708fa30c16d4740af8708d9da8055d36",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 18,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983857.1896188,
+      "harness_pid": 992532,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2691816438455135,
+      "log_sha256": "eb0dc0677a4fbd9e942fbe98e28a6e1dbf66a6702ce10196f199a27115e9a72a",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 19,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983858.4612684,
+      "harness_pid": 992692,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.2698308110702783,
+      "log_sha256": "8843d37a0f26cc8736c98c50256309308aebcb779ea8bc154c84dfe009eb3695",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    },
+    {
+      "round": 20,
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793983859.7323847,
+      "harness_pid": 992916,
+      "phase": "completed",
+      "exit_code": 0,
+      "elapsed_seconds": 1.218588697956875,
+      "log_sha256": "6035a20f8e8307d3ed19f1d017f73c2a5fcac8b0171da65a0917da5da38be1e0",
+      "log_bytes": 1078,
+      "complete_unfiltered_success": true
+    }
+  ],
+  "source_contract_sha256": "538da3b8b642c7e7afe771cda5045e02e742635cb6e30c08301c17b8eaa73fe8",
+  "preceding_smart_turn_diagnostic": {
+    "exit_code": 1,
+    "sha256": "dd3c6c9a12efa88b451d68839bae202fd89bf2e2f53eaaa648562009358810e8",
+    "model_parity_failures_retained": true
+  },
+  "resources_before": {
+    "mem_available_bytes": 78645243904,
+    "disk_free_bytes": 54377213952
+  },
+  "official_toolchain_manifest_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+  "changed_paths_from_previous_freeze": [
+    "rust/client-templates/README.md",
+    "rust/client-templates/VALIDATION.md",
+    "rust/crates/pipecat-evals/tests/bot_audio_response.rs",
+    "rust/crates/pipecat-evals/tests/user_speech.rs",
+    "rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+    "rust/crates/pipecat-livekit/VALIDATION.md",
+    "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+    "rust/docs/HMI_FOLLOWTHROUGH_20261106.md",
+    "rust/docs/HMI_FULL_SWEEP_20261106.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/EVIDENCE_AVAILABILITY.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/README.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/README.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/blob-publication.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/docs-closure-check.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/publication-inputs.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/SHA256SUMS",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/backup-receipt.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/SHA256SUMS",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/install-private-wasm-std.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/official-archive-xz-integrity.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-000-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-001-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-002-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-003-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-004-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-005-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-006-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-007-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-008-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-009-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-010-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-011-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-012-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-013-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-014-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-015-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-016-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-017-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-018-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-019-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-020-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-021-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-022-attempt-1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.in-progress.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/SHA256SUMS",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/checkout.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/clone.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/dependency-readiness-offline.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/preparation-error.log",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.in-progress.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/wasm-download-diagnosis.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/export-receipt.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/index.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/local-verification.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml.sha256",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/raw-evidence.json.gz",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.launch.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.read.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.status.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.launch.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.read.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.status.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.launch.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.read.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.status.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.launch.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.read.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.status.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_gates_export_r2.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_requalification_r1.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_diagnosis_r1.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_r2.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/target-owner.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.runtime.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.stdout.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/retrieval.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/wenet-data.list",
+    "rust/docs/qualification-hmi-full-sweep-20261106/fourth-entrance-recovery.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/README.md",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/control-delivery.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/diagnostic-source.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/grok-rebind-control.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/grok-rebind-control.py",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/pin-full-r2-counts.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-and-pin-r2.tar.xz",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-delivery.json",
+    "rust/docs/qualification-hmi-full-sweep-20261106/native/source-manifests-original-index.json"
+  ],
+  "source_before_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "inherited_rust_test_threads": null,
+  "environment_overrides": {
+    "CARGO_HOME": "/home/qian-qi/.cargo",
+    "CARGO_BUILD_JOBS": "8",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUSTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+    "RUSTDOC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+    "RUSTUP_TOOLCHAIN": "1.99.0",
+    "PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.local/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.cargo/bin:/home/qian-qi/.local/bin:/opt/gradle/current/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.1:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin",
+    "PIPECAT_ONNX_RUNTIME": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "ORT_DYLIB_PATH": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "PIPECAT_SILERO_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/vad/data/silero_vad.onnx",
+    "PIPECAT_SMART_TURN_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+    "CC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+    "CXX": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang++",
+    "LD_LIBRARY_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LIBCLANG_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LK_CUSTOM_WEBRTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/native-ranged-r1/linux-x64-release",
+    "CARGO_TARGET_DIR": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin"
+  },
+  "metadata_argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+    "metadata",
+    "--no-deps",
+    "--locked",
+    "--offline",
+    "--format-version",
+    "1"
+  ],
+  "metadata_exit_code": 0,
+  "binding_argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+    "test",
+    "--workspace",
+    "--locked",
+    "--offline",
+    "--no-run",
+    "--message-format=json-render-diagnostics"
+  ],
+  "binding_scope": "Unfiltered workspace/default feature phase, compilation only. Runtime qualification remains the separate original full test command.",
+  "binding_exit_code": 0,
+  "binding_log_sha256": "24f125d4debb54031a45383c0af2875ac9d421a1c22aa6561ccd9216ac97637e",
+  "artifacts": {
+    "harness": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+      "bytes": 7576024,
+      "sha256_before": "89bbf1dad3c5a0b6fa435c22d358550bbc661874d30b4e52b1f8cb2fd5cc6e05",
+      "compiler_artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime#0.1.0",
+        "manifest_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/Cargo.toml",
+        "target": {
+          "kind": [
+            "test"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "app_cli",
+          "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+          "edition": "2021",
+          "doc": false,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": true
+        },
+        "features": [],
+        "filenames": [
+          "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd"
+        ],
+        "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "fresh": false
+      },
+      "sha256_after": "89bbf1dad3c5a0b6fa435c22d358550bbc661874d30b4e52b1f8cb2fd5cc6e05",
+      "unchanged": true
+    },
+    "normal": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm",
+      "bytes": 47897800,
+      "sha256_before": "e998bc223a8b49a1871d8737c1861c9b3e267e98e41b7def7fb97fb8a4d4895f",
+      "compiler_artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime#0.1.0",
+        "manifest_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "grok_pcm",
+          "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/src/bin/grok_pcm.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm"
+        ],
+        "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm",
+        "fresh": true
+      },
+      "sha256_after": "e998bc223a8b49a1871d8737c1861c9b3e267e98e41b7def7fb97fb8a4d4895f",
+      "unchanged": true
+    }
+  },
+  "normal_path_embedded_in_harness": true,
+  "selection_argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+    "--list"
+  ],
+  "case_names": [
+    "actual_binary_absent_required_speech_times_out_cancels_and_retains_partial",
+    "actual_binary_explicit_run_records_fragmented_pcm_and_joins",
+    "actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join",
+    "actual_binary_final_echo_requires_assistant_continuation_and_generated_speech",
+    "actual_binary_output_exhaustion_retains_bounded_partial_bytes",
+    "actual_binary_output_path_swap_does_not_write_replacement",
+    "actual_binary_readiness_provider_and_protocol_failures_are_sanitized_partial",
+    "actual_binary_server_vad_does_not_invent_explicit_run_or_playback",
+    "actual_binary_server_vad_rapid_burst_preserves_speech_and_joins",
+    "aligned_regular_bounded_input_and_create_new_paths_preflight_before_connection",
+    "default_help_and_check_are_credential_free_and_effect_free",
+    "invalid_arguments_and_explicit_configuration_have_no_effects"
+  ],
+  "window_start_unix": 1793983835.8308296,
+  "effective_window_budget_seconds": 300.0,
+  "window_elapsed_seconds": 25.122383608017117,
+  "stop_reason": "predeclared 20-round diagnostic window completed",
+  "execution_exit_code": 0,
+  "source_after_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "source_unchanged": true,
+  "status_after": "",
+  "exit_code": 0,
+  "attempted_rounds": 20,
+  "completed_rounds": 20,
+  "end_unix": 1793983861.5321648
+}

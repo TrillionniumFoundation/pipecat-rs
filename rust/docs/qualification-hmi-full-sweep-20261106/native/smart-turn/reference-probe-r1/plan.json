@@ -1,0 +1,249 @@
+{
+  "schema": "pipecat-smart-turn-independent-c-api-reference-plan-v1",
+  "status": "C_program_and_wrapper_prepared_static_checks_only_no_inference",
+  "native_freeze": {
+    "commit": "272671b95297313d24db921eceda8e95f3a8d545",
+    "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c"
+  },
+  "purpose": "Feed the unchanged tracked golden float32 features directly to the same hash-pinned native runtime/model. This removes Rust feature extraction and the turn aggregator from the reference call without replacing the model, oracle, original tests, or their tolerances.",
+  "prerequisites": [
+    {
+      "role": "runtime",
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d",
+      "provenance": "Previously hash-verified restored official Microsoft 1.21.0 library; require the same bytes immediately before and after this diagnostic."
+    },
+    {
+      "role": "model",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+      "bytes": 8679182,
+      "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f"
+    },
+    {
+      "role": "golden_features",
+      "case": "speech",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+      "bytes": 256000,
+      "sha256": "618645fb485f531de515aa83b13627cb3d19a5cb8a0d1faf617c99e76fb8b575",
+      "encoding": "64000 little-endian IEEE754 float32 values in row-major order",
+      "tensor_shape": [
+        1,
+        80,
+        800
+      ],
+      "reference_probability_text": "0.98232018947601318",
+      "reference_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.probability.txt"
+    },
+    {
+      "role": "golden_features",
+      "case": "tone",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+      "bytes": 256000,
+      "sha256": "f838341ea22fe1aac684c6eabfc2ccd8f38330b2dbca1220985963d4d90dedc5",
+      "encoding": "64000 little-endian IEEE754 float32 values in row-major order",
+      "tensor_shape": [
+        1,
+        80,
+        800
+      ],
+      "reference_probability_text": "0.095775574445724487",
+      "reference_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.probability.txt"
+    },
+    {
+      "role": "golden_features",
+      "case": "silence",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32",
+      "bytes": 256000,
+      "sha256": "c4a1d90bbbdc1c49cf89b8f73360019b1b0fe01ae48a9dfd6fc2c4a3228b8859",
+      "encoding": "64000 little-endian IEEE754 float32 values in row-major order",
+      "tensor_shape": [
+        1,
+        80,
+        800
+      ],
+      "reference_probability_text": "0.98703670501708984",
+      "reference_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.probability.txt"
+    },
+    {
+      "role": "official_header",
+      "local_path": "workspace-evidence/smart-turn/reference-probe-r1/onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882",
+      "upstream_file_blob_sha1": "b2f3d95e00a88a348b4590fb16ff153cdfa10a29",
+      "source_url": "https://github.com/microsoft/onnxruntime/blob/v1.21.0/include/onnxruntime/core/session/onnxruntime_c_api.h"
+    },
+    {
+      "role": "compiler",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+      "requirement": "Use the already prepared compiler and record its actual path/version/SHA. No compiler download, Cargo invocation, target reuse, or CPU tuning flags."
+    }
+  ],
+  "independent_entry_choice": {
+    "existing_generator": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_generate_fixtures.py",
+    "why_not_run_generator": "It loads a Python feature helper and original WAV absent from this inspected checkout and rewrites fixtures/reference files. It is not a read-only fixed-feature probe.",
+    "python_installation": "No same-version independent Python installation has been established by this review; no package installation or additional host search is proposed.",
+    "chosen": "Small standalone C11 program compiled against the exact official header; dlopen the existing absolute .so path and call its C API. It reads only the fixed feature files."
+  },
+  "source_verified_api": {
+    "requested_api_version": 20,
+    "header_api_version": 21,
+    "compatibility": "ort-sys 2.0.0-rc.9 declares API 20. Official ORT 1.21.0 GetApi returns the same ort_api_1_to_21 table for API versions 1 through 21; this API request is not itself evidence of a mismatch.",
+    "session": {
+      "execution_mode": "ORT_SEQUENTIAL",
+      "inter_op_threads": 1,
+      "intra_op_threads": 1,
+      "graph_optimization": "ORT_ENABLE_ALL",
+      "appended_execution_providers": [],
+      "telemetry": false,
+      "optimized_model_output": false
+    },
+    "input_memory": {
+      "api": "CreateCpuMemoryInfo",
+      "allocator": "OrtArenaAllocator",
+      "memory_type": "OrtMemTypeCPUInput",
+      "reason": "Matches ort rc.9 Tensor::from_array CPU/id0/Arena/CPUInput rather than substituting default memory metadata."
+    },
+    "tensor_api": "CreateTensorWithDataAsOrtValue",
+    "run_options": "CreateRunOptions for each case, no termination request on ordinary execution; call Run once per case.",
+    "observation_apis": [
+      "OrtGetApiBase",
+      "GetVersionString",
+      "GetBuildInfoString",
+      "SessionGetInputCount",
+      "SessionGetOutputCount",
+      "SessionGetInputName",
+      "SessionGetOutputName",
+      "SessionGetInputTypeInfo",
+      "SessionGetOutputTypeInfo",
+      "CastTypeInfoToTensorInfo",
+      "GetTensorElementType",
+      "GetDimensionsCount",
+      "GetDimensions",
+      "GetTensorTypeAndShape",
+      "GetTensorShapeElementCount",
+      "GetTensorMutableData"
+    ]
+  },
+  "planned_program_steps": [
+    "Fail closed before loading if any fixed input/header/source digest differs, source commit/tree/status differs, or the exclusive qualification-owner-pin.lock is unavailable.",
+    "Create a new diagnostic directory, retain exact C source/header/compiler command and pre-run file identities; use the existing effective native environment without CPU/ISA/kernel flags.",
+    "dlopen only the absolute pinned .so with RTLD_NOW|RTLD_LOCAL; obtain OrtGetApiBase with dlsym; record dladdr's loaded filename, actual runtime version/build info and requested API20; require version1.21.0.",
+    "Create environment with telemetry disabled and one session using the same explicit options as Rust. Check exactly one float input named input_features and one float output named logits; record all declared shapes and dynamic dimensions without silently reshaping.",
+    "In fixed speech,tone,silence order, read exactly 256000 bytes with EOF validation; require little-endian host and 32-bit float; reject non-finite values.",
+    "Create an unchanged [1,80,800] tensor backed by the file bytes, using CPUInput memory metadata. Call Run once and require a float output with exactly one finite element in [0,1].",
+    "Record each output as its exact 32-bit hexadecimal bit pattern and a round-trippable decimal (%.17g after promotion to double), along with actual output shape. Do not stop recording other cases because a probability differs from its oracle.",
+    "Release each OrtValue, shape/type info, run options and buffer; release names via the returned allocator; release memory info/session/session options/environment and dlclose on ordinary exit. Preserve every native status and partial JSON lines on failure.",
+    "Require original stdout/stderr bytes, process exit, observed normal release completion, and all input/header/C source/compiler/executable hashes after exit. Record reference comparison separately; never rewrite any golden or reclassify original failures."
+  ],
+  "proposed_build_argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+    "-std=c11",
+    "-O0",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-ferror-limit=10",
+    "-I",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe.c",
+    "-ldl",
+    "-lm",
+    "-o",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe"
+  ],
+  "proposed_run_argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32"
+  ],
+  "execution_scheduling": {
+    "status": "Not submitted; wait for the current expanded native matrix and the shared owner's explicit serial scheduling.",
+    "owned_lock": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/qualification-owner-pin.lock",
+    "no_cargo_target_access": true,
+    "compile_deadline_seconds": 30,
+    "inference_deadline_seconds": 60,
+    "cleanup_deadline_seconds": 10,
+    "outer_owned_job_deadline_seconds": 120,
+    "cpu_quota_percent": 200,
+    "memory_max_bytes": 4294967296,
+    "nice": 10,
+    "attempts": 1,
+    "timeout_semantics": "Outer runner must signal only the owned child process group, bound TERM/KILL and leader wait, retain partial bytes, and distinguish signal requests, leader reaping, observed group absence, and native release completion. Do not claim full descendant join after timeout."
+  },
+  "interpretation": [
+    {
+      "result": "Fixed speech feature bytes reproduce approximately 0.9685282 in this independent C API session",
+      "scope": "The mismatch remains after excluding the Rust feature implementation and aggregator. Investigate model/runtime execution versus original oracle provenance; this does not itself establish CPU causation."
+    },
+    {
+      "result": "Fixed features reproduce original references while native PCM path differs",
+      "scope": "Capture actual Rust feature bytes and exact deviations/quantized input bins. Passing 2e-6 feature tolerance is insufficient to assert bit identity for a quantized graph."
+    },
+    {
+      "result": "Results vary or API/model metadata differs",
+      "scope": "Treat the diagnostic as an additional unresolved execution/identity observation; do not overwrite references or relax existing tolerances."
+    }
+  ],
+  "primary_sources": [
+    {
+      "repository": "microsoft/onnxruntime",
+      "ref": "v1.21.0",
+      "path": "include/onnxruntime/core/session/onnxruntime_c_api.h",
+      "blob_sha1": "b2f3d95e00a88a348b4590fb16ff153cdfa10a29",
+      "url": "https://github.com/microsoft/onnxruntime/blob/v1.21.0/include/onnxruntime/core/session/onnxruntime_c_api.h"
+    },
+    {
+      "repository": "microsoft/onnxruntime",
+      "ref": "v1.21.0",
+      "path": "onnxruntime/core/session/onnxruntime_c_api.cc",
+      "blob_sha1": "ca6950af0227ac89d31de0f0c0653ea5c9008654",
+      "url": "https://github.com/microsoft/onnxruntime/blob/v1.21.0/onnxruntime/core/session/onnxruntime_c_api.cc"
+    },
+    {
+      "repository": "pykeio/ort",
+      "ref": "v2.0.0-rc.9",
+      "path": "ort-sys/src/lib.rs",
+      "blob_sha1": "5eb2dbd9d30307d5fd376e4340e839b79e6828e4",
+      "url": "https://github.com/pykeio/ort/blob/v2.0.0-rc.9/ort-sys/src/lib.rs"
+    },
+    {
+      "repository": "pykeio/ort",
+      "ref": "v2.0.0-rc.9",
+      "path": "src/session/builder/impl_options.rs",
+      "blob_sha1": "3f356b9b049a3c1c5f57acefbd03499dcb2e8eb4",
+      "url": "https://github.com/pykeio/ort/blob/v2.0.0-rc.9/src/session/builder/impl_options.rs"
+    },
+    {
+      "repository": "pykeio/ort",
+      "ref": "v2.0.0-rc.9",
+      "path": "src/value/impl_tensor/create.rs",
+      "blob_sha1": "a11b654aa541717356c3b05ccc4cad4236d45062",
+      "url": "https://github.com/pykeio/ort/blob/v2.0.0-rc.9/src/value/impl_tensor/create.rs"
+    }
+  ],
+  "prepared_artifacts": [
+    {
+      "path": "workspace-evidence/smart-turn/reference-probe-r1/ort_reference_probe.c",
+      "bytes": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547",
+      "validation": "cc -std=c11 -O0 -Wall -Wextra -Werror -fsyntax-only, exit0; no executable/model run"
+    },
+    {
+      "path": "workspace-evidence/task-helpers/desktop_smart_turn_reference_pin_r1.py",
+      "bytes": 21084,
+      "sha256": "883d255905821c7e1b70141dd1b841d2dd16eeee26ba9ba1cf34b3eb09cf5abc",
+      "validation": "py_compile and AST parse, exit0; main not executed"
+    }
+  ],
+  "wrapper_argv": [
+    "python3",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/desktop_smart_turn_reference_pin_r1.py",
+    "272671b95297313d24db921eceda8e95f3a8d545",
+    "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "expanded-batch-pin-r1"
+  ],
+  "wrapper_exit_semantics": "The original native probe exit is retained separately. Complete execution with any probability outside the original <=1e-5 direct-model tolerance returns wrapper exit1 and preserves all three observations. Identity drift returns125; timeout retains124; no original failure is erased."
+}

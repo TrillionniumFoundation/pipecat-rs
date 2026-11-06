@@ -1,0 +1,19 @@
+{
+  "host": "desktop",
+  "files": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/input-evidence-r2/browser-input-acceptance.json",
+      "local": "input-r2.json",
+      "size": 8065,
+      "sha256": "50a3ed045906cc4f12950ecc9dbf1da100e954d91678044206c0d10211b5b5d0",
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/evidence-r3/browser-acceptance.json",
+      "local": "protocol-r3.json",
+      "size": 4188,
+      "sha256": "e1c57da2735876420970b178ee47ac07c627d14d60e59ab07dad52786e16bb87",
+      "eof": true
+    }
+  ]
+}

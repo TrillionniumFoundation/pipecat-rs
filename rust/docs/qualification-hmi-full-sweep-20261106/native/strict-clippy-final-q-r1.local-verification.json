@@ -1,0 +1,20 @@
+{
+  "archive_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/strict-clippy-final-q-r1.tar.xz",
+  "archive_bytes": 160008,
+  "archive_sha256": "9aa9fa08a6d092869f57e731736a81dd696faafb3b5d308fb15e6e7aa7d2697f",
+  "original_count": 35,
+  "original_bytes": 1896241,
+  "tar_members": 37,
+  "tar_member_bytes": 1913869,
+  "source_maps": [
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-after.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-before.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    }
+  ],
+  "all_original_bytes_verified": true
+}

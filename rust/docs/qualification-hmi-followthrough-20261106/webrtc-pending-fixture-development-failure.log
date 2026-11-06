@@ -1,0 +1,17 @@
+    Blocking waiting for file lock on build directory
+   Compiling webrtc v0.14.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/vendor/webrtc-0.14.0)
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+   Compiling pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+error[E0624]: method `conn` is private
+   --> crates/pipecat-webrtc/src/shutdown_start_tests.rs:217:20
+    |
+217 |             a_dtls.conn().await.is_none(),
+    |                    ^^^^ private method
+    |
+   ::: vendor/webrtc-0.14.0/src/dtls_transport/mod.rs:112:5
+    |
+112 |     pub(crate) async fn conn(&self) -> Option<Arc<DTLSConn>> {
+    |     -------------------------------------------------------- private method defined here
+
+For more information about this error, try `rustc --explain E0624`.
+error: could not compile `pipecat-webrtc` (lib test) due to 1 previous error

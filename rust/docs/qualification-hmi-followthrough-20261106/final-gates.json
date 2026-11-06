@@ -1,0 +1,262 @@
+{
+  "scope": "selected_packages_not_full_workspace_or_physical_acceptance",
+  "source_before": {
+    "commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+    "tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+    "worktree_status": ""
+  },
+  "build_environment": {
+    "CARGO_HOME": "/workspace/scratch/27653505a519/toolchain/cargo",
+    "CARGO_TARGET_DIR": "/tmp/pipecat-hmi-native-27653505a519",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "RUSTC": "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/rustc",
+    "RUSTDOC": "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/rustdoc",
+    "CMAKE": "/workspace/scratch/848006513f75/p0-build-tools/cmake/data/bin/cmake",
+    "LIBCLANG_PATH": "/usr/lib/x86_64-linux-gnu",
+    "PKG_CONFIG_PATH": "/workspace/scratch/27653505a519/native-sysroot/usr/lib/x86_64-linux-gnu/pkgconfig",
+    "PKG_CONFIG_SYSROOT_DIR": "/workspace/scratch/27653505a519/native-sysroot"
+  },
+  "toolchain": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "gates": [
+    {
+      "name": "format",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+        "--check",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "rust/crates/pipecat-core/src/frames.rs",
+        "rust/crates/pipecat-core/src/lib.rs",
+        "rust/crates/pipecat-core/src/payload_budget.rs",
+        "rust/crates/pipecat-core/src/pipeline.rs",
+        "rust/crates/pipecat-core/src/pipeline_stream.rs",
+        "rust/crates/pipecat-core/src/processor_stream.rs",
+        "rust/crates/pipecat-core/src/queue.rs",
+        "rust/crates/pipecat-core/tests/payload_budgets.rs",
+        "rust/crates/pipecat-hepta/examples/local_speech.rs",
+        "rust/crates/pipecat-hepta/src/lib.rs",
+        "rust/crates/pipecat-hepta/src/local_speech.rs",
+        "rust/crates/pipecat-hepta/src/parent_guard.rs",
+        "rust/crates/pipecat-hepta/src/process_supervision.rs",
+        "rust/crates/pipecat-hepta/tests/parent_death.rs",
+        "rust/crates/pipecat-hepta/tests/process_supervision.rs",
+        "rust/crates/pipecat-webrtc/src/connection.rs",
+        "rust/crates/pipecat-webrtc/src/shutdown_start_tests.rs",
+        "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs",
+        "rust/vendor/webrtc-0.14.0/src/dtls_transport/mod.rs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.275,
+      "log": "final-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-check",
+      "argv": [
+        "git",
+        "diff",
+        "HEAD^",
+        "HEAD",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.016,
+      "log": "final-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "core-pipeline",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.188,
+      "log": "final-core-pipeline.log",
+      "log_sha256": "fca0834ea67540d38d421a9aa35dc9649d98847dfeb6fe90e2152221385adddb",
+      "test_counts": {
+        "passed": 480,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "name": "hepta-native",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.311,
+      "log": "final-hepta-native.log",
+      "log_sha256": "52dde1113c30a9e4d70bfa472c0562c495d138e522e36ef63394875f45b2abaf",
+      "test_counts": {
+        "passed": 65,
+        "failed": 0,
+        "ignored": 3
+      }
+    },
+    {
+      "name": "webrtc",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-webrtc",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.046,
+      "log": "final-webrtc.log",
+      "log_sha256": "2317ad81b7138675d5f6fa25f43673e5c1718a685877bde358416d844ae7bdd6",
+      "test_counts": {
+        "passed": 46,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline",
+        "-p",
+        "pipecat-hepta",
+        "-p",
+        "pipecat-webrtc",
+        "--features",
+        "pipecat-hepta/local-speech",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 62.232,
+      "log": "final-clippy.log",
+      "log_sha256": "d025c1222b6c9b3de22b34824818c1967da49d8006356b6c7be4f8d94f9ad3eb"
+    },
+    {
+      "name": "native-build",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--example",
+        "local_speech"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.388,
+      "log": "final-native-build.log",
+      "log_sha256": "9136ecfd631e30c01e74cbc4eabaf806ae95d22421a35f4c5cc5280ea1dbf4f0"
+    },
+    {
+      "name": "actual-entry",
+      "argv": [
+        "python",
+        "rust/scripts/qualify_hmi_supervisor_entry.py",
+        "--binary",
+        "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+        "--output",
+        "/workspace/scratch/b2b6f3e38b6d/verification/final-actual-entry.json"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 10.414,
+      "log": "final-actual-entry.log",
+      "log_sha256": "69ffec4106dae0eaf6d71d84ffa19cb5245cf999150d8de00b1fc4cf92c14dfc"
+    }
+  ],
+  "python_ast": {
+    "passed": true,
+    "files": [
+      "rust/scripts/qualify_hmi_media_process.py",
+      "rust/scripts/qualify_hmi_supervisor_entry.py"
+    ]
+  },
+  "source_files_sha256": {
+    "rust/Cargo.lock": "3a9fc48a04164e55641d92a0fb6ef4d970adc99c0a179047ca6d4ffd69bce5ef",
+    "rust/crates/pipecat-core/PAYLOAD_ADMISSION.md": "ad0547b5e6788128cb4f92b355ec6af73e375ec860455922b4188e17a6b09bca",
+    "rust/crates/pipecat-core/README.md": "87416c2ffa159d02a555298ce39b6d871f741495fc224050511d48027bc5c76b",
+    "rust/crates/pipecat-core/src/frames.rs": "1a92c8dfdaa104d398207063d59f97090ac8f2d13d127b3869484ec3c734bd0a",
+    "rust/crates/pipecat-core/src/lib.rs": "541dd901971b345bc8ffdba1487c740cb2a79f18a7293ad51858a15187961c0c",
+    "rust/crates/pipecat-core/src/payload_budget.rs": "adf9dfc0b0b6db9938b8680f319b284301c3359389e7caac8ed1fcd406e0e8b6",
+    "rust/crates/pipecat-core/src/pipeline.rs": "25d09a9ba91e0bd992d1df917a4da02ba139639fafdc9918cd53809162f71c4d",
+    "rust/crates/pipecat-core/src/pipeline_stream.rs": "e0f07d4a3626a3c597c283b1fbd41639da9a78999b65a2252c04cdda0edbcf5e",
+    "rust/crates/pipecat-core/src/processor_stream.rs": "d8556641983c7a42e61eca506d387f8877288d216041a1a086c1c238f947f56a",
+    "rust/crates/pipecat-core/src/queue.rs": "c19151440084e16d21c8de914276f490773140464ba46c8e4bc5f4647ea2319c",
+    "rust/crates/pipecat-core/tests/payload_budgets.rs": "8a138ebfdda1a95fd2023a7acf87b9d781b0e04c202865e626092b0c6ba41330",
+    "rust/crates/pipecat-hepta/Cargo.toml": "5fdd985245424e2c70b413db621572a03d5abcf411eb55f30abf6635f77b4816",
+    "rust/crates/pipecat-hepta/README.md": "b96b6a4e0ff9804d945be7c7c7e80df404b6a0206c39496f391d8058f00d11eb",
+    "rust/crates/pipecat-hepta/examples/local_speech.rs": "189e304937aeef6c3f3ee8a73b62b705839320adf0a29fa913f69d6eb0aed648",
+    "rust/crates/pipecat-hepta/src/lib.rs": "251e3d074d0acfb3414b6f3e3950d9d448abacb70a6d4be2491cc7fd88b07068",
+    "rust/crates/pipecat-hepta/src/local_speech.rs": "6b8f9aa194de53ee887241ad61b44b3864b369dd34caa6e8c868bdb79659a995",
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "5d4e443c2b4a03236dca9f0f2255bc28a6d857c7268b2746575ec384e128d546",
+    "rust/crates/pipecat-hepta/src/process_supervision.rs": "b8311d77b16fcd6e92128b3ba8f1988355ccc7799f7a821e72c6ea19b8938212",
+    "rust/crates/pipecat-hepta/tests/parent_death.rs": "313a6ef90cd46a31cc57ff1857e28472f281355f4aee183262283ed4cf4020e6",
+    "rust/crates/pipecat-hepta/tests/process_supervision.rs": "ff44d499b32308b7afce14ad37f19fd6039f8d4311126c122781300ac1286fc7",
+    "rust/crates/pipecat-webrtc/SHUTDOWN_REGRESSION.md": "917f6ac58007e00850233dcc9130160f06b3cd48d7e70f319e038d5b0c1ecd61",
+    "rust/crates/pipecat-webrtc/src/connection.rs": "ae208b14ed0bb388a69f767f7706c71bc9d41f688e8bd0cbab0bcd2873163ede",
+    "rust/crates/pipecat-webrtc/src/shutdown_start_tests.rs": "d8f090a66915833aedeebbaa0fdbd30cf4a9cfb248ba59dd7e0647c395ba4260",
+    "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs": "74a7ae300aa221a2a5e8ad3847b7fa226e7385d64bea436cbb9683ed7045670e",
+    "rust/scripts/qualify_hmi_media_process.py": "92236514e64df01263a073fa2d8bf1020b217b89ff171172ed10599cfb992df7",
+    "rust/scripts/qualify_hmi_supervisor_entry.py": "1d0f959410311110603bc41d45792995b3b06f7db858f925b082723d58f52fc7",
+    "rust/vendor/webrtc-0.14.0/PATCHES.md": "4158e8dff7d52c98f13deb481d102f6089ec67d9e097e34eb11647d3ae01774b",
+    "rust/vendor/webrtc-0.14.0/src/dtls_transport/mod.rs": "81d247590b5840a98cd845247699c49bea8b2fe2bcadc03898bf35e90ae95574"
+  },
+  "root_readme_bytes": 0,
+  "binary_sha256": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "source_after": {
+    "commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+    "tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+    "worktree_status": ""
+  },
+  "passed": true,
+  "not_qualified": [
+    "full workspace",
+    "physical models/audio/video/devices",
+    "production Hepta owner composition",
+    "non-Linux containment",
+    "remote provider/SFU/browser qualification",
+    "unexplained WebRTC data-channel setup timeout"
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "schema": "pipecat-moq-diagnostic-runner-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793986866.297451,
+  "scope": "Read-only static review and byte comparisons. No remote request, Cargo, libtest harness, model or native fixture was executed.",
+  "verdict": "no_blocker_in_frozen_runner",
+  "runner": {
+    "bytes": 33499,
+    "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af",
+    "path": "workspace-evidence/task-helpers/desktop_moq_diagnostic_pin_r1.py"
+  },
+  "reviewed_draft": {
+    "bytes": 32645,
+    "sha256": "c6ba6d1d6c852cea51a5536dea43e1ca070b59a0eb90263ab8da167728bad27e"
+  },
+  "final_delta": "Only pre-admission absence of logs, explicit stopped-phase exit accounting and selection-mismatch exit 126 changed after the full draft review; all top-level configuration AST nodes remain identical.",
+  "original_selection": {
+    "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "source_tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "target_log": {
+      "bytes": 8165,
+      "sha256": "8a1fc305fac84714d2124c04c1af1aaeba6261e09c7214822d20e58a3e843c65"
+    },
+    "names_file": {
+      "bytes": 6882,
+      "sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+    },
+    "exact_unique_names": 81,
+    "independently_extracted_names_equal": true,
+    "exact_tail_slice_equal": true,
+    "original_summary": "80 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s",
+    "failed_case": "tests::absent_peer_has_a_bounded_deadline",
+    "original_actual_error_variant": "Not printed; unknown. Later observations must not be attributed retrospectively to this failure."
+  },
+  "diagnostic_source": {
+    "path": "rust/crates/pipecat-moq/src/tests.rs",
+    "original": {
+      "bytes": 27935,
+      "sha256": "c07b007f6fbd5d8ac215c4334ee531756f292796cb7ed600a17faeab63749bb0"
+    },
+    "candidate": {
+      "bytes": 28377,
+      "sha256": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219"
+    },
+    "unique_replacement_reverses_to_entire_original_file": true,
+    "assertion_expression_preserved": true,
+    "connect_timeout_ms": 150,
+    "default_end_timeout_and_existing_bounded_helper_unchanged": true,
+    "all_await_order_and_accepting_join_drop_unchanged": true,
+    "all_other_source_bytes_identical": true,
+    "new_elapsed_scope": "Whole connect invocation including internal cleanup, not an isolated peer-announcement wait.",
+    "new_accepting_finished_scope": "Sampled task-finished state, not proof of a particular handshake milestone."
+  },
+  "admission": {
+    "all_original_0cc_stages_and_c3_must_be_terminal": true,
+    "c3_source_and_inputs_intact": true,
+    "current_new_source_already_published_required": true,
+    "runner_updates_source_or_refs": false,
+    "source_contract": "Exact CLI head/tree/contract SHA; full changed-path list; complete source manifest; reviewed source hashes. The only MoQ-crate diff is the fixed tests.rs diagnostic candidate.",
+    "owner_lock": "Same exclusive nonblocking qualification-owner-pin.lock throughout the run and postchecks.",
+    "original_managed_job_authority": "Caller must separately observe authoritative terminal runtime statuses; disk receipt checks do not fabricate remote authority.",
+    "create_only_evidence": true
+  },
+  "selection_and_execution": {
+    "binding_argv": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--locked",
+      "--offline",
+      "--no-run",
+      "--message-format=json-render-diagnostics"
+    ],
+    "no_feature_override": true,
+    "compiler_binding": "Metadata workspace/package_id plus compiler-artifact target name/kind/test profile/source path and executable within the exclusive target/debug/deps. Exactly one successful build-finished record and matching artifact are required.",
+    "list_requires_exact_81_original_names_and_no_benchmarks": true,
+    "round_argv": "The exact compiler-reported libtest binary alone, with no selector or test-threads argument.",
+    "rust_test_threads_environment_rejected": true,
+    "maximum_rounds": 20,
+    "each_full_pass_requires": "Exactly one 81/0/0/0/0 summary and each original name exactly once with ok outcome.",
+    "stop_first_preparation_selection_native_containment_or_suite_failure": true,
+    "no_retry_or_failure_replacement": true,
+    "coverage_rule": "At most 20 repetitions of the same 81 unique cases; not 1620 distinct coverage cases."
+  },
+  "identity_and_limits": {
+    "source_full_manifest_before_after": true,
+    "head_tree_status_after": true,
+    "tools_runner_inputs_and_actual_binary_before_after": true,
+    "raw_stdout_stderr_preserved": true,
+    "outer_seconds": 600,
+    "inner_whole_seconds": 570,
+    "binding_max_seconds": 300,
+    "postflight_and_cleanup_reserve_seconds": 10,
+    "cpu_percent": 800,
+    "memory_bytes": 34359738368,
+    "build_jobs": 8,
+    "nice": 10,
+    "budget_scope": "The 570-second inner budget includes admission, workspace no-run, repeats, postchecks and a final elapsed observation; it does not extend original Rust test deadlines."
+  },
+  "process_containment": {
+    "each_invocation_owns_new_pgid": true,
+    "attempt_and_started_pid_saved_separately": true,
+    "term_leader_wait_seconds": 2,
+    "kill_leader_wait_seconds": 1,
+    "actual_leader_reap_required": true,
+    "final_group_absence_distinct_from_join": true,
+    "unexpected_group_after_normal_leader_exit_is_failure": true,
+    "containment_and_log_integrity_exit": 125,
+    "pre_admission_absent_logs_do_not_fake_corruption": true,
+    "original_native_exit_and_wrapper_phase_exit_preserved": true,
+    "stopped_phase_copies_failure_fields": true,
+    "selection_mismatch_exit": 126,
+    "timeout_exit": 124,
+    "outer_owned_job_is_final_containment_boundary": true
+  },
+  "limitations": [
+    "This review does not establish that any new suite passed, that the original absent-peer failure is resolved, or what its unprinted original error variant was.",
+    "The existing assertion-before-accepting-cleanup order is intentionally unchanged by the diagnostic fixture.",
+    "Source and artifact observations are bounded checks, not proof that every descendant was individually joined."
+  ]
+}

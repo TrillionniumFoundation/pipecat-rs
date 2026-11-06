@@ -1,0 +1,35 @@
+{
+  "schema": "pipecat-moq-diagnostic-runner-author-audit-v1",
+  "scope": "static source and existing original-log checks only; no Cargo/native/executable invocation",
+  "original_draft": {
+    "bytes": 32645,
+    "sha256": "c6ba6d1d6c852cea51a5536dea43e1ca070b59a0eb90263ab8da167728bad27e"
+  },
+  "frozen_runner": {
+    "bytes": 33499,
+    "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af"
+  },
+  "ast_unchanged_values": {
+    "BASE": true,
+    "BASE_TREE": true,
+    "DIAGNOSTIC_SHA": true,
+    "REPETITIONS": true,
+    "INNER_SECONDS": true,
+    "OUTER_SECONDS": true,
+    "RESERVE_SECONDS": true,
+    "binding_argv": true
+  },
+  "changes_from_review": [
+    "A phase denied admission need not invent a missing-log integrity failure; actual process/admission failure and original exit remain separately recorded.",
+    "The stopped phase records original exit before/after cleanup, runner timeout, containment, log-integrity and wrapper status separately.",
+    "Exact-case selection mismatch is explicitly126 without retry, preserving the list process original exit."
+  ],
+  "asserted_static_properties": {
+    "one_subprocess_Popen_call_site": true,
+    "no_source_checkout_or_fetch": true,
+    "no_test_thread_override_in_round_argv": true,
+    "same_exact_81_names_source": "original-selection-binding.json",
+    "original_150ms_assertion_contract": "diagnostic candidate SHA8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219"
+  },
+  "execution_status": "prepared; awaiting root source publication and all original0cc+C3 managed-job terminal receipts"
+}

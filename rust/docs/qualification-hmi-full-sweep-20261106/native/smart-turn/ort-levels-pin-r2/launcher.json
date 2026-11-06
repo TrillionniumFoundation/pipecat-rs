@@ -1,0 +1,97 @@
+{
+  "schema": "pipecat-smart-turn-levels-launch-v2",
+  "phase": "completed",
+  "start_unix": 1793983024.5726273,
+  "files_before": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/ort_reference_probe_disable.c",
+      "name": "ort_reference_probe_disable.c",
+      "bytes": 11816,
+      "sha256": "4e5623210792a87b71509d0ff2ba538ec9fd73baef4cab897c72f132abfc7844"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/ort_reference_probe_basic.c",
+      "name": "ort_reference_probe_basic.c",
+      "bytes": 11818,
+      "sha256": "d110fe4fd5e76856f8d9874a16da2899e9c92437659b0af289b17d675d7e35b1"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/onnxruntime_c_api.h",
+      "name": "onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/desktop_smart_turn_levels_pin_r2.py",
+      "name": "desktop_smart_turn_levels_pin_r2.py",
+      "bytes": 30275,
+      "sha256": "51eb47b6ed022620d98074e0063afa52c547cfa5f2086e67e130d0c526be6450"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "name": "run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "files_after": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/ort_reference_probe_disable.c",
+      "name": "ort_reference_probe_disable.c",
+      "bytes": 11816,
+      "sha256": "4e5623210792a87b71509d0ff2ba538ec9fd73baef4cab897c72f132abfc7844",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/ort_reference_probe_basic.c",
+      "name": "ort_reference_probe_basic.c",
+      "bytes": 11818,
+      "sha256": "d110fe4fd5e76856f8d9874a16da2899e9c92437659b0af289b17d675d7e35b1",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/onnxruntime_c_api.h",
+      "name": "onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/desktop_smart_turn_levels_pin_r2.py",
+      "name": "desktop_smart_turn_levels_pin_r2.py",
+      "bytes": 30275,
+      "sha256": "51eb47b6ed022620d98074e0063afa52c547cfa5f2086e67e130d0c526be6450",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "name": "run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+      "unchanged": true
+    }
+  ],
+  "requested_resource_budget": {
+    "cpu_quota_percent": 200,
+    "memory_max_bytes": 4294967296,
+    "nice": 10,
+    "timeout_seconds": 120
+  },
+  "preceding_expanded_launcher": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/expanded-batch-launch-pin-r1/launcher.json",
+    "sha256": "5162d316079c6e7efae542b0e5ba0a01c8576c0d9b10ac53c0617e7e41d26b1b",
+    "exit_code": 1
+  },
+  "actual_argv": [
+    "/usr/bin/python3",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-levels-pin-r2/desktop_smart_turn_levels_pin_r2.py",
+    "272671b95297313d24db921eceda8e95f3a8d545",
+    "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "expanded-batch-pin-r1"
+  ],
+  "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66",
+  "runner_exit_code": 1,
+  "files_unchanged": true,
+  "exit_code": 1,
+  "end_unix": 1793983028.7975585
+}

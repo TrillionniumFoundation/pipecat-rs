@@ -1,0 +1,804 @@
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+   Compiling pipecat-protocol v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-protocol)
+   Compiling pipecat-services v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-services)
+   Compiling pipecat-processors v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-processors)
+   Compiling pipecat-pipeline v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-pipeline)
+    Finished `test` profile [unoptimized] target(s) in 4m 49s
+     Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_core-103bcc746b5bf62a)
+
+running 151 tests
+test frames::tests::audio_requires_complete_pcm_samples ... ok
+test frames::tests::deserialized_interruption_clones_share_a_fresh_local_token ... ok
+test heartbeat::tests::close_before_activation_cannot_restart_monitor ... ok
+test frames::tests::flags_and_identity ... ok
+test frame_payloads::review_handler_identity::review_realtime_cause_keeps_only_tiny_handler_identity_until_last_cause_drops ... ok
+test frames::tests::frame_json_roundtrip ... ok
+test frames::tests::deserialized_fatal_error_preserves_the_constructor_invariant ... ok
+test heartbeat::tests::dropped_frames_retire_weak_identity_and_never_hold_the_payload_alive ... ok
+test heartbeat::tests::drain_stops_injection_without_resetting_timeout_and_close_freezes_counters ... ok
+test heartbeat::tests::pending_bound_expiry_and_repeated_timeouts_recover_on_a_fresh_probe ... ok
+test heartbeat::tests::source_defaults_and_native_config_bounds ... ok
+test heartbeat::tests::pressure_drop_is_private_origin_scoped_even_after_probe_expiry ... ok
+test heartbeat::tests::rejected_queue_admission_is_not_a_receipt_and_does_not_retain_a_frame ... ok
+test heartbeat::tests::duplicate_public_id_wire_reconstruction_and_modified_timestamp_do_not_refresh ... ok
+test heartbeat::tests::dropping_one_fanout_clone_preserves_other_real_receipt ... ok
+test idle::tests::cap_loses_coverage_permanently_but_does_not_limit_ordinary_observers ... ok
+test idle::tests::cancel_decision_is_once_and_cannot_be_retracted_by_activity ... ok
+test idle::tests::clones_deduplicate_but_wire_reconstruction_and_new_roots_do_not ... ok
+test heartbeat::tests::immediate_probe_receipt_resets_deadline_and_has_exact_rtt ... ok
+test idle::tests::existing_idle_key_above_cap_is_still_duplicate_not_coverage_loss ... ok
+test idle::tests::independent_child_observer_does_not_consume_root_first_push ... ok
+test idle::tests::notify_only_repeats_and_consumes_coalesced_activity_at_full_interval ... ok
+test idle::tests::every_frame_marks_first_push_and_mutation_cannot_create_activity ... ok
+test idle::tests::close_before_start_and_during_drain_are_final ... ok
+test llm_continuation::response_identity_tests::exhaustion_is_sticky_and_never_wraps ... ok
+test idle::tests::source_defaults_native_bounds_and_exact_default_selector ... ok
+test observer::lifecycle_recovery_tests::hub_drop_before_first_poll_cancels_without_spawning_cleanup ... ok
+test observer::lifecycle_recovery_tests::future_deadline_does_not_keep_closed_dispatch_alive ... ok
+test observer::lifecycle_recovery_tests::concurrent_shutdown_drains_and_cleans_registration_once ... ok
+test observer::lifecycle_recovery_tests::dropping_shutdown_aborts_owned_cleanup ... ok
+test observer::lifecycle_recovery_tests::abort_before_first_poll_cancels_then_cleans_once ... ok
+test observer::lifecycle_recovery_tests::cleanup_panic_is_isolated_and_counted ... ok
+test observer::lifecycle_recovery_tests::queued_event_cancels_expired_deadline_before_timeout ... ok
+test observer::lifecycle_review_tests::cancelled_shutdown_aborts_the_dispatch_task_it_owns ... ok
+test observer::lifecycle_review_tests::a_closed_queue_terminates_without_using_the_drain_timeout ... ok
+test observer::lifecycle_recovery_tests::unchanged_expired_deadline_yields_for_cancellation ... ok
+test observer::lifecycle_review_tests::many_concurrent_shutdowns_cleanup_each_registration_once ... ok
+test observer::lifecycle_review_tests::sharing_an_observer_explicitly_couples_registration_cancellation ... ok
+test observer::lifecycle_review_tests::timeout_callbacks_serialize_with_later_admissions_and_abort_safely ... ok
+test observer::lifecycle_recovery_tests::callback_and_cancel_panics_do_not_double_unwind ... ok
+test pipeline::flush_tests::flush_completion_is_visible_when_output_receiver_is_woken ... ok
+test pipeline::flush_tests::receiver_closure_after_flush_admission_does_not_revoke_completion ... ok
+test observer::lifecycle_recovery_tests::deadline_and_timeout_panics_cancel_and_cleanup ... ok
+test pipeline::flush_tests::rejected_flush_output_admission_does_not_set_completion ... ok
+test observer::lifecycle_review_tests::panic_accounting_preserves_backlog_losses_and_other_observers ... ok
+test pipeline::lifecycle::tests::committed_terminal_cannot_be_replaced_by_late_deadline_tick ... ok
+test observer::lifecycle_review_tests::continuously_ready_input_defers_expiration_across_cooperative_budgets ... ok
+test pipeline::lifecycle::tests::live_composition_membership_limit_is_explicit_backpressure ... ok
+test pipeline::lifecycle::tests::dynamic_child_setup_failure_fails_owner_and_releases_cleanup ... ok
+test pipeline::lifecycle::tests::owner_drop_cancels_explicit_child_and_unstarted_builder_is_weak ... ok
+test pipeline::lifecycle::tests::pending_and_sealed_roots_both_retain_the_shutdown_deadline ... ok
+test pipeline::lifecycle::tests::taken_background_result_owns_drain_until_error_publication_finishes ... ok
+test processor::causal_scope_tests::invocation_push_preserves_current_order_inside_surviving_background ... ok
+test observer::lifecycle_review_tests::callback_replaces_the_old_deadline_before_the_next_wait ... ok
+test processor::causal_scope_tests::realtime_fence_ignores_background_survival_and_retains_no_runtime ... ok
+test processor::causal_scope_tests::realtime_fence_intersection_checked_bound_preserves_distinct_raw_generations ... ok
+test pipeline::lifecycle::tests::completed_children_release_while_root_sender_is_retained ... ok
+test processor::causal_scope_tests::realtime_fence_checks_all_nested_origins_in_either_order ... ok
+test observer::lifecycle_recovery_tests::pending_cleanup_is_aborted_and_joined_at_drain_deadline ... ok
+test pipeline::lifecycle::tests::completed_dynamic_children_are_pruned_from_bounded_group ... ok
+test processor::causal_scope_tests::realtime_fence_stop_and_atomic_output_do_not_retain_runtime ... ok
+test processor::causal_scope_tests::realtime_native_request_admission_renews_only_surviving_policy_and_never_bound_clone ... ok
+test pipeline::lifecycle::tests::staged_child_accepts_only_fresh_registered_owner_and_keeps_external_cutoff ... ok
+test processor::causal_scope_tests::invocation_push_fences_canceled_middle_origin_under_background_survival ... ok
+test processor::causal_scope_tests::review_raw_invocation_fences_original_system_identity_but_normal_push_survives ... ok
+test processor::causal_scope_tests::realtime_fence_intersection_keeps_both_original_scopes_and_no_runtime_ownership ... ok
+test processor::causal_scope_tests::scope_comparison_is_unmasked_in_surviving_background_work ... ok
+test processor::causal_scope_tests::realtime_fence_raw_none_still_checks_interrupted_inherited_origins ... ok
+test processor::causal_scope_tests::synchronous_push_preserves_async_push_order_and_stale_drops ... ok
+test processor::causal_scope_tests::realtime_native_request_admission_raw_none_gets_local_epoch_and_keeps_inherited_scope ... ok
+test processor::causal_scope_tests::scope_compares_all_inherited_origin_fields_length_and_order ... ok
+test processor::causal_scope_tests::scope_compares_destination_runtime_index_and_raw_invocation_generation ... ok
+test processor::fenced_queue_tests::different_runtime_epochs_admit_to_self_and_preserve_identity_and_direction ... ok
+test processor::fenced_queue_tests::closed_source_and_expired_weak_are_stale_but_closed_destination_is_an_error ... ok
+test processor::causal_scope_tests::review_invocation_push_checks_inherited_origins_without_direct_generation ... ok
+test processor::fenced_queue_tests::forbidden_payloads_and_authority_are_rejected_before_admission_locks ... ok
+test processor::fenced_queue_tests::full_queue_is_an_error_and_does_not_claim_admission ... ok
+test processor::fenced_queue_tests::all_nineteen_snapshot_payloads_are_admitted_unchanged ... ok
+test processor::fenced_queue_tests::later_source_interruption_does_not_retract_an_already_queued_snapshot ... ok
+test processor::independent_queue_observation_review::review_observed_staleness_keeps_none_and_inherited_epoch_rules ... ok
+test processor::fenced_queue_tests::rejected_owned_payloads_drop_outside_both_admission_gates ... ok
+test processor::fenced_queue_tests::opposite_runtime_admissions_use_one_lock_order_and_join_all_owners ... ok
+test queue::observation_tests::published_queue_cutoff_matches_both_writers_without_regression ... ok
+test queue::observation_tests::observed_context_staleness_preserves_none_current_and_inherited_semantics ... ok
+test queue::observation_tests::released_bound_effect_observes_current_queue_before_callback_drop ... ok
+test queue::observation_tests::released_bound_effect_observes_inherited_queue_before_callback_drop ... ok
+test queue::observation_tests::source_observation_returns_before_direct_interruption_callback_drop ... ok
+test queue::observation_tests::source_observation_returns_before_queued_interruption_callback_drop ... ok
+test processor::fenced_queue_tests::raw_source_and_destination_fences_override_system_and_survival_exemptions ... ok
+test queue::tests::blocked_sender_wakes_on_capacity_or_close ... ok
+test queue::observation_tests::bound_confirmation_observes_current_queue_before_callback_drop ... ok
+test queue::tests::interruption_keeps_instance_overrides_and_terminal ... ok
+test queue::tests::stable_start_system_data_priority ... ok
+test realtime_context::tests::assistant_intent_requires_run_and_exact_direction_without_spending_sequence ... ok
+test realtime_context::tests::cause_orders_identical_text_and_rejects_gap_stale_other_producer ... ok
+test realtime_context::tests::cause_seals_payload_identity_marker_and_wire ... ok
+test realtime_context::tests::direct_function_schema_and_callback_identity_are_sealed_without_serializing_closures ... ok
+test speculation::eager_source::tests::adoption_is_once_only_consumer_bound_and_validated_before_replacement ... ok
+test speculation::eager_source::tests::aligned_live_sessions_require_exact_receipt_identity_for_transfer ... ok
+test speculation::eager_source::tests::all_source_carriers_reject_wire_and_seal_boundary_role_and_direction ... ok
+test queue::observation_tests::bound_confirmation_observes_inherited_queue_before_callback_drop ... ok
+test queue::observation_tests::source_observation_returns_before_uninterruptible_callback_discard ... ok
+test speculation::eager_source::tests::bounded_turn_identity_survives_child_or_receipt_without_prediction_payload ... ok
+test speculation::eager_source::tests::effective_revoke_precedes_delayed_child_notification ... ok
+test speculation::eager_source::tests::empty_stop_requires_owner_disposition_same_start_and_once_only_claim ... ok
+test speculation::eager_source::tests::bounded_passive_retention_releases_capacity_without_a_preadoption_timer ... ok
+test speculation::eager_source::tests::exact_start_is_required_once_before_prediction_final_and_stop_admission ... ok
+test speculation::eager_source::tests::failed_shared_capacity_reservation_preserves_current_receipt_and_bound_transfer ... ok
+test speculation::eager_source::tests::fallback_is_exact_once_and_retired_role_claims_are_rejected ... ok
+test speculation::eager_source::tests::bound_effect_constructs_and_polls_reentrant_callback_outside_source_and_capability_locks ... ok
+test speculation::eager_source::tests::no_result_turn_recovery_rights_follow_source_lifetime_without_receipt_arrival ... ok
+test speculation::eager_source::tests::last_runtime_owner_is_destroyed_after_source_lease_guard ... ok
+test speculation::eager_source::tests::normal_drain_preserves_only_offered_final_rights_including_queued_start ... ok
+test speculation::eager_source::tests::normal_completion_disarms_ended_runtime_and_dropped_health ... ok
+test speculation::eager_source::tests::normal_eof_dropped_receipt_cannot_restore_unrelated_prediction_or_recovery ... ok
+test speculation::eager_source::tests::old_cancel_cannot_withdraw_replacement_and_equal_text_is_not_receipt_identity ... ok
+test speculation::eager_source::tests::ordinary_consumption_observes_retirement_after_live_role_claims ... ok
+test speculation::eager_source::tests::payload_budget_does_not_retain_caller_spare_capacity ... ok
+test speculation::eager_source::tests::health_observation_denies_pretransfer_restoration_but_not_transferred_output ... ok
+test speculation::eager_source::tests::payload_role_direction_wire_and_duplicate_rights_are_enforced ... ok
+test speculation::eager_source::tests::queued_capability_drop_does_not_wake_watchers_after_owner_retirement ... ok
+test speculation::eager_source::tests::receipt_retains_consumer_provenance_without_retaining_prediction_payload ... ok
+test speculation::eager_source::tests::resume_and_source_retirement_before_adoption_deny_replayed_predictions ... ok
+test speculation::eager_source::tests::queued_source_carrier_drop_does_not_acquire_lease ... ok
+test speculation::eager_source::tests::same_session_supersession_retires_prior_receipt_before_replacement_transfer ... ok
+test speculation::eager_source::tests::self_cancel_preserves_current_error_authority_but_source_retirement_does_not ... ok
+test speculation::eager_source::tests::transferred_authority_survives_source_revoke_until_real_owner_cancels ... ok
+test speculation::eager_source::tests::supersession_retires_unadopted_receipts_empty_stops_and_no_result_turns ... ok
+test tool_progress::tests::disposition_mailbox_record_bound_and_atomic_charge_release ... ok
+test tool_progress::tests::actual_assistant_commit_receipt_waits_after_provider_admission_and_seals_clones ... ok
+test tool_progress::tests::dropped_waiter_does_not_cancel_history_or_consume_result ... ok
+test tool_progress::tests::history_attribution_rejects_changed_range_without_parsing_shape ... ok
+test tool_progress::tests::history_receipt_is_repeatable_staged_and_preserves_commit_on_close ... ok
+test tool_progress::tests::duplicate_selected_setup_latches_before_start_and_preserves_first_registration ... ok
+test tool_progress::tests::insufficient_actual_shutdown_budget_fails_before_reporting_open ... ok
+test tool_progress::tests::iterative_json_guard_rejects_depth_and_accumulated_spare_capacity ... ok
+test tool_progress::tests::forced_owner_drop_revokes_reports_and_resolves_real_pending_receipt ... ok
+test tool_progress::tests::public_batch_never_creates_reporting_admission ... ok
+test tool_progress::tests::receipt_notification_wakers_reenter_outside_route_locks ... ok
+test tool_progress::tests::terminal_reason_remains_copy_and_route_metadata_has_hard_bound ... ok
+test tool_progress::tests::queue_full_selected_failure_is_applied_only_after_owner_unlock ... ok
+test user_image_constraint::tests::clones_duplicates_retain_lease_and_one_commit_but_context_releases_rgb_lease ... ok
+test user_image_constraint::tests::sealed_image_rejects_payload_routing_identity_and_wire_laundering ... ok
+test user_image_constraint::tests::close_excludes_commit_and_derived_payload_cannot_change_or_rebind ... ok
+test tool_progress::tests::normal_final_permission_and_compact_journal_do_not_pin_runtime_or_terminal_pool ... ok
+test processor::fenced_queue_tests::inherited_raw_origins_remain_restrictions_when_local_generation_is_none ... ok
+test realtime_context::tests::cause_bound_and_checked_sequence_overflow_leave_frame_unmodified ... ok
+test realtime_context::tests::direct_tool_identity_bound_counts_repeated_entries_and_rejects_atomically ... ok
+test processor::independent_queue_observation_review::review_bound_observations_finish_while_real_callback_destructor_holds_queue ... ok
+test observer::lifecycle_review_tests::drain_and_cleanup_share_the_original_deadline ... ok
+test observer::lifecycle_review_tests::each_registration_uses_the_shared_shutdown_start_time ... ok
+
+test result: ok. 151 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/admission.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/admission-53ba31555742f3f1)
+
+running 3 tests
+test waiting_normal_and_end_senders_are_rejected_before_cancel_handler_finishes ... ok
+test administrative_system_senders_can_wait_for_capacity_during_end_drain ... ok
+test waiting_ordinary_system_senders_wake_closed_without_capacity_after_end_or_cancel ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/bridge_errors.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/bridge_errors-2221afc9f07b7fd1)
+
+running 1 test
+test native_bridged_errors_record_once_per_runtime_despite_consumption_bounce_and_eviction ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/bridges.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/bridges-024c5934b8ab5dd9)
+
+running 5 tests
+test same_node_forwarding_context_can_broadcast_and_continue_its_invocation ... ok
+test child_output_keeps_origin_epoch_when_returned_to_parent ... ok
+test child_ingress_checks_origin_and_destination_cutoffs ... ok
+test opposite_direction_bridges_use_consistent_lock_order ... ok
+test buffered_forwarding_context_checks_source_destination_and_nested_origins ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/drain.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/drain-d384f23a1ce02382)
+
+running 3 tests
+test cancel_preempts_pending_terminal_and_blocked_upstream_normal_handler ... ok
+test graceful_terminal_drains_admitted_upstream_system_and_background_output ... ok
+test blocked_upstream_system_drain_obeys_shutdown_timeout ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/frame_observation_token.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/frame_observation_token-8024b59c8426ae5e)
+
+running 2 tests
+test native_observation_identity_ignores_public_ids_and_is_not_wire_data ... ok
+test pipeline_captures_native_identity_before_forwarding_without_public_id_dedup ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gemini_continuation.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/gemini_continuation-92f425084238188c)
+
+running 5 tests
+test persisted_gemini_parts_preserve_bytes_and_redact_debug ... ok
+test provider_and_adjacent_tool_bookmarks_cannot_be_forged_or_omitted ... ok
+test native_gemini_details_are_opaque_and_never_silently_wire_encoded ... ok
+test gemini_phases_validate_exact_frame_and_tool_identity ... ok
+test signatures_and_reserved_memory_are_bounded_for_both_part_kinds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/health_generation.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/health_generation-cb756c7c91219518)
+
+running 4 tests
+test redundant_restoration_changes_admission_but_not_transition_observations ... ok
+test conditional_error_reentrant_watch_restores_without_deadlock_or_losing_verdict ... ok
+test conditional_error_observer_can_restore_and_keep_original_error_attribution ... ok
+test stale_and_concurrently_restored_outcomes_cannot_poison_current_health ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/heartbeats.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/heartbeats-7f23cd9c77459dde)
+
+running 9 tests
+test pinned_source_defaults_match_native_opt_in_defaults ... ok
+test default_disabled_and_application_heartbeat_is_ordinary_output ... ok
+test real_sink_receipts_do_not_require_application_output_consumption ... ok
+test interior_queue_pressure_is_diagnostic_only ... ok
+test child_busy_input_and_output_pressure_never_acknowledge_or_fail_root ... ok
+test pause_can_report_a_stall_and_resume_recovers ... ok
+test stalled_probe_times_out_repeatedly_then_recovers_without_error ... ok
+test monitor_starts_only_after_start_reaches_the_real_sink ... ok
+test end_stops_probes_but_monitors_until_terminal_and_then_freezes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/native_contract_examples.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/native_contract_examples-2dbc0f9fb5b00995)
+
+running 1 test
+test every_native_variant_matches_the_python_source_priority_and_interruptibility ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_llm_continuation.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/native_llm_continuation-b25cde1412673154)
+
+running 8 tests
+test block_count_and_argument_depth_are_bounded ... ok
+test clone_duplicate_and_broadcast_preserve_provider_response_identity ... ok
+test phase_and_tool_relationships_are_checked_on_attach_read_and_take ... ok
+test native_history_is_never_wire_serialized_or_debug_disclosed ... ok
+test ordinary_wire_fixture_and_priorities_are_unchanged ... ok
+test persisted_rich_context_keeps_signatures_for_replay_but_redacts_debug ... ok
+test invalid_ids_signatures_and_tool_arguments_are_rejected ... ok
+test retained_byte_bounds_count_spare_capacity_and_json_structure ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/observer_capture.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/observer_capture-aa9f8368ca05ccf2)
+
+running 10 tests
+test capture_limits_reject_unbounded_or_zero_configuration ... ok
+test contexts_exceptions_signatures_and_payload_wall_clocks_are_never_captured ... ok
+test bare_error_falls_back_to_actual_pusher_and_message_opt_in_is_independent ... ok
+test json_node_budget_is_shared_across_the_whole_call_batch ... ok
+test recovered_error_keeps_native_origin_and_reporting_verdict_after_health_restoration ... ok
+test identities_are_omitted_whole_and_call_and_aggregate_limits_are_enforced ... ok
+test adjacent_and_boundary_stream_paths_preserve_safe_observation_and_first_push ... ok
+test json_depth_nodes_and_field_bytes_are_checked_before_retention ... ok
+test detailed_results_preserve_finality_empty_error_truthiness_and_requested_fields ... ok
+test shared_hub_never_promotes_one_subscribers_sensitive_capture ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/observers.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/observers-31daa3d2d743ee25)
+
+running 12 tests
+test a_failed_boundary_admission_never_publishes_a_successful_push ... ok
+test cancel_aborts_blocked_callbacks_instead_of_waiting_for_graceful_timeout ... ok
+test setup_failure_and_panic_have_explicit_distinct_outcomes ... ok
+test zero_capacity_observer_is_rejected_before_spawning_dispatch ... ok
+test setup_process_and_accepted_pushes_have_causal_order_and_injected_timestamps ... ok
+test disabled_observers_skip_all_injected_clock_reads ... ok
+test observations_exclude_raw_content_metadata_and_transport_identifiers ... ok
+test full_observer_queue_never_backpressures_processors_and_reports_loss ... ok
+test reported_metric_snapshots_are_bounded_and_keep_explicit_loss_count ... ok
+test clones_before_admission_share_first_push_but_duplicate_and_serde_restart_it ... ok
+test observer_panic_is_isolated_counted_and_does_not_break_another_observer ... ok
+test graceful_end_drains_healthy_observers_and_bounds_blocked_callbacks ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/openclaw_frames.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/openclaw_frames-b2a86a90acbde40a)
+
+running 1 test
+test openclaw_priority_names_and_serde_are_explicit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/payload_budgets.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/payload_budgets-0664ef6a750c2e07)
+
+running 13 tests
+test invalid_profile_is_rejected_without_constructing_queue ... ok
+test bounded_measurement_handles_escaped_strings_and_rejects_deep_json ... ok
+test exact_limit_includes_routing_metadata_and_rejects_overflow ... ok
+test owned_output_wait_rejects_oversize_even_when_output_is_full ... ok
+test invalid_external_cancel_is_rejected_before_input_is_closed ... ok
+test strict_profile_rejects_opaque_native_and_callback_payloads ... ok
+test oversized_processor_output_is_never_admitted ... ok
+test system_and_start_have_reserved_bytes_and_interruption_releases_data ... ok
+test child_pipeline_inherits_strict_profile_and_cannot_replace_it ... ok
+test system_media_cannot_consume_control_item_or_byte_reservations ... ok
+test bytes_can_fill_before_items_and_dequeue_wakes_external_sender ... ok
+test runtime_external_wait_internal_failure_and_cancel_remain_distinct ... ok
+test dropping_pending_send_or_closing_does_not_leak_reservations ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/payloads.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/payloads-34bd6a6121655cca)
+
+running 8 tests
+test dtmf_sequence_respects_precedence_and_rejects_invalid_or_empty_input ... ok
+test local_flush_event_supports_late_waiters_clear_and_explicit_serialization_failure ... ok
+test source_uninterruptible_control_defaults_are_retained ... ok
+test executable_message_transform_preserves_rich_context_and_errors ... ok
+test callbacks_execute_locally_and_never_serialize_as_empty_placeholders ... ok
+test sprite_and_image_properties_survive_roundtrip ... ok
+test settings_keep_omission_null_and_value_distinct_and_are_uninterruptible ... ok
+test direct_tool_callbacks_return_values_and_custom_tool_schemas_roundtrip ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/realtime_handler_identity.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/realtime_handler_identity-a2b760ac9225c515)
+
+running 2 tests
+test same_schema_replacement_after_original_callback_drop_invalidates_seal ... ok
+test cloned_handlers_keep_identity_call_behavior_and_serialization_boundary ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_contracts.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_contracts-57ef439927d4e032)
+
+running 2 tests
+test frame_deserialization_keeps_the_public_serde_struct_name ... ok
+test separately_decoded_errors_have_fresh_identity_but_clones_share_identity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_gemini_provider_blocks.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_gemini_provider_blocks-fa6917064494b415)
+
+running 2 tests
+test generic_text_remains_supported_for_anthropic_carriers ... ok
+test gemini_carriers_reject_untyped_text_before_empty_signed_tail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_generations.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_generations-1edf34c57186b4ae)
+
+running 20 tests
+test duplicated_interruption_has_a_new_logical_identity ... ok
+test fresh_admission_after_interruption_survives_delayed_handler ... ok
+test duplicate_interruption_identity_does_not_invalidate_fresh_admission ... ok
+test full_normal_lane_keeps_system_admission_available_and_fresh_sender_progresses ... ok
+test broadcast_does_not_refresh_previously_cloned_background_context ... ok
+test delayed_upstream_interruption_does_not_promote_old_remote_output ... ok
+test broadcast_preserves_same_invocation_fresh_frames_across_both_branches ... ok
+test fresh_external_admission_survives_while_upstream_interruption_is_delayed ... ok
+test distinct_second_interruption_invalidates_only_earlier_generations ... ok
+test interruptible_background_cannot_emit_after_interruption_reaches_output ... ok
+test deliberate_broadcast_refreshes_active_invocation_across_await ... ok
+test later_distinct_interruption_cancels_refreshed_active_invocation ... ok
+test interruptible_background_cannot_requeue_after_interruption ... ok
+test rebroadcast_of_admitted_event_does_not_repeat_its_callback ... ok
+test interruption_reclaims_full_normal_lane_before_fresh_internal_emission ... ok
+test interruption_siblings_share_one_fence_when_their_paths_rejoin ... ok
+test normal_emission_is_fenced_at_interruption_admission_before_handler_runs ... ok
+test older_interruption_arriving_after_newer_fence_does_not_reinvoke_processor ... ok
+test opted_out_background_can_emit_after_interruption ... ok
+test replayed_old_interruption_does_not_become_fresh_after_many_newer_events ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/review_native_declaration.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_native_declaration-8e286761996a3178)
+
+running 2 tests
+test independent_native_inprogress_receipt_binds_member_policy_and_group ... ok
+test independent_native_started_receipt_binds_ordered_full_membership_and_wire ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_native_history_carrier.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_native_history_carrier-285525f2a9ea3aa3)
+
+running 4 tests
+test review_mutated_payload_failure_does_not_remove_or_replace_semantics ... ok
+test review_empty_completion_and_start_have_separate_legal_boundaries ... ok
+test review_tool_binding_is_ordered_and_exact_before_any_effect ... ok
+test review_consumption_is_clone_local_and_never_silently_serializes_history ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_openclaw_frames.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_openclaw_frames-ca286ba5a69261e7)
+
+running 1 test
+test review_all_typed_openclaw_frames_preserve_payload_identity_priority_and_serde ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_outcome_content.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_outcome_content-20935a39f8abddf2)
+
+running 5 tests
+test independent_failed_error_text_mutation_cannot_reuse_receipt ... ok
+test independent_result_policy_mutation_requires_validated_override ... ok
+test independent_completed_payload_mutation_cannot_reuse_receipt ... ok
+test independent_failed_payload_mutation_cannot_reuse_receipt ... ok
+test independent_native_content_is_not_serializable_until_consumed ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_realtime_cause.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_realtime_cause-3b78612521780198)
+
+running 4 tests
+test review_direct_handler_seal_does_not_retain_callback_after_frame_drop ... ok
+test review_check_without_commit_and_rejected_sequences_do_not_advance_cursor ... ok
+test review_rebinding_same_carrier_never_refreshes_original_fence_or_retains_processor ... ok
+test review_failed_attachment_preserves_sequence_and_clone_consumption_is_local ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/review_signed_checkpoint.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_signed_checkpoint-226950f0917fcb4d)
+
+running 3 tests
+test review_checkpoint_is_never_a_completed_tool_admission_or_response_boundary ... ok
+test review_checkpoint_limits_count_capacity_before_attachment ... ok
+test review_checkpoint_clones_remain_local_and_reject_wire_serialization ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_source_api.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_source_api-b47d337ac6c5f1dd)
+
+running 11 tests
+test review_bound_legacy_confirm_cannot_bypass_exact_receipt ... ok
+test review_empty_stop_requires_owner_offer_and_same_consumer_start ... ok
+test review_equal_text_foreign_source_receipt_cannot_confirm_or_consume_local_receipt ... ok
+test review_final_before_adoption_binds_consumer_once_and_preserves_correct_retry ... ok
+test review_mutated_payload_and_upstream_carrier_fail_closed_without_consumption ... ok
+test review_foreign_receipt_with_same_local_allocation_order_cannot_consume_own_receipt ... ok
+test review_old_replay_and_resume_cannot_cancel_new_prediction ... ok
+test review_transfer_relinquishes_source_authority_but_not_aggregator_authority ... ok
+test review_retired_claimed_receipt_cannot_consume_fallback ... ok
+test review_normal_drop_preserves_offered_receipt_but_abandoned_owner_does_not ... ok
+test review_passive_retention_cap_is_recoverable_after_tokens_are_dropped ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_timeout_projection.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_timeout_projection-c27ac24a65008d49)
+
+running 5 tests
+test independent_altered_error_cannot_be_laundered_through_projection ... ok
+test independent_timeout_projection_rejects_forged_identity_and_policy ... ok
+test independent_public_payload_cannot_forge_timeout_projection ... ok
+test independent_timeout_projection_retains_original_arc_and_blocks_wire ... ok
+test independent_non_timeout_or_success_cannot_project ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_tool_outcome.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_tool_outcome-24da32ff0a5c36f4)
+
+running 4 tests
+test review_full_boundary_is_undelivered_and_fails_closed ... ok
+test review_closed_runtime_retains_explicit_unadmitted_receipt ... ok
+test review_full_adjacent_system_lane_is_undelivered_without_drop_spawn ... ok
+test review_stale_completed_result_is_cancelled_and_native_identity_is_sealed ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_tool_outcome_scope.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_tool_outcome_scope-8bf843afc2702afa)
+
+running 2 tests
+test review_admitted_result_survives_later_interruption_without_second_terminal ... ok
+test review_inherited_origin_fences_interruptible_result_but_async_policy_survives ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_usability.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_usability-853b79a3a7e41835)
+
+running 7 tests
+test cancellation_policy_from_completed_background_preempts_staged_graceful_terminal ... ok
+test health_watch_waker_can_restore_health_without_lock_recursion ... ok
+test explicit_cancel_preempts_pending_policy_end_behind_full_normal_lane ... ok
+test forged_wire_origin_and_matching_processor_name_never_claim_local_health ... ok
+test cancellation_policy_retries_full_system_lane_and_rejects_new_input ... ok
+test health_observer_can_restore_health_and_receive_the_reentrant_transition ... ok
+test observation_clock_can_read_health_while_recording_a_transition ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/runtime.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/runtime-a42658a55f6ac80d)
+
+running 29 tests
+test each_setup_failure_is_reported ... ok
+test cancelling_startup_aborts_setup_and_background_and_cleans_resources ... ok
+test cancel_preempts_active_and_queued_frames_even_if_uninterruptible ... ok
+test end_waits_for_active_and_queued_data ... ok
+test full_normal_queue_does_not_block_cancel_or_waiting_producers ... ok
+test flush_makes_a_down_up_down_roundtrip ... ok
+test internal_and_self_backpressure_fail_instead_of_deadlock ... ok
+test interruption_cancels_active_and_keeps_overrides_and_end ... ok
+test background_errors_reach_upstream ... ok
+test broadcasts_have_distinct_paired_ids ... ok
+test interruption_keeps_opted_out_background_tasks_but_cancel_stops_them ... ok
+test detailed_flush_signals_its_local_event_after_a_complete_roundtrip ... ok
+test end_drains_background_work_before_forwarding_terminal ... ok
+test interruption_preserves_current_uninterruptible_frame ... ok
+test errors_travel_upstream_and_are_not_swallowed ... ok
+test output_backpressure_is_explicit_even_without_an_output_consumer ... ok
+test paused_normal_lane_can_be_resumed_while_a_sender_waits ... ok
+test processor_and_background_panics_reach_join ... ok
+test interruption_cancels_background_even_while_end_is_draining ... ok
+test setup_panics_report_errors_and_cleanup_panics_close_output ... ok
+test stop_skips_cleanup_but_end_and_cancel_do_not ... ok
+test linear_pipeline_both_directions_and_graceful_end ... ok
+test joining_is_cancellation_safe ... ok
+test error_history_is_bounded_and_counts_evictions_without_double_reporting ... ok
+test prepare_end_can_cancel_lifecycle_timers_and_flush_before_drain ... ok
+test running_notification_does_not_cancel_the_start_handler ... ok
+test startup_timeout_is_an_error_and_cleanup_errors_fail_join ... ok
+test worker_end_and_cancel_requests_turn_around_and_control_pipeline ... ok
+test stuck_end_times_out_and_cleans_up ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/serde_identity.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/serde_identity-a918ff06fc84db3b)
+
+running 1 test
+test cloned_deserialized_errors_keep_identity_when_history_is_disabled ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/speculation.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/speculation-8faaa7edcd980ce0)
+
+running 3 tests
+test owner_drop_cancel_and_late_confirmation_are_terminal ... ok
+test pending_tools_withdraw_and_confirmed_tools_wait_for_boundary ... ok
+test capability_survives_native_clones_and_cannot_cross_wire ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stream_admission.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/stream_admission-9853bd20dbf2000f)
+
+running 8 tests
+test later_legacy_hop_keeps_explicit_fail_fast_policy ... ok
+test synchronous_special_and_final_control_routes_are_rejected ... ok
+test full_attempts_do_not_duplicate_push_observations ... ok
+test uninterruptible_owned_task_survives_interruption_while_capacity_waiting ... ok
+test worker_output_capacity_is_reserved_without_holding_admission_lock ... ok
+test adjacent_capacity_wait_preserves_frames_and_owned_cancel_wakes_it ... ok
+test adjacent_compact_and_detailed_flush_waits_for_capacity_on_both_return_states ... ok
+test pending_output_wait_wakes_for_each_inherited_origin_and_keeps_uninterruptible_frame ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/switching_support.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/switching_support-9c09f598a4b49a9d)
+
+running 6 tests
+test local_frame_tags_are_scoped_bounded_and_never_cross_wire_or_change_equality ... ok
+test false_permanence_override_never_softens_fatal_failure ... ok
+test local_processor_identity_matches_error_attribution_and_distinguishes_names ... ok
+test supplied_interruption_rejects_wrong_type_and_stale_reuse_without_losing_future_input ... ok
+test read_only_health_can_only_be_changed_by_owner_even_when_error_is_permanent ... ok
+test returned_permanence_override_preserves_category_and_never_restores_health ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/sync_health_error_admission.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/sync_health_error_admission-35c839cc4e05ef8c)
+
+running 8 tests
+test output_backpressure_records_the_error_and_preserves_first_failure ... ok
+test fatal_transient_error_fails_without_disabling_health_under_every_policy ... ok
+test synchronous_hooks_can_read_health_but_execute_inside_the_callers_lock_scope ... ok
+test closed_pipeline_rejects_before_mutating_health_or_recording ... ok
+test same_true_restoration_rejects_stale_permanent_and_fatal_errors ... ok
+test read_only_health_keeps_its_owner_control_and_reporting_verdict ... ok
+test identity_permanence_and_once_only_recording_match_both_apis ... ok
+test stale_local_and_inherited_causal_scopes_reject_before_health_verdict ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/terminal_stream_admission.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/terminal_stream_admission-8779aed5425963e2)
+
+running 2 tests
+test cancel_aborts_owned_terminal_wait_without_releasing_stalled_sink ... ok
+test late_owned_end_detailed_end_and_stop_wait_and_do_not_cleanup_early ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/tts_native_contract.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/tts_native_contract-832b2522eaa477de)
+
+running 2 tests
+test native_tts_contracts_are_interruptible_normal_and_not_source_catalog_claims ... ok
+test pipeline_pts_marker_survives_clone_duplicate_and_refuses_wire_until_checked_rebase ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/usability.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/usability-dbedfb08de242039)
+
+running 20 tests
+test concurrent_health_changes_are_idempotent_and_watch_is_revisioned ... ok
+test cancel_policy_preempts_active_and_owned_background_work ... ok
+test a_finished_context_cannot_change_shared_health_reused_in_a_later_runtime ... ok
+test even_an_all_normal_gate_cannot_swallow_start_system_end_stop_or_cancel ... ok
+test forced_permanence_preserves_category_and_each_policy_has_its_own_terminal ... ok
+test health_handle_has_no_op_updates_and_coalesced_revision_notifications ... ok
+test fatal_errors_keep_native_failure_semantics_without_implying_unusability ... ok
+test consumed_errors_never_trigger_worker_policy_but_remain_in_history ... ok
+test cross_runtime_forwarding_preserves_local_origin_but_wire_decode_cannot_claim_health ... ok
+test health_observations_precede_error_pushes_and_detach_on_shutdown ... ok
+test policy_is_once_per_processor_even_after_recovery_and_names_are_not_identities ... ok
+test default_health_is_runtime_scoped_even_when_a_processor_instance_is_reused ... ok
+test restoration_before_queued_invocation_uses_current_health ... ok
+test health_change_does_not_cancel_in_flight_work_and_gates_queued_work_at_entry ... ok
+test merely_becoming_unusable_does_not_trigger_policy_but_reporting_does ... ok
+test late_background_permanent_report_can_make_recovered_processor_unusable_again ... ok
+test opt_in_gating_is_bidirectional_and_restoration_only_admits_new_work ... ok
+test recovery_before_the_worker_boundary_suppresses_policy_without_rewriting_report_snapshot ... ok
+test end_policy_retries_owned_terminal_admission_without_waiting_on_producer_lock ... ok
+test only_permanent_categories_change_health_and_plain_processors_keep_working ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/worker_idle.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/worker_idle-6a61b0402f9feeb9)
+
+running 11 tests
+test inherited_observer_child_counts_activity_once_and_preserves_first_push ... ok
+test pinned_source_defaults_agree_with_explicit_enabled_config ... ok
+test independently_observed_child_activity_does_not_steal_root_first_push ... ok
+test existing_unusable_end_policy_wins_without_idle_cancel_override ... ok
+test explicit_cancel_root_times_out_once_and_cleans_owned_work ... ok
+test selected_activity_in_either_direction_resets_notify_only_monitor ... ok
+test cancel_admission_retries_full_system_lane_without_retracting_decision ... ok
+test default_off_and_heartbeat_does_not_keep_a_conversation_active ... ok
+test coverage_loss_disarms_auto_cancel_but_preserves_actual_observer_first_push ... ok
+test end_input_closure_disarms_idle_during_graceful_drain ... ok
+test idle_timer_precedes_start_sink_and_cancel_joins_failed_startup ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+     Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_pipeline-c88e494c8b30e81e)
+
+running 1 test
+test switching::tests::branch_capture_and_lifecycle_buffer_drop_stale_system_metadata_after_reactivation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/heartbeats.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/heartbeats-73a21cec6999b337)
+
+running 4 tests
+test ordinary_heartbeat_still_uses_sync_sentinel_and_application_output ... ok
+test one_healthy_branch_can_mask_a_stalled_sibling ... ok
+test parallel_child_saturated_ingress_soft_drops_only_diagnostics ... ok
+test sync_parallel_probe_avoids_sentinel_and_business_batch_pressure ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/independent_held_cancel.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/independent_held_cancel-eae5f586c45db3a8)
+
+running 1 test
+test independent_active_cancel_cannot_be_overtaken_by_completed_descendant_cleanup ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/llm_switching.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/llm_switching-5dd735a2ecb306c3)
+
+running 7 tests
+test cancelling_out_of_band_inference_closes_its_http_request ... ok
+test inference_bounds_accumulation_and_does_not_execute_tool_calls ... ok
+test inference_keeps_selected_member_and_settings_snapshot_without_mutating_context ... ok
+test inactive_llm_settings_and_tools_are_ready_before_explicit_post_switch_context ... ok
+test shared_tool_executor_retains_callback_options_and_deduplicates_across_llms ... ok
+test actual_http_failover_refreshes_metadata_but_never_replays_failed_context ... ok
+test rejected_llm_settings_keep_last_good_configuration_and_do_not_fail_over ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/nested_shutdown.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/nested_shutdown-4f1e578d6a85181d)
+
+running 9 tests
+test dropping_root_during_descendant_cleanup_releases_owned_monitors ... ok
+test admitted_upstream_survives_nested_terminal_staging ... ok
+test descendant_cleanup_failure_prevents_successful_end ... ok
+test nested_stop_retains_resources_until_explicit_cleanup ... ok
+test final_end_waits_for_descendant_cleanup_and_cancel_can_preempt_it ... ok
+test downstream_prepare_end_reverse_output_drains_before_final_terminal ... ok
+test downstream_owned_task_reverse_output_drains_before_final_terminal ... ok
+test failed_cleanup_releases_descendants_and_observers_at_child_deadline_without_manual_release ... ok
+test root_shutdown_deadline_bounds_blocked_descendant_cleanup ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/observers.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/observers-2d1a5b0e8dbf1ee9)
+
+running 1 test
+test root_observers_cover_nested_parallel_runtimes_until_root_end ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/parallel.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/parallel-f003f4c812bb1c09)
+
+running 25 tests
+test configuration_rejects_empty_or_unbounded_zero_limits ... ok
+test drop_cancels_and_cleans_owned_branch_workers ... ok
+test bounded_sync_output_fails_instead_of_deadlocking ... ok
+test full_branch_queue_fails_without_hanging_cleanup ... ok
+test cancellation_releases_blocked_normal_and_sync_work ... ok
+test failed_branch_fails_parent_and_cleans_peers ... ok
+test bounded_parallel_identity_window_allows_old_replay_after_eviction ... ok
+test active_sentinels_survive_smaller_recent_history_capacity ... ok
+test branch_originated_interruption_reaches_parent_siblings_and_both_directions ... ok
+test cancel_supersedes_pending_end_without_closed_branch_failure ... ok
+test generated_upstream_terminal_is_relayed_without_ending_worker ... ok
+test independent_parallel_branches_do_not_wait_for_slow_peer ... ok
+test parent_records_nonfatal_branch_error_even_when_upstream_consumes_it ... ok
+test graceful_end_releases_all_flush_output_before_terminal ... ok
+test start_barrier_covers_slow_branch_and_startup_output ... ok
+test identity_is_deduplicated_in_both_directions ... ok
+test interruption_clears_pending_sync_batch_and_next_input_survives ... ok
+test interruption_invalidates_buffered_output_from_already_ended_branch ... ok
+test missing_sentinel_times_out_and_joins_branch ... ok
+test synchronized_branches_retain_output_direction ... ok
+test pipeline_order_deduplicates_after_ordering_and_per_input_only ... ok
+test sync_holds_fast_output_until_slow_branch_sentinel ... ok
+test terminal_timeout_is_explicit_and_cleans_branches ... ok
+test end_and_cancel_wait_for_every_branch_and_cleanup ... ok
+test sync_order_matches_source_fixture ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/review_lifecycle.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_lifecycle-ad526794755a16f5)
+
+running 4 tests
+test retained_parallel_processor_does_not_keep_children_alive_after_worker_drop ... ok
+test active_sync_sentinels_are_not_evicted_by_small_identity_history ... ok
+test sync_sentinel_does_not_wait_for_explicit_background_work_but_end_does ... ok
+test nested_parallel_compositions_preserve_identity_direction_and_end ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/service_switching_review.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/service_switching_review-1738acc453ef6dc9)
+
+running 6 tests
+test private_settings_copies_do_not_escape_when_recent_id_window_is_small ... ok
+test nested_stop_retains_all_members_until_exactly_once_owner_cleanup ... ok
+test system_metadata_admission_is_atomic_with_external_interruption ... ok
+test delayed_private_settings_stay_private_after_many_updates_and_reactivation ... ok
+test nested_switchers_keep_private_copy_ownership_scoped_to_each_compound ... ok
+test failover_metadata_commit_and_terminal_admission_are_serialized ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/switching.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/switching-75a22e270dcffef9)
+
+running 20 tests
+test construction_rejects_empty_and_duplicate_service_identity ... ok
+test fatal_member_error_still_fails_parent_and_cleans_every_member ... ok
+test drop_cancels_owned_service_tasks_and_cleans_inactive_members ... ok
+test failover_handles_setup_error_without_sending_work_to_failed_service ... ok
+test aggregate_health_is_read_only_and_recovers_after_all_services_lost ... ok
+test pinned_source_contract_explicitly_has_no_llm_context_replay ... ok
+test failover_consumes_member_error_before_parent_cancel_policy_and_does_not_replay ... ok
+test manual_strategy_reports_unusable_active_member_but_remains_usable_with_a_backup ... ok
+test failover_skips_unusable_members_and_wraps_only_after_explicit_recovery ... ok
+test manual_switch_routes_real_work_refreshes_metadata_and_cleans_every_member ... ok
+test inactive_errors_are_consumed_but_health_recovery_is_observable ... ok
+test nested_switcher_interruption_keeps_future_parent_and_child_admissions_live ... ok
+test refused_and_unknown_targets_forward_unchanged_and_duplicate_names_require_local_identity ... ok
+test switching_cancels_owned_work_and_old_outputs_stay_fenced_after_reactivation ... ok
+test all_lost_error_is_attributed_to_switcher_and_applies_parent_policy ... ok
+test stopped_switcher_retains_resources_until_explicit_cleanup_then_cleans_once ... ok
+test upstream_manual_selection_and_work_keep_direction ... ok
+test transient_errors_pass_through_without_switching ... ok
+test unrelated_attributed_and_name_only_errors_cannot_trigger_failover ... ok
+test settings_reach_active_targeted_and_opted_in_inactive_members_in_both_directions ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+   Doc-tests pipecat_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pipecat_pipeline
+
+running 2 tests
+test crates/pipecat-pipeline/src/lib.rs - (line 153) ... ok
+test crates/pipecat-pipeline/src/lib.rs - (line 8) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

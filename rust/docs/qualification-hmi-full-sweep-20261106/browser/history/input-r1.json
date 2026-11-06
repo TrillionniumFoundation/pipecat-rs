@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "result": "failed",
+  "checks": [],
+  "failure": {
+    "type": "Error",
+    "message": "CDPSession.send: Protocol error (Browser.getBrowserCommandLine): Command line not returned because --enable-automation not set.",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py\", line 249, in main\n    await asyncio.wait_for(scenario(), timeout=90)\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py\", line 144, in scenario\n    browser_args = (await browser_cdp.send('Browser.getBrowserCommandLine'))['arguments']\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/async_api/_generated.py\", line 15816, in send\n    await self._impl_obj.send(method=method, params=mapping.to_impl(params))\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_cdp_session.py\", line 40, in send\n    return await self._channel.send(\"send\", None, locals_to_params(locals()))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 76, in send\n    return await self._connection.wrap_api_call(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 632, in wrap_api_call\n    raise rewrite_error(error, f\"{parsed_st['apiName']}: {error}\") from None\nplaywright._impl._errors.Error: CDPSession.send: Protocol error (Browser.getBrowserCommandLine): Command line not returned because --enable-automation not set.\n"
+  },
+  "cleanup_errors": [],
+  "page_errors": [],
+  "elapsed_seconds": 1.0793225910747424,
+  "source_sha256": {
+    "tests/browser_input_acceptance.py": "9d28feafc2429d04c559321129392d25da4bcb5a28c0bce93a0617caea111978",
+    "tests/browser_acceptance.py": "1ecb160b3885ca9f64fdd7c8cc15f9c914c8eaa4fa614f6bbf4f544074281812"
+  },
+  "source_sha256_after": {
+    "tests/browser_input_acceptance.py": "9d28feafc2429d04c559321129392d25da4bcb5a28c0bce93a0617caea111978",
+    "tests/browser_acceptance.py": "1ecb160b3885ca9f64fdd7c8cc15f9c914c8eaa4fa614f6bbf4f544074281812"
+  },
+  "asset_sha256": {
+    "config.json": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+    "index.html": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+    "pkg/pipecat_browser_client.js": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+    "pkg/pipecat_browser_client_bg.wasm": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+    "style.css": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f"
+  },
+  "browser_version": "156.0.8078.79",
+  "application_source_present": false,
+  "browser_executable": "/usr/bin/google-chrome",
+  "chromium_sandbox": true,
+  "launch_args": [
+    "--mute-audio"
+  ],
+  "browser_command_line": [],
+  "observations": [],
+  "fixture": {
+    "starts": [],
+    "ready": [],
+    "texts": [],
+    "closed": [],
+    "server_errors": []
+  },
+  "scope": {
+    "ime": "Chromium IME engine via CDP; not OS Pinyin/candidate UI",
+    "audio": "Connect gesture, native scheduling, muted synthetic PCM; not hearing or all autoplay policies",
+    "network": "Loopback TCP abort and manual reconnect; not WAN/offline/SFU recovery",
+    "owner": "Protocol fixture only; no Hepta production conversation or provider"
+  }
+}

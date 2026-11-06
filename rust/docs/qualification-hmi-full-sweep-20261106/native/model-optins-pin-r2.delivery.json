@@ -1,0 +1,40 @@
+{
+  "schema": "pipecat-final-model-optin-delivery-v1",
+  "archive_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/model-optins-pin-r2.tar.xz",
+  "archive_bytes": 202460,
+  "archive_sha256": "73584f7779a7063e35d1288cfc65c5691b4057d175d11abbdbf5e2dbba19ffe2",
+  "original_count": 131,
+  "original_bytes": 21020427,
+  "original_manifest_bytes": 45559,
+  "original_manifest_sha256": "23003d0d3217bddc5d4741909d4bfc5f52825b23fa02998902900588da4627e4",
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/part-000.b64",
+      "bytes": 60000,
+      "sha256": "ed0a3a264bca84a51921f8475bca9a2833b8387a6f229b22bd4c8109e692a72a"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/part-001.b64",
+      "bytes": 60000,
+      "sha256": "5e7b3bd7887585372bd902a63353f83b9440104aecc08b16b3e78c0a65119b01"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/part-002.b64",
+      "bytes": 60000,
+      "sha256": "521b84a77b74cdc362a851b9116004cf89f1277f2bc34441ec1021b4e5d89c1b"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/part-003.b64",
+      "bytes": 60000,
+      "sha256": "44150656be9ffaef2742c565252e3bbda044fb1c2b5cf10c91798c04caaa402e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/model-optins-pin-r2/part-004.b64",
+      "bytes": 29948,
+      "sha256": "425cb9b9dac62a59767a1eb391cdf225070385c377faa2518a9a5da7ae51fa70"
+    }
+  ],
+  "commands": 19,
+  "passed_cases": 21,
+  "completed_unix": 1793987559.377037
+}

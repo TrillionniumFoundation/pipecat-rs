@@ -1,0 +1,54 @@
+{
+  "schema": "pipecat-strace-launcher-v1",
+  "phase": "completed",
+  "start_unix": 1793979749.0349054,
+  "requested_resource_budget": {
+    "cpu_quota_percent": 800,
+    "memory_max_bytes": 34359738368,
+    "nice": 10,
+    "timeout_seconds": 270
+  },
+  "scripts_before": [
+    {
+      "role": "runner",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_strace_pin_r1.py",
+      "bytes": 27235,
+      "sha256": "4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6"
+    },
+    {
+      "role": "source_manifest_helper",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "scripts_after": [
+    {
+      "role": "runner",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_strace_pin_r1.py",
+      "bytes": 27235,
+      "sha256": "4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6",
+      "unchanged": true
+    },
+    {
+      "role": "source_manifest_helper",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+      "unchanged": true
+    }
+  ],
+  "resources_before": {
+    "free_disk_bytes": 79809679360,
+    "mem_available_bytes": 88271151104
+  },
+  "actual_argv": [
+    "/usr/bin/python3",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_strace_pin_r1.py"
+  ],
+  "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66",
+  "runner_exit_code": 101,
+  "scripts_unchanged": true,
+  "exit_code": 101,
+  "end_unix": 1793979755.4752352
+}

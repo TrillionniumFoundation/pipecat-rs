@@ -1,0 +1,31 @@
+{
+  "schema": "pipecat.bot_audio_response.baseline_oracle.static.v1",
+  "status": "static_review_waiting_for_original_target_log",
+  "native_pin": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_blob": "18078e352e5e21e67e247bc3fa38dea6f46f7c98",
+  "source_sha256": "e12c2e0c4daaa9b4a45a9d3882bfd7ccce84e7a5418d88b60bcb1bfce82ba70c",
+  "observed_tests": 16,
+  "async_tests": 14,
+  "sync_tests": 2,
+  "oracle": "A process-wide /proc/self/task scan for comm eval-bot-vad, strict equality of sorted (tid,starttime); scan errors remain None and fail equality on Linux.",
+  "baseline_timing": "Fixture::with_config obtains baseline before analyzer/model creation and before session.run starts BotTranscription; baseline can contain another concurrently running case's worker.",
+  "native_ownership": "BotTranscription::finish signals stop, takes native JoinHandle and calls join; request_stop is distinct from join. The per-fixture finish awaits its run and peer tasks before observing /proc. Native join itself has no wall-time guarantee.",
+  "literal_existing_serial_assumption": "Linux integration runs use --test-threads=1.",
+  "default_parallel_issue": "Other case workers entering or leaving the global set can break equality even if the current case joined its owned worker. Nonempty baseline -> empty final is not a surviving native-thread observation.",
+  "http_closed_semantics": "Successful reply writes/shuts down stream and sets replied=true; closed is set only by expected EOF/reset/broken-pipe disconnect branches. A joined successful HTTP peer with replied=true/closed=false is not by itself failure.",
+  "candidate_a": "Static async Mutex<()> local to this integration binary; first-line async guard in all 14 async test entrypoints, first-line blocking_lock in invalid_bounds sync #[test]. Ordinary constructor test unchanged. All original contents/assertions/timeouts remain.",
+  "candidate_a_precondition": "Wait for original raw to separate nonempty baseline, foreign after set, None snapshot, and any independent behavioural failure before assigning observed causes.",
+  "candidate_b_tradeoff": "A cohort read-lease + quiescent writer would need a different stable cohort baseline and lifecycle/admission proof. It is larger than enforcing the existing explicit exclusivity assumption.",
+  "cancellation_drop_nested_review": "All model/peer work remains independent of the test lock. Explicit future-drop aborts only the session task and then calls finish before checks. Loop cases finish+checked before next Fixture. Absence wrappers own one lock and helper takes none. No current test holds two simultaneous Fixtures.",
+  "scanner_error_limit": "comm is read before name filtering: any non-NotFound comm error (including a non-VAD task) yields None. NotFound is already skipped; stat is read only for matching native names. entry errors and parse errors also lose detail. Existing None alone cannot identify errno or prove leak/cleanup.",
+  "unchanged": "No source or runtime changes; no case execution; no tolerance/observation-window/test-thread arguments relaxed.",
+  "mutex_primary_source": {
+    "repository": "tokio-rs/tokio",
+    "ref": "tokio-1.53.2",
+    "path": "tokio/src/sync/mutex.rs",
+    "git_blob_sha1": "2c7d807661e25c5447a5cacecd9fd16465f5a859",
+    "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.2/tokio/src/sync/mutex.rs",
+    "scope": "blocking_lock supports sharing a Mutex between synchronous and asynchronous code; it panics within an async execution context. Original invalid_bounds remains a synchronous Rust #[test] with no Runtime::enter or asynchronous caller."
+  },
+  "log_availability_limit": "All 14 asynchronous cases print Outcome snapshots before their assertion; invalid_bounds only prints the failed condition and may not have recoverable original before/after values."
+}

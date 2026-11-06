@@ -52,9 +52,7 @@ impl Runtime {
                 StreamAttempt::Accepted
             }
             Err((QueueError::Full, returned)) => StreamAttempt::Full(Box::new(returned.frame)),
-            Err((QueueError::Closed, _)) => {
-                StreamAttempt::Failed(ProcessorError::new("downstream queue is closed"))
-            }
+            Err((error, _)) => StreamAttempt::Failed(error.into()),
         }
     }
     pub(crate) fn stream_output_unlocked(
@@ -62,10 +60,12 @@ impl Runtime {
         from: usize,
         frame: Frame,
         permit: mpsc::OwnedPermit<DirectedFrame>,
-    ) {
+    ) -> Result<(), ProcessorError> {
+        self.validate_payload(&frame)?;
         let observation = self.stream_observation(from, &frame);
         permit.send(DirectedFrame::new(frame, Direction::Downstream));
         self.stream_observe(from, None, observation);
+        Ok(())
     }
     fn stream_observation(&self, from: usize, frame: &Frame) -> Option<StreamObservation> {
         self.observers.enabled().then(|| StreamObservation {

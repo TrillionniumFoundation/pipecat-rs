@@ -165,7 +165,7 @@ fn verify_tool_continuation(body: &Value, provider: Provider) -> TestResult<()> 
                 .and_then(|parts| parts.iter().find(|part| part["type"] == "tool_use"))
                 .ok_or("missing Anthropic tool use")?;
             let result = &messages[2]["content"][0];
-            let result_text = result["content"][0]["text"]
+            let result_text = result["content"]
                 .as_str()
                 .ok_or("missing serialized Anthropic tool result")?;
             let parsed_result = serde_json::from_str::<Value>(result_text)

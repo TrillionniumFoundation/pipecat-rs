@@ -1,0 +1,63 @@
+{
+  "schema": "pipecat.bot_audio_response.test_local_gate_candidate.v1",
+  "status": "SOURCE_CANDIDATE_NOT_EXECUTED_NOT_APPLIED_TO_REPOSITORY",
+  "basis": "Existing full-process native-worker set-equality oracle explicitly required serial integration execution. Candidate enforces that test-resource precondition locally. Per-case observed failure attribution still awaits original target raw.",
+  "native_pin": "272671b95297313d24db921eceda8e95f3a8d545",
+  "original": {
+    "path": "rust/crates/pipecat-evals/tests/bot_audio_response.rs",
+    "bytes": 44922,
+    "sha256": "e12c2e0c4daaa9b4a45a9d3882bfd7ccce84e7a5418d88b60bcb1bfce82ba70c",
+    "git_blob_sha1": "18078e352e5e21e67e247bc3fa38dea6f46f7c98"
+  },
+  "candidate": {
+    "bytes": 45779,
+    "sha256": "d605033588e78252bcc0518d2b5f7470cf9f23b5833dc6822cc5b9db0f7491a3",
+    "git_blob_sha1": "3acb13f87ff608b8a404661752086b7e1bf7498c"
+  },
+  "patch": {
+    "bytes": 5423,
+    "sha256": "1341782d9929d2d29fbbb8d74f1eb4f7f414669d135f2e8757905ba9d0c8e25c"
+  },
+  "checks": {
+    "undo_only_declared_additions_restores_original_bytes": true,
+    "all_16_test_names_types_and_order_unchanged": true,
+    "all_14_async_entrypoints_guarded": true,
+    "invalid_bounds_original_sync_test_guarded_via_blocking_lock": true,
+    "pure_constructor_test_bytes_unchanged": true,
+    "all_original_helper_and_scenario_statements_restored_byte_for_byte_by_reversal": true,
+    "no_native_implementation_change": true,
+    "no_fixture_body_or_guard_reentrancy": true,
+    "strict_worker_set_equality_unchanged": true,
+    "200ms_observation_and_5ms_interval_unchanged": true,
+    "all_HTTP_VAD_transport_scenario_deadlines_unchanged": true
+  },
+  "async_guarded_tests": [
+    "genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio",
+    "empty_transcript_emits_no_response_and_later_real_segment_recovers",
+    "interruption_and_new_llm_epoch_discard_delayed_old_http_result",
+    "explicit_next_send_discards_previous_pending_recognition",
+    "ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting",
+    "ordinary_next_send_settlement_timeout_fails_without_sending_it",
+    "cancellation_during_http_closes_connection_and_joins_session_and_peers",
+    "dropping_run_future_with_queued_vad_work_closes_owned_websocket",
+    "malformed_and_unsupported_pcm_fail_without_any_stt_upload",
+    "two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order",
+    "pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload",
+    "spoken_absence_held_pcm_continuation_keeps_original_deadline",
+    "spoken_absence_held_pcm_new_llm_start_fails",
+    "spoken_absence_held_pcm_new_remote_speaking_start_fails"
+  ],
+  "synchronous_guarded_test": "invalid_bounds_are_rejected_before_connecting_or_starting_workers",
+  "unguarded_constructor_test": "ordinary_constructor_rejects_typed_response_and_opt_in_rejects_classifier_eval",
+  "ownership": "Each guard starts before any baseline, model loading, owner start or session timer and remains until the original test ends, including assertions/unwind. No helper also takes this lock. All loop fixtures finish and check before the next iteration; three absence wrappers each lock once and call an unguarded helper. Fixture tasks/native joins never acquire TEST_LOCK.",
+  "queue_scope": "Admission waits are outside existing per-session work deadlines, matching the existing serial-test assumption. The outer owned command deadline remains the ultimate bound for hung native joins; the lock does not add a native shutdown guarantee.",
+  "cancellation_scope": "The explicit future-drop case aborts the session owner, then calls the original finish path and original full identity check while retaining the guard. No new stop/abort is substituted for a join.",
+  "observation_limit": "None remains a failing unavailable snapshot on Linux. This candidate does not change error skipping or claim an existing None was a leak or successful cleanup.",
+  "qualification_limit": "This integration suite no longer exercises overlap between independent libtest fixture instances; it preserves each original within-scenario asynchronous concurrency assertion and does not claim multi-session concurrency qualification.",
+  "failures_retained": "Original expanded gate 15 failures are not cleared by a static candidate or later passes. Actual raw attribution and execution remain pending.",
+  "local_validation": {
+    "git_apply_check_whitespace_error_all_exit_code": 0,
+    "rustfmt": "NOT_RUN: rustfmt is not present on this local PATH",
+    "cargo_or_native_tests": "NOT_RUN"
+  }
+}

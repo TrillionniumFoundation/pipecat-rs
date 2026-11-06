@@ -1,0 +1,527 @@
+{
+  "schema": "pipecat-independent-final-optin-selection-review-v1",
+  "scope": "Read-only source, argv, fixed input and helper review; no native command or model executed by this review.",
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "changed_fixture_paths_disjoint_from_selected_model_sources": true,
+    "selected_source_sha256": {
+      "rust/crates/pipecat-piper/tests/adversarial_review.rs": "370e0337e69443df3da2b6abaf0b1b8f508ff96d52a9d9042b05f00b6d56b73f",
+      "rust/crates/pipecat-piper/tests/native_inference.rs": "a5b548d6c3388970d7029ebf5e5ed3d25fd93878b481f00b0958ca71813dcfbb",
+      "rust/crates/pipecat-piper/tests/native_pipeline.rs": "63565a6191983feb17e137b3a10da622ac1a2ca63995e3b3cb62c47a64bafc86",
+      "rust/crates/pipecat-runner/src/whisper.rs": "a833be8bcba4863169c1c3ea3f2a9b70f8079a67a75b5afa7d2e67df9c0e7f4f",
+      "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs": "d9f7e14225e0df18ce8bbce634266c235b08efb99accb85ed73ed06a5cdca2c6",
+      "rust/crates/pipecat-whisper/src/config.rs": "155851ebfab603efb112d7c443c01742444c1e9073cb2572e30d61ecf927f02d",
+      "rust/crates/pipecat-whisper/src/processor.rs": "6abc7e57b8d1e07e9a69c2ef10d26fad843f429845da9df20f997574f7a38c01",
+      "rust/crates/pipecat-whisper/src/service.rs": "2f0c7605e7638219331da614551ee3cacde87f85dd40ae5f66f5bf4689e437c1",
+      "rust/crates/pipecat-whisper/tests/review_contracts.rs": "f6b4a19e194ad2dc20e64ed4c5d6ff7adcbf6d183b59783417f9daf47e876156",
+      "rust/crates/pipecat-whisper/tests/usability.rs": "fb8209a7dcf842ea19a27fc586132fc596113e0b455e1aa1b5650a55f5e4b369"
+    },
+    "all_ten_source_hashes_match_recovered_selection": true,
+    "stt_source_sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a"
+  },
+  "helpers": [
+    {
+      "path": "task-helpers/desktop_gate_batch_pin_r1.py",
+      "bytes": 12378,
+      "sha256": "4492fe741b76258630c1e472c3f326887d71e02ff705035a14240938d4aa5ef0"
+    },
+    {
+      "path": "task-helpers/desktop_additional_gate_pin_v4.py",
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "path": "task-helpers/run_qualification_command_pin_v3.py",
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "path": "task-helpers/desktop_aishell_pin_r1.py",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    }
+  ],
+  "declared_final_cli": {
+    "optins": [
+      "python3",
+      "desktop_gate_batch_pin_r1.py",
+      "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+      "aec037b9cf2be53fcf6f85fdc149382942277702",
+      "full-workspace-rust-1.99.0-r5",
+      "optins",
+      "pin-r2"
+    ],
+    "aishell": [
+      "python3",
+      "desktop_aishell_pin_r1.py",
+      "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+      "aec037b9cf2be53fcf6f85fdc149382942277702",
+      "full-workspace-rust-1.99.0-r5"
+    ]
+  },
+  "input_documents": [
+    {
+      "path": "recovered-model-test-selection.json",
+      "bytes": 16369,
+      "sha256": "c9e5e422c077da628594fe12a634ae42e7e004aa278fb25468ba8eac0c9c2921"
+    },
+    {
+      "path": "model-inputs-final/config.json",
+      "bytes": 2815,
+      "sha256": "edb172c2edd82083fe821d4c99364e1a80fe011ed33ed3f52eb01f28e2d132aa"
+    },
+    {
+      "path": "model-inputs-final/piper-config.json",
+      "bytes": 1317,
+      "sha256": "28aca7161d2f60022cb0cc48ae5ef57d309a261c3fb9fa69a6f1d7f2c4cae4da"
+    }
+  ],
+  "selected_commands": [
+    {
+      "stage": "local-sfu",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-livekit",
+        "--test",
+        "local_sfu",
+        "--",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 3
+    },
+    {
+      "stage": "chinese-synthetic",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--lib",
+        "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "piper-genuine-owner",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_inference",
+        "genuine_cpu_inference_cancellation_resampling_and_global_owner",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "piper-invalid-bounds",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_inference",
+        "malformed_model_config_and_output_bounds_fail_explicitly",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "piper-cancel-reload",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "adversarial_review",
+        "native::native_cancel_drop_then_reload_preserves_global_owner",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "piper-long-pipeline",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_pipeline",
+        "genuine_native_long_utterance_crosses_default_capacity_slow_output_exactly",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-01",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--lib",
+        "service::tests::last_owner_drop_waits_for_inference_after_aborted_join_waiter",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-02",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "drop_after_cancelled_join_does_not_depend_on_blocking_pool_capacity",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-03",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "vad_overflow_discards_remainder_through_stop",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-04",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "rejected_oversized_frame_discards_the_active_prefix",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-05",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "public_settings_recover_only_on_valid_effective_change",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-06",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "coalesced_recovery_discards_vad_prefix_and_tail",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-07",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "terminal_frames_cleanup_while_unusable_without_flushing_speech",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-08",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::owned_health_gates_fixed_windows_and_shares_native_settings_recovery",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-09",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::dropping_the_last_runner_handle_joins_the_session_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-10",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "stopping_one_native_session_joins_only_its_owner_and_reuses_the_slot",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-11",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "later_initialization_failure_joins_the_native_model_before_releasing_admission",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-12",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "authorized_but_unready_client_expires_and_joins_its_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    },
+    {
+      "stage": "whisper-owner-13",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "rejected_browser_and_unused_session_expiry_never_start_native_workers",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "expected_harness_passed": 1
+    }
+  ],
+  "coverage_accounting": {
+    "commands": 19,
+    "actual_selected_cases": 21,
+    "components": {
+      "local_sfu": 3,
+      "chinese_synthetic": 1,
+      "piper": 4,
+      "whisper_and_runner_owner": 13
+    },
+    "unique_argv": 19,
+    "chinese_transcript_observations_within_one_case": 8,
+    "filtered_cases_added_to_coverage": 0,
+    "aishell_is_separate_one_public_recording_diagnostic": true
+  },
+  "input_distinctions": {
+    "chinese_synthetic_whisper": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-small-q5_1.bin",
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+    },
+    "owner_tests_and_aishell_whisper": {
+      "env": "PIPECAT_WHISPER_MODEL",
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "kind": "multilingual; deliberately not substituted for English-only test contracts"
+    },
+    "piper_subtree_equals_separate_manifest": true,
+    "piper_manifest_sha256": "28aca7161d2f60022cb0cc48ae5ef57d309a261c3fb9fa69a6f1d7f2c4cae4da",
+    "espeak_expected_directory_sha256": "bba750d12c77a7714b579dc8a34e205417174963cfd05a54da8edd4031f09926",
+    "espeak_algorithm": "Sorted UTF-8 relative filenames, NUL byte, lowercase file SHA-256 hex ASCII, LF. Reject symlinks and special files; at most 10000 total entries, depth 32 and 128 MiB total regular-file contents.",
+    "media_segment_bytes": 2097152,
+    "physical_device_labels": {
+      "input": "qualification:never-open",
+      "output": "qualification:never-open"
+    },
+    "no_real_owner_or_grant_claim": "Synthetic qualification IDs do not authorize production Hepta media or prove current physical device generations/grants."
+  },
+  "lifecycle_and_result_contract": [
+    "The driver runs stages sequentially and does not hold the inner lock. Each actual command holds the same nonblocking exclusive qualification-owner-pin.lock; AISHELL uses that same lock.",
+    "Both require a terminal unchanged-source default gate for the supplied new head/tree, and preserve its original nonzero exit. A successful independent stage cannot repair a failed default.",
+    "Every opt-in command requires exactly one anchored successful harness summary with its declared passed count, zero failed and zero ignored. Filtered cases are not added to coverage.",
+    "An ordinary test failure remains in the batch, while source/script/artifact or compilation failures stop later stages. The whole batch cannot return zero with a failed child stage.",
+    "The selected case source hashes remain exact; original model expectations, assertions and deadlines were not edited.",
+    "AISHELL binds one normal example compiler-artifact to its exact package, source, profile and target path; runs once with the original WAV and configuration; preserves exact stdout/stderr and original exit, and checks source/config/model/WAV/executable/script before and after.",
+    "AISHELL retains build 300 seconds, inference 60 seconds, internal total 560 seconds and caller-owned outer 600 seconds, CPU 200 percent and memory 8 GiB. It records inference admission only after Popen succeeds."
+  ],
+  "qualification_limits": [
+    "No results from the newly selected head are asserted here. This is a static readiness review.",
+    "The Chinese case produces four sentences times clean/noisy variants and asserts nonempty transcription plus source retention, not a Chinese accuracy threshold. Eight transcript lines are not eight Rust cases.",
+    "The rejected-browser Whisper/runner case deliberately starts no native model and is admission/cleanup evidence. Other owner tests are not an English or Chinese recognition quality benchmark.",
+    "Piper uses the recovered Chinese voice with unchanged ownership/PCM-bound tests; this does not qualify spoken English, subjective speech quality or physical audibility.",
+    "AISHELL uses one 4.281-second public human recording and the original base/zh/beam5/temp0 prompt configuration. It does not qualify a microphone, OS permission, Hepta production owner or the complete LocalSpeech configuration.",
+    "Actual outer input-manifest verification must pin the selection, both configurations, all referenced model/runtime files and the original eSpeak directory digest before execution and compare them after. The inner loader check alone is not a post-run immutable-input receipt."
+  ],
+  "review_outcome": "No blocking issue in the frozen inner helpers, selection or immutable input documents. Final outer launcher/input pre-post implementation is a separate review and runtime receipt, not claimed completed here."
+}

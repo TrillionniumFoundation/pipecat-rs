@@ -147,6 +147,18 @@ impl std::hash::Hash for FrameObservationToken {
     }
 }
 impl Frame {
+    pub(crate) fn has_unbounded_native_payload(&self) -> bool {
+        self.native_llm_continuation.is_some()
+            || self.native_speculation.is_some()
+            || self.native_eager_source.is_some()
+            || self.native_realtime_context.is_some()
+            || self.native_tool_outcome.is_some()
+            || self.native_tool_batch.is_some()
+            || self.native_tool_progress.is_some()
+            || self.native_tool_progress_admission.is_some()
+            || self.native_user_image.is_some()
+            || self.native_user_image_context.is_some()
+    }
     pub fn observation_token(&self) -> FrameObservationToken {
         FrameObservationToken(Arc::downgrade(&self.observed_runtimes))
     }

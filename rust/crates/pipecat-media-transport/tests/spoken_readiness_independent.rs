@@ -333,17 +333,31 @@ async fn drain(worker: &mut PipelineWorker) {
     .unwrap();
 }
 fn signed_blocks(shared: &SharedContext) -> Vec<Value> {
+    let snapshot = shared.snapshot().unwrap();
+    assert!(snapshot
+        .messages
+        .iter()
+        .all(|message| message.role == pipecat_services::Role::Assistant));
+    let before = serde_json::to_value(&snapshot).unwrap();
     let request = request_body(
         Provider::Anthropic,
-        &CompletionRequest::new("synthetic", shared.snapshot().unwrap()),
+        &CompletionRequest::new("synthetic", snapshot),
     )
     .unwrap();
-    request["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .flat_map(|message| message["content"].as_array().unwrap().iter().cloned())
-        .collect()
+    // Unknown models receive one wire-only trailing user turn. It is not
+    // assistant speech, and must never be written back into shared history.
+    let messages = request["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["role"], "assistant");
+    assert_eq!(
+        messages[1],
+        json!({"role":"user","content":[{"type":"text","text":"."}]})
+    );
+    assert_eq!(
+        serde_json::to_value(shared.snapshot().unwrap()).unwrap(),
+        before
+    );
+    messages[0]["content"].as_array().unwrap().clone()
 }
 async fn finish(f: Fixture) {
     f.worker.end().await.unwrap();

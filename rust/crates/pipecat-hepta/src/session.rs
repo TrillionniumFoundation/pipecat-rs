@@ -25,6 +25,9 @@ pub struct OutputIdentity {
 /// Scope copied from the existing Hepta HMI bridge's source-bound event.
 /// Complete fields are not an output grant: a trusted owner must also admit the
 /// event kind and check its current permits_output boundary. Nulls reject audio.
+/// Conversion to OutputIdentity omits the connection incarnation. Wire callers
+/// must first use MediaConnectionBinding/MediaCommandGate with their owner's
+/// independently supplied connection ID; this DTO is never an authentication API.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HeptaOutputScope {

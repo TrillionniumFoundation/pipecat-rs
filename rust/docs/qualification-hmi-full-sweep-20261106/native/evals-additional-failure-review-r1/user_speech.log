@@ -1,0 +1,36 @@
+
+     Running tests/user_speech.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/user_speech-7329fd8d04281fe0)
+
+running 16 tests
+test assertion_deadline_starts_before_http_instead_of_after_synthesis ... ok
+test dtmf_and_observation_stay_synthesis_free_against_explicitly_compatible_endpoint ... ok
+test cancellation_joins_stalled_http_and_does_not_play_or_cache_partial_body ... ok
+test cache_lock_wait_has_its_own_fixed_deadline_without_second_http_call ... ok
+test explicit_recording_wins_in_both_public_builder_orders ... ok
+test no_cache_full_native_host_consumption_waits_for_delayed_tail_and_never_sends_text ... ok
+test remote_bot_interruption_does_not_cancel_admitted_user_speech ... ok
+test stricter_explicit_upstream_audio_limit_is_preserved_before_playback ... ok
+test synthesis_begins_only_after_local_send_after_admission ... ok
+test source_loader_preserves_recording_override_and_observation_without_extra_synthesis ... ok
+test early_success_still_waits_for_complete_local_playback_and_cache_settlement ... ok
+test cold_then_warm_new_session_replays_complete_pcm_after_http_listener_has_closed ... ok
+test silent_http_production_deadline_is_fixed_even_when_bot_events_continue ... FAILED
+test concurrent_sessions_share_one_cold_cache_transaction_then_both_consume_full_pcm ... ok
+test every_non_200_and_invalid_complete_body_discards_audio_and_never_publishes_cache ... ok
+test cache_identity_distinguishes_exact_case_voice_model_language_and_endpoint ... ok
+
+failures:
+
+---- silent_http_production_deadline_is_fixed_even_when_bot_events_continue stdout ----
+
+thread 'silent_http_production_deadline_is_fixed_even_when_bot_events_continue' (831780) panicked at crates/pipecat-evals/tests/user_speech.rs:337:9:
+producer timeout swallowed or relabelled: ScriptResult { scenario_name: "independent user speech", passed: false, failures: [AssertionFailure { turn_index: 0, expectation_index: 0, event_name: "llm_response", reason: "invalid scenario: user speech cache lookup timed out", kind: "user_speech_cache_timeout" }], turns: [TurnResult { turn_index: 0, status: "failed", failures: [AssertionFailure { turn_index: 0, expectation_index: 0, event_name: "llm_response", reason: "invalid scenario: user speech cache lookup timed out", kind: "user_speech_cache_timeout" }], expectations: [], duration_ms: 182 }, TurnResult { turn_index: 1, status: "not_run", failures: [], expectations: [], duration_ms: 0 }], duration_ms: 1368, events_seen: [], debug_log: ["user speech transaction 1 cache: no new publication completed"], skipped: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    silent_http_production_deadline_is_fixed_even_when_bot_events_continue
+
+test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.65s
+
+error: test failed, to rerun pass `-p pipecat-evals --test user_speech`

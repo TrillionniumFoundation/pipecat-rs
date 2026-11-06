@@ -1,0 +1,217 @@
+{
+  "schema": "pipecat-grok-strace-readonly-analysis-v1",
+  "created_utc": "2026-11-06T15:54:10.662257+00:00",
+  "source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_test_sha256": "5f5d2cba7774aa4644cd7dd6dc67d86daf256223c78e65761705f59b67bf953f",
+  "inputs": {
+    "round-01.trace.trace": {
+      "bytes": 310585,
+      "sha256": "81737afec1129dbd9f1ba9dd8c8b79304292b1e5463f9e78ebf285b5664ca3c2"
+    },
+    "round-01.stdout.log": {
+      "bytes": 1192,
+      "sha256": "12a1e1e0edfb90282cb1291e730f1128d3016df70ca5f7c5b441abd52c85db92"
+    },
+    "round-01.stderr.log": {
+      "bytes": 2730,
+      "sha256": "22b0186211dbc3bb78aae7ecebdbc42211181ca61961a5fc8b5ed1875590ee58"
+    },
+    "trace-window.json": {
+      "bytes": 17155,
+      "sha256": "9f482686eeb83fbb653b668ea6ff79edd282d3c39b287192c8947a6fe35f4e55"
+    },
+    "launcher.json": {
+      "bytes": 1754,
+      "sha256": "3d7b5f34e1b8461c6487978525e962764b34a1ff7aa6824b46d0a50dee518c2c"
+    }
+  },
+  "observed_failure": {
+    "case": "actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join",
+    "endpoint": "127.0.0.1:34901",
+    "listener_inode": 1121549341,
+    "listener_fd": 28,
+    "harness_pid": 696799,
+    "failing_thread": 696802,
+    "errno": 98,
+    "errno_name": "EADDRINUSE",
+    "failing_syscall": "bind",
+    "round": 1,
+    "passed": 11,
+    "failed": 1
+  },
+  "observed_events": [
+    {
+      "line": 934,
+      "raw": "696802 1793979753.006524 socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, IPPROTO_IP) = 28<TCP:[1121549341]> <0.000030>"
+    },
+    {
+      "line": 944,
+      "raw": "696802 1793979753.020141 setsockopt(28<TCP:[1121549341]>, SOL_SOCKET, SO_REUSEADDR, [1], 4 <unfinished ...>"
+    },
+    {
+      "line": 954,
+      "raw": "696802 1793979753.032606 bind(28<TCP:[1121549341]>, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr(\"127.0.0.1\")}, 16 <unfinished ...>"
+    },
+    {
+      "line": 965,
+      "raw": "696802 1793979753.045432 listen(28<TCP:[127.0.0.1:34901]>, 128 <unfinished ...>"
+    },
+    {
+      "line": 973,
+      "raw": "696802 1793979753.050855 getsockname(28<TCP:[127.0.0.1:34901]>,  <unfinished ...>"
+    },
+    {
+      "line": 976,
+      "raw": "696802 1793979753.050920 <... getsockname resumed>{sa_family=AF_INET, sin_port=htons(34901), sin_addr=inet_addr(\"127.0.0.1\")}, [128 => 16]) = 0 <0.000047>"
+    },
+    {
+      "line": 1753,
+      "raw": "696802 1793979753.550044 accept4(28<TCP:[127.0.0.1:34901]>,  <unfinished ...>"
+    },
+    {
+      "line": 1757,
+      "raw": "696802 1793979753.550200 <... accept4 resumed>{sa_family=AF_INET, sin_port=htons(55064), sin_addr=inet_addr(\"127.0.0.1\")}, [128 => 16], SOCK_CLOEXEC|SOCK_NONBLOCK) = 48<TCP:[127.0.0.1:34901->127.0.0.1:55064]> <0.000132>"
+    },
+    {
+      "line": 2404,
+      "raw": "696836 1793979753.697617 close(13<TCP:[127.0.0.1:55064->127.0.0.1:34901]> <unfinished ...>"
+    },
+    {
+      "line": 2408,
+      "raw": "696802 1793979753.697928 fcntl(48<TCP:[127.0.0.1:34901->127.0.0.1:55064]>, F_GETFD <unfinished ...>"
+    },
+    {
+      "line": 2411,
+      "raw": "696802 1793979753.698012 close(48<TCP:[127.0.0.1:34901->127.0.0.1:55064]>) = 0 <0.000030>"
+    },
+    {
+      "line": 2542,
+      "raw": "696802 1793979753.850469 fcntl(28<TCP:[127.0.0.1:34901]>, F_GETFD <unfinished ...>"
+    },
+    {
+      "line": 2543,
+      "raw": "696857 1793979753.850483 clone3({flags=CLONE_VM|CLONE_VFORK|CLONE_CLEAR_SIGHAND, exit_signal=SIGCHLD, stack=0x7aa90d2d3000, stack_size=0x9000}, 88 <unfinished ...>"
+    },
+    {
+      "line": 2544,
+      "raw": "696802 1793979753.850510 <... fcntl resumed>) = 0x1 (flags FD_CLOEXEC) <0.000029>"
+    },
+    {
+      "line": 2546,
+      "raw": "696802 1793979753.850560 close(28<TCP:[127.0.0.1:34901]> <unfinished ...>"
+    },
+    {
+      "line": 2548,
+      "raw": "696802 1793979753.850598 <... close resumed>) = 0 <0.000026>"
+    },
+    {
+      "line": 2551,
+      "raw": "696850 1793979753.850667 <... fcntl resumed>) = 0 <0.000028>"
+    },
+    {
+      "line": 2556,
+      "raw": "696897 1793979753.878258 dup2(10</dev/null<char 1:3>>, 0</home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1b18689be-fc05-7958/stdin.bin> <unfinished ...>"
+    },
+    {
+      "line": 2558,
+      "raw": "696897 1793979753.878368 <... dup2 resumed>) = 0</dev/null<char 1:3>> <0.000044>"
+    },
+    {
+      "line": 2559,
+      "raw": "696802 1793979753.878401 bind(5<TCP:[1121552386]>, {sa_family=AF_INET, sin_port=htons(34901), sin_addr=inet_addr(\"127.0.0.1\")}, 16 <unfinished ...>"
+    },
+    {
+      "line": 2560,
+      "raw": "696897 1793979753.895041 dup2(21<pipe:[1121515335]>, 1<pipe:[1121527069]> <unfinished ...>"
+    },
+    {
+      "line": 2561,
+      "raw": "696802 1793979753.895127 <... bind resumed>) = -1 EADDRINUSE (地址已在使用) <0.000115>"
+    },
+    {
+      "line": 2562,
+      "raw": "696897 1793979753.895158 <... dup2 resumed>) = 1<pipe:[1121515335]> <0.000053>"
+    },
+    {
+      "line": 2577,
+      "raw": "696897 1793979753.928628 execve(\"/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm\", [\"/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm\", \"--enable\"], 0x7aa8f00075d0 /* 2 vars */ <unfinished ...>"
+    },
+    {
+      "line": 2585,
+      "raw": "696857 1793979753.929032 <... clone3 resumed>) = 696897 <0.078531>"
+    },
+    {
+      "line": 2593,
+      "raw": "696897 1793979753.929286 <... execve resumed>) = 0 <0.000606>"
+    }
+  ],
+  "candidate_child_all_traced_events_through_first_exec_completion": [
+    {
+      "line": 2556,
+      "raw": "696897 1793979753.878258 dup2(10</dev/null<char 1:3>>, 0</home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1b18689be-fc05-7958/stdin.bin> <unfinished ...>"
+    },
+    {
+      "line": 2558,
+      "raw": "696897 1793979753.878368 <... dup2 resumed>) = 0</dev/null<char 1:3>> <0.000044>"
+    },
+    {
+      "line": 2560,
+      "raw": "696897 1793979753.895041 dup2(21<pipe:[1121515335]>, 1<pipe:[1121527069]> <unfinished ...>"
+    },
+    {
+      "line": 2562,
+      "raw": "696897 1793979753.895158 <... dup2 resumed>) = 1<pipe:[1121515335]> <0.000053>"
+    },
+    {
+      "line": 2567,
+      "raw": "696897 1793979753.911923 dup2(27<pipe:[1121515336]>, 2<pipe:[1121527070]> <unfinished ...>"
+    },
+    {
+      "line": 2572,
+      "raw": "696897 1793979753.912070 <... dup2 resumed>) = 2<pipe:[1121515336]> <0.000104>"
+    },
+    {
+      "line": 2577,
+      "raw": "696897 1793979753.928628 execve(\"/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm\", [\"/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm\", \"--enable\"], 0x7aa8f00075d0 /* 2 vars */ <unfinished ...>"
+    },
+    {
+      "line": 2593,
+      "raw": "696897 1793979753.929286 <... execve resumed>) = 0 <0.000606>"
+    }
+  ],
+  "direct_observations": [
+    "The listener was created with SOCK_CLOEXEC; F_GETFD immediately before close confirms FD_CLOEXEC.",
+    "Parent close of listener fd28 succeeds before the failed replacement bind to the same endpoint.",
+    "Another harness thread enters clone3 with CLONE_VM|CLONE_VFORK|CLONE_CLEAR_SIGHAND, without CLONE_FILES, before that parent close is recorded.",
+    "Owned child696897 performs its standard-input/output/error dup2 operations and first execve during an interval overlapping the failed bind; execve starts after the bind failure is recorded.",
+    "No traced child operation before first exec closes fd28, close_ranges it, or overwrites fd28 via dup; no direct child fd28/inode read exists in the trace.",
+    "Parent postfailure self-FD and TCP snapshots contain no old inode/endpoint; all are non-atomic later samples with no truncation/read error."
+  ],
+  "inference": "A pre-exec inherited-listener reference in child696897 is a concrete, strongly matching mechanism. CLONE_FILES absence means descriptor-table copying; FD_CLOEXEC closes the inherited descriptor at exec, not at clone. This is a candidate causal explanation rather than a direct observation of child fd28/inode1121549341.",
+  "limits": [
+    "clone3 syscall entry is not a timestamp for the internal descriptor-table copy; it overlaps the parent close and the trace does not expose that copy instant.",
+    "The trace does not directly inspect child696897 fd28 or its socket inode. No claim that this child was conclusively proven to hold inode1121549341 at the failed bind.",
+    "strace scheduling and -yy decoding perturb timing. Printed timestamps and unfinished/resumed records must not be treated as untraced execution timing.",
+    "Unrelated processes and untraced operations are not exhaustively excluded.",
+    "This traced first-round failure has a third distinct case and freshly bound workspace artifacts. It does not retrospectively establish the cause of full-workspace r3 or untraced diagnostic-r2 failures."
+  ],
+  "minimal_conditional_fixture_fix": {
+    "condition": "Only after deciding the inherited-descriptor mechanism is sufficiently established, or after an additional direct owned-child inode witness confirms it.",
+    "proposal": "Coordinate the central Command::spawn critical section with fixture listener drop plus its single rebind. A test-only reader/writer gate can allow concurrent spawns while excluding a listener release transition until every in-progress spawn has crossed exec; hold the exclusive side only over drop and the original single rebind.",
+    "preserve": [
+      "all 12 cases and default libtest parallelism",
+      "the real child and websocket lifecycle",
+      "all existing product and fixture deadlines and content assertions",
+      "the original 60ms no_connection check",
+      "one rebind attempt, without retry"
+    ],
+    "scope": "This is an unimplemented proposal. It does not serialize full tests or alter any library/CLI product interface."
+  },
+  "next_evidence_if_needed": "A positive witness of the same socket inode in the specific owned pre-exec child would close the remaining observation gap. A separately controlled fork/exec experiment could prove the mechanism, but would not substitute for that original-run witness.",
+  "reference_urls": [
+    "https://man7.org/linux/man-pages/man2/clone.2.html",
+    "https://man7.org/linux/man-pages/man2/execve.2.html"
+  ],
+  "source_mutation": false,
+  "runtime_rerun": false
+}

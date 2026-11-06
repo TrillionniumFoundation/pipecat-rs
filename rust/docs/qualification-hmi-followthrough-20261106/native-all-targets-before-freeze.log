@@ -1,0 +1,150 @@
+    Blocking waiting for file lock on build directory
+   Compiling tokio v1.53.2
+   Compiling whisper-rs v0.16.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-whisper/vendor/whisper-rs)
+   Compiling pulldown-cmark v0.13.4
+   Compiling alsa v0.11.0
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+   Compiling hyper v1.12.0
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.6
+   Compiling hyper-rustls v0.27.10
+   Compiling tower-http v0.6.11
+   Compiling tokio-util v0.7.20
+   Compiling reqwest v0.12.28
+   Compiling cpal v0.18.2
+   Compiling pipecat-services v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-services)
+   Compiling pipecat-text v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-text)
+   Compiling pipecat-media-transport v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-media-transport)
+   Compiling pipecat-whisper v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-whisper)
+   Compiling pipecat-vad v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-vad)
+   Compiling pipecat-piper v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-piper)
+   Compiling pipecat-local-audio v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-local-audio)
+   Compiling pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Finished `test` profile [unoptimized] target(s) in 1m 30s
+     Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_hepta-604d7510d804798b)
+
+running 4 tests
+test local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results ... ignored, requires explicit hashed multilingual Whisper and Chinese Piper assets
+test local_speech::native_tests::long_chinese_output_survives_device_deadline_and_interrupt_fences_remaining_pcm ... ignored, requires explicit trusted local speech config and authorized physical output
+test local_speech::gate_tests::failed_device_retirement_stays_unknown_on_duplicate_ack_and_reattach ... ok
+test local_speech::gate_tests::native_retirement_closes_admission_even_for_relabelled_old_turn ... ok
+
+test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/media_command.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/media_command-5c0aa9253dfd7c30)
+
+running 12 tests
+test admitted_ids_allow_arbitrary_gaps_and_reordering_but_never_replay ... ok
+test binding_and_output_require_complete_owner_identity ... ok
+test all_correlated_commands_reject_zero_before_effects ... ok
+test connection_is_checked_before_the_lossy_output_identity_conversion ... ok
+test every_stream_dimension_is_bound_including_source_release ... ok
+test foreign_scope_cannot_consume_a_valid_command_id_or_capacity ... ok
+test malformed_unknown_or_incomplete_commands_are_terminal ... ok
+test one_byte_reads_preserve_chinese_emoji_and_newlines_across_suspensions ... ok
+test request_correlation_is_not_mistaken_for_owner_sequence_order ... ok
+test two_commands_in_one_read_keep_wire_order_without_swallowing_the_next_line ... ok
+test zero_utterance_sequence_is_rejected_independently_of_request_id ... ok
+test exactly_one_bounded_line_is_admitted_and_overflow_never_resynchronizes ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/media_store.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/media_store-fa8b52c38c0ccacf)
+
+running 7 tests
+test old_organ_reference_cannot_release_identically_named_new_asset ... ok
+test duplicate_old_generation_release_preserves_new_assets_and_quota ... ok
+test exact_bytes_span_digest_and_scope_are_verified_before_release ... ok
+test symlinks_and_path_escape_are_rejected_without_touching_the_target ... ok
+test quota_survives_reopen_and_only_an_acknowledged_asset_frees_capacity ... ok
+test unpublished_cleanup_validates_full_identity_and_releases_once ... ok
+test corrupt_bytes_and_foreign_root_binding_never_become_valid_observations ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parent_death.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/parent_death-a8ce49beefda21fb)
+
+running 4 tests
+test parent_guard_helper ... ignored, subprocess fixture; invoked by the three process tests
+test invalid_or_mismatched_parent_is_rejected_before_binding ... ok
+test supervisor_sigkill_kills_reaps_native_and_releases_listener ... ok
+test parent_lost_before_arming_is_rejected_before_resource_open ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/presentation_lifecycle.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/presentation_lifecycle-a60d6cfad810311e)
+
+running 4 tests
+test a_delayed_terminal_cannot_release_a_reused_utterance_identity ... ok
+test terminal_retention_failure_keeps_the_record_and_repeat_release_is_rejected ... ok
+test interrupted_terminal_preserves_local_interruption_without_claiming_playback ... ok
+test interrupted_render_retains_terminal_once_and_reuses_capacity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/process_supervision.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/process_supervision-56e4208750d7c2b3)
+
+running 22 tests
+test invalid_deadlines_and_connection_are_rejected_before_spawn ... ok
+test forwards_exact_commands_and_events_but_hides_private_handshake ... ok
+test eof_allows_native_terminal_to_drain_without_fabricating_success ... ok
+test ready_then_exit_without_protocol_terminal_is_not_success ... ok
+test malformed_command_is_not_forwarded_or_resynchronized ... ok
+test bare_or_failed_terminal_cannot_make_exit_zero_successful ... ok
+test oversized_native_event_is_rejected_without_unbounded_buffering ... ok
+test rejected_input_cause_is_retained_in_the_childs_existing_terminal ... ok
+test partial_utf8_command_at_eof_is_a_terminal_failure ... ok
+test successful_exit_without_native_readiness_is_not_success ... ok
+test private_control_ack_is_removed_and_command_sequence_counts_non_controls ... ok
+test unsolicited_private_control_ack_is_rejected ... ok
+test valid_private_control_ack_is_hidden_from_the_owner ... ok
+test wrong_connection_readiness_fails_without_exposing_child_output ... ok
+test stalled_owner_output_does_not_leave_native_child_running ... ok
+test retire_ack_requires_private_processed_command_sequence ... ok
+test revoke_capture_is_a_total_deadline_without_waiting_for_ack ... ok
+test stdout_eof_is_not_mistaken_for_native_thread_exit ... ok
+test shutdown_kills_and_reaps_a_native_call_that_never_polls_tokio ... ok
+test uncorrelated_vad_event_cannot_acknowledge_a_blocked_interrupt ... ok
+test stop_during_blocking_startup_uses_the_shorter_shutdown_deadline ... ok
+test startup_hang_is_contained_while_owner_input_is_still_open ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/session.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/session-d74a7473bcd5bc57)
+
+running 11 tests
+test attached_hepta_epoch_is_preserved_and_zero_device_generations_reject ... ok
+test count_pressure_never_evicts_live_state_or_consumes_rejected_sequence ... ok
+test callback_submission_cannot_be_promoted_to_played_or_heard ... ok
+test device_failure_fences_old_output_and_still_returns_remote_interrupt ... ok
+test new_turn_retires_previous_turn_without_resetting_replay_high_water ... ok
+test old_synthesis_cannot_reenter_after_local_barge_in ... ok
+test hepta_bridge_numeric_connection_scope_decodes_without_string_coercion ... ok
+test owner_stop_echo_uses_the_native_retirement_floor_without_skipping_an_epoch ... ok
+test exact_owner_epoch_attaches_after_local_stop_without_minting_another_epoch ... ok
+test same_epoch_foreign_generation_and_replayed_sequences_reject_atomically ... ok
+test unknown_hepta_terminal_scope_cannot_become_speech_identity ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/speech_segments.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/speech_segments-f4806226426b198d)
+
+running 2 tests
+test chinese_multi_item_response_preserves_text_at_utf8_boundaries ... ok
+test no_boundary_response_is_bounded_and_validated_before_rendering ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/local_speech.rs (/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech-f6fe2620e3b41ca9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/stt_fixture.rs (/tmp/pipecat-hmi-native-27653505a519/debug/examples/stt_fixture-5a6419e4430d9f41)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

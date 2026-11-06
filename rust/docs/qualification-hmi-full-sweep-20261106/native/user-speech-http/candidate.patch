@@ -1,0 +1,15 @@
+--- a/rust/crates/pipecat-evals/tests/user_speech.rs
++++ b/rust/crates/pipecat-evals/tests/user_speech.rs
+@@ -317,10 +317,11 @@
+             {"user":"next turn must never synthesize","expect":[expected(2)]}
+         ]));
+         let now = tokio::time::Instant::now();
++        // Select the HTTP phase directly; cache lookup has a distinct timeout contract.
+         let result = run(session(
+             scenario,
+             &host.url,
+-            settings(&http.url, Some(&root), Duration::from_millis(180)),
++            settings(&http.url, None, Duration::from_millis(180)),
+         ))
+         .await;
+         let elapsed = now.elapsed();

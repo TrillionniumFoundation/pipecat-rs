@@ -1,0 +1,32 @@
+{
+  "schema": "pipecat-root-final-native-archive-verification-v1",
+  "created_utc": "2026-11-06T18:33:07.074346+00:00",
+  "archive": {
+    "file": "strict-clippy-final-q-r1.tar.xz",
+    "bytes": 160008,
+    "sha256": "9aa9fa08a6d092869f57e731736a81dd696faafb3b5d308fb15e6e7aa7d2697f",
+    "git_blob_sha1": "d5f1ab655cb386c93a8f0f3ac38139c6004d50f6"
+  },
+  "original_count": 35,
+  "original_bytes": 1896241,
+  "archive_member_count": 37,
+  "archive_member_bytes": 1913869,
+  "manifest_bytes": 12518,
+  "manifest_sha256": "c82ed0ecda42135a8c4d3bb289976c5410423fe617bcf71a8b4a133ffe108b33",
+  "all_originals_archive_bytes_and_hashes_match": true,
+  "all_archive_members_safe_unique_regular_files": true,
+  "source_maps": [
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-after.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+      "files": 2422
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-before.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+      "files": 2422
+    }
+  ],
+  "q_maps_equal_independently_derived_published_git_tree_map": true,
+  "excluded_retained_artifacts": []
+}

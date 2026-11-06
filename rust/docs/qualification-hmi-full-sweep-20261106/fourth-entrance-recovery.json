@@ -1,0 +1,33 @@
+{
+  "scope": "Fourth brief local executor transport interruption; observed retained files only, not a new remote test run",
+  "observed_utc": "2026-11-06T15:01:08.103533+00:00",
+  "head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "browser_pre_interruption_manifest": "browser/publication-inputs.json",
+  "manifest_sha256": "fdad4a862f69c7f93786f20bb54734fd423c3d434bceb80704edc27d98b6d034",
+  "original_files_rechecked": 71,
+  "bytes_sha256_and_git_blob_all_equal": true,
+  "additional_root_observations": [
+    {
+      "path": "rust/docs/HMI_FULL_SWEEP_20261106.md",
+      "bytes": 30525,
+      "sha256": "04b3027157a476df02d46bbec35fd5a606c7a7ac2f0b7ae3a7b075bb00f49e46"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-fixture-presence-r1.json",
+      "bytes": 10237,
+      "sha256": "2f0922103e6c4c1462373dee17e86097361c61033eedbe544f8ae2436318ffb9"
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/environment/aishell-reference/wenet-data.list",
+      "bytes": 447,
+      "sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7"
+    }
+  ],
+  "source_diff_paths": [],
+  "remote_jobs_replayed_due_to_this_interruption": false,
+  "limits": [
+    "No inference that unobserved paths are unchanged.",
+    "The pre-interruption candidate manifest does not claim its files were already tracked at commit 272671.",
+    "No files were reconstructed for these 71 checks."
+  ]
+}

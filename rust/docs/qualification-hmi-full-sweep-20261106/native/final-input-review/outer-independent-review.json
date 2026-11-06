@@ -1,0 +1,60 @@
+{
+  "schema": "pipecat-native-optin-outer-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793986407.9292538,
+  "scope": "Static source and lifecycle review only; no native execution, model inference or new qualification counts.",
+  "runner": {
+    "path": "workspace-evidence/task-helpers/desktop_model_optins_launcher_pin_r2.py",
+    "bytes": 23993,
+    "sha256": "97b2ba851c49ce395c66cb4eb8fcdb39cb90c696f27d0fd6a430ee00e1335c49"
+  },
+  "source_binding": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+  },
+  "verdict": "no_remaining_blocker_in_reviewed_outer_runner",
+  "input_closure": {
+    "original_three_configuration_or_selection_files_bound": true,
+    "seven_model_or_runtime_artifacts_bound": true,
+    "ten_selected_source_files_bound": true,
+    "local_sfu_binary_bound": true,
+    "actual_ready_executables_iterated": true,
+    "ready_tool_count_correction": "The actual ready receipt lists four executables: rustc, cargo, cargo-clippy and rustfmt. This outer review does not invent six tool observations.",
+    "espeak_directory_algorithm_matches_existing_piper_contract": true,
+    "original_espeak_expected_sha256": "bba750d12c77a7714b579dc8a34e205417174963cfd05a54da8edd4031f09926",
+    "espeak_algorithm": "Sorted relative UTF-8 path bytes, NUL, lowercase file SHA-256 hexadecimal, LF; preserve existing depth, count and total-byte bounds and reject symbolic links, invalid paths or special files.",
+    "before_and_after_identities_checked": true,
+    "mutable_media_exception": "Only the declared fresh generation-1 private synthetic media directory may acquire its captured assets; inputs/configs/models and the existing eSpeak directory remain immutable. Never-open device labels remain intact."
+  },
+  "lifecycle": {
+    "exclusive_preflight_and_postflight_lock": "Same qualification-owner-pin.lock; released before the inner driver whose stages acquire the same lock, avoiding a recursive lock deadlock.",
+    "driver_argv_preserved": true,
+    "driver_invoked_only_after_popen_returns_pid": true,
+    "driver_start_new_session": true,
+    "internal_whole_seconds": 3580,
+    "cleanup_reserve_seconds": 10,
+    "outer_seconds": 3600,
+    "finally_cleanup_precedes_input_postflight": true,
+    "owned_pgid_signals": "TERM with 2-second leader wait; KILL if still required with 2-second leader wait; final 1-second leader wait.",
+    "leader_reap_and_group_absence_distinct": true,
+    "normal_leader_exit_with_surviving_group_is_integrity_failure": true,
+    "original_driver_exit_preserved": true,
+    "timeout_exit": 124,
+    "integrity_or_containment_exit": 125,
+    "no_all_descendants_join_claim": true,
+    "each_postflight_error_is_recorded_and_fails": true
+  },
+  "coverage_limits": [
+    "The original 19 commands select 21 cases: SFU 3, Chinese synthetic 1, Piper 4, Whisper/runner 13. This wrapper adds no case or original assertion.",
+    "The eight clean/noisy Chinese transcript observations remain output samples of one test, not eight separate accuracy-qualified tests.",
+    "Filtered test counts, repeated feature matrices, or rejected browser admissions must not be added as independent model-inference coverage.",
+    "This review establishes no physical microphone, audible playback, OS permission, real provider account, Hepta owner/thread or production qualification."
+  ],
+  "separate_selection_review": {
+    "path": "workspace-evidence/model-inputs-final/independent-selection-review.json",
+    "sha256": "7fe4e08a3db3f0c5fb64d5a9445ff65593a0b6b4e96c632ba811a0c65f4fb52e",
+    "git_blob_sha1": "c56065d14cab48935ca6c854696afdd91970a19c"
+  },
+  "execution_status_at_review": "Not executed by this reviewer; the orchestrator reports actual results separately."
+}

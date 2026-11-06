@@ -1,0 +1,1329 @@
+{
+  "schema": "pipecat-native-model-optins-full-raw-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793988317.5901492,
+  "scope": "Read-only independent recomputation from the completed original current-source native export. No native replay, test change, additional case or new quality threshold.",
+  "archive": {
+    "path": "workspace-evidence/model-optins-pin-r2.tar.xz",
+    "bytes": 202460,
+    "sha256": "73584f7779a7063e35d1288cfc65c5691b4057d175d11abbdbf5e2dbba19ffe2"
+  },
+  "original_files_manifest": {
+    "path": "workspace-evidence/model-optins-pin-r2/original-files-manifest.json",
+    "bytes": 45559,
+    "sha256": "23003d0d3217bddc5d4741909d4bfc5f52825b23fa02998902900588da4627e4"
+  },
+  "verification": {
+    "tar_members": 134,
+    "original_files_rehashed": 131,
+    "every_original_size_and_sha_matches": true,
+    "source_canonical_snapshots_recomputed": 40,
+    "all_source_snapshots_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "all_original_gate_argv_and_summary_anchor_checks": true,
+    "all_19_wrapper_and_command_exits_zero": true,
+    "exact_independent_case_names_count": 21,
+    "case_identity_key": [
+      "package",
+      "target",
+      "name"
+    ],
+    "espeak_355_file_digest_recomputed_from_original_inventory": true
+  },
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702"
+  },
+  "counting": {
+    "commands": 19,
+    "unique_passed_cases": 21,
+    "partition": {
+      "local_sfu": 3,
+      "chinese_synthetic": 1,
+      "piper": 4,
+      "whisper_runner": 13
+    },
+    "chinese_transcript_observations": 8,
+    "filtered_tests_counted_as_coverage": false,
+    "duplicate_matrix_passes_added": false,
+    "standalone_aishell_or_c_probes_added_to_rust_case_count": false,
+    "rejected_browser_scope": "whisper-owner-13 deliberately proves rejected/unused sessions do not start native workers; its pass is not counted as an inference."
+  },
+  "stages": [
+    {
+      "stage": "local-sfu",
+      "package": "pipecat-livekit",
+      "target": "local_sfu",
+      "case_names": [
+        "media_control::native_participant_mute_unmute_observes_subscription_and_remote_pcm",
+        "media_control::native_remote_video_decodes_two_rgb_patterns_with_identity_and_source",
+        "native_participants_exchange_audio_data_cancel_leave_rejoin_and_release"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-livekit",
+        "--test",
+        "local_sfu",
+        "--",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 0,
+      "raw_summary": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.30s",
+      "summary_byte_offset": 13305,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/local-sfu-pin-r2/command.log",
+        "bytes": 13401,
+        "sha256": "f1e1b7467952cb4fc652d3d874b6dc8ab420ffd740183861ce1ff6a70e3ef462"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/local-sfu-pin-r2/gate.json",
+        "bytes": 3471,
+        "sha256": "68e605d5c69b3afbefe2aafdc0ac01aa04ee0d9817a4310e1ab7ae0c89e6bf17"
+      },
+      "libtest_reported_seconds": 16.3,
+      "gate_interval_seconds_including_source_postchecks": 121.87773895263672,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "chinese-synthetic",
+      "package": "pipecat-hepta",
+      "target": "--lib",
+      "case_names": [
+        "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--lib",
+        "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 3,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 109.74s",
+      "summary_byte_offset": 198067,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/chinese-synthetic-pin-r2/command.log",
+        "bytes": 198164,
+        "sha256": "d2f948d3b69157780dcc5b000f62a73f9d2db231507b79950522e9aed168a9a7"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/chinese-synthetic-pin-r2/gate.json",
+        "bytes": 3574,
+        "sha256": "b1f5969587bb27a0e6ae9c35d0a1dace06692426b3c1e66694e24358de7df04d"
+      },
+      "libtest_reported_seconds": 109.74,
+      "gate_interval_seconds_including_source_postchecks": 190.29344749450684,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "piper-genuine-owner",
+      "package": "pipecat-piper",
+      "target": "native_inference",
+      "case_names": [
+        "genuine_cpu_inference_cancellation_resampling_and_global_owner"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_inference",
+        "genuine_cpu_inference_cancellation_resampling_and_global_owner",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 1,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 20.22s",
+      "summary_byte_offset": 1122,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-genuine-owner-pin-r2/command.log",
+        "bytes": 1218,
+        "sha256": "0d738c1ffea46f04e5ab8873124aceed86f76ee383af0e2d90a3acfa359b4e9b"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-genuine-owner-pin-r2/gate.json",
+        "bytes": 3581,
+        "sha256": "7a148e38a48110290ec3116c809290d053802f539a03edd643625af6e5efba4b"
+      },
+      "libtest_reported_seconds": 20.22,
+      "gate_interval_seconds_including_source_postchecks": 39.31060290336609,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "piper-invalid-bounds",
+      "package": "pipecat-piper",
+      "target": "native_inference",
+      "case_names": [
+        "malformed_model_config_and_output_bounds_fail_explicitly"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_inference",
+        "malformed_model_config_and_output_bounds_fail_explicitly",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 1,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 19.36s",
+      "summary_byte_offset": 299,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-invalid-bounds-pin-r2/command.log",
+        "bytes": 395,
+        "sha256": "c6094f052f764318e094ebdecff496cde181b409d51c1e40dee2d11e29b6bc69"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-invalid-bounds-pin-r2/gate.json",
+        "bytes": 3577,
+        "sha256": "d772fcc30f2cc505466db23a84c3bb456f17a4d3189df29b857b29947c9204cc"
+      },
+      "libtest_reported_seconds": 19.36,
+      "gate_interval_seconds_including_source_postchecks": 20.127975702285767,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "piper-cancel-reload",
+      "package": "pipecat-piper",
+      "target": "adversarial_review",
+      "case_names": [
+        "native::native_cancel_drop_then_reload_preserves_global_owner"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "adversarial_review",
+        "native::native_cancel_drop_then_reload_preserves_global_owner",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 10,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 16.51s",
+      "summary_byte_offset": 436,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-cancel-reload-pin-r2/command.log",
+        "bytes": 533,
+        "sha256": "5f2d184f22ae96981d1f0ebf2fc75d8175ad1f89172ade0e642e3db348c201b0"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-cancel-reload-pin-r2/gate.json",
+        "bytes": 3582,
+        "sha256": "89e194f9f2f7e3f5bc1c8012b225fd87240b51c62560cd66c21a7e0e8294e657"
+      },
+      "libtest_reported_seconds": 16.51,
+      "gate_interval_seconds_including_source_postchecks": 18.16061234474182,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "piper-long-pipeline",
+      "package": "pipecat-piper",
+      "target": "native_pipeline",
+      "case_names": [
+        "genuine_native_long_utterance_crosses_default_capacity_slow_output_exactly"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-piper",
+        "--test",
+        "native_pipeline",
+        "genuine_native_long_utterance_crosses_default_capacity_slow_output_exactly",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 0,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.07s",
+      "summary_byte_offset": 713,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-long-pipeline-pin-r2/command.log",
+        "bytes": 809,
+        "sha256": "f383105ea5293ef53aba5b15c6734f604baa39cdcd1ceb3793bd1889bcee355c"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/piper-long-pipeline-pin-r2/gate.json",
+        "bytes": 3592,
+        "sha256": "b19969db27dc52bf53ee49b686f2d0ab8930f5ab0573750e9ea28cd715cd1191"
+      },
+      "libtest_reported_seconds": 27.07,
+      "gate_interval_seconds_including_source_postchecks": 31.515372037887573,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-01",
+      "package": "pipecat-whisper",
+      "target": "--lib",
+      "case_names": [
+        "service::tests::last_owner_drop_waits_for_inference_after_aborted_join_waiter"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--lib",
+        "service::tests::last_owner_drop_waits_for_inference_after_aborted_join_waiter",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 25,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 2.42s",
+      "summary_byte_offset": 2662,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-01-pin-r2/command.log",
+        "bytes": 2758,
+        "sha256": "c3d9b2e5f423cf461e7da52219107af52165dea00a160c94397ef2b69fca80ab"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-01-pin-r2/gate.json",
+        "bytes": 3530,
+        "sha256": "5e33e7bd3200c06350d5c5b030dcb5776173f50ecd9d5c417b3a49837bc0b251"
+      },
+      "libtest_reported_seconds": 2.42,
+      "gate_interval_seconds_including_source_postchecks": 29.963926553726196,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-02",
+      "package": "pipecat-whisper",
+      "target": "review_contracts",
+      "case_names": [
+        "drop_after_cancelled_join_does_not_depend_on_blocking_pool_capacity"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "drop_after_cancelled_join_does_not_depend_on_blocking_pool_capacity",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 3,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.25s",
+      "summary_byte_offset": 2021,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-02-pin-r2/command.log",
+        "bytes": 2116,
+        "sha256": "f038944fec7ffa16729ff16ae66f5f63f740b36b9522c7e9ceb6f24471b17ff0"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-02-pin-r2/gate.json",
+        "bytes": 3544,
+        "sha256": "faaba16d019d97ac5316c83c4dc82074a53f9a0d06515b0ff6b1012b5a5be69b"
+      },
+      "libtest_reported_seconds": 0.25,
+      "gate_interval_seconds_including_source_postchecks": 6.904668569564819,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-03",
+      "package": "pipecat-whisper",
+      "target": "review_contracts",
+      "case_names": [
+        "vad_overflow_discards_remainder_through_stop"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "vad_overflow_discards_remainder_through_stop",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 3,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 2.46s",
+      "summary_byte_offset": 3259,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-03-pin-r2/command.log",
+        "bytes": 3354,
+        "sha256": "44aca9a881e84acb5cc6153bdb5f7d882f89e1e04193651276d2e1e602e45b41"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-03-pin-r2/gate.json",
+        "bytes": 3521,
+        "sha256": "340e3cd596c45847b3c7984207ee5c155b3f1a154c422d9126d93dc62154e308"
+      },
+      "libtest_reported_seconds": 2.46,
+      "gate_interval_seconds_including_source_postchecks": 3.168898582458496,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-04",
+      "package": "pipecat-whisper",
+      "target": "review_contracts",
+      "case_names": [
+        "rejected_oversized_frame_discards_the_active_prefix"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "rejected_oversized_frame_discards_the_active_prefix",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 3,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 2.35s",
+      "summary_byte_offset": 3266,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-04-pin-r2/command.log",
+        "bytes": 3361,
+        "sha256": "cdce9dfcfdc4dec0b2acb879ef6d670cea7a9669617336044922283360a4dd4a"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-04-pin-r2/gate.json",
+        "bytes": 3529,
+        "sha256": "88703e821688e8d1f2d8dc7918459d81bba78b41c15a3dfdd7edd2237b61e8d5"
+      },
+      "libtest_reported_seconds": 2.35,
+      "gate_interval_seconds_including_source_postchecks": 3.022925615310669,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-05",
+      "package": "pipecat-whisper",
+      "target": "usability",
+      "case_names": [
+        "public_settings_recover_only_on_valid_effective_change"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "public_settings_recover_only_on_valid_effective_change",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 4,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.26s",
+      "summary_byte_offset": 1994,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-05-pin-r2/command.log",
+        "bytes": 2089,
+        "sha256": "7dd25fdafc5cd32400f699b4dd97556223f583deaa418320e36cb935e2e07bdb"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-05-pin-r2/gate.json",
+        "bytes": 3525,
+        "sha256": "6e8b7d57bcb5ba34979c16eac3bd4841a6f1ce8121745ec40d1e2e634b419189"
+      },
+      "libtest_reported_seconds": 0.26,
+      "gate_interval_seconds_including_source_postchecks": 1.8624200820922852,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-06",
+      "package": "pipecat-whisper",
+      "target": "usability",
+      "case_names": [
+        "coalesced_recovery_discards_vad_prefix_and_tail"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "coalesced_recovery_discards_vad_prefix_and_tail",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 4,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 2.42s",
+      "summary_byte_offset": 3248,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-06-pin-r2/command.log",
+        "bytes": 3343,
+        "sha256": "976d4e6a05881d5b7e4b017b1d37d473ef32440d0c94343e342bcb40a09b5dbd"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-06-pin-r2/gate.json",
+        "bytes": 3517,
+        "sha256": "41e50a5864e1edf4d051cc45623fd5efdfd58fc062380c12875bd3ea313cfcea"
+      },
+      "libtest_reported_seconds": 2.42,
+      "gate_interval_seconds_including_source_postchecks": 3.021577835083008,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-07",
+      "package": "pipecat-whisper",
+      "target": "usability",
+      "case_names": [
+        "terminal_frames_cleanup_while_unusable_without_flushing_speech"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "terminal_frames_cleanup_while_unusable_without_flushing_speech",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 4,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.80s",
+      "summary_byte_offset": 5028,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-07-pin-r2/command.log",
+        "bytes": 5123,
+        "sha256": "156b689687f305f5c27f445f99c15c5867d3b221f4a9358f14df9ab7ded3ef9b"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-07-pin-r2/gate.json",
+        "bytes": 3532,
+        "sha256": "3e549ebdc1d7b1a7d833e89b46edd380bd2e541d36720335d192ed3b5e75d686"
+      },
+      "libtest_reported_seconds": 0.8,
+      "gate_interval_seconds_including_source_postchecks": 1.493112325668335,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-08",
+      "package": "pipecat-runner",
+      "target": "--lib",
+      "case_names": [
+        "whisper::tests::owned_health_gates_fixed_windows_and_shares_native_settings_recovery"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::owned_health_gates_fixed_windows_and_shares_native_settings_recovery",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 65,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.27s",
+      "summary_byte_offset": 8101,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-08-pin-r2/command.log",
+        "bytes": 8197,
+        "sha256": "b65a88e3fbfb215f088c1173f6dcdadaaf5ca8a43e70aeb224c0096a46d1ad1a"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-08-pin-r2/gate.json",
+        "bytes": 3534,
+        "sha256": "4fccc98a80ae4668dd812ca553b510f168737a9ab13b595fd9d33e06cae09eab"
+      },
+      "libtest_reported_seconds": 0.27,
+      "gate_interval_seconds_including_source_postchecks": 232.7958469390869,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-09",
+      "package": "pipecat-runner",
+      "target": "--lib",
+      "case_names": [
+        "whisper::tests::dropping_the_last_runner_handle_joins_the_session_native_owner"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::dropping_the_last_runner_handle_joins_the_session_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 65,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.25s",
+      "summary_byte_offset": 1893,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-09-pin-r2/command.log",
+        "bytes": 1989,
+        "sha256": "8566bbcaf35f5935d183cc0bf778151beb31a006a70c414babd56d421b1b11ee"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-09-pin-r2/gate.json",
+        "bytes": 3530,
+        "sha256": "c474454780eb2474ee35b294d4a399371bd464b7e447f91ad5894036b0f47a7b"
+      },
+      "libtest_reported_seconds": 0.25,
+      "gate_interval_seconds_including_source_postchecks": 2.7374370098114014,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-10",
+      "package": "pipecat-runner",
+      "target": "whisper_lifecycle",
+      "case_names": [
+        "stopping_one_native_session_joins_only_its_owner_and_reuses_the_slot"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "stopping_one_native_session_joins_only_its_owner_and_reuses_the_slot",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 7,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.52s",
+      "summary_byte_offset": 3602,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-10-pin-r2/command.log",
+        "bytes": 3697,
+        "sha256": "b5d87a3f5642dc80109df58c61a3d12842ddfdd9157b30d26a60e4c4d4c28b74"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-10-pin-r2/gate.json",
+        "bytes": 3544,
+        "sha256": "afd6da21a7ea6b789a99674b71f49900d05bef69c9550208415d85b8e490b92f"
+      },
+      "libtest_reported_seconds": 0.52,
+      "gate_interval_seconds_including_source_postchecks": 62.9088671207428,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-11",
+      "package": "pipecat-runner",
+      "target": "whisper_lifecycle",
+      "case_names": [
+        "later_initialization_failure_joins_the_native_model_before_releasing_admission"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "later_initialization_failure_joins_the_native_model_before_releasing_admission",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 7,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 30.55s",
+      "summary_byte_offset": 3481,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-11-pin-r2/command.log",
+        "bytes": 3577,
+        "sha256": "0f7663279dd2df1aaefdeee323bff0941d3315e9b34eaa26ba1343da1f9b416d"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-11-pin-r2/gate.json",
+        "bytes": 3555,
+        "sha256": "af7b0867505e5b4be02cbb9e1d2131ca0adef49be8f26c06ae8e594869eb56ee"
+      },
+      "libtest_reported_seconds": 30.55,
+      "gate_interval_seconds_including_source_postchecks": 31.462806701660156,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-12",
+      "package": "pipecat-runner",
+      "target": "whisper_lifecycle",
+      "case_names": [
+        "authorized_but_unready_client_expires_and_joins_its_native_owner"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "authorized_but_unready_client_expires_and_joins_its_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 7,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.48s",
+      "summary_byte_offset": 1888,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-12-pin-r2/command.log",
+        "bytes": 1983,
+        "sha256": "9cfc60c5bb2d008bcf9f6bea5a66bffd769c0bc7237547a12c3b0bd5e91b7c39"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-12-pin-r2/gate.json",
+        "bytes": 3541,
+        "sha256": "28c69548209ddacee88cf3198746fd104b75c2938dde15c43171a0c8d0ef6f70"
+      },
+      "libtest_reported_seconds": 0.48,
+      "gate_interval_seconds_including_source_postchecks": 1.2747316360473633,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    },
+    {
+      "stage": "whisper-owner-13",
+      "package": "pipecat-runner",
+      "target": "whisper_lifecycle",
+      "case_names": [
+        "rejected_browser_and_unused_session_expiry_never_start_native_workers"
+      ],
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "rejected_browser_and_unused_session_expiry_never_start_native_workers",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "original_command_exit_code": 0,
+      "original_wrapper_exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out_not_counted": 7,
+      "raw_summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.29s",
+      "summary_byte_offset": 314,
+      "raw_log": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-13-pin-r2/command.log",
+        "bytes": 409,
+        "sha256": "3ea3f6c1038f2cf5627fc644ae7057ec79259570384df8030621cc384ec1adcf"
+      },
+      "gate": {
+        "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/whisper-owner-13-pin-r2/gate.json",
+        "bytes": 3546,
+        "sha256": "4ddf2e00194a103f95fd33ef4185ed16f9a6bc615cb71005e4cdfea5a3526b54"
+      },
+      "libtest_reported_seconds": 0.29,
+      "gate_interval_seconds_including_source_postchecks": 1.1948637962341309,
+      "source_unchanged": true,
+      "runner_wrapper_pre_post_sha_equal": true
+    }
+  ],
+  "outer_cleanup": {
+    "pgid": 1169842,
+    "signal_requests": [],
+    "scope": "Signals target only the owned process group. Actual leader reap and non-atomic group observations are recorded; this is not a claim that all descendants were individually joined.",
+    "group_before": {
+      "present": false
+    },
+    "leader_exit_before": 0,
+    "unexpected_surviving_group_after_driver_exit": false,
+    "leader_reaped": true,
+    "leader_exit_after": 0,
+    "group_after": {
+      "present": false
+    },
+    "cleanup_checks_succeeded": true
+  },
+  "espeak_directory": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/share/espeak-ng-data",
+    "resolved": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/share/espeak-ng-data",
+    "entry_count_including_directories": 391,
+    "file_count": 355,
+    "total_file_bytes": 17991651,
+    "sha256": "bba750d12c77a7714b579dc8a34e205417174963cfd05a54da8edd4031f09926",
+    "algorithm": "sorted relative UTF-8 filename + NUL + lowercase file SHA256 hex ASCII + LF"
+  },
+  "local_sfu": {
+    "real_server_version": "1.13.9",
+    "binary_sha256": "0fbb1246f555fc3d27ae92530273f53d9463bbccd93c7edb398e0c6ccfe1536b",
+    "servers": [
+      {
+        "directory": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986297-0",
+        "server_cleanup": {
+          "deadline_ms": 3000,
+          "elapsed_ms": 10,
+          "exit_status": "signal: 9 (SIGKILL)",
+          "kill_error": null,
+          "kill_requested": true,
+          "outer_owned_job_deadline_required": false,
+          "pid": 1183695,
+          "reaped": true,
+          "stage": "media_cleanup",
+          "timed_out": false,
+          "wait_error": null
+        },
+        "cleanup_file": {
+          "path": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986297-0/server-cleanup.jsonl",
+          "bytes": 243,
+          "sha256": "019831e90302f5f29f3cbb903cd685627b6ebbdf38ea879e804e507a5be47ec5"
+        },
+        "events_file": {
+          "path": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986297-0/media-events.jsonl",
+          "bytes": 5601,
+          "sha256": "bab4a7a379e48b3c4efb51b7fc20c347cbb7dd9c321f6482e91e89bb37c6cdd0"
+        },
+        "participant_closes": [
+          {
+            "details": {
+              "close_succeeded": true,
+              "identity": "native-tone-source",
+              "state": "Closed"
+            },
+            "elapsed_ms": 2267,
+            "stage": "participant_close"
+          },
+          {
+            "details": {
+              "close_succeeded": true,
+              "identity": "native-controlled-receiver",
+              "state": "Closed"
+            },
+            "elapsed_ms": 2273,
+            "stage": "participant_close"
+          },
+          {
+            "details": {
+              "close_succeeded": true,
+              "identity": "native-witness-receiver",
+              "state": "Closed"
+            },
+            "elapsed_ms": 2276,
+            "stage": "participant_close"
+          }
+        ],
+        "final_event": {
+          "details": {
+            "failures": []
+          },
+          "elapsed_ms": 2290,
+          "stage": "finished"
+        }
+      },
+      {
+        "directory": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986303-1",
+        "server_cleanup": {
+          "deadline_ms": 3000,
+          "elapsed_ms": 10,
+          "exit_status": "signal: 9 (SIGKILL)",
+          "kill_error": null,
+          "kill_requested": true,
+          "outer_owned_job_deadline_required": false,
+          "pid": 1184250,
+          "reaped": true,
+          "stage": "media_cleanup",
+          "timed_out": false,
+          "wait_error": null
+        },
+        "cleanup_file": {
+          "path": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986303-1/server-cleanup.jsonl",
+          "bytes": 243,
+          "sha256": "9520a803ac254e64abb752643140ec4caebf1580cd99d326a13c161d7c1edd71"
+        },
+        "events_file": {
+          "path": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986303-1/media-events.jsonl",
+          "bytes": 2003,
+          "sha256": "1281c52b49e4260351b46a5c3bd673c4648168f31591137d3da92a0e7ce988ec"
+        },
+        "participant_closes": [
+          {
+            "details": {
+              "close_succeeded": true,
+              "identity": "native-video-source",
+              "state": "Closed"
+            },
+            "elapsed_ms": 888,
+            "stage": "participant_close"
+          },
+          {
+            "details": {
+              "close_succeeded": true,
+              "identity": "native-video-receiver",
+              "state": "Closed"
+            },
+            "elapsed_ms": 892,
+            "stage": "participant_close"
+          }
+        ],
+        "final_event": {
+          "details": {
+            "failures": []
+          },
+          "elapsed_ms": 907,
+          "stage": "finished"
+        }
+      },
+      {
+        "directory": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986307-2",
+        "server_cleanup": {
+          "deadline_ms": 3000,
+          "elapsed_ms": 10,
+          "exit_status": "signal: 9 (SIGKILL)",
+          "kill_error": null,
+          "kill_requested": true,
+          "outer_owned_job_deadline_required": false,
+          "pid": 1184917,
+          "reaped": true,
+          "stage": "drop_fallback",
+          "timed_out": false,
+          "wait_error": null
+        },
+        "cleanup_file": {
+          "path": "workspace-evidence/model-optins-pin-r2/originals/sfu-evidence/pipecat-livekit-sfu-1183463-1793986307-2/server-cleanup.jsonl",
+          "bytes": 243,
+          "sha256": "ca64e37826e223adfa1c18f49b6582e3afb7f87b427b8ebf096a459890ae4a95"
+        }
+      }
+    ],
+    "video_observations": {
+      "decoded_patterns": [
+        {
+          "details": {
+            "adaptation_dropped": 0,
+            "colors": {
+              "regions": [
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    225.0,
+                    32.0,
+                    32.0
+                  ]
+                },
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    30.0,
+                    225.0,
+                    32.0
+                  ]
+                },
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    33.0,
+                    30.0,
+                    228.0
+                  ]
+                }
+              ],
+              "rotation": 0,
+              "size": [
+                320,
+                240
+              ]
+            },
+            "decoded": 3,
+            "forwarded": 4,
+            "identity": "native-video-source",
+            "matching": 3,
+            "track_sid": "TR_VCqTsBbaANaarv"
+          },
+          "elapsed_ms": 621,
+          "stage": "remote_pattern_decoded"
+        },
+        {
+          "details": {
+            "adaptation_dropped": 0,
+            "colors": {
+              "regions": [
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    33.0,
+                    223.0,
+                    32.0
+                  ]
+                },
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    31.0,
+                    32.0,
+                    222.0
+                  ]
+                },
+                {
+                  "dominant_fraction": 1.0,
+                  "mean_rgb": [
+                    225.0,
+                    32.0,
+                    32.0
+                  ]
+                }
+              ],
+              "rotation": 1,
+              "size": [
+                320,
+                240
+              ]
+            },
+            "decoded": 3,
+            "forwarded": 3,
+            "identity": "native-video-source",
+            "matching": 3,
+            "track_sid": "TR_VCqTsBbaANaarv"
+          },
+          "elapsed_ms": 877,
+          "stage": "remote_pattern_decoded"
+        }
+      ],
+      "participant_close_count": 2,
+      "finished_elapsed_ms": 907
+    },
+    "participant_control_observations": {
+      "baseline": {
+        "details": {
+          "controlled": {
+            "frames": 22,
+            "nonzero_frames": 11,
+            "samples": 3520,
+            "subscribed": true,
+            "subscriptions": 1,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 0
+          },
+          "witness": {
+            "frames": 10,
+            "nonzero_frames": 10,
+            "samples": 1600,
+            "subscribed": true,
+            "subscriptions": 1,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 0
+          }
+        },
+        "elapsed_ms": 612,
+        "stage": "baseline_pcm_received"
+      },
+      "unsubscribe_observed": {
+        "details": {
+          "controlled": {
+            "frames": 22,
+            "nonzero_frames": 11,
+            "samples": 3520,
+            "subscribed": false,
+            "subscriptions": 1,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 1
+          },
+          "witness": {
+            "frames": 10,
+            "nonzero_frames": 10,
+            "samples": 1600,
+            "subscribed": true,
+            "subscriptions": 1,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 0
+          }
+        },
+        "elapsed_ms": 613,
+        "stage": "unsubscribe_observed"
+      },
+      "drain_window_ms": 500,
+      "muted_window_ms": 1000,
+      "muted_media_check": {
+        "details": {
+          "controlled_frames": 0,
+          "source_accepted_chunks": 100,
+          "witness_nonzero_frames": 100
+        },
+        "elapsed_ms": 2117,
+        "stage": "muted_media_check"
+      },
+      "resubscribed_and_fresh_pcm": {
+        "details": {
+          "controlled": {
+            "frames": 32,
+            "nonzero_frames": 21,
+            "samples": 5120,
+            "subscribed": true,
+            "subscriptions": 2,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 1
+          },
+          "witness": {
+            "frames": 174,
+            "nonzero_frames": 174,
+            "samples": 27840,
+            "subscribed": true,
+            "subscriptions": 1,
+            "track_sid": "TR_AMsnYyZWWZAwTQ",
+            "unsubscriptions": 0
+          }
+        },
+        "elapsed_ms": 2261,
+        "stage": "resubscribe_and_fresh_pcm_observed"
+      },
+      "fresh_controlled_nonzero_frame_delta": 10,
+      "participant_close_count": 3,
+      "finished_elapsed_ms": 2290
+    },
+    "scope": "Actual isolated loopback SFU, native decoded synthetic video patterns and remote PCM under subscription control. This does not qualify a public SFU deployment, remote network resilience, physical camera/microphone/speaker, arbitrary participant controls, ICE restart or track replacement.",
+    "server_shutdown_method": "Each owned SFU process was explicitly killed and then actually reaped within the bounded try_wait loop. This is successful fixture containment, not a graceful server shutdown claim.",
+    "audio_data_original_case": "Its original source body/60-second scenario contract was retained. The actual case passed and its Drop fallback recorded a real server reap; it has no new media-events file."
+  },
+  "piper_long_pipeline": {
+    "raw_match_byte_offset": 439,
+    "native_bytes": 1197036,
+    "native_sha256": "d127f3b0d7af6ddc46ac967f0f4292e47b239ef8f3aeab8265ab435666e9c0d4",
+    "source_chunks": 585,
+    "default_queue_capacity": 128,
+    "backend_bytes": 1198080,
+    "backend_sha256": "a5e33db5ca9370facfb25466359f4187974300a311c445129f9532c5e677c9ec",
+    "backend_chunks": 312,
+    "zero_padding_bytes": 1044,
+    "pcm_sample_rate_hz": 48000,
+    "pcm_channels": 1,
+    "pcm_bits_per_sample": 16,
+    "native_generated_audio_seconds": 12.469125,
+    "backend_audio_seconds_including_padding": 12.48,
+    "raw_libtest_seconds": 27.07,
+    "receipt": "Discarded",
+    "scope": "Exact generated PCM plus zero padding crossed the original queue bounds into the slow discard backend. 27.07 seconds is libtest elapsed time; the generated PCM is 12.469125 seconds, not a 30-second audible playback qualification. The original test asserts no committed spoken context for discarded output."
+  },
+  "chinese_review": {
+    "path": "../model-optins-final-pin-r2/chinese-independent-review.json",
+    "sha256": "f5224146bed6490c1c19ae8464587fd585940d1e0f8b4e4485d0e06fbe80e4f9",
+    "git_blob_sha1": "862994738180acc64cf1c54a507863d4f954eabb",
+    "scope": "One test, four fixed utterances in two conditions, nonempty/source-retention gates. Two recognitions differ by 会→挥; no accuracy threshold was asserted."
+  },
+  "artifact_availability": {
+    "delivered_original_file_count": 131,
+    "individual_requests_runner_execution_json_present_in_this_archive": 0,
+    "limit": "The 131-entry delivered original manifest contains no requests/{stage}-pin-r2/runner-execution.json. The original gate/log/source files, complete batch stage receipts, exact common runner/wrapper copies and outer before/after identities are present and verified. Additional request receipts were requested through the existing export; this review does not claim unseen files were read."
+  },
+  "qualification_boundary": [
+    "These 21 opt-in cases supplement the original full-matrix results. Their success does not erase any retained default, expanded, strict-Clippy or SmartTurn failures.",
+    "No physical acoustic quality, OS permissions, hot unplug/revoke, live microphone or audible playback was exercised.",
+    "The current production Hepta owner/thread, signed producer/replay witness, current generations/grants and adopted production model combination remain separately unqualified."
+  ]
+}

@@ -1,0 +1,1239 @@
+{
+  "schema": "hepta_hmi_core_engineering_qualification_v1",
+  "date_utc": "2026-11-06",
+  "decision": "ENGINEERING_CORE_PASS_PRODUCTION_ORGAN_HOLD",
+  "repository": "https://github.com/TrillionniumFoundation/pipecat-rs",
+  "branch": "work/hmi-core-audit-20261106",
+  "source": {
+    "base_commit": "ec40f982205cb2c87f61094d78d163c5c2febb39",
+    "published_code_commit": "b7e4c008c35036ac1b209dca97f6b737824f29c0",
+    "tested_local_code_commit": "70e29b500698dc93cbb56af0d10c848517d69e48",
+    "code_tree": "a0da019c63ba0e413ca45307a54cb6306bb20393",
+    "remote_tree_readback": "a0da019c63ba0e413ca45307a54cb6306bb20393",
+    "tree_equivalence_verified": true,
+    "cargo_lock_git_blob": "61ae24f75ff390065e626a10e570f0c9a03d1dae",
+    "publication_note": "CLI git push had no GitHub credential. Authorized GitHub Git Data API published the same exact blobs/trees with different commit metadata; public git fetch independently verified tree identity. Later audit/evidence commits may change documentation only.",
+    "companion_owner_read_only_commit": "7bbdd715957e72274bc13209c4a619913e880129"
+  },
+  "environment": {
+    "class": "current_scratch_engineering_only",
+    "cwd": "/workspace/scratch/27653505a519/pipecat-rs",
+    "target": "x86_64-unknown-linux-gnu",
+    "kernel": "6.18.57",
+    "toolchain": {
+      "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1",
+      "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "rustfmt": "rustfmt 1.10.0-stable (b940084d7e 2026-09-28)"
+    },
+    "original_project_executor_available": false,
+    "runtime_device_operations_performed": false,
+    "production_owner_session_opened": false,
+    "env": {
+      "CARGO_HOME": "/workspace/scratch/27653505a519/toolchain/cargo",
+      "CARGO_TARGET_DIR_core": "/workspace/scratch/27653505a519/target",
+      "CARGO_TARGET_DIR_native": "/tmp/pipecat-hmi-native-27653505a519",
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CMAKE": "/workspace/scratch/848006513f75/p0-build-tools/cmake/data/bin/cmake",
+      "LIBCLANG_PATH": "/usr/lib/x86_64-linux-gnu",
+      "PKG_CONFIG_PATH": "/workspace/scratch/27653505a519/native-sysroot/usr/lib/x86_64-linux-gnu/pkgconfig",
+      "PKG_CONFIG_SYSROOT_DIR": "/workspace/scratch/27653505a519/native-sysroot"
+    },
+    "alsa_note": "Debian libasound2-dev 1.2.14-1+deb13u1 headers/pkg-config unpacked into task sysroot, linked against existing system /usr/lib/x86_64-linux-gnu/libasound.so.2.0.0. No null, mock, virtual, or substitute audio backend used. Linking does not prove physical I/O."
+  },
+  "final_runs": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "scope": "Three selected crates and their integration/doc tests; not all 62 crates.",
+      "source_binding": "final_code_tree",
+      "log": "core-tests-final.log",
+      "suite_count": 59,
+      "totals": {
+        "passed": 502,
+        "failed": 0,
+        "ignored": 0
+      },
+      "by_package": {
+        "pipecat-core": {
+          "passed": 387,
+          "failed": 0,
+          "ignored": 0,
+          "suites": 41
+        },
+        "pipecat-hepta": {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0,
+          "suites": 7
+        },
+        "pipecat-pipeline": {
+          "passed": 80,
+          "failed": 0,
+          "ignored": 0,
+          "suites": 11
+        }
+      },
+      "suites": [
+        {
+          "suite": "Running unittests src/lib.rs (/workspace/scratch/27653505a519/target/debug/deps/pipecat_core-103bcc746b5bf62a)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 151,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/admission.rs (/workspace/scratch/27653505a519/target/debug/deps/admission-53ba31555742f3f1)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/bridge_errors.rs (/workspace/scratch/27653505a519/target/debug/deps/bridge_errors-2221afc9f07b7fd1)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/bridges.rs (/workspace/scratch/27653505a519/target/debug/deps/bridges-024c5934b8ab5dd9)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/drain.rs (/workspace/scratch/27653505a519/target/debug/deps/drain-d384f23a1ce02382)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/frame_observation_token.rs (/workspace/scratch/27653505a519/target/debug/deps/frame_observation_token-8024b59c8426ae5e)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/gemini_continuation.rs (/workspace/scratch/27653505a519/target/debug/deps/gemini_continuation-92f425084238188c)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/health_generation.rs (/workspace/scratch/27653505a519/target/debug/deps/health_generation-cb756c7c91219518)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/heartbeats.rs (/workspace/scratch/27653505a519/target/debug/deps/heartbeats-7f23cd9c77459dde)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/native_contract_examples.rs (/workspace/scratch/27653505a519/target/debug/deps/native_contract_examples-2dbc0f9fb5b00995)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/native_llm_continuation.rs (/workspace/scratch/27653505a519/target/debug/deps/native_llm_continuation-b25cde1412673154)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/observer_capture.rs (/workspace/scratch/27653505a519/target/debug/deps/observer_capture-aa9f8368ca05ccf2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/observers.rs (/workspace/scratch/27653505a519/target/debug/deps/observers-31daa3d2d743ee25)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/openclaw_frames.rs (/workspace/scratch/27653505a519/target/debug/deps/openclaw_frames-b2a86a90acbde40a)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/payloads.rs (/workspace/scratch/27653505a519/target/debug/deps/payloads-34bd6a6121655cca)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/realtime_handler_identity.rs (/workspace/scratch/27653505a519/target/debug/deps/realtime_handler_identity-a2b760ac9225c515)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_contracts.rs (/workspace/scratch/27653505a519/target/debug/deps/review_contracts-57ef439927d4e032)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_gemini_provider_blocks.rs (/workspace/scratch/27653505a519/target/debug/deps/review_gemini_provider_blocks-fa6917064494b415)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_generations.rs (/workspace/scratch/27653505a519/target/debug/deps/review_generations-1edf34c57186b4ae)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_native_declaration.rs (/workspace/scratch/27653505a519/target/debug/deps/review_native_declaration-8e286761996a3178)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_native_history_carrier.rs (/workspace/scratch/27653505a519/target/debug/deps/review_native_history_carrier-285525f2a9ea3aa3)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_openclaw_frames.rs (/workspace/scratch/27653505a519/target/debug/deps/review_openclaw_frames-ca286ba5a69261e7)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_outcome_content.rs (/workspace/scratch/27653505a519/target/debug/deps/review_outcome_content-20935a39f8abddf2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_realtime_cause.rs (/workspace/scratch/27653505a519/target/debug/deps/review_realtime_cause-3b78612521780198)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_signed_checkpoint.rs (/workspace/scratch/27653505a519/target/debug/deps/review_signed_checkpoint-226950f0917fcb4d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_source_api.rs (/workspace/scratch/27653505a519/target/debug/deps/review_source_api-b47d337ac6c5f1dd)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_timeout_projection.rs (/workspace/scratch/27653505a519/target/debug/deps/review_timeout_projection-c27ac24a65008d49)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_tool_outcome.rs (/workspace/scratch/27653505a519/target/debug/deps/review_tool_outcome-24da32ff0a5c36f4)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_tool_outcome_scope.rs (/workspace/scratch/27653505a519/target/debug/deps/review_tool_outcome_scope-8bf843afc2702afa)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_usability.rs (/workspace/scratch/27653505a519/target/debug/deps/review_usability-853b79a3a7e41835)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/runtime.rs (/workspace/scratch/27653505a519/target/debug/deps/runtime-a42658a55f6ac80d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 29,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/serde_identity.rs (/workspace/scratch/27653505a519/target/debug/deps/serde_identity-a918ff06fc84db3b)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/speculation.rs (/workspace/scratch/27653505a519/target/debug/deps/speculation-8faaa7edcd980ce0)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/stream_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/stream_admission-9853bd20dbf2000f)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/switching_support.rs (/workspace/scratch/27653505a519/target/debug/deps/switching_support-9c09f598a4b49a9d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/sync_health_error_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/sync_health_error_admission-35c839cc4e05ef8c)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/terminal_stream_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/terminal_stream_admission-8779aed5425963e2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/tts_native_contract.rs (/workspace/scratch/27653505a519/target/debug/deps/tts_native_contract-832b2522eaa477de)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/usability.rs (/workspace/scratch/27653505a519/target/debug/deps/usability-dbedfb08de242039)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/worker_idle.rs (/workspace/scratch/27653505a519/target/debug/deps/worker_idle-6a61b0402f9feeb9)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running unittests src/lib.rs (/workspace/scratch/27653505a519/target/debug/deps/pipecat_hepta-7db99f3364612643)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/media_command.rs (/workspace/scratch/27653505a519/target/debug/deps/media_command-3caef772404ce749)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/media_store.rs (/workspace/scratch/27653505a519/target/debug/deps/media_store-7a6f7bce3f11d68a)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/presentation_lifecycle.rs (/workspace/scratch/27653505a519/target/debug/deps/presentation_lifecycle-834bb1a475984360)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/session.rs (/workspace/scratch/27653505a519/target/debug/deps/session-e4ecbc9d649e70e9)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/speech_segments.rs (/workspace/scratch/27653505a519/target/debug/deps/speech_segments-3a0fb4caab106d31)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running unittests src/lib.rs (/workspace/scratch/27653505a519/target/debug/deps/pipecat_pipeline-c88e494c8b30e81e)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/heartbeats.rs (/workspace/scratch/27653505a519/target/debug/deps/heartbeats-73a21cec6999b337)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/independent_held_cancel.rs (/workspace/scratch/27653505a519/target/debug/deps/independent_held_cancel-eae5f586c45db3a8)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/llm_switching.rs (/workspace/scratch/27653505a519/target/debug/deps/llm_switching-5dd735a2ecb306c3)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/nested_shutdown.rs (/workspace/scratch/27653505a519/target/debug/deps/nested_shutdown-4f1e578d6a85181d)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/observers.rs (/workspace/scratch/27653505a519/target/debug/deps/observers-2d1a5b0e8dbf1ee9)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/parallel.rs (/workspace/scratch/27653505a519/target/debug/deps/parallel-f003f4c812bb1c09)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 25,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_lifecycle.rs (/workspace/scratch/27653505a519/target/debug/deps/review_lifecycle-ad526794755a16f5)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/service_switching_review.rs (/workspace/scratch/27653505a519/target/debug/deps/service_switching_review-1738acc453ef6dc9)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/switching.rs (/workspace/scratch/27653505a519/target/debug/deps/switching-75a22e270dcffef9)",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Doc-tests pipecat_core",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Doc-tests pipecat_hepta",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Doc-tests pipecat_pipeline",
+          "package": "pipecat-pipeline",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--all-targets",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "scope": "Native local-speech dependency build and all pipecat-hepta targets; model/device tests remain ignored.",
+      "source_binding": "final_code_tree",
+      "log": "native-feature-tests-final.log",
+      "suite_count": 8,
+      "totals": {
+        "passed": 38,
+        "failed": 0,
+        "ignored": 2
+      },
+      "by_package": {
+        "pipecat-hepta": {
+          "passed": 38,
+          "failed": 0,
+          "ignored": 2,
+          "suites": 8
+        }
+      },
+      "suites": [
+        {
+          "suite": "Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_hepta-91d5d27e1fb93471)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 2
+        },
+        {
+          "suite": "Running tests/media_command.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/media_command-0b015f7930a927d8)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/media_store.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/media_store-a411569cc35a0a75)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/presentation_lifecycle.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/presentation_lifecycle-fe1142731bb29b91)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/session.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/session-e7b508d51fcae669)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/speech_segments.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/speech_segments-f2c0aafb5800f234)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running unittests examples/local_speech.rs (/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech-451bb27cba76e56a)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running unittests examples/stt_fixture.rs (/tmp/pipecat-hmi-native-27653505a519/debug/examples/stt_fixture-428ad7d20929d9d0)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "native_checks": [
+    {
+      "name": "native-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 175.42017433
+    },
+    {
+      "name": "native-example-build",
+      "command": [
+        "cargo",
+        "build",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--example",
+        "local_speech",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.6933747680013767
+    }
+  ],
+  "actual_binary_startup": {
+    "evidence": "startup-rejections.json",
+    "binary_sha256": "2524fcbfb94f127753c89489733e5c9e5f29f4fee5b657ed2d2811879d08cbc4",
+    "binary_bytes": 20598536,
+    "passed": 5,
+    "total": 5,
+    "scope": "real_binary_startup_rejections_before_native_load_no_devices"
+  },
+  "static_checks": {
+    "evidence": "static-checks.json",
+    "rustfmt_edition": "2021",
+    "rustfmt_exit_code": 0,
+    "python_script_ast_parse": "passed",
+    "root_readme_bytes": 0
+  },
+  "failure_history": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "scope": "Pre-final development run; pipeline portion was not reached.",
+      "source_binding": "unfrozen_development_worktree_not_equated_to_final_commit",
+      "log": "core-tests.log",
+      "suite_count": 42,
+      "totals": {
+        "passed": 397,
+        "failed": 1,
+        "ignored": 0
+      },
+      "by_package": {
+        "pipecat-core": {
+          "passed": 387,
+          "failed": 0,
+          "ignored": 0,
+          "suites": 40
+        },
+        "pipecat-hepta": {
+          "passed": 10,
+          "failed": 1,
+          "ignored": 0,
+          "suites": 2
+        }
+      },
+      "suites": [
+        {
+          "suite": "Running unittests src/lib.rs (/workspace/scratch/27653505a519/target/debug/deps/pipecat_core-103bcc746b5bf62a)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 151,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/admission.rs (/workspace/scratch/27653505a519/target/debug/deps/admission-53ba31555742f3f1)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/bridge_errors.rs (/workspace/scratch/27653505a519/target/debug/deps/bridge_errors-2221afc9f07b7fd1)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/bridges.rs (/workspace/scratch/27653505a519/target/debug/deps/bridges-024c5934b8ab5dd9)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/drain.rs (/workspace/scratch/27653505a519/target/debug/deps/drain-d384f23a1ce02382)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/frame_observation_token.rs (/workspace/scratch/27653505a519/target/debug/deps/frame_observation_token-8024b59c8426ae5e)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/gemini_continuation.rs (/workspace/scratch/27653505a519/target/debug/deps/gemini_continuation-92f425084238188c)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/health_generation.rs (/workspace/scratch/27653505a519/target/debug/deps/health_generation-cb756c7c91219518)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/heartbeats.rs (/workspace/scratch/27653505a519/target/debug/deps/heartbeats-7f23cd9c77459dde)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/native_contract_examples.rs (/workspace/scratch/27653505a519/target/debug/deps/native_contract_examples-2dbc0f9fb5b00995)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/native_llm_continuation.rs (/workspace/scratch/27653505a519/target/debug/deps/native_llm_continuation-b25cde1412673154)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/observer_capture.rs (/workspace/scratch/27653505a519/target/debug/deps/observer_capture-aa9f8368ca05ccf2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/observers.rs (/workspace/scratch/27653505a519/target/debug/deps/observers-31daa3d2d743ee25)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/openclaw_frames.rs (/workspace/scratch/27653505a519/target/debug/deps/openclaw_frames-b2a86a90acbde40a)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/payloads.rs (/workspace/scratch/27653505a519/target/debug/deps/payloads-34bd6a6121655cca)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/realtime_handler_identity.rs (/workspace/scratch/27653505a519/target/debug/deps/realtime_handler_identity-a2b760ac9225c515)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_contracts.rs (/workspace/scratch/27653505a519/target/debug/deps/review_contracts-57ef439927d4e032)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_gemini_provider_blocks.rs (/workspace/scratch/27653505a519/target/debug/deps/review_gemini_provider_blocks-fa6917064494b415)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_generations.rs (/workspace/scratch/27653505a519/target/debug/deps/review_generations-1edf34c57186b4ae)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_native_declaration.rs (/workspace/scratch/27653505a519/target/debug/deps/review_native_declaration-8e286761996a3178)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_native_history_carrier.rs (/workspace/scratch/27653505a519/target/debug/deps/review_native_history_carrier-285525f2a9ea3aa3)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_openclaw_frames.rs (/workspace/scratch/27653505a519/target/debug/deps/review_openclaw_frames-ca286ba5a69261e7)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_outcome_content.rs (/workspace/scratch/27653505a519/target/debug/deps/review_outcome_content-20935a39f8abddf2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_realtime_cause.rs (/workspace/scratch/27653505a519/target/debug/deps/review_realtime_cause-3b78612521780198)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_signed_checkpoint.rs (/workspace/scratch/27653505a519/target/debug/deps/review_signed_checkpoint-226950f0917fcb4d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_source_api.rs (/workspace/scratch/27653505a519/target/debug/deps/review_source_api-b47d337ac6c5f1dd)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_timeout_projection.rs (/workspace/scratch/27653505a519/target/debug/deps/review_timeout_projection-c27ac24a65008d49)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_tool_outcome.rs (/workspace/scratch/27653505a519/target/debug/deps/review_tool_outcome-24da32ff0a5c36f4)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_tool_outcome_scope.rs (/workspace/scratch/27653505a519/target/debug/deps/review_tool_outcome_scope-8bf843afc2702afa)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/review_usability.rs (/workspace/scratch/27653505a519/target/debug/deps/review_usability-853b79a3a7e41835)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/runtime.rs (/workspace/scratch/27653505a519/target/debug/deps/runtime-a42658a55f6ac80d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 29,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/serde_identity.rs (/workspace/scratch/27653505a519/target/debug/deps/serde_identity-a918ff06fc84db3b)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/speculation.rs (/workspace/scratch/27653505a519/target/debug/deps/speculation-8faaa7edcd980ce0)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/stream_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/stream_admission-9853bd20dbf2000f)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/switching_support.rs (/workspace/scratch/27653505a519/target/debug/deps/switching_support-9c09f598a4b49a9d)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/sync_health_error_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/sync_health_error_admission-35c839cc4e05ef8c)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/terminal_stream_admission.rs (/workspace/scratch/27653505a519/target/debug/deps/terminal_stream_admission-8779aed5425963e2)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/tts_native_contract.rs (/workspace/scratch/27653505a519/target/debug/deps/tts_native_contract-832b2522eaa477de)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/usability.rs (/workspace/scratch/27653505a519/target/debug/deps/usability-dbedfb08de242039)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/worker_idle.rs (/workspace/scratch/27653505a519/target/debug/deps/worker_idle-6a61b0402f9feeb9)",
+          "package": "pipecat-core",
+          "result": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running unittests src/lib.rs (/workspace/scratch/27653505a519/target/debug/deps/pipecat_hepta-7db99f3364612643)",
+          "package": "pipecat-hepta",
+          "result": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "suite": "Running tests/media_command.rs (/workspace/scratch/27653505a519/target/debug/deps/media_command-3caef772404ce749)",
+          "package": "pipecat-hepta",
+          "result": "FAILED",
+          "passed": 10,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "finding": "The new strict-decoding test caught serde accepting extra fields on internally tagged unit stop variants. Empty struct stop variants now enforce deny_unknown_fields; final source rerun passed."
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--all-targets",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "scope": "Initial native build/link attempt.",
+      "source_binding": "development_worktree_not_equated_to_final_commit",
+      "log": "native-feature-tests.log",
+      "suite_count": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      "by_package": {},
+      "suites": [],
+      "finding": "Linker could not resolve -lasound because the local dev-package symlink target was absent. Fixed task sysroot target to existing system ALSA runtime, then rebuilt and reran successfully. No test execution in this failed native link attempt."
+    }
+  ],
+  "ignored_tests": [
+    {
+      "name": "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+      "reason": "requires explicit hashed multilingual Whisper and Chinese Piper assets"
+    },
+    {
+      "name": "local_speech::native_tests::long_chinese_output_survives_device_deadline_and_interrupt_fences_remaining_pcm",
+      "reason": "requires explicit trusted local speech config and authorized physical output"
+    }
+  ],
+  "counting_rules": [
+    "502 default and 38 native passing tests overlap and must not be added as independent tests.",
+    "Ignored tests are not passing tests.",
+    "Example test harnesses with zero tests count no physical or end-user qualification.",
+    "Compilation/Clippy/startup rejection is not latency, recognition quality, playback, or permission evidence.",
+    "Historical owner/model/device fixture evidence remains tied to its original source/environment; not rerun here."
+  ],
+  "not_qualified": [
+    "Current original Hepta owner/user/model same-thread text E2E",
+    "Lossless delta replay cursor on reconnect",
+    "Production owner launcher composing native media child and signed observation producer",
+    "Physical microphone-to-same-owner-thread-to-speaker E2E",
+    "Current OS/device permission and revoke/replug behavior",
+    "Bidirectional audio/video and AV clock synchronization",
+    "Acoustic heard-by-user result and real Chinese conversational quality",
+    "Cross-platform p50/p95/p99 latency, resource and long-soak recovery",
+    "Production supervisor hard termination for native/blocking I/O",
+    "Safe production endpoint rotation after 65536 correlated requests",
+    "Neuron shadow quality/latency/cost benefit"
+  ],
+  "authority_invariants": {
+    "new_authoritative_conversation_database": false,
+    "trusted_read_only_organ_trait_expanded": false,
+    "new_production_credentials_or_grants_issued": false,
+    "hepta_companion_modified": false
+  },
+  "artifacts": [
+    {
+      "path": "core-tests-final.log",
+      "bytes": 56353,
+      "sha256": "dc780b3b050aac75d61a3241c0f6eca9c1fe7e1376fe6fa97f68f66a805e2837"
+    },
+    {
+      "path": "core-tests.log",
+      "bytes": 53350,
+      "sha256": "3cee200f3e5524dd628fa569a53763195291beead1c6e3f21300f5bc27257554"
+    },
+    {
+      "path": "native-checks.json",
+      "bytes": 707,
+      "sha256": "a46eef723f8380b41ec2699765c2a5cddef17f9d875af723735a214a20457336"
+    },
+    {
+      "path": "native-clippy.log",
+      "bytes": 5391,
+      "sha256": "ad1c6e0e6379f5b1e98d9cb5f026e849363fe008e24746a970d1d532c0a0bf24"
+    },
+    {
+      "path": "native-example-build.log",
+      "bytes": 165,
+      "sha256": "dd4560068350edfce93b2d9669c7552cbcc6c61e76d9befb97eacc4a963782ba"
+    },
+    {
+      "path": "native-feature-tests-final.log",
+      "bytes": 5390,
+      "sha256": "8eb17d593732a7c46bb563e663766daa63ab9292c8dd22611acc3fb7b5f35e59"
+    },
+    {
+      "path": "native-feature-tests.log",
+      "bytes": 26423,
+      "sha256": "897ef276a6aa8a759372ca7d4d9d7a672e357ec72fba9c87daf415fe498f17e1"
+    },
+    {
+      "path": "startup-rejections.json",
+      "bytes": 1549,
+      "sha256": "891d7dabf61fda4777719777b676b85b5b4a71db2ecb6b0c492635232e236268"
+    },
+    {
+      "path": "static-checks.json",
+      "bytes": 1496,
+      "sha256": "e355c8cc40896dd5967a63d0e0547dd58b7f9eebe6519fc222f267ad48cd11d9"
+    }
+  ],
+  "historical_full_workspace_gate": {
+    "source_document": "../../../docs/DRAFT_QUALIFICATION.md",
+    "qualification_base_commit": "ec40f982205cb2c87f61094d78d163c5c2febb39",
+    "canonical_source": "167994707ab2b84a7ea3e9de423488752b5dbbbe",
+    "tested_projection": "2cbbb058e1092f5113b27ff522795211c421c6d6",
+    "tested_tree": "3e91f1f6c62671fe8e6504859de34f0bbc9ef339",
+    "passed": 3477,
+    "failed": 1,
+    "ignored": 55,
+    "exit_code": 101,
+    "failure": "pipecat-webrtc::review_lifecycle::repeated_peer_shutdown_schedules_release_both_udp_ports",
+    "diagnostic": "UDP leak schedule=5, iteration=24",
+    "recorded_status": "unresolved_release_blocker",
+    "scope": "Historical record only, not rerun this turn; does not prove current source fails. Current selected Core tests do not close a WebRTC workspace gate."
+  },
+  "independent_source_review": {
+    "scope": "Separate agent source review only; no independent runtime, physical-device, owner-identity or permission proof",
+    "code_tree": "a0da019c63ba0e413ca45307a54cb6306bb20393",
+    "outcome": "No newly identified blocking correctness issue in the final command decoder/gate, endpoint, tests and owner contract",
+    "owner_contract_document_sha256": "c76db351d87b46ecc3ef13af4c7f7c9ef3faf684da95a8d5f5d9cb8038f37a6e",
+    "upstream_audit_document_sha256": "1c7c5de6bb58d1695dd629e83caef805d4b4f6a4df98f43e47daed4e3054ee51",
+    "upstream_inventory_sha256": "d35eb58187aec3b79752642bc808880dc5450037e5577936db2f3facae4f98be",
+    "retained_limits": [
+      "65536-request lifecycle budget without production rotation launcher",
+      "Actual Agentd port remains TextPort + NoAudio",
+      "Blocking source I/O cleanup lacks an overall hard deadline",
+      "No HMI token replay cursor",
+      "No production physical E2E/cross-platform/shadow qualification"
+    ]
+  }
+}

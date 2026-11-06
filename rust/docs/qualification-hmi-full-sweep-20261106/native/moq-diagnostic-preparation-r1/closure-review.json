@@ -1,0 +1,29 @@
+{
+  "schema": "pipecat-moq-registry-identity-closure-v1",
+  "scope": "read-only comparison of gate-exported exact registry members and earlier official-tag primary source; no new Cargo or native invocation",
+  "earlier_review": {
+    "path": "../moq-connect-deadline-review-r1/review.json",
+    "sha256": "c5d523d06c8cec5b8ff512b3ab3e6745590f2f31271a52eed608e44f6218bbe8",
+    "preserved_unmodified": true
+  },
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "actual_registry_selection": "The gate read the unique registry path identified by the retained same-workspace compiler artifact; original provenance receipt is copied verbatim.",
+  "actual_client": {
+    "bytes": 38489,
+    "sha256": "3b8d7eda5f0f686febefceb4417dd06510ce06d54c1ccd572e721fb815fe9407",
+    "git_blob_sha1": "75abdb5e3b229086ca08316f7fbeb8d9b60600ab"
+  },
+  "matches_earlier_official_tag_client_exact_bytes": true,
+  "cargo_vcs_info": {
+    "git": {
+      "sha1": "b00be0ffc3734addcdd5e6ad4b348ae055e70957"
+    },
+    "path_in_vcs": "rs/moq-net"
+  },
+  "conclusion": "The actual observed registry client matches the official fixed version used in the earlier static Lite06 analysis. Its supported Lite06 branch returns start_lite synchronously before fallback async SETUP. No additional intermediate asynchronous negotiation gap was demonstrated.",
+  "limits": [
+    "This is a source-identity observation, not a new runtime experiment.",
+    "The original r5 actual returned error remains unprinted and unknown.",
+    "No passing later run or this static identity closure clears that failure."
+  ]
+}

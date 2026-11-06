@@ -1,0 +1,14 @@
+{
+  "scope": "Fifth local executor entrance change; old checkout was not visible in this entrance at 2026-11-06 15:42:32 UTC. This does not establish permanent loss.",
+  "recovery_observed_utc": "2026-11-06T15:44:27.287155+00:00",
+  "recovered_commit": "52243a392065d474ea0d0aead585891c6010bb3d",
+  "recovered_tree": "276642de5386879c1f61030f77b7afd7384f5371",
+  "recovery_method": "Fresh shallow clone of the existing authorized PR branch; all 95 checkpoint files checked against the pre-interruption manifest preserved in functions store",
+  "verified_checkpoint_files": 95,
+  "all_sizes_sha256_git_blob_equal": true,
+  "root_readme_bytes": 0,
+  "grok_diagnostic_source_sha256": "5f5d2cba7774aa4644cd7dd6dc67d86daf256223c78e65761705f59b67bf953f",
+  "uncommitted_analysis_draft": "Later report analysis paragraphs were not in this checkpoint and will be rewritten from observed records as analysis, never represented as recovered original logs.",
+  "remote_job_replayed": false,
+  "unpublished_originals": "Recover only exact original bytes from durable desktop evidence, preserved stores, or verified Git blobs; otherwise mark unavailable."
+}

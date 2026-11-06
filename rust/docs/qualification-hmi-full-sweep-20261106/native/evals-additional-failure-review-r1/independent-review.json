@@ -1,0 +1,155 @@
+{
+  "schema": "pipecat-independent-additional-evals-failure-review-v1",
+  "scope": "Read-only exact original no-fail-fast raw slices and source audit. No native cases run by this review; no original failures cleared.",
+  "source": {
+    "head": "272671b95297313d24db921eceda8e95f3a8d545",
+    "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "manifest": {
+      "path": "expanded-and-reference-pin-r1/originals/evidence/all-features-all-targets-no-fail-fast-pin-r1/source-before.json",
+      "bytes": 469607,
+      "sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83"
+    },
+    "manifest_digest": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+    "files": [
+      {
+        "path": "rust/crates/pipecat-evals/tests/user_speech.rs",
+        "kind": "file",
+        "size": 30887,
+        "sha256": "17cac6b7b25c06a3b5eadf79240a56f3c8afa59aca2f3b457a3c25317c19c203"
+      },
+      {
+        "path": "rust/crates/pipecat-evals/tests/bot_audio_smart_turn.rs",
+        "kind": "file",
+        "size": 54578,
+        "sha256": "7503f0a19482af2c2a9b9c7b8acdd75527faf4e51f91ae77bc35f765bfccd339"
+      },
+      {
+        "path": "rust/crates/pipecat-evals/src/user_speech.rs",
+        "kind": "file",
+        "size": 48057,
+        "sha256": "44e05b6bb5f0a5480f7339d295548102c3f913fb5030710baa37e7f438c70740"
+      },
+      {
+        "path": "rust/crates/pipecat-evals/src/user_speech_cache.rs",
+        "kind": "file",
+        "size": 64307,
+        "sha256": "7af9dd93b4116a7ab062623502c77d6bbcdd5dfe75c7c9ac678fa21bde959bb7"
+      }
+    ]
+  },
+  "original_gate": {
+    "record": {
+      "path": "expanded-and-reference-pin-r1/originals/evidence/all-features-all-targets-no-fail-fast-pin-r1/gate.json",
+      "bytes": 3221,
+      "sha256": "cb489696a0f52d5ed019402ff0e9ac7b01681ed22f48135beb3659203ed68d3a"
+    },
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "test",
+      "--workspace",
+      "--all-features",
+      "--all-targets",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "exit_code": 101,
+    "source_unchanged": true
+  },
+  "raw": {
+    "source_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/expanded-and-reference-pin-r1/originals/evidence/all-features-all-targets-no-fail-fast-pin-r1/command.log",
+    "source_bytes": 1708509,
+    "source_sha256": "f451a13a8cdbc23579e1bbcd6a90602a3538d2324f3f60237005755026f0a2a8",
+    "slices": [
+      {
+        "target": "user_speech",
+        "bytes": 2922,
+        "sha256": "1d72ff6fd1eacf4f4e7ad9c6aaeff1cd7d93412d4c629d4d79776004d58961d1",
+        "start_byte": 981165,
+        "end_byte_exclusive": 984087
+      },
+      {
+        "target": "bot_audio_smart_turn",
+        "bytes": 1838,
+        "sha256": "3ca07d93a572aea5cb60c70b57b1510e3a6cd6918c3876e8ddfb976c3459eaa8",
+        "start_byte": 957187,
+        "end_byte_exclusive": 959025
+      }
+    ]
+  },
+  "slice_bytes_independently_verified": true,
+  "user_speech": {
+    "harness": {
+      "passed": 15,
+      "failed": 1,
+      "ignored": 0,
+      "duration_seconds": 5.65
+    },
+    "failed_case": "silent_http_production_deadline_is_fixed_even_when_bot_events_continue",
+    "failure_location": "crates/pipecat-evals/tests/user_speech.rs:337",
+    "observed": {
+      "expected_kind": "user_speech_timeout",
+      "actual_kind": "user_speech_cache_timeout",
+      "reason": "invalid scenario: user speech cache lookup timed out",
+      "first_turn_ms": 182,
+      "result_duration_ms": 1368,
+      "second_turn": "not_run",
+      "events_seen": [],
+      "cache_debug": "user speech transaction 1 cache: no new publication completed"
+    },
+    "cause_scope": "Private cache enters Lookup before HTTP. The fixed admission deadline expired in Lookup, whose distinct error is user_speech_cache_timeout. The failed expectation addresses the later silent-HTTP stage.",
+    "unobserved": [
+      "Raw does not identify which chatty loop iteration failed.",
+      "Raw does not establish HTTP admission or request/closed counts: the failed assertion precedes those checks.",
+      "The reason for delayed cache lookup/result consumption is unknown; no filesystem, scheduling or CPU-pressure cause is assigned."
+    ],
+    "minimal_fixture_change": {
+      "candidate": {
+        "path": "user-speech-http-candidate-r1/user_speech.rs",
+        "bytes": 30969,
+        "sha256": "1b45c80e8d220aff0b42ce0b556034d0e468b838f64f7059b40b8667fb9b0d95"
+      },
+      "audit": {
+        "path": "user-speech-http-candidate-r1/audit.json",
+        "bytes": 3247,
+        "sha256": "af5ccca1aa82ae6ddc9355c907a48bdff6ba453cf05181c7cecab3601e9ea9a1"
+      },
+      "change": "Only this case uses existing Disabled cache mode (None instead of Some(&root)), with one explanatory comment. Product code is unchanged.",
+      "preserved": [
+        "180 ms production deadline",
+        "1500 ms elapsed bound",
+        "both chatty branches",
+        "exact user_speech_timeout",
+        "one actual HTTP request and closed connection",
+        "cleanup before fixture stop",
+        "no playback/later turn and successful host report"
+      ],
+      "limit": "The unused empty-cache-directory assertion is not cache-owner cleanup evidence. The original Private-cache attempt remains failed and is not shown to have entered HTTP."
+    },
+    "separate_cache_scope": "cache_lock_wait_has_its_own_fixed_deadline_without_second_http_call passed in this original target. It does not clear the different failed Private-cache path."
+  },
+  "bot_audio_smart_turn": {
+    "harness": {
+      "passed": 8,
+      "failed": 1,
+      "ignored": 0,
+      "duration_seconds": 23.02
+    },
+    "failed_case": "genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles",
+    "failure_location": "crates/pipecat-evals/tests/bot_audio_smart_turn.rs:1007",
+    "failed_assertion": "(result.metrics.unwrap().probability - expected_tone).abs() < 1e-5",
+    "actual_probability": null,
+    "tone_iteration": null,
+    "observed_cleanup": {
+      "elapsed_ms": 0,
+      "workers": []
+    },
+    "source_order": "Two tone and one speech analyses complete inside work, then cleanup returns and endpoint drops. Work/cleanup, probe.dropped and strict worker-identity checks precede the probability assertion. This target already holds TEST_LOCK.",
+    "conclusion": "The only reported failure category is tone reference-probability mismatch. The assertion is inside a two-result loop; raw cannot identify first versus second tone result or its value.",
+    "unreached_assertions": [
+      "retained tone buffer equality after loop",
+      "final speech Complete state and probability",
+      "final buffer cleared"
+    ],
+    "limit": "Do not substitute C-probe values for the unprinted Rust value, count later assertions as passed, or turn eight separate passing scenarios into full target qualification."
+  }
+}

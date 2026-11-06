@@ -1,0 +1,516 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "checks": [
+    "Trusted Connect click resumes native AudioContext and schedules/ends synthetic PCM with normal autoplay policy and muted output",
+    "Chromium CDP IME emits composition start/update/end with recorded trust bits, preserves Chinese/emoji/newline, and sends one exact protobuf message only after Send",
+    "Server TCP abort clears the draft and owned resources; user-click reconnect performs no message replay and accepts one fresh explicit send",
+    "Both connections close with all observed AudioContexts, sockets and timers released and zero microphone calls"
+  ],
+  "failure": null,
+  "cleanup_errors": [],
+  "page_errors": [],
+  "elapsed_seconds": 4.2872275080299005,
+  "source_sha256": {
+    "tests/browser_input_acceptance.py": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873",
+    "tests/browser_acceptance.py": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e"
+  },
+  "source_sha256_after": {
+    "tests/browser_input_acceptance.py": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873",
+    "tests/browser_acceptance.py": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e"
+  },
+  "asset_sha256": {
+    "config.json": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+    "index.html": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+    "pkg/pipecat_browser_client.js": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+    "pkg/pipecat_browser_client_bg.wasm": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+    "style.css": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f"
+  },
+  "browser_version": "156.0.8078.79",
+  "application_source_present": false,
+  "browser_executable": "/usr/bin/google-chrome",
+  "chromium_sandbox": true,
+  "launch_args": [
+    "--mute-audio",
+    "--enable-automation"
+  ],
+  "browser_command_line": [
+    "/usr/bin/google-chrome",
+    "--disable-field-trial-config",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-back-forward-cache",
+    "--disable-breakpad",
+    "--disable-client-side-phishing-detection",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-component-update",
+    "--no-default-browser-check",
+    "--disable-default-apps",
+    "--disable-dev-shm-usage",
+    "--disable-edgeupdater",
+    "--disable-extensions",
+    "--disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion",
+    "--enable-features=CDPScreenshotNewSurface",
+    "--allow-pre-commit-input",
+    "--disable-hang-monitor",
+    "--disable-ipc-flooding-protection",
+    "--disable-popup-blocking",
+    "--disable-prompt-on-repost",
+    "--disable-renderer-backgrounding",
+    "--disable-updater-scheduler",
+    "--force-color-profile=srgb",
+    "--metrics-recording-only",
+    "--no-first-run",
+    "--password-store=basic",
+    "--use-mock-keychain",
+    "--no-service-autorun",
+    "--export-tagged-pdf",
+    "--disable-search-engine-choice-screen",
+    "--unsafely-disable-devtools-self-xss-warnings",
+    "--edge-skip-compat-layer-relaunch",
+    "--disable-infobars",
+    "--disable-search-engine-choice-screen",
+    "--disable-sync",
+    "--enable-unsafe-swiftshader",
+    "--headless",
+    "--hide-scrollbars",
+    "--mute-audio",
+    "--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4",
+    "--mute-audio",
+    "--enable-automation",
+    "--user-data-dir=/tmp/playwright_chromiumdev_profile-eqKysQ",
+    "--remote-debugging-pipe",
+    "--no-startup-window",
+    "--noerrdialogs",
+    "--ozone-platform=headless",
+    "--ozone-override-screen-size=800,600",
+    "--use-angle=swiftshader-webgl",
+    "--flag-switches-begin",
+    "--flag-switches-end",
+    "--enable-unsafe-swiftshader"
+  ],
+  "observations": [
+    {
+      "stage": "gesture-audio",
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "running",
+            "time": 1.0773333333333333
+          }
+        ],
+        "socketStates": [
+          1
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [],
+        "inputs": [],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 1
+      }
+    },
+    {
+      "stage": "ime-before-send",
+      "draft": "中文 🦀\n第二行",
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "running",
+            "time": 1.216
+          }
+        ],
+        "socketStates": [
+          1
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [
+          {
+            "type": "compositionstart",
+            "data": "",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionend",
+            "data": "中文",
+            "trusted": false
+          }
+        ],
+        "inputs": [
+          {
+            "type": "insertCompositionText",
+            "data": "中",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": " 🦀",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertLineBreak",
+            "data": null,
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "第二行",
+            "composing": false,
+            "trusted": true
+          }
+        ],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 1
+      }
+    },
+    {
+      "stage": "tcp-loss-cleanup",
+      "no_auto_retry_window_ms": 300,
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "closed",
+            "time": 1.5146666666666666
+          }
+        ],
+        "socketStates": [
+          3
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [
+          {
+            "type": "compositionstart",
+            "data": "",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionend",
+            "data": "中文",
+            "trusted": false
+          }
+        ],
+        "inputs": [
+          {
+            "type": "insertCompositionText",
+            "data": "中",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": " 🦀",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertLineBreak",
+            "data": null,
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "第二行",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "未发送草稿 🦀",
+            "composing": false,
+            "trusted": true
+          }
+        ],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 0
+      }
+    },
+    {
+      "stage": "final-disconnect",
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "closed",
+            "time": 1.5146666666666666
+          },
+          {
+            "state": "closed",
+            "time": 0.4693333333333333
+          }
+        ],
+        "socketStates": [
+          3,
+          3
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [
+          {
+            "type": "compositionstart",
+            "data": "",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionend",
+            "data": "中文",
+            "trusted": false
+          }
+        ],
+        "inputs": [
+          {
+            "type": "insertCompositionText",
+            "data": "中",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": " 🦀",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertLineBreak",
+            "data": null,
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "第二行",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "未发送草稿 🦀",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "重连后的新消息",
+            "composing": false,
+            "trusted": true
+          }
+        ],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          },
+          {
+            "trusted": true,
+            "active": true
+          },
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 0
+      }
+    }
+  ],
+  "fixture": {
+    "starts": [
+      {
+        "transport": "websocket"
+      },
+      {
+        "transport": "websocket"
+      }
+    ],
+    "ready": [
+      {
+        "connection": 0,
+        "id": "1"
+      },
+      {
+        "connection": 1,
+        "id": "3"
+      }
+    ],
+    "texts": [
+      {
+        "connection": 0,
+        "message": {
+          "data": {
+            "content": "中文 🦀\n第二行",
+            "options": {
+              "audio_response": true,
+              "run_immediately": true
+            }
+          },
+          "id": "text-1-1",
+          "label": "rtvi-ai",
+          "type": "send-text"
+        }
+      },
+      {
+        "connection": 1,
+        "message": {
+          "data": {
+            "content": "重连后的新消息",
+            "options": {
+              "audio_response": true,
+              "run_immediately": true
+            }
+          },
+          "id": "text-3-1",
+          "label": "rtvi-ai",
+          "type": "send-text"
+        }
+      }
+    ],
+    "closed": [
+      0,
+      1
+    ],
+    "server_errors": []
+  },
+  "scope": {
+    "ime": "Chromium IME engine via CDP; not OS Pinyin/candidate UI",
+    "audio": "Connect gesture, native scheduling, muted synthetic PCM; not hearing or all autoplay policies",
+    "network": "Loopback TCP abort and manual reconnect; not WAN/offline/SFU recovery",
+    "owner": "Protocol fixture only; no Hepta production conversation or provider"
+  }
+}

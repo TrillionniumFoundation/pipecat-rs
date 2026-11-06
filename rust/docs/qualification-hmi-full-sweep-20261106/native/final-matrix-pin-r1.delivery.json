@@ -1,0 +1,229 @@
+{
+  "schema": "pipecat-final-matrix-delivery-v1",
+  "archive_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/final-matrix-pin-r1.tar.xz",
+  "archive_bytes": 927996,
+  "archive_sha256": "62f4b7b500766bd5e1afe027159be17c64a517d676c060226bec332f7a9c4ced",
+  "original_count": 147,
+  "original_bytes": 23765300,
+  "original_manifest_bytes": 51622,
+  "original_manifest_sha256": "40e34f382610b6b514f7487175e4271b8ed356c6ddb8a49196ef709a365d04e7",
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-000.b64",
+      "bytes": 60000,
+      "sha256": "276dda7c3dc042b85d6c51999553b97d0eff6a669f9327a1f5ed232aa223bc3e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-001.b64",
+      "bytes": 60000,
+      "sha256": "52b6c50b1aeb591f37fca66db573b8598b5aed3150cef67621573b09fd0a3a0a"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-002.b64",
+      "bytes": 60000,
+      "sha256": "62ae6a2cbcaedef446d12d96768b2f2e1c04200dba31194b025f6a48a0fd695e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-003.b64",
+      "bytes": 60000,
+      "sha256": "f9b616a5cd6896e80fda7e3289c1e9142ff70f4b0ea79800918e72a60e3f1f6d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-004.b64",
+      "bytes": 60000,
+      "sha256": "f577efc08b1572b6870ff175f21f8e83b5a68ca7941c77222d6a13261879556f"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-005.b64",
+      "bytes": 60000,
+      "sha256": "3b7a96eb5e1525c8f575c8b221fc3151ce73676c3d187a2b1efffba3f199c072"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-006.b64",
+      "bytes": 60000,
+      "sha256": "3c276f951a91559c24a09252a63646fa37dc18028c4c16f8508b4d397a05ccc2"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-007.b64",
+      "bytes": 60000,
+      "sha256": "db9584197d8afbdefddf6874d4580fb46bfa20a36dfc107b5994f20d4d617bcd"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-008.b64",
+      "bytes": 60000,
+      "sha256": "e62e02ecf4b498df66dd81856895845f2b0ba25e6a5ec5432bd9fffcfa078538"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-009.b64",
+      "bytes": 60000,
+      "sha256": "48a75e8d4591bd0aa6c6a7dca594ce1e44b775423247ad2a7ddd1788402174ea"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-010.b64",
+      "bytes": 60000,
+      "sha256": "8ef2c58a30185c7f94d2c1a9d3d448e4dae4b5fc67543ed691a4a85de3d3fbea"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-011.b64",
+      "bytes": 60000,
+      "sha256": "14fafd94d4eae76467a892898482bef245ba834331a4b62300f6c551889f6a75"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-012.b64",
+      "bytes": 60000,
+      "sha256": "f97b9e48b0b19e4c1cf7e12abf0e94cb8df44229377a178e0196515850989210"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-013.b64",
+      "bytes": 60000,
+      "sha256": "5e8c2d8be16ea297c08a417f3525e564dc53a95f44a47e69b0535bbc22918440"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-014.b64",
+      "bytes": 60000,
+      "sha256": "8b76f04e6b7b0b2bbbb390d4fc561bba3df3163af49ab63b4d08f5efc365ec32"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-015.b64",
+      "bytes": 60000,
+      "sha256": "aada6f42dcc1dfd0de0bc0b8c3802abf67f09d467fe52c0ee49c91d01390b91d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-016.b64",
+      "bytes": 60000,
+      "sha256": "b3aab4970afbee47813de2c29f041243be98edb66206bc08d952f9de3b6492d7"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-017.b64",
+      "bytes": 60000,
+      "sha256": "ecacbc7e1caff2a3de4367c46f34f87fddcbfaa595151a73821d2ef1ffb26da2"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-018.b64",
+      "bytes": 60000,
+      "sha256": "c07167f8187515c1dc8d70388592caf9b336091d704e93a87b5f60126616ff34"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-019.b64",
+      "bytes": 60000,
+      "sha256": "a3ddde7367cffa47ad913f76b772e1ca00a081de48ddd6de4631fcff561af67c"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-matrix-pin-r1/part-020.b64",
+      "bytes": 37328,
+      "sha256": "2e10a72a30bac65053622c22f375504e6eebf725be3a961aa47e8f8257887854"
+    }
+  ],
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "source_tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "counts": [
+    {
+      "source_gate": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/gate.json",
+      "raw_log": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/cargo-test-workspace.log",
+      "raw_log_bytes": 436838,
+      "raw_log_sha256": "646703b53acac51ede7550e708a6b3ad664a875ac3441078d27c1fb2169f36e2",
+      "totals": {
+        "passed": 3792,
+        "failed": 1,
+        "ignored": 11,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "harness_count": 325,
+      "failed_harnesses": [
+        "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_moq-9303b098e3099349)"
+      ],
+      "command_exit_code": 101
+    },
+    {
+      "source_gate": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/default-no-fail-fast-pin-r2/gate.json",
+      "raw_log": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/default-no-fail-fast-pin-r2/command.log",
+      "raw_log_bytes": 893160,
+      "raw_log_sha256": "4855e50cd33d5e4f0ded7802fd3b28ce479713ff8ee162f6e9340acd0f493eac",
+      "totals": {
+        "passed": 7748,
+        "failed": 4,
+        "ignored": 33,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "harness_count": 755,
+      "failed_harnesses": [
+        "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)",
+        "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-1ae35dd7b6b312e0)",
+        "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-2845e05916b76d58)"
+      ],
+      "command_exit_code": 101
+    },
+    {
+      "source_gate": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/all-features-all-targets-pin-r2/gate.json",
+      "raw_log": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/all-features-all-targets-pin-r2/command.log",
+      "raw_log_bytes": 256042,
+      "raw_log_sha256": "5f6f79efa4877f729aa35e6e9a490cd6bd60aec24846eda3ea0fe85168caf006",
+      "totals": {
+        "passed": 2221,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "harness_count": 222,
+      "failed_harnesses": [
+        "Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)"
+      ],
+      "command_exit_code": 101
+    },
+    {
+      "source_gate": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/all-features-all-targets-no-fail-fast-pin-r2/gate.json",
+      "raw_log": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/all-features-all-targets-no-fail-fast-pin-r2/command.log",
+      "raw_log_bytes": 998609,
+      "raw_log_sha256": "32f0935dbbd2910f61cfbfbec89b7d6a807f60d27e734c45f87ea540f5b213ad",
+      "totals": {
+        "passed": 8856,
+        "failed": 7,
+        "ignored": 63,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "harness_count": 731,
+      "failed_harnesses": [
+        "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_evals-46a03f7eca78a082)",
+        "Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)",
+        "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-adb22a02b2ba759a)",
+        "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-23786cc7a223be1a)",
+        "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-ffcc52f9b2c092a5)"
+      ],
+      "command_exit_code": 101
+    }
+  ],
+  "moq_registry": {
+    "scope": "Only the exact registry source selected by the recorded compiler artifact is read; no Cargo command or registry scan is executed.",
+    "artifact_source_candidates": [
+      "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/src/lib.rs"
+    ],
+    "files": [
+      {
+        "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/.cargo_vcs_info.json",
+        "archive_name": "registry/moq-net-0.3.7/.cargo_vcs_info.json",
+        "bytes": 104,
+        "sha256": "aadfab79abeb7e97515bea7b13b8ed7b5a76bc5abec06f4c59e38a12c0251058",
+        "git_blob": "4d11b9ff62408c4cdab14bfde9204185f5bee748"
+      },
+      {
+        "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/src/client.rs",
+        "archive_name": "registry/moq-net-0.3.7/src/client.rs",
+        "bytes": 38489,
+        "sha256": "3b8d7eda5f0f686febefceb4417dd06510ce06d54c1ccd572e721fb815fe9407",
+        "git_blob": "75abdb5e3b229086ca08316f7fbeb8d9b60600ab"
+      }
+    ],
+    "cargo_vcs_info": {
+      "git": {
+        "sha1": "b00be0ffc3734addcdd5e6ad4b348ae055e70957"
+      },
+      "path_in_vcs": "rs/moq-net"
+    },
+    "matches_official_client_blob_75abdb5e": true
+  },
+  "completed_unix": 1793986253.384324
+}

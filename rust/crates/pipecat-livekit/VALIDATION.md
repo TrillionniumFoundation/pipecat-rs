@@ -1,5 +1,24 @@
 # LiveKit native validation
 
+## Current campaign: 2026-11-06
+
+The source-only and no-SFU statements in the older batches below describe those
+historical campaigns. In the current authorized campaign, a real local LiveKit
+server and SDK executed all three opt-in scenarios on commit
+`ae56473b029b81a8cb08ec2fd385aecd74287e9f`, using Rust 1.99.1: **3 passed, 0 failed**.
+They cover audio/data/leave/rejoin, remote video decoding, and participant audio
+mute/unmute with an independent subscriber witness. The original raw output is
+retained in the [native evidence archive](../../docs/qualification-hmi-full-sweep-20261106/native/README.md).
+
+This early result is separate from the later bounded server-reap changes and
+the exact Rust 1.99.0 qualification. The [current full-sweep report](../../docs/HMI_FULL_SWEEP_20261106.md)
+records the actual source, toolchain, complete workspace gates and final SFU
+results as they complete; no pending phase is counted as passed here.
+See [the fixture contract](qualification/LOCAL_SFU.md) for the unchanged media
+oracles and the explicit cleanup failure behavior. These are synthetic tracks
+through an actual isolated SFU, not physical camera/microphone, hosted-account,
+WAN recovery, production-owner or user-perceived quality qualification.
+
 ## Batch 165: participant audio subscription control — source-only
 
 This candidate adds owner-queued `mute_participant` / `unmute_participant` on the

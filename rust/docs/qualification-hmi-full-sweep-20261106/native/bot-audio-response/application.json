@@ -1,0 +1,25 @@
+{
+  "schema": "pipecat-root-bot-audio-response-application-v1",
+  "created_utc": "2026-11-06T16:39:07.126408+00:00",
+  "parent_head": "52243a392065d474ea0d0aead585891c6010bb3d",
+  "candidate": {
+    "bytes": 45779,
+    "sha256": "d605033588e78252bcc0518d2b5f7470cf9f23b5833dc6822cc5b9db0f7491a3",
+    "git_blob_sha1": "3acb13f87ff608b8a404661752086b7e1bf7498c"
+  },
+  "root_checks": {
+    "exact_frozen_candidate": true,
+    "reverse_patch_check_exit_code": 0,
+    "original_fixture_bytes": 44922,
+    "original_fixture_sha256": "e12c2e0c4daaa9b4a45a9d3882bfd7ccce84e7a5418d88b60bcb1bfce82ba70c",
+    "test_count": 16,
+    "async_guard_insertions": 14,
+    "sync_guard_insertions": 1,
+    "test_attribute_forms": {
+      "tokio::test": 14,
+      "test": 2
+    }
+  },
+  "scope": "Same integration-test process only: serialize the 15 owners of the existing process-wide eval-bot-vad identity oracle. Original helper logic, equality, 200ms observation and product deadlines unchanged. Pure-constructor test unchanged.",
+  "native_qualification": "NOT_EXECUTED at application; final source/pinned toolchain gate required; all prior failures retained."
+}

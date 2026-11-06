@@ -345,8 +345,8 @@ async fn mixed_redacted_history_and_real_tools_replay_exact_second_http_order() 
     assert_eq!(
         second["messages"][2],
         json!({"role":"user","content":[
-            {"type":"tool_result","tool_use_id":"tool-a","content":[{"type":"text","text":"{\"n\":1}"}]},
-            {"type":"tool_result","tool_use_id":"tool-b","content":[{"type":"text","text":"{\"n\":2}"}]}
+            {"type":"tool_result","tool_use_id":"tool-a","content":"{\"n\":1}"},
+            {"type":"tool_result","tool_use_id":"tool-b","content":"{\"n\":2}"}
         ]})
     );
     assert_eq!(effects.load(Ordering::SeqCst), 2);
@@ -448,10 +448,14 @@ async fn redacted_only_completed_response_is_committed_without_public_text() {
     let report = joined.unwrap();
     assert_eq!(report.state, WorkerState::Ended);
     assert_eq!(report.total_errors, 0, "{:?}", report.errors);
-    assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(body["messages"].as_array().unwrap().len(), 3);
     assert_eq!(
         body["messages"][1],
         json!({"role":"assistant","content":[{"type":"redacted_thinking","data":OPAQUE_A}]})
+    );
+    assert_eq!(
+        body["messages"][2],
+        json!({"role":"user","content":[{"type":"text","text":"."}]})
     );
     assert_eq!(effects.load(Ordering::SeqCst), 0);
     let captured = capture.lock().unwrap();
@@ -660,13 +664,17 @@ async fn retirement(mode: Retirement, closed: bool) {
     assert!(!body.to_string().contains("unfinished-signature"));
     assert!(!body.to_string().contains("never-run"));
     if closed {
-        assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+        assert_eq!(body["messages"].as_array().unwrap().len(), 3);
         assert_eq!(
             body["messages"][1],
             json!({"role":"assistant","content":[
                 {"type":"redacted_thinking","data":OPAQUE_A},
                 {"type":"text","text":"heard prefix"}
             ]})
+        );
+        assert_eq!(
+            body["messages"][2],
+            json!({"role":"user","content":[{"type":"text","text":"."}]})
         );
     } else {
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);

@@ -1,0 +1,16 @@
+{
+  "retrieval": "GitHub fetch_file, whole base64 content at pinned commit",
+  "repository": "wenet-e2e/wenet",
+  "commit": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+  "path": "test/resources/dataset/data.list",
+  "upstream_git_blob": "bb298bc1d68ca750bd70a9cf9bb1181dff1458ce",
+  "bytes": 447,
+  "sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7",
+  "selected_annotation": {
+    "key": "test/resources/dataset/aishell-BAC009S0724W0121",
+    "wav": "test/resources/dataset/aishell-BAC009S0724W0121.wav",
+    "txt": "广州市房地产中介协会分析"
+  },
+  "reference_utf8_sha256_without_newline": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee",
+  "qualification": "Annotation text only. The separately verified local target WAV is used for STT; this retrieval does not assert the dataset symlink itself is WAV bytes."
+}

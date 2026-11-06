@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "<string>", line 88, in <module>
+  File "<string>", line 51, in download
+AssertionError: checksum mismatch: https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-wasm32-unknown-unknown.tar.xz

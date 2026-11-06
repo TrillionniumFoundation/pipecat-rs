@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-11-06",
+  "status": "SELECTED_ENGINEERING_GATES_PASSED_PRODUCTION_HOLD",
+  "scope": "Strict runtime payload admission; actual Linux local_speech supervision/parent binding; pending DTLS start cancellation and localhost UDP release.",
+  "tested_local_code_commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+  "published_code_commit": "6367d62babf97cab96a756b58427c8ee5fac5f15",
+  "code_tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+  "source_unchanged_during_final_gates": true,
+  "native_binary_sha256": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "toolchain": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "environment_class": "Current Linux engineering executor; not original HMI physical host or production deployment.",
+  "final_gates": [
+    {
+      "name": "format",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+        "--check",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "rust/crates/pipecat-core/src/frames.rs",
+        "rust/crates/pipecat-core/src/lib.rs",
+        "rust/crates/pipecat-core/src/payload_budget.rs",
+        "rust/crates/pipecat-core/src/pipeline.rs",
+        "rust/crates/pipecat-core/src/pipeline_stream.rs",
+        "rust/crates/pipecat-core/src/processor_stream.rs",
+        "rust/crates/pipecat-core/src/queue.rs",
+        "rust/crates/pipecat-core/tests/payload_budgets.rs",
+        "rust/crates/pipecat-hepta/examples/local_speech.rs",
+        "rust/crates/pipecat-hepta/src/lib.rs",
+        "rust/crates/pipecat-hepta/src/local_speech.rs",
+        "rust/crates/pipecat-hepta/src/parent_guard.rs",
+        "rust/crates/pipecat-hepta/src/process_supervision.rs",
+        "rust/crates/pipecat-hepta/tests/parent_death.rs",
+        "rust/crates/pipecat-hepta/tests/process_supervision.rs",
+        "rust/crates/pipecat-webrtc/src/connection.rs",
+        "rust/crates/pipecat-webrtc/src/shutdown_start_tests.rs",
+        "rust/crates/pipecat-webrtc/tests/review_lifecycle.rs",
+        "rust/vendor/webrtc-0.14.0/src/dtls_transport/mod.rs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.275,
+      "log": "final-format.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-check",
+      "argv": [
+        "git",
+        "diff",
+        "HEAD^",
+        "HEAD",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.016,
+      "log": "final-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "core-pipeline",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.188,
+      "log": "final-core-pipeline.log",
+      "log_sha256": "fca0834ea67540d38d421a9aa35dc9649d98847dfeb6fe90e2152221385adddb",
+      "test_counts": {
+        "passed": 480,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "name": "hepta-native",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.311,
+      "log": "final-hepta-native.log",
+      "log_sha256": "52dde1113c30a9e4d70bfa472c0562c495d138e522e36ef63394875f45b2abaf",
+      "test_counts": {
+        "passed": 65,
+        "failed": 0,
+        "ignored": 3
+      }
+    },
+    {
+      "name": "webrtc",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-webrtc",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.046,
+      "log": "final-webrtc.log",
+      "log_sha256": "2317ad81b7138675d5f6fa25f43673e5c1718a685877bde358416d844ae7bdd6",
+      "test_counts": {
+        "passed": 46,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-core",
+        "-p",
+        "pipecat-pipeline",
+        "-p",
+        "pipecat-hepta",
+        "-p",
+        "pipecat-webrtc",
+        "--features",
+        "pipecat-hepta/local-speech",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 62.232,
+      "log": "final-clippy.log",
+      "log_sha256": "d025c1222b6c9b3de22b34824818c1967da49d8006356b6c7be4f8d94f9ad3eb"
+    },
+    {
+      "name": "native-build",
+      "argv": [
+        "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "rust/Cargo.toml",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--example",
+        "local_speech"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.388,
+      "log": "final-native-build.log",
+      "log_sha256": "9136ecfd631e30c01e74cbc4eabaf806ae95d22421a35f4c5cc5280ea1dbf4f0"
+    },
+    {
+      "name": "actual-entry",
+      "argv": [
+        "python",
+        "rust/scripts/qualify_hmi_supervisor_entry.py",
+        "--binary",
+        "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+        "--output",
+        "/workspace/scratch/b2b6f3e38b6d/verification/final-actual-entry.json"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 10.414,
+      "log": "final-actual-entry.log",
+      "log_sha256": "69ffec4106dae0eaf6d71d84ffa19cb5245cf999150d8de00b1fc4cf92c14dfc"
+    }
+  ],
+  "python_ast": {
+    "passed": true,
+    "files": [
+      "rust/scripts/qualify_hmi_media_process.py",
+      "rust/scripts/qualify_hmi_supervisor_entry.py"
+    ]
+  },
+  "root_readme_bytes": 0,
+  "ignored_classification": {
+    "physical_models_or_devices": 2,
+    "subprocess_only_helper": 1,
+    "helper_note": "Explicitly executed by the three top-level parent-death tests; helper invocations are not extra unique tests."
+  },
+  "actual_entry_faults": {
+    "passed": 8,
+    "failed": 0,
+    "artifact": "final-actual-entry.json",
+    "binary_unchanged": true
+  },
+  "final_parent_death_entry": {
+    "passed": true,
+    "artifact": "parent-guard/final-native-entry-fifo.json",
+    "running_executable_hashes_match": true,
+    "native_exit_observed": true,
+    "harness_owned_native_waitpid": false,
+    "emergency_cleanup": false
+  },
+  "stage_baseline_comparison": {
+    "webrtc_two_deterministic_regressions_before_fix": {
+      "passed": 0,
+      "failed": 2,
+      "artifact": "webrtc-baseline-both-regressions.log"
+    },
+    "webrtc_deterministic_repeats_after_fix": {
+      "invocations": 30,
+      "test_executions": 60,
+      "failed": 0,
+      "not_additive_unique_tests": true
+    },
+    "prior_fixed_package_gate": {
+      "passed": 46,
+      "failed": 0,
+      "qualification": "Recorded pre-final diagnostic edit; final-webrtc.log separately validates frozen source."
+    }
+  },
+  "retained_open_failures": [
+    {
+      "kind": "WebRTC data-channel setup timeout",
+      "artifact": "webrtc-fixed-repeat.log",
+      "details": "After 24 passing stress invocations, invocation 25 failed in offerer first wait_data_channel at unchanged 5s setup deadline before that pair shutdown. Cause unresolved; 23.83s is whole-test duration.",
+      "later_observations": "30 subsequent passes do not erase this failure; failure-only diagnostic context added without changing acceptance deadlines."
+    }
+  ],
+  "retained_corrected_failures": [
+    {
+      "artifact": "actual-supervisor-entry.log",
+      "kind": "Full inherited stderr blocked failed executable exit; later bounded logging/self-signal plus final actual-entry gate."
+    },
+    {
+      "artifact": "frozen-gates-r1/final-gates.json",
+      "kind": "Prior frozen tree passed 480/65/46 but strict Clippy failed collapsible_if; equivalent condition merge, new freeze and final complete rerun."
+    },
+    {
+      "artifact": "parent-guard/native-entry-fifo-smoke-r1.json",
+      "kind": "Kernel lacks task/TID/children; bounded PPid inventory fallback with exact identity checks."
+    }
+  ],
+  "unqualified_attempts": "Build prerequisite/ENOSPC/cache failures, fixture compile/candidate corrections and coordinated clippy interruption are retained in stage logs; none counts as a passing behavior test or qualifying negative control.",
+  "environment_evidence": "environment-followthrough.json",
+  "unknown_remote_jobs": [
+    "1a1b01f09b3-fc05-6e3b",
+    "1a1b04f07ab-fc05-6fa9"
+  ],
+  "boundaries": {
+    "payload": "Compact JSON queue charges, not total payload retention or RSS; opaque/native capabilities reject in enabled strict profile; HMI input opts in; generic compatibility default disabled.",
+    "cancellation": "Kill request, exit observation and wait/reap are distinct. Already submitted device/remote effects are not undone. No automatic replay.",
+    "owner": "Existing Hepta conversation/model/tool/permission owner remains authoritative; companion source unchanged; TrustedReadOnlyOrganV1 not expanded.",
+    "parent_death": "Linux creating parent thread must outlive child; no arbitrary-descendant or changed-credential guarantee. Non-Linux direct path remains unqualified."
+  },
+  "not_run_or_not_closed": [
+    "Complete 62-crate workspace/release gate; historical recorded UDP leak exact random schedule not reproduced here.",
+    "Production Hepta media composition: pinned Agentd still TextPort + NoAudio.",
+    "Current real owner/thread, signed producer/replay witness, grants/generations and adopted immutable model manifests.",
+    "Physical microphone-to-owner-to-speaker Chinese speech, echo/noise, permissions/replug/recovery and actual user hearing.",
+    "Per-provider live auth/reconnect/terminal semantics; presets are not complete API qualification.",
+    "WebRTC full video/camera/screen, adaptive jitter, PLC, Opus FEC, shared playout clock, existing-peer ICE restart/track replacement.",
+    "Real LiveKit SFU/remote video/final participant control.",
+    "Real browser microphone permissions/Chinese IME/autoplay/disconnect recovery/visible states.",
+    "Cross-platform physical/resource/latency p50/p95/p99 qualification; neuron shadow remains inactive."
+  ],
+  "counting_policy": "Do not add feature variants, earlier gates, subsets, repeated stress runs or helper output into a unique coverage total."
+}

@@ -7,7 +7,8 @@ rust-version.workspace = true
 
 [features]
 default = []
-local-speech = ["dep:pipecat-audio", "dep:pipecat-core", "dep:pipecat-local-audio", "dep:pipecat-piper", "dep:pipecat-vad", "dep:pipecat-whisper", "dep:tokio"]
+process-supervision = ["dep:tokio", "tokio/process", "dep:rustix"]
+local-speech = ["dep:pipecat-audio", "dep:pipecat-core", "dep:pipecat-local-audio", "dep:pipecat-piper", "dep:pipecat-vad", "dep:pipecat-whisper", "process-supervision"]
 
 [dependencies]
 serde.workspace = true
@@ -21,6 +22,9 @@ pipecat-piper = { path = "../pipecat-piper", features = ["espeak-gpl"], optional
 pipecat-vad = { path = "../pipecat-vad", optional = true }
 pipecat-whisper = { path = "../pipecat-whisper", optional = true }
 tokio = { workspace = true, optional = true, features = ["io-std"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "=1.1.5", features = ["process"], optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

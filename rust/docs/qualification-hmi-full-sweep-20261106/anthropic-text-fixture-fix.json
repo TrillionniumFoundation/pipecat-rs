@@ -1,0 +1,28 @@
+{
+  "commit": "72cac7fdfc65585219ebf757992ffa5b12c63dcb",
+  "tree": "20fed35e5a3822a0f14d892b904e108776942649",
+  "parent": "8279c5566c861fc047b7e36f4a44524e34c00767",
+  "files": [
+    {
+      "path": "rust/crates/pipecat-rtvi/tests/first_answer_timing.rs",
+      "sha": "dfbca32773a4a0ffcaab2cc84e6d63571a4238fb",
+      "sha256": "75b929e2f3b0aa30dd8de41d0e2bd577a21c3a2bec7ddb24abe09c3d8561ad07",
+      "bytes": 72338
+    },
+    {
+      "path": "rust/crates/pipecat-turns/tests/anthropic_history_runtime.rs",
+      "sha": "b16835d6a66186e8f941d981992eefb56c95572a",
+      "sha256": "ce2f561174c391c47a997189362bdb051e4fa9adbea583111361651799d19deb",
+      "bytes": 14801
+    },
+    {
+      "path": "rust/crates/pipecat-turns/tests/anthropic_redacted_runtime.rs",
+      "sha": "f9f5bee9bb6582e0a1d7ee57dbee4ecea511304b",
+      "sha256": "fa9d7ab6d62b6499099e8da319b5cdc4954676c780988806a3c5939f19b8d408",
+      "bytes": 36766
+    }
+  ],
+  "format_report_sha256": "7068861005eb3289e7131efbdfdcadf5e255186872be0c9e331386ef6507cedd",
+  "all_source_bodies_and_deadlines_preserved_except_four_wire_shape_lines": true,
+  "product_code_changed": false
+}

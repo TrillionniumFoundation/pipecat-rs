@@ -1,0 +1,506 @@
+{
+  "scope": "Exact original 68-file browser requalification archive plus three authorized documentation updates. Each immutable GitData blob SHA matches its pre-outage local git hash-object, and all 71 files were checked again after reconnect. No tree, commit, or ref was created by this agent.",
+  "frozen_native_source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "archive_file_count": 68,
+  "documentation_file_count": 3,
+  "file_count": 71,
+  "files": [
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md",
+      "bytes": 6722,
+      "sha256": "75d0f06b8c8a8cec84beaf650c77f2373323bd064c5b2ad5ea3555e8d1e30c35",
+      "blob_sha": "62640a8478509b35546737ad88c415a9ea9e709a",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/SHA256SUMS",
+      "bytes": 7005,
+      "sha256": "5a36f07bdf7e4a769a0ae42aa0241f366ca4f8e63d1bc508a130b2b1261436ab",
+      "blob_sha": "a18c9f0342c1f841f62065b1c54eb8dde3ad37f8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/backup-receipt.json",
+      "bytes": 1019,
+      "sha256": "08b282b3e112b150247110ebdee16a8e27fc30b81a85fc8b3c755366c2735b32",
+      "blob_sha": "7dac64f28ae4bbec085a132f77ff3160fcd11c3b",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/SHA256SUMS",
+      "bytes": 860,
+      "sha256": "4b0be45634bc85a28490ce5833df6f957923cdcaa4d666c97c98d1f3a19dd159",
+      "blob_sha": "cc89bc544a3993a17d75b5483094b9174707d539",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/checkout.log",
+      "bytes": 96,
+      "sha256": "c7290c4f0ba915fd845df48d143f7c9be8a167f370ff18ea334a7704a81825b9",
+      "blob_sha": "25b8cb2c4692b1a3988e0924a446d9603c29d5c8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/clone.log",
+      "bytes": 112,
+      "sha256": "cd10fc9106dda8421590a35f661117b44ea6c611cbb105e67fcf20c6444d1eed",
+      "blob_sha": "fb6d6b6bf3056484d85c28a63f4087586c326d02",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/dependency-readiness-offline.log",
+      "bytes": 429184,
+      "sha256": "0ac41ae652e620014666083776e0fa195c795600a312dbfce897d6a59747b51c",
+      "blob_sha": "f06fafd347dbaf651a19ab761e4aa05a6bd525fd",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.json",
+      "bytes": 18583,
+      "sha256": "dbed4e1a6229dcec955b7e46c93635ec2e7c82a029192b55990cf164f05821eb",
+      "blob_sha": "6366351d53adbc8d89f612d0160dcae006684503",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-strict-clippy.log",
+      "bytes": 1651,
+      "sha256": "3b1db109d9a5cb34bc2d78c31e4370f02546eb007e77d5d199e6463162527fc0",
+      "blob_sha": "680ab261ce99ce113ddfcf122da8526a65674250",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.json",
+      "bytes": 18933,
+      "sha256": "21b2387511f75054e3f2cb00d5a394fd938c6485b7fb4ddc0a412275287db2a4",
+      "blob_sha": "15dd0fe1cd82f216aa4c44664f92837dd9830e77",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/native-tests.log",
+      "bytes": 7584,
+      "sha256": "263e5f831fa01ed351bdb8fbeef78eda299e10a93e59ebf881547097939f6b1a",
+      "blob_sha": "66ca63092e85041f2f3499bceaf3d4aa06692c8d",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/preparation-error.log",
+      "bytes": 241,
+      "sha256": "724e589c01e8eb4a5af27ca605b763cf5f07000c68e6e69990e3a295734e76c6",
+      "blob_sha": "367f6de4e899b4024c434ea525d13fea6b7ccb74",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.in-progress.json",
+      "bytes": 52546,
+      "sha256": "73a14981d9b70556add95e3dc4fa2dee9f0284bdc4f77b68e99e25fc27e3342e",
+      "blob_sha": "6f821121e57c27c550b8900e3f852eec82a531a9",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/result.json",
+      "bytes": 61388,
+      "sha256": "b62777df8ab396a5a3a44a6c10ce9754b50bc792829deb765a334e56c953c2c6",
+      "blob_sha": "a5c95ee790a06b88a08eb10f641776062374554c",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence/wasm-download-diagnosis.json",
+      "bytes": 2100,
+      "sha256": "d5c0aff1e7577888a3b5b3a5dd34b5f1004c01deb768d151941c6360911e69d2",
+      "blob_sha": "2f1bb223f28a50a6909becb4937123128c825d1e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/SHA256SUMS",
+      "bytes": 2635,
+      "sha256": "496740dd6cf0baeb70bb03af11c436e7bd4be633e11cc89ded596ebda403eb83",
+      "blob_sha": "b716f4f5c85c81d91359b73e2362714119955e1e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/install-private-wasm-std.log",
+      "bytes": 253,
+      "sha256": "763bb33a12845f69d6b53a32511cc77ff7712d2400f627d5a210948fcecdafad",
+      "blob_sha": "2c8b37d33842251e0360f87f060d12f093c34a19",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/official-archive-xz-integrity.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-000-attempt-1.json",
+      "bytes": 1624,
+      "sha256": "50b4a3f2a09237ed776f3e09e27e42c643ed7f642e3de1372fc05b1178f18ca5",
+      "blob_sha": "7e2a0e22ebab3ec32bf576f68a4b0bd764d2770c",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-001-attempt-1.json",
+      "bytes": 1642,
+      "sha256": "d0f55618c5aaefa263922a83ba8442ac12ce458049df04076f416fe8aaefb6a2",
+      "blob_sha": "26542c161220d1d6ee2932255f7785bfa3f50b7e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-002-attempt-1.json",
+      "bytes": 1642,
+      "sha256": "af64d1ca62af1e98d1c78c9418de8a7b5f87969e49f494f1b4f35a0a913e3a8d",
+      "blob_sha": "00ff294dfee8f8f7590d053af03241162cf3862f",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-003-attempt-1.json",
+      "bytes": 1642,
+      "sha256": "5cf85af81ff103b06a7ad8ddcdade82c030e4ad88e9f4e621663d30df59c4743",
+      "blob_sha": "9dbb2fad604b1ba5a3be228473536d02e4352a38",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-004-attempt-1.json",
+      "bytes": 1642,
+      "sha256": "bd123ba92c9dbe4a58eb24bb97183c7e30af2fde7324cf59dcd0bb490f4bbc24",
+      "blob_sha": "6fe5c6719db3744ef68dcd71ad505667b88ceddd",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-005-attempt-1.json",
+      "bytes": 1642,
+      "sha256": "9c4be5dfeecbe3d6133d1402123fd79368e8d388670004174f0aab114555ed48",
+      "blob_sha": "26baa61069484d5852f14bbefe52beff2be56e10",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-006-attempt-1.json",
+      "bytes": 1643,
+      "sha256": "05c71d10b7459e1b78f94586e7300095733e496c74b890f326ad907e60cb2cff",
+      "blob_sha": "a45c61cb9e72df7a4c39f6e852a5b7a9549c0a61",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-007-attempt-1.json",
+      "bytes": 1643,
+      "sha256": "3a4ae065df457716320a17e4039b7e58f0c2e6278953af72c062574c4229c6f3",
+      "blob_sha": "58fe513744eaa35b4c4159bbd5b4b89220f8c040",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-008-attempt-1.json",
+      "bytes": 1644,
+      "sha256": "58286159f3e33282a1799325cb20705dce92222f0a93f9a0a20242ab43891279",
+      "blob_sha": "93c588d007174c09e9ea3bc35e384152be8d0907",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-009-attempt-1.json",
+      "bytes": 1646,
+      "sha256": "3283b09af2e6804461358d6f073c7e262d0dee5ef710c867213fb442235b9878",
+      "blob_sha": "5d4fd8bd47c914c5e39cada8d423e85f1d0cf117",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-010-attempt-1.json",
+      "bytes": 1648,
+      "sha256": "c3af4a03e4e4b7ef595a686922edaa62c705cc26a3375d4ee2c82a6e73c2c288",
+      "blob_sha": "ca684efadae0c4ff2564adf7d47cafce3d787bca",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-011-attempt-1.json",
+      "bytes": 1651,
+      "sha256": "d27b450f7d552a63a42f179451a18a659cdd35804cd3150bf0deb8212a99a895",
+      "blob_sha": "4b0f83958a3e3845f26ec396f9726c5f0ea0108e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-012-attempt-1.json",
+      "bytes": 1649,
+      "sha256": "7df893c0d3bf8e8f86ae7ff8f2c2e85c1cefdb109391964aed347f001abe5c0d",
+      "blob_sha": "b9cf5ef8fc9aca44d2fe1dcdd76bb7ffc3c4659e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-013-attempt-1.json",
+      "bytes": 1650,
+      "sha256": "8f9094fce6e053e3c60e9f655cb49f9ed4a075afd24e1f6a95153e74a9078f82",
+      "blob_sha": "511d3ff3be623f4fbf7c49fa064f6d630f651ae8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-014-attempt-1.json",
+      "bytes": 1651,
+      "sha256": "1e5471c1b19bef2cd09d32747023460ef5b05f3a7b851eea62fe207d16b397db",
+      "blob_sha": "d748675fce39efa630eec87d209c153f327e8aab",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-015-attempt-1.json",
+      "bytes": 1649,
+      "sha256": "48e589a0aa0defe6aeeaead7a5552c03896d1e67735eee230b5a36a1bbbcc7b4",
+      "blob_sha": "28d0c9d9b0e7f3b1dd66ca86910216d23b593c59",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-016-attempt-1.json",
+      "bytes": 1650,
+      "sha256": "240fac865e6d41d6ce92c46ab1999bbb82269a95fefc4ed964c48e0adfbb72c8",
+      "blob_sha": "295d3c0da27a5610946b2b35662147336c83791a",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-017-attempt-1.json",
+      "bytes": 1650,
+      "sha256": "a900324a4ad1689cc3b44445b150952eb1f8f144ab4241e704b25479010a1ee5",
+      "blob_sha": "71d4b1a146317879c759a92ce938c2c6ee78dd63",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-018-attempt-1.json",
+      "bytes": 1649,
+      "sha256": "bfd17029767260e364cfba2ba015be2e402174ef581dba0a190aef0da1472283",
+      "blob_sha": "f29e1515532e5df800fa62db9ecf581e8e5e4ca2",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-019-attempt-1.json",
+      "bytes": 1650,
+      "sha256": "39e7525318a313eef4afb6253bc8555b6291c614123005721670b9e44d0ec584",
+      "blob_sha": "2d4768574924151666c3754cedc98bcca8e7a87e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-020-attempt-1.json",
+      "bytes": 1649,
+      "sha256": "844c64f8d216115115972b59c91e2ecb6b117a04e57dc77969ccc5993b29b4b2",
+      "blob_sha": "52cb627f165c1bbd332cc527a160ca9c3f730d7b",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-021-attempt-1.json",
+      "bytes": 1649,
+      "sha256": "e4fc570a26d6791632a97fdd9b98704b04dc717ba33bdf35ade593c8bb10f821",
+      "blob_sha": "e8ad3cc2fe0d0dcfd0a0ccaf97b8bb627b37e67c",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/range-022-attempt-1.json",
+      "bytes": 1643,
+      "sha256": "3cdfeff207eb659a74baf3065e92bf4e5a2438de73737fcf44c797313205ede1",
+      "blob_sha": "2e6590ac525c295d4a4af794afed1922e1e83925",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.in-progress.json",
+      "bytes": 83833,
+      "sha256": "8cf8a36907b644e73c1fb1910821198ee37fb136c1ace364787ae7d2cb7b4e08",
+      "blob_sha": "7c5d146c467cf4a4ee9700c44b91074b2881ad38",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/result.json",
+      "bytes": 94774,
+      "sha256": "1feaf11b72ff6d3591099a0b8d62f7eec75a6ae0dbf82f3a01f67c3d1b968909",
+      "blob_sha": "4ec93fc7f405cc6f4f23b7a3bc2ba7c80e214a0c",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.json",
+      "bytes": 18769,
+      "sha256": "d7334e2a4741d297f0714715f002fcdf1ff136db3f7d7ac7824b83f1f2dc4dff",
+      "blob_sha": "c495065b0722710859defc82c289a673d0284f3e",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/evidence-wasm-r2/wasm-strict-clippy.log",
+      "bytes": 2442,
+      "sha256": "804ba285ac4a574b378eaca0adeeb1dea02df7291dc5828de5ed9455eee97885",
+      "blob_sha": "468f210c1fdba0df6c0cbfc5ac4682d1c3b3d95f",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/export-receipt.json",
+      "bytes": 3020,
+      "sha256": "080fba4ac571334c845aedff8f4dfdba314227c9b85676e389dccabe4043d3e5",
+      "blob_sha": "7f20f5e50323e33c6b8b45d9deb23452170201f0",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/index.json",
+      "bytes": 15781,
+      "sha256": "8aa89304d8c2ad7c5fe318b12b782e97270b2c805e669b19dbda293f64e9639a",
+      "blob_sha": "d7fc3897533bff8601ac30277aaa533257f6403c",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/local-verification.json",
+      "bytes": 15033,
+      "sha256": "4d71a139212d075c81b3ec3bcbae7bd8be6b0eecc5f48f2e65e97bd6f3eac89c",
+      "blob_sha": "28cfae7653a26f65edc1545094b098d77d7d3ac8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml",
+      "bytes": 943486,
+      "sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+      "blob_sha": "ad56c53263677d0608631e67049073c5557e86c9",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/official-wasm-component/channel-rust-1.99.0.toml.sha256",
+      "bytes": 91,
+      "sha256": "56b7d9b1cdc0980a8b70daf4115575a3d212d57ece3021818991d604eb275e14",
+      "blob_sha": "b69ad82690e2a21dd462a75119777654896ebba8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/raw-evidence.json.gz",
+      "bytes": 185129,
+      "sha256": "a2abde0dbf3eb5998dd3d323cb3e79d9ef98d64b618775d6c28b08daee018e20",
+      "blob_sha": "e237d5919a18acf861562a676380ebdbe2211ab0",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.launch.json",
+      "bytes": 5192,
+      "sha256": "7f3828a868e8956aa6818141efb9d5c664e86c41e102b4ae92f501d208be0d0e",
+      "blob_sha": "12676aa333a6754f610e05e69c164b99bdddf7eb",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.read.json",
+      "bytes": 10071,
+      "sha256": "0fec6e2623eda1b86aa1d9ef354b734bff3b2d96043d90e8fbcbc0e0ae6057f6",
+      "blob_sha": "4ea85e25d3067eb3cb39c56352df8e3baa909118",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/browser-gates-export-r2.status.json",
+      "bytes": 1154,
+      "sha256": "98da93aba745f681474bc6985da5bde4c65825871d2ad3e5bf6ee906261d78f6",
+      "blob_sha": "03da232bd3da17ff5e0a667f380f9ccedf2180af",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.launch.json",
+      "bytes": 11970,
+      "sha256": "216a0e23814d8849078c3a0e9bb0b1ee0e015518f6e6dc0257fb85a6d8967b9a",
+      "blob_sha": "a1819694b5a1dcba514e45b99b1ed4c4a23ca336",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.read.json",
+      "bytes": 6140,
+      "sha256": "1356458b0af65666e299ff03db5174f8fd00df912f202a3f9cf77736268264c6",
+      "blob_sha": "8443705b3344040f78c82d922a0a869a37635b20",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/native-and-download-r1.status.json",
+      "bytes": 1151,
+      "sha256": "24cc5f000e5ea34dd4e1ee537c0a0a1127f8cbd32f164f60756d691fde3a9c8c",
+      "blob_sha": "c530d21c82799744bda6d65288af27c5f8c22999",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.launch.json",
+      "bytes": 3063,
+      "sha256": "45f3c871a14c4d5e92c0fdc15e3a66af30a80f8da27a861f19e7df43fa273946",
+      "blob_sha": "48a8c215b23826e6aef37c2417954b40c8941e80",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.read.json",
+      "bytes": 7537,
+      "sha256": "5578481526d2dfd358d21e8182262f07ed6573d33815c443f06200efc4618c16",
+      "blob_sha": "c13c753a3506ba859eac4b2330eff8cfeb8ba6af",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-download-diagnosis.status.json",
+      "bytes": 1153,
+      "sha256": "34861b0026809ac6f4838f2c9c2c3f1425c14656bebe0c7aee68b9daf2c22f36",
+      "blob_sha": "d4fc7cceac3a954f0d57e145f24ae965a337f66b",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.launch.json",
+      "bytes": 17227,
+      "sha256": "44349ac979cf4fa1e557b11f009ab1c4a342e9d1742c986b5b8fe56752103d1c",
+      "blob_sha": "96418ec7e05ed0f37159c66b7f0a9783b89ffa14",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.read.json",
+      "bytes": 5109,
+      "sha256": "96e35ee6d5224e95446323aa7e3995be0c897dfb6fb143ffd9f64abf31506ed5",
+      "blob_sha": "6ae73171d31ea62c75863cc9bbe73f46637c2538",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/runtime-receipts/wasm-range-r2.status.json",
+      "bytes": 1146,
+      "sha256": "1d9ccb04fadb971f432a5d75f0f61c57d3591046b650afdd83fb0ca92d346020",
+      "blob_sha": "b5ff2c815ceff44c44bd4aa2086e42433416b7b4",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_gates_export_r2.py",
+      "bytes": 3664,
+      "sha256": "5848375c4202e1130e7fb7136c4b4ac55fa492264aae91ecc5292c0c9b425713",
+      "blob_sha": "f95a05c86ff87478308a89b4cea048f41dcaeaf8",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_requalification_r1.py",
+      "bytes": 10271,
+      "sha256": "b24721de874e2dbac9b2bd2f8ea2fd399971af4e28db52d11d93f159f5ed68d5",
+      "blob_sha": "54ac54e6694c3d62be71ab6a4e652e51ee615e35",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_diagnosis_r1.py",
+      "bytes": 1589,
+      "sha256": "e5a021b955b363a248448a912c8c3adf73975406c3a68c6fef2ed4ef095fbb5f",
+      "blob_sha": "78756080bd3ba7907dad64922a1e817d7d6ffa3a",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/scripts/desktop_browser_wasm_r2.py",
+      "bytes": 15397,
+      "sha256": "d95ff5d274f1b517f410ca8a8f03410de1c6963271ca9762ac3e6cc7a5a567a9",
+      "blob_sha": "46871e5ae0deb358efb25a5cb4eaf244fb493fbc",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/requalification/target-owner.json",
+      "bytes": 2105,
+      "sha256": "d2c08214bec52f1b66d522710de3853894bbf5078e1b2c533c556e1838fc1578",
+      "blob_sha": "bbb1fba3387db032d303b22053dd3f6b7f823656",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/docs/qualification-hmi-full-sweep-20261106/browser/README.md",
+      "bytes": 10991,
+      "sha256": "a06dd59bfe381b28d8a037fd5da7279b12112dee397edc08f1615037a1a1d27b",
+      "blob_sha": "b4cf1ac923efe5a18b0aedddf42f9aea69a77ce9",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/client-templates/README.md",
+      "bytes": 23378,
+      "sha256": "b3193f96026e08c07a0e2d0560fd6a39d01dd23434b7eb73c4c2379702c7183d",
+      "blob_sha": "2f829d87dace4c29cda1cfe056ba2f49dbcfd8dc",
+      "matched_local_git_hash_object": true
+    },
+    {
+      "path": "rust/client-templates/VALIDATION.md",
+      "bytes": 21451,
+      "sha256": "feb9c374d83ce8d3e04a1f37a94be089b2ace1272415890b6f26f16f7e65a03c",
+      "blob_sha": "91656b3d523a93c822f04c20ebb1c4b4623bb232",
+      "matched_local_git_hash_object": true
+    }
+  ]
+}

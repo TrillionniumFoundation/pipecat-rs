@@ -1,0 +1,317 @@
+{
+  "schema": "grok-lifetime-gate-deliverable-verification-v1",
+  "created_utc": "2026-11-06T16:20:26.712683+00:00",
+  "scope": "Archival packaging only: no source edits, experiment rerun, Cargo build or native qualification. The original immutable manifest is separate from its 28 archived members and is not recursively hashed by itself.",
+  "intended_repository_destination": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/",
+  "original_immutable_manifest": {
+    "path": "immutable-backup-manifest.json",
+    "bytes": 11923,
+    "sha256": "5e14937ab49e1c759aab6f8214a8cdfd6b72e604a5cdb02f5cb97ce8f1968c0e",
+    "git_blob": "1cd42a4bcb318f9cae01270b64846566b037b99e"
+  },
+  "archive": {
+    "path": "frozen-evidence.tar.xz",
+    "bytes": 89444,
+    "sha256": "2ab1f9fd30d57085d688f5010e5048e50968e5debb49f8bfd8c5ae6b07f848d3",
+    "git_blob": "6dcf00e429e9e9fe3a9301a6ae266e87cdc2df5f",
+    "format": "USTAR in XZ; exact file bytes; uid/gid/mtime normalized only in archive metadata",
+    "member_count": 28,
+    "total_member_bytes": 463209
+  },
+  "members": [
+    {
+      "path": "grok-spawn-gate-candidate-r1/REJECTED.md",
+      "bytes": 1024,
+      "sha256": "35ff71ba45774068a4ee1b31777ff9f03ce5b1af86e54b99f13cf68de691d6bd",
+      "git_blob": "c4efbbae6695b4c3222329fea99cd683bef1882c",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/app_cli.rs",
+      "bytes": 40061,
+      "sha256": "2fefa9c1f0d812c31f50501e96c7ba6fd169e0b04e121da7d3b3b6e80c9c3d7e",
+      "git_blob": "633aeba75afe9ac967c66f3b640f761c9206dc39",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/audit.json",
+      "bytes": 1134,
+      "sha256": "f7674ebfc9e9ba7ffe51e06ae6d1962b78a90f40229279bbdaaf722eab3753fb",
+      "git_blob": "87e795cd349f8e716bb11ef2d646644ae09997d9",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/controlled-run-r1/execution.json",
+      "bytes": 1141,
+      "sha256": "fac8f9534c0737c40547782279381055aa7d7d6c2e4d3aef1af1cc39d4901a50",
+      "git_blob": "5ec14f73d7c39854d4140cb9c2af91114f597fa4",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/controlled-run-r1/experiment/experiment.json",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/controlled-run-r1/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/controlled-run-r1/stdout.log",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/controlled_inheritance.py",
+      "bytes": 10157,
+      "sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+      "git_blob": "eeb49539405574b74e4efaddd9b891030c085a2b",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r1/fixture-rw-gate.patch",
+      "bytes": 8216,
+      "sha256": "a692932e0333eec55926938a45d31cc6415dce895145039ed0c005e2714f9a54",
+      "git_blob": "d79bcb72343f59830b7e31f32526815cdcea8508",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/DESIGN.md",
+      "bytes": 8482,
+      "sha256": "700bee4098bf490374a3f0d67112b9edd06aae914ddb0536b201773fd7f4eb79",
+      "git_blob": "74d89a378cb67bd03655ee037a2377118bf928e4",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/app_cli.rs",
+      "bytes": 41107,
+      "sha256": "b7e2420e488e7c2a348bfa7084bba4e6dde1376a2099b1d530efb3956bdf1913",
+      "git_blob": "bfc0c74269589b037eebb45cde5ec29c28085fe1",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/audit.json",
+      "bytes": 1598,
+      "sha256": "d1be21a6f2dd9997251e62e6f10ddbc920b8a12593d554295e5bcd12119fd4ff",
+      "git_blob": "173045ba10494b24732da0605b6d24bf15580caa",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/fixture-child-lifetime-gate.patch",
+      "bytes": 9908,
+      "sha256": "ebce905890aeb4d67b7a0ed4b13f1dd2313e9295e1e9150dba2d1cad06eee78a",
+      "git_blob": "ce2d548f8407c46711c13e7aaee968022e16694e",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format-check-r2.json",
+      "bytes": 1131,
+      "sha256": "352b1e3f3d1a60045fb466ac762145061c01c97c42114cda08466a10f882faec",
+      "git_blob": "61e85a78c9adf6759ba980a991e4f9120f960b58",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format-check.json",
+      "bytes": 1185,
+      "sha256": "edb5f1792ec0993aedacb19802619368809e408d1795d3e7ea710e639556dae0",
+      "git_blob": "c1a6b9b3449e8603356e009f834b561348b8f1a7",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format-r2.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format-r2.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/local-format.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary-boundaries.json",
+      "bytes": 6584,
+      "sha256": "7e82b0f0c6727de1a8aae6d7e7856f273d8273549450ab1125e064c2ec42e415",
+      "git_blob": "ddcfbd717a15c171a705f7beb9d04af05bcb532e",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/glibc-2.39/sysdeps/unix/sysv/linux/spawni.c",
+      "bytes": 16547,
+      "sha256": "6db348bec1d6393d69dc79cd93c6a3d0fc03d81a714e24a95b85a347f70e49ee",
+      "git_blob": "e8ed2babb9b1396903466f631da0571504896aa5",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/linux-v6.14/fs/exec.c",
+      "bytes": 53537,
+      "sha256": "036d5169d2ff5033cd9a51324f7db1e71ef03b7a40cc62534ec87570771d57f7",
+      "git_blob": "506cd411f4ac2ecd8a4ba5711fb5952d44182064",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/linux-v6.8/fs/exec.c",
+      "bytes": 53615,
+      "sha256": "6df9a811b61b67caf4b48a3d55b2bf89ce46a8147563ce3fdbfaf86dccbc9838",
+      "git_blob": "af4fbb61cd53e97c788387a0d8277d1ce5495d7d",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/linux-v6.8/kernel/exit.c",
+      "bytes": 48977,
+      "sha256": "c7a2878deada686a04be224f8b5185ad022a995a297229ff8b43e8c3b53f2af9",
+      "git_blob": "dfb963d2f862ada6a2f06259c6df4923272cb218",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/linux-v6.8/kernel/fork.c",
+      "bytes": 89451,
+      "sha256": "82e2af227e6f67d64f9c4c20a5c121c59aac575c6cb59da54a9bd16c5eb159e8",
+      "git_blob": "0d944e92a43ffa13bdbcce6c6a28c44bab29ca19",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/rust-1.99.0/library/std/src/sys/process/unix/unix.rs",
+      "bytes": 51130,
+      "sha256": "1c0f874f1835e5befa6e8bdd65450903f475248b525d3b7b5e1ce861311a21d0",
+      "git_blob": "34bf78e8bb325c8abb4da4dba66dbe0c44ae942f",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/source-manifest.json",
+      "bytes": 1853,
+      "sha256": "10f7598295d11e84550ee97000e65af7ab6d0134fa6d0a5b0629f18a3c151226",
+      "git_blob": "a701df96f67f65e91ae5423b2d9a8322c49899cf",
+      "matches_original_immutable_manifest": true
+    },
+    {
+      "path": "grok-spawn-gate-candidate-r2/primary/tokio-1.53.2/tokio/src/net/addr.rs",
+      "bytes": 10113,
+      "sha256": "7aac2266980d74a9a95b3b67bf11a44a46dcfd9d44d6f9e222106c5451793713",
+      "git_blob": "a098990bb79b22ce4ea96b1d5b4afc530e7dcc29",
+      "matches_original_immutable_manifest": true
+    }
+  ],
+  "readable_copies": [
+    {
+      "path": "immutable-backup-manifest.json",
+      "original_path": "grok-spawn-gate-candidate-r2/immutable-backup-manifest.json",
+      "bytes": 11923,
+      "sha256": "5e14937ab49e1c759aab6f8214a8cdfd6b72e604a5cdb02f5cb97ce8f1968c0e",
+      "git_blob": "1cd42a4bcb318f9cae01270b64846566b037b99e",
+      "exact_copy": true
+    },
+    {
+      "path": "DESIGN.md",
+      "original_path": "grok-spawn-gate-candidate-r2/DESIGN.md",
+      "bytes": 8482,
+      "sha256": "700bee4098bf490374a3f0d67112b9edd06aae914ddb0536b201773fd7f4eb79",
+      "git_blob": "74d89a378cb67bd03655ee037a2377118bf928e4",
+      "exact_copy": true
+    },
+    {
+      "path": "audit.json",
+      "original_path": "grok-spawn-gate-candidate-r2/audit.json",
+      "bytes": 1598,
+      "sha256": "d1be21a6f2dd9997251e62e6f10ddbc920b8a12593d554295e5bcd12119fd4ff",
+      "git_blob": "173045ba10494b24732da0605b6d24bf15580caa",
+      "exact_copy": true
+    },
+    {
+      "path": "primary-boundaries.json",
+      "original_path": "grok-spawn-gate-candidate-r2/primary-boundaries.json",
+      "bytes": 6584,
+      "sha256": "7e82b0f0c6727de1a8aae6d7e7856f273d8273549450ab1125e064c2ec42e415",
+      "git_blob": "ddcfbd717a15c171a705f7beb9d04af05bcb532e",
+      "exact_copy": true
+    },
+    {
+      "path": "controlled-experiment/controlled_inheritance.py",
+      "original_path": "grok-spawn-gate-candidate-r1/controlled_inheritance.py",
+      "bytes": 10157,
+      "sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+      "git_blob": "eeb49539405574b74e4efaddd9b891030c085a2b",
+      "exact_copy": true
+    },
+    {
+      "path": "controlled-experiment/execution.json",
+      "original_path": "grok-spawn-gate-candidate-r1/controlled-run-r1/execution.json",
+      "bytes": 1141,
+      "sha256": "fac8f9534c0737c40547782279381055aa7d7d6c2e4d3aef1af1cc39d4901a50",
+      "git_blob": "5ec14f73d7c39854d4140cb9c2af91114f597fa4",
+      "exact_copy": true
+    },
+    {
+      "path": "controlled-experiment/stdout.log",
+      "original_path": "grok-spawn-gate-candidate-r1/controlled-run-r1/stdout.log",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "exact_copy": true
+    },
+    {
+      "path": "controlled-experiment/stderr.log",
+      "original_path": "grok-spawn-gate-candidate-r1/controlled-run-r1/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "exact_copy": true
+    },
+    {
+      "path": "controlled-experiment/experiment.json",
+      "original_path": "grok-spawn-gate-candidate-r1/controlled-run-r1/experiment/experiment.json",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "exact_copy": true
+    },
+    {
+      "path": "format-r2/local-format-check-r2.json",
+      "original_path": "grok-spawn-gate-candidate-r2/local-format-check-r2.json",
+      "bytes": 1131,
+      "sha256": "352b1e3f3d1a60045fb466ac762145061c01c97c42114cda08466a10f882faec",
+      "git_blob": "61e85a78c9adf6759ba980a991e4f9120f960b58",
+      "exact_copy": true
+    },
+    {
+      "path": "format-r2/local-format-r2.stdout.log",
+      "original_path": "grok-spawn-gate-candidate-r2/local-format-r2.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "exact_copy": true
+    },
+    {
+      "path": "format-r2/local-format-r2.stderr.log",
+      "original_path": "grok-spawn-gate-candidate-r2/local-format-r2.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "exact_copy": true
+    }
+  ]
+}

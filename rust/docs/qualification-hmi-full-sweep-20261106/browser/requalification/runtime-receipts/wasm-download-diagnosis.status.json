@@ -1,0 +1,14 @@
+{
+  "scope": "Serialization of an actual MCP return retained in this session; original field values are unchanged.",
+  "store_key": "browser_wasm_diagnosis_result:0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"at_unix_ms\": 1793973567583,\n  \"audit_recorded\": true,\n  \"automatic_retry\": false,\n  \"cancelled\": false,\n  \"exit_code\": 0,\n  \"job_id\": \"1a1b1281877-fc05-7657\",\n  \"launch_nonce\": \"64b97997065a535ae2cde2945ea3c357\",\n  \"log_bytes\": {\n    \"stderr\": {\n      \"seen\": 0,\n      \"stored\": 0\n    },\n    \"stdout\": {\n      \"seen\": 2100,\n      \"stored\": 2100\n    }\n  },\n  \"log_errors\": {\n    \"stderr\": null,\n    \"stdout\": null\n  },\n  \"log_synced\": {\n    \"stderr\": true,\n    \"stdout\": true\n  },\n  \"log_truncated\": {\n    \"stderr\": false,\n    \"stdout\": false\n  },\n  \"output_complete\": true,\n  \"output_durable\": true,\n  \"state\": \"succeeded\",\n  \"terminal_publication_confirmed\": true,\n  \"terminal_publication_protocol\": 1,\n  \"timed_out\": false\n}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  }
+}

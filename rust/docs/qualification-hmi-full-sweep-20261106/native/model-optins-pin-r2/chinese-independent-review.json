@@ -1,0 +1,349 @@
+{
+  "schema": "pipecat-chinese-native-raw-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793987368.5663328,
+  "scope": "Independent analysis of the one actual current-source synthetic Chinese case and its original raw bytes. No replay, model invocation, code or input modification.",
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "test_file": "rust/crates/pipecat-hepta/src/local_speech_native_tests.rs",
+    "test_file_bytes": 7313,
+    "test_file_sha256": "48ca4bd2aea77269b37bce42708a3d296666fd81f3f18c6919f8749911a713e0"
+  },
+  "evidence": [
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/inputs.json",
+      "bytes": 34345,
+      "sha256": "633b91da9cf5c65211cb2cbf3c978c260273e5eacb4aa0b5197ad0f6234656a7"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/batch.json",
+      "bytes": 27672,
+      "sha256": "0d3ccc453e91f204ca8e339d0a8fb21c9c3a03a124374a3155661e3cfc5f2a43"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/runtime-start.json",
+      "bytes": 5531,
+      "sha256": "e3de898b3beb05d6cf795ed77a24705c8e65ec51f9dbb6f661345eb79d8b38f0"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/runtime-status.json",
+      "bytes": 952,
+      "sha256": "e8ff63b1fe3977144508817ef9f65759b03fd3a92cb7a709331411eec07d062f"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/chinese-gate.json",
+      "bytes": 3574,
+      "sha256": "b1f5969587bb27a0e6ae9c35d0a1dace06692426b3c1e66694e24358de7df04d"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/chinese-command.log",
+      "bytes": 198164,
+      "sha256": "d2f948d3b69157780dcc5b000f62a73f9d2db231507b79950522e9aed168a9a7"
+    },
+    {
+      "path": "workspace-evidence/model-optins-final-pin-r2/chinese-json-lines.json",
+      "bytes": 2628,
+      "sha256": "808ae901020a863f1c78e31138df676e4a9565e62eaa62874212bc48e93619ff"
+    }
+  ],
+  "runtime": {
+    "job_id": "1a1b1e882d4-fc05-7b73",
+    "state": "succeeded",
+    "exit_code": 0,
+    "output_complete": true,
+    "output_durable": true,
+    "timed_out": false
+  },
+  "batch_scope": {
+    "observed_command_receipts": 19,
+    "all_original_command_and_wrapper_exits_zero": true,
+    "declared_case_count": 21,
+    "case_partition": {
+      "local_sfu": 3,
+      "chinese_synthetic": 1,
+      "piper": 4,
+      "whisper_runner": 13
+    },
+    "per_target_full_raw_review": "Only Chinese complete raw and SFU/Chinese gate receipts are present in this small package. The remaining raw target and runner receipts will be audited from the separate full export; they are not fabricated here.",
+    "filtered_tests_not_counted": true,
+    "no_duplicate_matrix_counts_added": true
+  },
+  "immutable_inputs": {
+    "verified_before_after_file_identities": 32,
+    "each_resolved_path_bytes_and_sha_equal": true,
+    "source_unchanged": true,
+    "espeak": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/share/espeak-ng-data",
+      "resolved": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/share/espeak-ng-data",
+      "entry_count_including_directories": 391,
+      "file_count": 355,
+      "total_file_bytes": 17991651,
+      "sha256": "bba750d12c77a7714b579dc8a34e205417174963cfd05a54da8edd4031f09926",
+      "algorithm": "sorted relative UTF-8 filename + NUL + lowercase file SHA256 hex ASCII + LF"
+    },
+    "piper_config_and_whisper_settings_unchanged": true,
+    "whisper_model": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-small-q5_1.bin",
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+    },
+    "whisper_settings": {
+      "language": "zh",
+      "no_speech_probability": 0.4,
+      "initial_prompt": "以下是简体中文语音。",
+      "temperature": 0.0,
+      "translate_to_english": false,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      }
+    },
+    "media_before": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/fixtures/chinese-synthetic-pin-r1/media",
+      "mode": 448,
+      "entries": [],
+      "scope": "Mutable test-owned capture state, deliberately excluded from immutable model equality."
+    },
+    "media_after": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/fixtures/chinese-synthetic-pin-r1/media",
+      "mode": 448,
+      "entries": [
+        "scope.json"
+      ],
+      "scope": "Mutable test-owned capture state, deliberately excluded from immutable model equality."
+    }
+  },
+  "outer_cleanup": {
+    "pgid": 1169842,
+    "signal_requests": [],
+    "scope": "Signals target only the owned process group. Actual leader reap and non-atomic group observations are recorded; this is not a claim that all descendants were individually joined.",
+    "group_before": {
+      "present": false
+    },
+    "leader_exit_before": 0,
+    "unexpected_surviving_group_after_driver_exit": false,
+    "leader_reaped": true,
+    "leader_exit_after": 0,
+    "group_after": {
+      "present": false
+    },
+    "cleanup_checks_succeeded": true
+  },
+  "actual_test": {
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "test",
+      "--locked",
+      "-p",
+      "pipecat-hepta",
+      "--features",
+      "local-speech",
+      "--lib",
+      "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+      "--",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "passed_cases": 1,
+    "failed_cases": 0,
+    "ignored_cases": 0,
+    "filtered_cases": 3,
+    "raw_libtest_elapsed_seconds": 109.74,
+    "selection_exact": true,
+    "reached_shutdown": "The unchanged function awaits speech.shutdown after its eight records and non-empty/retention checks. The exact case and original process both returned success. This is not a physical-device or production-owner shutdown qualification."
+  },
+  "raw_handling": {
+    "original_binary_bytes_preserved": true,
+    "whole_log_is_valid_utf8": false,
+    "first_invalid_utf8": {
+      "offset_start": 4550,
+      "offset_end_exclusive": 4552,
+      "reason": "invalid continuation byte"
+    },
+    "extraction": "Only complete JSON-prefixed byte lines are strictly UTF-8 decoded. Original byte ranges and line SHA-256 are recorded. No lossy decoding or replacement was applied to transcript strings.",
+    "strict_json_records": 9,
+    "independent_records_equal_exported_derived_json": true
+  },
+  "observations": [
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "recognized": "你好欢迎使用本地语音助手。",
+      "noisy": false,
+      "reference_after_punctuation_whitespace_removal": "你好欢迎使用本地语音助手",
+      "hypothesis_after_same_removal": "你好欢迎使用本地语音助手",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 9.285048,
+      "rss_kib": 781164,
+      "byte_range": [
+        26908,
+        27116
+      ],
+      "raw_line_sha256": "41884ea3af048970e1fef66c249171784bcdcd8f943e6211ae1ca13cd11e1f3e"
+    },
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "recognized": "你好欢迎使用本地语音助手。",
+      "noisy": true,
+      "reference_after_punctuation_whitespace_removal": "你好欢迎使用本地语音助手",
+      "hypothesis_after_same_removal": "你好欢迎使用本地语音助手",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 9.084715,
+      "rss_kib": 782484,
+      "byte_range": [
+        49456,
+        49663
+      ],
+      "raw_line_sha256": "b178c4579754751ae7433009a1a3ec17ea0ecb87a0c6ab05f56da497636c84e1"
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "recognized": "请停止播放保留当前,挥话。",
+      "noisy": false,
+      "reference_after_punctuation_whitespace_removal": "请停止播放保留当前会话",
+      "hypothesis_after_same_removal": "请停止播放保留当前挥话",
+      "reference_codepoints": 11,
+      "levenshtein_edits": 1,
+      "cer": 0.09090909090909091,
+      "stt_seconds": 8.96237,
+      "rss_kib": 783568,
+      "byte_range": [
+        72785,
+        72988
+      ],
+      "raw_line_sha256": "4aa54f6f972b894cb9bba87524087f316fb911e3f1f8e892d2f9881bc8e78a36"
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "recognized": "请停止播放保留当前,挥话。",
+      "noisy": true,
+      "reference_after_punctuation_whitespace_removal": "请停止播放保留当前会话",
+      "hypothesis_after_same_removal": "请停止播放保留当前挥话",
+      "reference_codepoints": 11,
+      "levenshtein_edits": 1,
+      "cer": 0.09090909090909091,
+      "stt_seconds": 9.156204,
+      "rss_kib": 783568,
+      "byte_range": [
+        95823,
+        96025
+      ],
+      "raw_line_sha256": "eae4df50e913bab168f264468976dc580a24d3028b69075738926b9d76dd116a"
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "recognized": "今天我们测试中文语音识别。",
+      "noisy": false,
+      "reference_after_punctuation_whitespace_removal": "今天我们测试中文语音识别",
+      "hypothesis_after_same_removal": "今天我们测试中文语音识别",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 9.161356,
+      "rss_kib": 783572,
+      "byte_range": [
+        120169,
+        120374
+      ],
+      "raw_line_sha256": "cb8d8eb120f2b090b8b34aac9c626d6ac04020348016a44a742fd00c00d3da27"
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "recognized": "今天我们测试中文语音识别。",
+      "noisy": true,
+      "reference_after_punctuation_whitespace_removal": "今天我们测试中文语音识别",
+      "hypothesis_after_same_removal": "今天我们测试中文语音识别",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 8.980134,
+      "rss_kib": 783572,
+      "byte_range": [
+        142483,
+        142687
+      ],
+      "raw_line_sha256": "2199e79e6a80c2ebd4070becb38a1c61c2e7588c66dab820d629f24961fd6c5f"
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "recognized": "设备重新连接以后继续工作。",
+      "noisy": false,
+      "reference_after_punctuation_whitespace_removal": "设备重新连接以后继续工作",
+      "hypothesis_after_same_removal": "设备重新连接以后继续工作",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 9.228424,
+      "rss_kib": 794960,
+      "byte_range": [
+        170239,
+        170444
+      ],
+      "raw_line_sha256": "15c9878e565f20ec66b025d8305df0ae0a664182ce3e311407ec870471def62f"
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "recognized": "设备重新连接以后继续工作。",
+      "noisy": true,
+      "reference_after_punctuation_whitespace_removal": "设备重新连接以后继续工作",
+      "hypothesis_after_same_removal": "设备重新连接以后继续工作",
+      "reference_codepoints": 12,
+      "levenshtein_edits": 0,
+      "cer": 0.0,
+      "stt_seconds": 8.795723,
+      "rss_kib": 794960,
+      "byte_range": [
+        197745,
+        197949
+      ],
+      "raw_line_sha256": "b34fcd12b95f33f09b528689dbfcf723811bb5c659c987d4f665e9f156901d47"
+    }
+  ],
+  "derived_quality_diagnostic": {
+    "measurement_policy": "Unicode codepoint Levenshtein distance after removing only Unicode punctuation categories P* and whitespace. No traditional/simplified folding, case folding, NFKC, spelling correction or alternative-reference selection.",
+    "unicode_database_version": "15.0.0",
+    "nonempty_transcripts": 8,
+    "raw_exact_text_matches": 4,
+    "punctuation_whitespace_ignored_exact_matches": 6,
+    "sum_edits": 2,
+    "sum_reference_codepoints": 94,
+    "aggregate_cer": 0.02127659574468085,
+    "observed_error": "Both clean and noisy versions of the second sentence transcribe 会话 as 挥话.",
+    "new_quality_threshold_or_pass_claim": false,
+    "attribution_limit": "These outputs describe the fixed Piper-to-resampler-to-Whisper chain. They do not isolate whether pronunciation or recognition caused the difference."
+  },
+  "timing": {
+    "stt_min_seconds": 8.795723,
+    "stt_max_seconds": 9.285048,
+    "stt_sum_seconds": 72.653974,
+    "reported_n8_statistics": {
+      "n": 8,
+      "p50_us": 9084715,
+      "p95_us": 9285048,
+      "p99_us": 9285048,
+      "scope": "offline_stt_and_retention_not_mic_to_speaker"
+    },
+    "statistics_definition": "The unchanged test sorts eight STT samples and uses index 3 as p50 and index 7 as both p95 and p99. These eight-sample order statistics are not population tail-latency guarantees.",
+    "stt_clock_scope": "Starts immediately before submit_with_source and stops after its result; excludes Piper synthesis, prior resampling, later explicit source verify/release and final LocalSpeech shutdown.",
+    "command_gate_interval_seconds_including_source_after_checks": 190.29344749450684,
+    "batch_stage_interval_seconds_including_wrapper": 190.84649658203125,
+    "entire_model_outer_interval_through_integrity_seconds": 829.7204090000596,
+    "cargo_compile_report": "Finished test profile in 1m 19s, as rounded by Cargo.",
+    "captured_pcm_durations_seconds": null,
+    "captured_duration_limit": "This case does not print captured PCM lengths/durations. No audio real-time factor or mic-to-speaker latency can be computed from these raw JSON samples.",
+    "decoder_padding": "The unchanged test adds one second (32000 bytes) of zero PCM decoder padding while retaining/verifying only the captured pre-padding byte count."
+  },
+  "quality_boundary": [
+    "Eight records are four fixed synthetic utterances each with clean and deterministic low-amplitude white-noise input; they are not eight independent human speakers or eight test cases.",
+    "The unchanged acceptance assertion requires nonempty recognized text and exact retained-source integrity/release, not an accuracy threshold. Passing it does not imply every word was correct.",
+    "The synthetic noise is not measured acoustic echo. No physical microphone, OS permission, unplug/revoke recovery, audible speaker output or real Hepta owner/thread/grants was qualified.",
+    "The separate authorized AISHELL recording uses the fixed base Whisper configuration. It must not be merged with these small-q5_1 synthetic results or counted before its actual output arrives."
+  ]
+}

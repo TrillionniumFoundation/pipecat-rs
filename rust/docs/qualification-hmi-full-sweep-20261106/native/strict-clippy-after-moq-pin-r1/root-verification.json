@@ -1,0 +1,153 @@
+{
+  "schema": "pipecat-root-final-strict-verification-v1",
+  "created_utc": "2026-11-06T18:34:03.086753+00:00",
+  "head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+  "tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+  "source_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+  "all_input_file_identity_records_match_before_after": true,
+  "observed_files": 28,
+  "original_clippy_argv_exactly_matches_original_0cc_command": true,
+  "qualification_commands_started": 3,
+  "strict_clippy_attempts": 1,
+  "strict_original_exit_code": 0,
+  "strict_wrapper_exit_code": 0,
+  "containment_exit_code": 0,
+  "integrity_exit_code": 0,
+  "whole_runner_seconds": 174.91189242410474,
+  "stages": [
+    {
+      "name": "format-moq-diagnostic",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustfmt",
+        "--check",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-moq/src/tests.rs"
+      ],
+      "original_exit_code": 0,
+      "wrapper_exit_code": 0,
+      "execution_elapsed_seconds": 0.06800861400552094,
+      "elapsed_seconds": 0.06848702509887516,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-moq-diagnostic.stdout.log",
+          "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-moq-diagnostic.stdout.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "cleanup": {
+        "pid": 1522157,
+        "pgid": 1522157,
+        "signals": [],
+        "errors": [],
+        "leader_exit_before": 0,
+        "group_before": {
+          "present": false
+        },
+        "group_survived_leader": false,
+        "leader_reaped": true,
+        "leader_exit_after": 0,
+        "group_after": {
+          "present": false
+        },
+        "checks_succeeded": true,
+        "scope": "Only the newly owned process group is signalled. Actual leader reap and non-atomic final group absence do not assert individual descendant joins."
+      }
+    },
+    {
+      "name": "format-quality-ledger",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustfmt",
+        "--check",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-evals/src/simulation/quality.rs"
+      ],
+      "original_exit_code": 0,
+      "wrapper_exit_code": 0,
+      "execution_elapsed_seconds": 0.03604931500740349,
+      "elapsed_seconds": 0.036263020941987634,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-quality-ledger.stdout.log",
+          "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-quality-ledger.stdout.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "cleanup": {
+        "pid": 1522158,
+        "pgid": 1522158,
+        "signals": [],
+        "errors": [],
+        "leader_exit_before": 0,
+        "group_before": {
+          "present": false
+        },
+        "group_survived_leader": false,
+        "leader_reaped": true,
+        "leader_exit_after": 0,
+        "group_after": {
+          "present": false
+        },
+        "checks_succeeded": true,
+        "scope": "Only the newly owned process group is signalled. Actual leader reap and non-atomic final group absence do not assert individual descendant joins."
+      }
+    },
+    {
+      "name": "strict-clippy",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "original_exit_code": 0,
+      "wrapper_exit_code": 0,
+      "execution_elapsed_seconds": 172.4733244390227,
+      "elapsed_seconds": 172.4740827351343,
+      "logs": {
+        "stdout": {
+          "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/strict-clippy.stdout.log",
+          "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/strict-clippy.stdout.log",
+          "bytes": 14726,
+          "sha256": "108bed385f7d898c9f23d8b374966897053a9866b7ae349270c19eb931baf348"
+        }
+      },
+      "cleanup": {
+        "pid": 1522159,
+        "pgid": 1522159,
+        "signals": [],
+        "errors": [],
+        "leader_exit_before": 0,
+        "group_before": {
+          "present": false
+        },
+        "group_survived_leader": false,
+        "leader_reaped": true,
+        "leader_exit_after": 0,
+        "group_after": {
+          "present": false
+        },
+        "checks_succeeded": true,
+        "scope": "Only the newly owned process group is signalled. Actual leader reap and non-atomic final group absence do not assert individual descendant joins."
+      }
+    }
+  ],
+  "raw_verification_json": {
+    "bytes": 69866,
+    "sha256": "f11090ea838fb5b606d40cd048daec5d503cc080c7a086729f030d24a14da26c"
+  },
+  "full_archive": "../strict-clippy-final-q-r1.tar.xz",
+  "scope": "Only these three Q checks; original 0cc strict/fmt-all and full test matrix failures remain unchanged."
+}

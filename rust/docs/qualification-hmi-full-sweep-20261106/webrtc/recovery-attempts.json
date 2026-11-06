@@ -1,0 +1,34 @@
+[
+  {
+    "path": "index.json",
+    "bytes": 6130,
+    "sha256": "b9335864ea42ce2b2d09f629669697e03175953d3e70e4117df921effe4c7471",
+    "expected_sha256": "b9335864ea42ce2b2d09f629669697e03175953d3e70e4117df921effe4c7471",
+    "matches_original_hash": true,
+    "origin": "Complete real tool-output text retained in this task's conversation; recovered bytes accepted only if original recorded hash matches."
+  },
+  {
+    "path": "README.md",
+    "bytes": 7747,
+    "sha256": "a8f726c950ac0bc2b3d7739e396992a54877e13bf1b1075e5438e97bb8e9caa9",
+    "expected_sha256": "a8f726c950ac0bc2b3d7739e396992a54877e13bf1b1075e5438e97bb8e9caa9",
+    "matches_original_hash": true,
+    "origin": "Complete real tool-output text retained in this task's conversation; recovered bytes accepted only if original recorded hash matches."
+  },
+  {
+    "path": "historical/webrtc-shutdown-evidence.json",
+    "bytes": 5280,
+    "sha256": "7e9017fba725c074daa19cbcbfc3f8feec2bd860c3659ad66b24a8fa182eca6a",
+    "expected_sha256": "7e9017fba725c074daa19cbcbfc3f8feec2bd860c3659ad66b24a8fa182eca6a",
+    "matches_original_hash": true,
+    "origin": "Original published e526 file read through GitHub; immutable blob f9efefda08ec8b091f62c4460393cf7eb3ce8352."
+  },
+  {
+    "path": "historical/webrtc-fixed-repeat.log",
+    "bytes": 19001,
+    "sha256": "0e676432fc2147d5ea1defd90d19093c4153a5f1c18719277f81c64762da8296",
+    "expected_sha256": "0e676432fc2147d5ea1defd90d19093c4153a5f1c18719277f81c64762da8296",
+    "matches_original_hash": true,
+    "origin": "Original published e526 file read through GitHub; immutable blob febbdfc60f371dcfeccf935705b7feec0b98fc34."
+  }
+]

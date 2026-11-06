@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "scope": "Exact public AISHELL fixture recovered and hashed; read-only preparation for one separately authorized current-source offline STT diagnostic. No inference was run by this probe.",
+  "host": "desktop",
+  "job_id": "1a1b150a920-fc05-77b5",
+  "idempotency_key": "f9f576cc6c66-aishell-fixture-presence-r1-20261106",
+  "runtime": {
+    "state": "succeeded",
+    "exit_code": 0,
+    "output_complete": true,
+    "output_durable": true,
+    "stdout_bytes": 8451,
+    "stderr_bytes": 0,
+    "probe_elapsed_seconds": 1.3652469469234347
+  },
+  "artifacts": [
+    {
+      "path": "aishell-fixture-presence-r1.py",
+      "bytes": 8634,
+      "sha256": "0ef2c52d454542194c658df90c42a24d80dc6c24c5f05bd1eb51aa25f9fdb578"
+    },
+    {
+      "path": "aishell-fixture-presence-r1.stdout.json",
+      "bytes": 8451,
+      "sha256": "bdc73b95689ca4398953b3d83f806984c41ccf3bf920600b2b7ba41def9eaab9"
+    },
+    {
+      "path": "aishell-fixture-presence-r1.runtime.json",
+      "bytes": 18972,
+      "sha256": "21222e7ecfcbb6cb8891754e027100cb050bf7802f15718b23d0252f7ba9b411"
+    }
+  ],
+  "fixture": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav",
+    "sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13",
+    "bytes": 137036,
+    "matches_original": true,
+    "wav_format": {
+      "rate_hz": 16000,
+      "channels": 1,
+      "frames": 68496,
+      "sample_width_bytes": 2,
+      "compression": "NONE"
+    }
+  },
+  "historical_alias_not_used": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-BAC009S0724W0121.wav",
+    "sha256": "ebde2b73df17f327e2e760c37c13c537c753d1cb2d030467bb9518d00322e137",
+    "bytes": 31,
+    "matches_original": false
+  },
+  "fixed_configuration": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+    "sha256": "d6fcd5f1a04d0deae47fea2672b1c78707a1b2f136136faa33e05477cf77c1c6",
+    "whisper_model": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+    },
+    "whisper_settings": {
+      "language": "zh",
+      "no_speech_probability": 0.4,
+      "initial_prompt": "以下是简体中文语音。",
+      "temperature": 0.0,
+      "translate_to_english": false,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      }
+    },
+    "limit": "Unused LocalSpeech fields/identity labels omitted; stt_fixture does not admit them."
+  },
+  "whisper_model": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+    "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    "bytes": 147951465,
+    "matches_original": true
+  },
+  "reference": {
+    "text": "广州市房地产中介协会分析",
+    "character_count": 12,
+    "utf8_no_newline_bytes": 36,
+    "utf8_no_newline_sha256": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee",
+    "historical_source_record": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source-actual.json",
+      "sha256": "1f67bee54368ee8319a2c4bdd0087b5141dfce32fcaf9430423de37d4c1c17e2",
+      "keys": [
+        "alias_blob_sha256",
+        "annotation_audio_alias",
+        "annotation_path",
+        "annotation_sha256",
+        "expected",
+        "repository",
+        "revision",
+        "wav_format",
+        "wav_path",
+        "wav_sha256"
+      ],
+      "public_fields": {
+        "repository": "wenet-e2e/wenet",
+        "revision": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+        "wav_path": "test/resources/aishell-BAC009S0724W0121.wav",
+        "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13",
+        "annotation_path": "test/resources/dataset/data.list",
+        "annotation_sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7",
+        "expected": "广州市房地产中介协会分析",
+        "wav_format": {
+          "rate_hz": 16000,
+          "channels": 1,
+          "frames": 68496
+        },
+        "annotation_audio_alias": "test/resources/dataset/aishell-BAC009S0724W0121.wav",
+        "alias_blob_sha256": "ebde2b73df17f327e2e760c37c13c537c753d1cb2d030467bb9518d00322e137"
+      }
+    },
+    "independent_upstream_retrieval": {
+      "path": "aishell-reference/wenet-data.list",
+      "receipt": "aishell-reference/retrieval.json",
+      "repository": "wenet-e2e/wenet",
+      "commit": "be6ad97fdb512589df113042f7ff3a29d392fb38",
+      "source_path": "test/resources/dataset/data.list",
+      "bytes": 447,
+      "sha256": "aa82642e1ccfa6cc90b85f6cddc82838f1b34f45f05f0a5f0c10005006dbd1e7",
+      "git_blob": "bb298bc1d68ca750bd70a9cf9bb1181dff1458ce"
+    },
+    "limit": "The original data.list bytes were independently retrieved by the root agent and locally hash-checked here; this probe did not find or claim a data.list copy in the selected desktop assets directory."
+  },
+  "interface_audit": {
+    "inspected_git_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+    "source_path": "rust/crates/pipecat-hepta/examples/stt_fixture.rs",
+    "bytes": 1997,
+    "sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a",
+    "behavior": [
+      "Deserialize the existing LocalSpeechConfig, then use only Whisper model path/hash and Whisper settings.",
+      "Verify the explicit Whisper model digest before loading.",
+      "Read at most 1 MiB of explicit 16 kHz mono PCM16 WAV.",
+      "Submit through WhisperService using the unchanged configured settings.",
+      "Await service.shutdown() before printing the success JSON."
+    ],
+    "not_called": [
+      "LocalSpeech::load",
+      "MediaStore::open",
+      "physical input/output",
+      "Hepta owner/thread admission"
+    ],
+    "default_whisper_inference_threads": 4
+  },
+  "single_run_preparation": {
+    "status": "Approved by root for gate agent after the final matrix; not executed by this probe.",
+    "source_and_target": "Use the gate agent final frozen source, selected Rust 1.99.0 native environment, and the existing exclusively owned target; wait until other matrix/model jobs release it.",
+    "build_argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "-p",
+      "pipecat-hepta",
+      "--features",
+      "local-speech",
+      "--example",
+      "stt_fixture",
+      "--message-format=json-render-diagnostics"
+    ],
+    "artifact_selection": "Match metadata pipecat-hepta package_id plus compiler-artifact target.name=stt_fixture, target.kind includes example, and exactly one non-null executable. Hash that executable; do not select an old file merely by basename.",
+    "inference_argv": [
+      "<exact compiler-artifact executable>",
+      "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+      "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav"
+    ],
+    "resource_recommendation": {
+      "cpu_percent": 200,
+      "memory_max_bytes": 8589934592,
+      "nice": 10,
+      "cargo_build_jobs": 2,
+      "build_timeout_seconds": 300,
+      "inference_timeout_seconds": 60,
+      "owned_job_outer_deadline_required": true,
+      "timeout_cleanup": "Bound TERM/KILL/reap; preserve timeout/failure and do not label killed native work gracefully joined."
+    },
+    "fixed_before_inference": {
+      "whisper_model": "base multilingual; exact recorded SHA only",
+      "settings": {
+        "language": "zh",
+        "no_speech_probability": 0.4,
+        "initial_prompt": "以下是简体中文语音。",
+        "temperature": 0.0,
+        "translate_to_english": false,
+        "strategy": {
+          "beam_search": {
+            "beam_size": 5
+          }
+        }
+      },
+      "reference_text": "广州市房地产中介协会分析",
+      "reference_sha256": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee",
+      "run_count": 1,
+      "automatic_retry": false,
+      "configuration_or_prompt_changes": false
+    },
+    "retain": [
+      "Final source commit/tree and source before/after hashes.",
+      "Exact Cargo argv, compiler-artifact record, executable SHA before/after.",
+      "Config, model and WAV SHA before/after; reference raw bytes/hash and upstream provenance.",
+      "Complete original stdout JSON and stderr; exit status and bounded termination result.",
+      "Separate load_us and stt_us for this one fixed-profile execution."
+    ],
+    "quality_calculation": "Keep the original transcript verbatim. For the optional diagnostic CER, remove only Unicode punctuation and whitespace from reference and transcript, preserve traditional/simplified distinctions and other characters, and compute ordinary character Levenshtein distance divided by 12. No answer prompt, Unicode folding, model selection, pass threshold, or retry based on the result."
+  },
+  "historical_log": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/human-configured-base.log",
+    "sha256": "3c3fc16e34bc258a056fcceb5a87a556ca5c1faa4d6f172a66ff4023b9786b93",
+    "bytes": 2711,
+    "matches_published": true,
+    "limit": "Historical log hash only; not a new inference result."
+  },
+  "effects": {
+    "audio_playback": false,
+    "audio_capture": false,
+    "model_inference": false,
+    "remote_file_writes": false,
+    "configuration_changes": false,
+    "owner_or_thread_created": false
+  },
+  "limits": [
+    "One 4.281 second public prerecorded utterance is not representative human-speech acceptance.",
+    "No actual microphone, speaker, OS grant, acoustic noise/echo, user-heard output, or production owner/thread chain is qualified.",
+    "Only the Whisper subconfiguration is consumed by this interface; parsing old qualification labels does not admit the entire LocalSpeech config or validate its grants.",
+    "The eight synthetic Piper inputs are a distinct diagnostic and are not merged with this human recording.",
+    "Any later inference result belongs to its exact final source/toolchain/artifact and must be recorded separately; the historical log is not counted as a new run."
+  ]
+}

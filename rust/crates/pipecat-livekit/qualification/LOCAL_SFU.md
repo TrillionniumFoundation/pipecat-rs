@@ -89,10 +89,21 @@ remain in memory and are never logged or persisted. It attempts to verify:
 4. Cancellation and awaited close produce a peer-observed departure; the same
    identity rejoins and sends fresh data; repeated close remains safe
 5. Owned signaling references are released, the server process is killed and
-   reaped, temporary fixture files are removed, and its signaling port closes
+   reaped, and its signaling port closes. Failed assertions retain the original
+   server log; successful runs retain it when `PIPECAT_LIVEKIT_KEEP_EVIDENCE=1`,
+   otherwise their temporary fixture files are removed
 
 Startup and individual operations are bounded, with a 60-second scenario
 limit. The process has a cleanup guard for assertion failure and cancellation.
+SFU termination is confirmed only when `try_wait()` returns an exit status:
+each cleanup or Drop fallback polls for at most three seconds and records the
+PID, kill-request result, actual reap status and any timeout/error in
+`server-cleanup.jsonl`. No blocking `Child::wait()` or unbounded join is used.
+An unconfirmed reap is a failure, retains evidence, and is not reported as
+cleaned; a normal Drop also fails the test in that case. During an existing
+panic the original failure is preserved. Run the harness inside an owned job
+with a hard process deadline as the final boundary for any child whose exit
+cannot be confirmed by the bounded fallback.
 No automatic reconnection, network-loss recovery, server-failure rollback or
 playback/audibility result is covered by this harness.
 
@@ -101,8 +112,73 @@ the native prerequisites in [VALIDATION.md](../VALIDATION.md):
 
 ```sh
 export PIPECAT_LIVEKIT_SERVER=/absolute/path/to/verified/livekit-server
-cargo test -p pipecat-livekit --test local_sfu -- --ignored --nocapture
+export PIPECAT_LIVEKIT_KEEP_EVIDENCE=1
+cargo test -p pipecat-livekit --test local_sfu -- --ignored --nocapture --test-threads=1
 ```
+
+The test-only injected SDK WebSocket client is process-global. All scenarios in
+this integration binary must run serially. Each scenario owns a separate server,
+with an atomic sequence in its directory name so retained evidence from a fast
+failure cannot collide with the next scenario.
+
+## Additional remote-media candidates, 2026-11-06
+
+`tests/local_sfu/media_control.rs` adds two ignored scenarios to the same pinned,
+loopback-only fixture. These additions are **pending native compilation and
+execution**; their presence and formatting checks are not SFU qualification.
+The original audio/data/cancel/leave/rejoin scenario and its deadlines are intact.
+
+The video scenario publishes two distinct synthetic RGB band layouts, in sequence,
+from one native participant and consumes decoded video at another. Each pattern
+requires three matching decoded frames, a real `VideoSubscribed` observation,
+matching participant identity and track SID, camera source, RGB payload length,
+and the fixture's full 320x240 dimensions. This size is divisible by the native
+alignment and below the pinned SDK's additional simulcast-layer threshold; the
+test does not weaken size checks if adaptation chooses a different resolution.
+The decoder's interior patches must have mean error at most 30 per channel from
+the expected RGB primaries, and at least 95% of pixels must have the expected
+dominant channel (at least 160 and at least 80 above both other channels). These
+explicit lossy-codec tolerances reject black/gray, channel swaps and the previous
+layout. Pattern two is first captured only after pattern one qualifies, so replay
+of the first pattern cannot pass both phases. The received production
+`into_frame()` projection must retain the `UserImage` identity, `camera` transport
+source and track metadata. Source-acceptance receipts alone cannot pass.
+
+The audio-control scenario joins a tone publisher, a controlled receiver and an
+independent witness receiver. Both receivers first require their actual
+`AudioSubscribed` event and ten nonzero decoded PCM frames at 16kHz mono. The
+publisher continuously supplies 10ms chunks of generated 440Hz, 24kHz mono PCM.
+The controlled receiver calls `mute_participant` and records local owner-command
+completion separately from the matching `AudioUnsubscribed` event. A fixed 500ms
+drain records the actual queued PCM frame and sample counts. The following fixed
+one-second window must contain zero controlled PCM frames, while the independent
+witness receives at least twenty nonzero frames, including input in the second
+half of that window, and the source accepts at least twenty further chunks.
+Thus stopping the publisher cannot satisfy the mute check. Unmute must produce
+another actual `AudioSubscribed` for the same current track SID and at least ten
+new nonzero frames; the witness must remain subscribed throughout.
+
+The new scenarios return errors through cleanup before asserting: established
+participants receive `close()` calls with individual ten-second deadlines,
+signaling socket references have a three-second release check, the owned SFU
+has the bounded reap attempt above, and its listening port has a one-second
+closure check. A close timeout records failure and requests cancellation; it
+does not establish that the participant owner was joined. The original
+audio/data scenario keeps its original assertions and uses its existing Drop
+cancellation path when it unwinds, rather than promising awaited peer joins on
+failure. Scenario work remains bounded to 60 seconds; cleanup and its Drop
+fallback have separate deadlines and preserve their own failures.
+`media-events.jsonl` records stage times,
+subscription observations, PCM counters and decoded color statistics alongside
+the unchanged `server.log`. Failed runs keep both; the retention flag also keeps
+successful evidence. Tokens and media payloads are not written to these records.
+
+Even if executed successfully, these cases qualify synthetic localhost delivery
+and current-participant subscription behavior. They do not attest a separate SFU
+subscription acknowledgement, forced microphone mute, immediate PCM recall,
+physical capture, loudspeaker playback, human quality, screen sharing, hosted
+compatibility or recovery after network loss. The fixed drain and observation
+window do not establish indefinite silence or a privacy boundary.
 
 Do not re-run startup on a host that has explicitly denied the required access,
 or change security/proxy settings just to make the fixture pass. To reproduce

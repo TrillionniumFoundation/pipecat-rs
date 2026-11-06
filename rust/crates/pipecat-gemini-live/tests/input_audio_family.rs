@@ -1017,9 +1017,10 @@ async fn both_native_modes_preserve_default_and_fixed_transcript_identity() {
                 })
                 .collect();
             assert_eq!(transcripts.len(), 3);
-            for ((frame, text), dynamic_id) in transcripts
-                .into_iter()
-                .zip(["first-speaker", "", "second-speaker"])
+            for ((frame, text), dynamic_id) in
+                transcripts
+                    .into_iter()
+                    .zip(["first-speaker", "", "second-speaker"])
             {
                 assert_eq!(frame.direction, Direction::Downstream);
                 let expected_id = fixed_id.unwrap_or(if transcription { dynamic_id } else { "" });

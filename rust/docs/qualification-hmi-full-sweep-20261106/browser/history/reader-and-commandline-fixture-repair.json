@@ -1,0 +1,16 @@
+[
+  {
+    "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_acceptance.py",
+    "before_sha256": "1ecb160b3885ca9f64fdd7c8cc15f9c914c8eaa4fa614f6bbf4f544074281812",
+    "after_sha256": "b44e646aa7179f4d7ab2d2e69362a17a7495b029a5695110c67325172661ae67",
+    "assertions": 114,
+    "assertions_unchanged": true
+  },
+  {
+    "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py",
+    "before_sha256": "9d28feafc2429d04c559321129392d25da4bcb5a28c0bce93a0617caea111978",
+    "after_sha256": "262cfa38a401b2e21b6c81fe5fe474b58e80e1dd3c373b11ca3e1b1b1354971c",
+    "assertions": 40,
+    "assertions_unchanged": true
+  }
+]

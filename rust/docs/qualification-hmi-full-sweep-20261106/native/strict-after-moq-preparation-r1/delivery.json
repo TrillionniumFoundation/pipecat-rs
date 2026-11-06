@@ -1,0 +1,34 @@
+{
+  "schema": "pipecat-strict-after-moq-preparation-delivery-v1",
+  "source_directory": "/workspace/scratch/f9f576cc6c66/workspace-evidence/strict-clippy-after-moq-plan-r1",
+  "delivered_directory": "/workspace/scratch/f9f576cc6c66/pipecat-rs/rust/docs/qualification-hmi-full-sweep-20261106/native/strict-after-moq-preparation-r1",
+  "scope": "Preparation only. Original generated-time scope statements remain unchanged. Managed runtime outcomes, including later MoQ/Clippy results, are stored separately.",
+  "source_head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+  "source_tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+  "source_contract_sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3",
+  "runner_sha256": "2d2a93bf3e82524e5c7822a0bd3fe42de1d8a361362cd3ee59dce1e90cb3352c",
+  "independent_review_sha256": "f59c93d5259ca6fbacbc385cf329e04e8cad305b2e6dfa7a666d124dbe336da3",
+  "original_file_count": 9,
+  "original_file_bytes": 109545,
+  "archive_member_count": 9,
+  "archive": {
+    "path": "strict-after-moq-preparation-r1.tar.xz",
+    "bytes": 20164,
+    "sha256": "64d5ad916f48a36fc86b4cb3065c0fae437eb9a6c01b7e4f32406b0927f7ceab",
+    "git_blob_sha1": "181cda9122db84fc95357a186ae96d4726b60044"
+  },
+  "content_index": {
+    "path": "content-index.json",
+    "bytes": 2679,
+    "sha256": "f5ba3473b64a4efb72ef526a1fee1924b615077eec6589bf0147299615a4a304",
+    "git_blob_sha1": "412f5efbbfe502d8f10b21f3ec0e2e584f1953a0"
+  },
+  "checks": {
+    "source_files_unchanged": true,
+    "readable_copies_exact": true,
+    "archive_member_paths_exact": true,
+    "archive_member_bytes_and_sha256_exact": true,
+    "all_original_git_blob_ids_match_local_bytes": true
+  },
+  "changes": "Created this owned preparation delivery directory only; no shared report/index or Rust source edits and no native execution."
+}

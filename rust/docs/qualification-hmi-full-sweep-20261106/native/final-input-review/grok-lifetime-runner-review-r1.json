@@ -1,0 +1,43 @@
+{
+  "schema": "grok-lifetime-runner-readonly-review-v1",
+  "created_utc": "2026-11-06T16:48:41.999120+00:00",
+  "scope": "Static source/contract review only. No native process or Cargo command was executed by reviewer. No runner/source edits.",
+  "runner": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/task-helpers/desktop_grok_lifetime_pin_r1.py",
+    "bytes": 21149,
+    "sha256": "df34ba548570a00fef92de695e1fdd4199c7b82c40ff457eb24b5a792ad57788",
+    "ast_parse": true
+  },
+  "contract": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/task-helpers/source-contract-final-native-pin-r5.json",
+    "bytes": 11841,
+    "sha256": "538da3b8b642c7e7afe771cda5045e02e742635cb6e30c08301c17b8eaa73fe8",
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "changed_paths_count": 99,
+    "same_complete_path_list_as_root_freeze": true,
+    "source_sha256": {
+      "rust/crates/pipecat-grok-realtime/tests/app_cli.rs": "6529eac0c56d6f3b0c6686d469d0305f672e516731b416b96afbd93f0dc76df5",
+      "rust/crates/pipecat-evals/tests/bot_audio_response.rs": "d605033588e78252bcc0518d2b5f7470cf9f23b5833dc6822cc5b9db0f7491a3",
+      "rust/crates/pipecat-evals/tests/user_speech.rs": "1b45c80e8d220aff0b42ce0b556034d0e468b838f64f7059b40b8667fb9b0d95",
+      "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs": "96ad703190d83041feea27fe1570d158d503491a958fd80b614615c668c77cf0"
+    },
+    "all_four_rust_paths_and_hashes_match_root_freeze": true
+  },
+  "result": "no_blocking_finding_for_this_frozen_runner_and_contract",
+  "checks": [
+    "Shared qualification-owner-pin.lock is acquired nonblocking before source checks, fetch, checkout, compilation or tests; target owner ties target-pin to the same source-pin checkout.",
+    "Exact failed unchanged r4 source and fixed-hash completed C2 receipt are prerequisites. Updated commit/tree/clean status, full reviewed 99 changed paths and all four source SHA values must match.",
+    "Pinned executable hashes are checked. Four Rust files receive read-only rustfmt --check. Source manifests cover before/after execution.",
+    "Artifact binding is unfiltered workspace/default --no-run JSON, not a single-package feature graph. Exact package_id plus target kind/profile selects one app_cli harness and one normal grok_pcm. Both paths remain inside exclusive target; normal path must be embedded in harness; both SHA before/after retained.",
+    "--list must exactly equal all 12 declared test names; runtime is no-selector --nocapture with default libtest parallelism. Any inherited RUST_TEST_THREADS setting is rejected.",
+    "At most 20 serial harness invocations; 300s runtime window and 870s whole-job internal budget inside 900s outer cap. Actual runtime-window elapsed is checked at end, including final round. Any nonzero, timeout or wrong full 12-pass summary stops without replacement.",
+    "Round PID and running entry are persisted immediately after Popen; per-round raw/hash/elapsed retained. Exception-finally preserves interrupted round and source/artifact verification failures separately.",
+    "Timeout cleanup records owned process-group signal requests, actual leader reap and final group existence without claiming all descendants joined.",
+    "Schedule caveat explicitly identifies the child-lifetime barrier. Existing 60ms, single bind and product deadlines remain source facts; finite repeat window does not erase three historical failures."
+  ],
+  "delivery_requirements_retained": [
+    "Outer launcher must preserve actual runner/helper bytes and before/after hashes, environment and enforced cgroup/900s runtime receipt as planned by gate.",
+    "A static review does not certify execution success, bound compiler subprocess descendants beyond the outer runtime containment, or establish a cause for any historical failure."
+  ]
+}

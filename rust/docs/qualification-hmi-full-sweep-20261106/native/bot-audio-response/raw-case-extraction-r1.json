@@ -1,0 +1,1159 @@
+{
+  "raw_sha256": "61fa134f9505f8f1509bbb60950c7d2a7d86ccd575398d089ac687abbc78710d",
+  "cases": [
+    {
+      "case": "malformed_and_unsupported_pcm_fail_without_any_stt_upload",
+      "section_bytes": 62544,
+      "failure": [
+        "thread 'malformed_and_unsupported_pcm_fail_without_any_stt_upload' (813762) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=false, request_bytes=0, replied=false, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": false
+    },
+    {
+      "case": "invalid_bounds_are_rejected_before_connecting_or_starting_workers",
+      "section_bytes": 222,
+      "failure": [
+        "thread 'invalid_bounds_are_rejected_before_connecting_or_starting_workers' (813761) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:1071:5:\nassertion failed: same_worker_identities(&vad_workers(), &before)"
+      ],
+      "workers_before": {
+        "available_in_log": false
+      },
+      "workers_first": {
+        "available_in_log": false
+      },
+      "workers_after": {
+        "available_in_log": false
+      },
+      "http_gate_lines": [],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 0,
+      "has_work_error": false
+    },
+    {
+      "case": "cancellation_during_http_closes_connection_and_joins_session_and_peers",
+      "section_bytes": 62933,
+      "failure": [
+        "thread 'cancellation_during_http_closes_connection_and_joins_session_and_peers' (813755) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "R"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": false
+    },
+    {
+      "case": "dropping_run_future_with_queued_vad_work_closes_owned_websocket",
+      "section_bytes": 61149,
+      "failure": [
+        "thread 'dropping_run_future_with_queued_vad_work_closes_owned_websocket' (813756) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:914:5:\nnative VAD worker identities survived session drop and bounded observation"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": true
+    },
+    {
+      "case": "pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload",
+      "section_bytes": 72989,
+      "failure": [
+        "thread 'pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload' (813866) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=false, request_bytes=0, replied=false, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": false
+    },
+    {
+      "case": "genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio",
+      "section_bytes": 70426,
+      "failure": [
+        "thread 'genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio' (813759) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": false
+    },
+    {
+      "case": "ordinary_next_send_settlement_timeout_fails_without_sending_it",
+      "section_bytes": 62904,
+      "failure": [
+        "thread 'ordinary_next_send_settlement_timeout_fails_without_sending_it' (813785) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 29,
+      "has_work_error": false
+    },
+    {
+      "case": "ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting",
+      "section_bytes": 64635,
+      "failure": [
+        "thread 'ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting' (813790) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 30,
+      "has_work_error": false
+    },
+    {
+      "case": "interruption_and_new_llm_epoch_discard_delayed_old_http_result",
+      "section_bytes": 50754,
+      "failure": [
+        "thread 'interruption_and_new_llm_epoch_discard_delayed_old_http_result' (813760) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=true",
+        "HTTP gate 1: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 31,
+      "has_work_error": false
+    },
+    {
+      "case": "empty_transcript_emits_no_response_and_later_real_segment_recovers",
+      "section_bytes": 49705,
+      "failure": [
+        "thread 'empty_transcript_emits_no_response_and_later_real_segment_recovers' (813757) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "R"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=47660, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 31,
+      "has_work_error": false
+    },
+    {
+      "case": "explicit_next_send_discards_previous_pending_recognition",
+      "section_bytes": 47425,
+      "failure": [
+        "thread 'explicit_next_send_discards_previous_pending_recognition' (813758) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true",
+        "HTTP gate 1: received=true, request_bytes=34860, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 31,
+      "has_work_error": false
+    },
+    {
+      "case": "spoken_absence_held_pcm_new_llm_start_fails",
+      "section_bytes": 33360,
+      "failure": [
+        "thread 'spoken_absence_held_pcm_new_llm_start_fails' (813885) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 33,
+      "has_work_error": false
+    },
+    {
+      "case": "two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order",
+      "section_bytes": 29137,
+      "failure": [
+        "thread 'two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order' (813929) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "R"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=47660, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 32,
+      "has_work_error": false
+    },
+    {
+      "case": "spoken_absence_held_pcm_new_remote_speaking_start_fails",
+      "section_bytes": 21625,
+      "failure": [
+        "thread 'spoken_absence_held_pcm_new_remote_speaking_start_fails' (813895) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 0,
+      "native_samples_total": 33,
+      "has_work_error": false
+    },
+    {
+      "case": "spoken_absence_held_pcm_continuation_keeps_original_deadline",
+      "section_bytes": 11600,
+      "failure": [
+        "thread 'spoken_absence_held_pcm_continuation_keeps_original_deadline' (813867) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_first": [],
+      "workers_after": [],
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "sample_none_count": 0,
+      "sample_empty_count": 34,
+      "native_samples_total": 34,
+      "has_work_error": false
+    }
+  ]
+}

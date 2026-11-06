@@ -1,0 +1,19 @@
+{
+  "schema": "pipecat-cartesia-exact-history-application-v1",
+  "created_utc": "2026-11-06T16:42:45.589987+00:00",
+  "parent_head": "52243a392065d474ea0d0aead585891c6010bb3d",
+  "source_file": "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+  "original_sha256": "c40cfcb287fb6e83e2d8c2b6dc18039687276622d07c362a49a30a9430c4808b",
+  "candidate": {
+    "bytes": 23727,
+    "sha256": "96ad703190d83041feea27fe1570d158d503491a958fd80b614615c668c77cf0",
+    "git_blob_sha1": "0f3f67e7f7bddf3ae2051c99600c651d5bd256c6"
+  },
+  "root_checks": {
+    "patch_check_passed": true,
+    "applied_exact_candidate": true,
+    "all_bytes_outside_exact_signed_history_unchanged": true
+  },
+  "scope": "Exact existing wire contract: Anthropic loopback model user/assistant plus one prescribed user dot; Gemini user/model. Signed payload equality retained; roles now also exact. Scenario inputs, original assertions outside helper and deadlines unchanged.",
+  "qualification": "No native rerun at application. Original 33/1 failure remains. Gemini loop in that failed case was not reached."
+}

@@ -3,11 +3,15 @@
 Test-only JavaScript supplies a remote WebRTC peer and API instrumentation; shipped
 application logic remains Rust. Requires aiohttp and playwright, uses system Chromium.
 """
+import argparse
 import base64
 import asyncio
+import hashlib
 import json
 import math
 import struct
+import time
+import traceback
 from pathlib import Path
 
 from aiohttp import web
@@ -50,7 +54,15 @@ def audio_frame():
     pcm = b''.join(struct.pack('<h', int(math.sin(i * 2 * math.pi * 440 / 16000) * 1000)) for i in range(16000))
     return blob(2, blob(3, pcm) + varint(4 * 8) + varint(16000) + varint(5 * 8) + varint(1))
 
-async def main():
+async def main(args):
+    started = time.monotonic()
+    args.output.mkdir(parents=True, exist_ok=True)
+    launch_args = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required']
+    artifacts = {}
+    browser = None
+    browser_version = None
+    failure = None
+    cleanup_errors = []
     state = {'audio': 0, 'ready': 0, 'ws': [], 'mode': 'normal', 'offers': [], 'starts': [], 'texts': [], 'images': [], 'pending_ready': None}
     peer_page = None
     async def config(request):
@@ -139,17 +151,27 @@ async def main():
     app.router.add_post('/api/start', start)
     app.router.add_post('/api/sessions/fixture-session/api/offer', offer)
     app.router.add_get('/ws', websocket)
-    app.router.add_static('/', ROOT / 'dist', show_index=True)
     runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '127.0.0.1', 0)
-    await site.start()
-    port = site._server.sockets[0].getsockname()[1]
+    runner_started = False
     errors = []
     checks = []
+    fixture_observations = {'delayed_image_reads': [], 'peer_cleanup': []}
     try:
+        if not args.assets.is_dir():
+            raise FileNotFoundError(f'Rust/WASM asset directory does not exist: {args.assets}')
+        artifacts = {
+            str(path.relative_to(args.assets)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(args.assets.rglob('*')) if path.is_file()
+        }
+        app.router.add_static('/', args.assets, show_index=True)
+        await runner.setup()
+        runner_started = True
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        port = site._server.sockets[0].getsockname()[1]
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(executable_path='/usr/bin/chromium', headless=True, chromium_sandbox=True, args=[ '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
+            browser = await pw.chromium.launch(executable_path=str(args.browser), headless=True, chromium_sandbox=True, args=launch_args)
+            browser_version = browser.version
             context = await browser.new_context(viewport={'width': 1200, 'height': 800})
             await context.add_init_script('''
               window.liveIntervals=new Map(); const nativeInterval=window.setInterval.bind(window); const nativeClearInterval=window.clearInterval.bind(window); window.setInterval=(fn,ms,...args)=>{const id=nativeInterval(fn,ms,...args);window.liveIntervals.set(id,ms);return id;}; window.clearInterval=(id)=>{window.liveIntervals.delete(id);nativeClearInterval(id);};
@@ -169,6 +191,7 @@ async def main():
             requested_urls = []
             page.on('request', lambda request: requested_urls.append(request.url))
             peer_page = await context.new_page()
+            peer_page.on('pageerror', lambda error: errors.append(f'peer_page: {error}'))
             await peer_page.goto(f'http://127.0.0.1:{port}/index.html')
             async def idle():
                 await page.wait_for_function("document.querySelector('#transport-state').textContent === 'Disconnected'")
@@ -178,6 +201,17 @@ async def main():
             async def connect():
                 await page.click('#connect-btn')
                 await page.wait_for_function("document.querySelector('#transport-state').textContent === 'Connected'")
+            async def close_peer_fixture():
+                observation = await asyncio.wait_for(peer_page.evaluate('''async () => {
+                  window.peers.forEach(p => p.close());
+                  const contexts = window.peerContexts.filter(c => c.state !== 'closed');
+                  await Promise.all(contexts.map(c => c.close()));
+                  if (!window.peerContexts.every(c => c.state === 'closed'))
+                    throw new Error('peer AudioContext close did not reach closed');
+                  return {peers: window.peers.length, contexts: window.peerContexts.length,
+                          newly_closed_contexts: contexts.length};
+                }'''), timeout=5)
+                fixture_observations['peer_cleanup'].append(observation)
             async def cleanup():
                 await idle()
                 assert await page.locator("#job-groups .job-group").count() == 0
@@ -273,6 +307,60 @@ async def main():
                     return await peer_page.evaluate("window.signals.filter(v=>v.type==='send-file')")
                 fixture = (ROOT / 'tests' / 'fixtures' / 'baseline.jpg').read_bytes()
                 selection = {'name': 'image.jpg', 'mimeType': 'image/jpeg', 'buffer': fixture}
+                async def delay_image_reads():
+                    await page.evaluate('''() => {
+                      const original = FileReader.prototype.readAsArrayBuffer;
+                      window.originalImageRead = original;
+                      window.delayedImageReads = [];
+                      FileReader.prototype.readAsArrayBuffer = function(blob) {
+                        const reader = this;
+                        window.delayedImageReads.push(() => new Promise((resolve, reject) => {
+                          let loaded = false;
+                          const onLoad = () => { loaded = true; };
+                          const detach = () => {
+                            reader.removeEventListener('load', onLoad);
+                            reader.removeEventListener('loadend', onEnd);
+                          };
+                          const onEnd = () => {
+                            detach();
+                            try {
+                              const result = reader.result;
+                              if (!loaded || reader.error !== null || reader.readyState !== FileReader.DONE
+                                  || !(result instanceof ArrayBuffer) || result.byteLength === 0
+                                  || result.byteLength !== blob.size)
+                                throw new Error('delayed native FileReader did not complete a successful full read');
+                              resolve({loaded, byte_length: result.byteLength,
+                                       bytes: Array.from(new Uint8Array(result))});
+                            } catch (error) { reject(error); }
+                          };
+                          reader.addEventListener('load', onLoad);
+                          reader.addEventListener('loadend', onEnd, {once: true});
+                          try { original.call(reader, blob); }
+                          catch (error) { detach(); reject(error); }
+                        }));
+                      };
+                    }''')
+                async def flush_image_reads(stage, restore=False):
+                    receipts = await asyncio.wait_for(page.evaluate('''async (restore) => {
+                      const reads = window.delayedImageReads.splice(0);
+                      try {
+                        if (reads.length === 0) throw new Error('no delayed native FileReader was queued');
+                        return await Promise.all(reads.map(read => read()));
+                      } finally {
+                        if (restore) FileReader.prototype.readAsArrayBuffer = window.originalImageRead;
+                      }
+                    }''', restore), timeout=5)
+                    results = [bytes(receipt['bytes']) for receipt in receipts]
+                    fixture_observations['delayed_image_reads'].append({
+                        'transport': transport, 'stage': stage,
+                        'reads': [{'loaded': receipt['loaded'], 'byte_length': receipt['byte_length'],
+                                   'sha256': hashlib.sha256(result).hexdigest()}
+                                  for receipt, result in zip(receipts, results)],
+                        'expected_sha256': hashlib.sha256(fixture).hexdigest(),
+                        'all_bytes_match': all(result == fixture for result in results),
+                    })
+                    if any(result != fixture for result in results):
+                        raise RuntimeError('delayed native FileReader bytes differ from the selected JPEG fixture')
                 before = len(await received())
                 await page.set_input_files('#image-input', selection)
                 await page.fill('#image-caption', '  图片 🦀 \" \\  ')
@@ -309,17 +397,17 @@ async def main():
                 assert len(await received()) == before
                 # Instrument only read timing: selection/caption changes invalidate
                 # the owner before a deliberately late native result can appear.
-                await page.evaluate("window.originalImageRead=FileReader.prototype.readAsArrayBuffer; window.delayedImageReads=[]; FileReader.prototype.readAsArrayBuffer=function(blob){window.delayedImageReads.push(()=>window.originalImageRead.call(this,blob));}")
+                await delay_image_reads()
                 for action in ['caption', 'selection', 'clear']:
                     await page.set_input_files('#image-input', selection)
                     await page.click('#image-send-btn')
                     if action == 'caption': await page.fill('#image-caption', 'newer caption')
                     elif action == 'selection': await page.set_input_files('#image-input', selection)
                     else: await page.click('#image-clear-btn')
-                    await page.evaluate("window.delayedImageReads.splice(0).forEach(read=>read())")
+                    await flush_image_reads(action)
                     await page.wait_for_timeout(50)
                     assert len(await received()) == before
-                await page.evaluate("FileReader.prototype.readAsArrayBuffer=window.originalImageRead")
+                await page.evaluate("() => { FileReader.prototype.readAsArrayBuffer=window.originalImageRead; }")
                 await page.click('#image-clear-btn')
                 if transport == 'websocket':
                     await page.set_input_files('#image-input', selection)
@@ -328,11 +416,11 @@ async def main():
                     await page.wait_for_function("document.querySelector('#image-status').textContent.includes('busy')")
                     assert len(await received()) == before
                     assert await page.evaluate("document.querySelector('#image-input').files.length") == 1
-                    await page.evaluate("delete window.openSockets.at(-1).bufferedAmount; window.savedImageSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture image send failure')}")
+                    await page.evaluate("() => { delete window.openSockets.at(-1).bufferedAmount; window.savedImageSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture image send failure')}; }")
                     await page.click('#image-send-btn')
                     await page.wait_for_function("document.querySelector('#image-status').textContent.includes('fixture image send failure')")
                     assert len(await received()) == before
-                    await page.evaluate("window.openSockets.at(-1).send=window.savedImageSend")
+                    await page.evaluate("() => { window.openSockets.at(-1).send=window.savedImageSend; }")
                     await page.click('#image-send-btn')
                     for _ in range(100):
                         if len(await received()) == before + 1: break
@@ -340,13 +428,13 @@ async def main():
                     assert len(await received()) == before + 1
                     before += 1
                     await page.set_input_files('#image-input', selection)
-                    await page.evaluate("window.delayedImageReads=[]; FileReader.prototype.readAsArrayBuffer=function(blob){window.delayedImageReads.push(()=>window.originalImageRead.call(this,blob));}")
+                    await delay_image_reads()
                     await page.click('#image-send-btn')
                     await page.click('#connect-btn')
                     await cleanup()
                     await connect()
                     await page.wait_for_function("!document.querySelector('#image-send-btn').disabled")
-                    await page.evaluate("window.delayedImageReads.splice(0).forEach(read=>read()); FileReader.prototype.readAsArrayBuffer=window.originalImageRead")
+                    await flush_image_reads('disconnect_reconnect', restore=True)
                     await page.wait_for_timeout(50)
                     assert len(await received()) == before
                     assert await page.evaluate("document.querySelector('#image-input').files.length") == 0
@@ -408,11 +496,11 @@ async def main():
             await page.click('#send-btn')
             assert await page.input_value('#message-input') == 'retry explicitly'
             assert len(state['texts']) == 1
-            await page.evaluate("delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}")
+            await page.evaluate("() => { delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}; }")
             await page.click('#send-btn')
             assert await page.input_value('#message-input') == 'retry explicitly'
             assert len(state['texts']) == 1
-            await page.evaluate("window.openSockets.at(-1).send=window.savedSend")
+            await page.evaluate("() => { window.openSockets.at(-1).send=window.savedSend; }")
             await page.click('#send-btn')
             for _ in range(100):
                 if len(state['texts']) == 2: break
@@ -516,10 +604,10 @@ async def main():
             checks.append('Actual browser WebRTC form emits the bounded RTVI send-text JSON on the paired data channel')
             await page.click('#mic-btn')
             await peer_page.wait_for_function("window.signals.some(v=>v.type==='signalling' && v.message.type==='trackStatus' && v.message.enabled===false)")
-            await page.screenshot(path=str(ROOT / 'target' / 'browser-acceptance.png'))
+            await page.screenshot(path=str(args.output / 'browser-acceptance.png'))
             await peer_page.evaluate('window.channel.close()')
             await cleanup()
-            await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
+            await close_peer_fixture()
             checks.append('Real paired RTCPeerConnection: SDP offer/answer, data-channel RTVI, incoming synthetic audio track, keepalive, track-status mute and peer close')
             # Explicit page configuration; this is not an in-session mode toggle.
             state['input_mode'] = 'text'
@@ -591,7 +679,7 @@ async def main():
                 await page.click('#connect-btn')
                 await cleanup()
                 await page.wait_for_function("window.openPeers.every(p=>p.signalingState==='closed')")
-                await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
+                await close_peer_fixture()
             state['mode'] = 'slow_offer'
             offers_before = len(state['offers'])
             await page.click('#connect-btn')
@@ -603,7 +691,7 @@ async def main():
             await cleanup()
             await page.wait_for_timeout(800)
             assert await page.evaluate("window.openPeers.every(p=>p.signalingState==='closed') && window.mediaRequests===0")
-            await peer_page.evaluate('window.peers.forEach(p=>p.close()); window.peerContexts.forEach(c=>c.close())')
+            await close_peer_fixture()
             checks.append('Text WebRTC: throwing permission trap untouched, no capture/local tracks, negotiated recvonly, exact RTVI text/downlink RTP, zero audio RTP uplink counters, inert mic, reconnect and pending-offer cancellation cleanup')
             del state['input_mode']
             state['mode'] = 'normal'
@@ -619,14 +707,51 @@ async def main():
             assert await page.locator('#connect-btn').is_disabled()
             checks.append('Unsupported Daily adapter fails explicitly before starting a session')
             assert not errors, errors
-            await browser.close()
+            await asyncio.wait_for(browser.close(), timeout=10)
+    except BaseException as error:
+        failure = {'type': type(error).__name__, 'message': str(error), 'traceback': traceback.format_exc()}
+        raise
     finally:
-        for ws in state['ws']:
-            await ws.close()
-        await runner.cleanup()
-    output = {'result': 'passed', 'checks': checks, 'page_errors': errors, 'microphone': 'Chromium synthetic device only', 'provider': 'Loopback transport fixtures only; no live bot/provider'}
-    (ROOT / 'target' / 'browser-acceptance.json').write_text(json.dumps(output, indent=2) + '\n')
-    print(json.dumps(output, indent=2))
+        # Preserve completed assertions and the original failure even when the
+        # browser cannot launch. A missing report must never look like a pass.
+        if browser is not None and browser.is_connected():
+            try:
+                await asyncio.wait_for(browser.close(), timeout=10)
+            except Exception as error:
+                cleanup_errors.append(f'browser close: {error}')
+        try:
+            await asyncio.wait_for(asyncio.gather(*(ws.close() for ws in state['ws'])), timeout=5)
+        except Exception as error:
+            cleanup_errors.append(f'fixture sockets: {error}')
+        if runner_started:
+            try:
+                await asyncio.wait_for(runner.cleanup(), timeout=10)
+            except Exception as error:
+                cleanup_errors.append(f'fixture server: {error}')
+        output = {
+            'result': 'passed' if failure is None and not cleanup_errors else 'failed',
+            'checks': checks, 'page_errors': errors, 'failure': failure,
+            'fixture_observations': fixture_observations,
+            'cleanup_errors': cleanup_errors, 'elapsed_seconds': time.monotonic() - started,
+            'browser_executable': str(args.browser), 'browser_version': browser_version,
+            'chromium_sandbox': True, 'launch_args': launch_args,
+            'fixture_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'asset_sha256': artifacts,
+            'microphone': 'Chromium synthetic device only',
+            'autoplay': 'Policy override for synthetic transport fixture; normal autoplay restrictions are not qualified',
+            'provider': 'Loopback transport fixtures only; no live bot/provider',
+        }
+        (args.output / 'browser-acceptance.json').write_text(json.dumps(output, indent=2) + '\n')
+        print(json.dumps(output, indent=2))
+        if failure is None and cleanup_errors:
+            raise RuntimeError('browser fixture cleanup failed; see browser-acceptance.json')
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--browser', type=Path, default=Path('/usr/bin/chromium'),
+                        help='Explicit Chromium-compatible executable; the browser sandbox remains enabled')
+    parser.add_argument('--assets', type=Path, default=ROOT / 'dist',
+                        help='Exact built Rust/WASM static bundle to exercise')
+    parser.add_argument('--output', type=Path, default=ROOT / 'target',
+                        help='Evidence directory, including partial checks on failure')
+    asyncio.run(main(parser.parse_args()))

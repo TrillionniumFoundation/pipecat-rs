@@ -1,0 +1,159 @@
+{
+  "schema": "pipecat-original-source-manifest-recovery-v1",
+  "files": [
+    {
+      "path": "full-workspace-r1/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "734e4613b5608487ac3a8d71fbcc2bf220f90d74fc4929907cbb2ea577137460",
+      "canonical_manifest_sha256": "73b54119abdc3198cb502a2a3bfda0009b1f1f8d4ebedf67def7241ca9947870",
+      "head": "478ab3b8e0deca51571c41c2890b519f0faeab94",
+      "tree": "52644150c51bd2c66052ed4d32f2ad7a844ac71f"
+    },
+    {
+      "path": "full-workspace-r1/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "734e4613b5608487ac3a8d71fbcc2bf220f90d74fc4929907cbb2ea577137460",
+      "canonical_manifest_sha256": "73b54119abdc3198cb502a2a3bfda0009b1f1f8d4ebedf67def7241ca9947870",
+      "head": "478ab3b8e0deca51571c41c2890b519f0faeab94",
+      "tree": "52644150c51bd2c66052ed4d32f2ad7a844ac71f"
+    },
+    {
+      "path": "full-workspace-r2/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "full-workspace-r2/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "pin-prebuild-r1/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "9652a79577e4d09f4250a9911158f533f8ba1da7a06a9b37243d0c25ff522e22",
+      "canonical_manifest_sha256": "6eb447c0b29d8ed9992a3ed7625d84819a7a22a8a2aa522d1a9b852e0a01ede3",
+      "head": "c45da3bd794af3640c28f8160285dcad31960c40",
+      "tree": "12a56abe43c39621e2d1e2639c828c4d85145f58"
+    },
+    {
+      "path": "pin-prebuild-r1/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "9652a79577e4d09f4250a9911158f533f8ba1da7a06a9b37243d0c25ff522e22",
+      "canonical_manifest_sha256": "6eb447c0b29d8ed9992a3ed7625d84819a7a22a8a2aa522d1a9b852e0a01ede3",
+      "head": "c45da3bd794af3640c28f8160285dcad31960c40",
+      "tree": "12a56abe43c39621e2d1e2639c828c4d85145f58"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r1/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "a3667bb019a7717a2476fbfeace5a9c7aa83f8c9a8d301e26cfbe1884c875729",
+      "canonical_manifest_sha256": "6bd4a498802990919789e1a172ad1f640290ab23528a59c612d4b5c88cfde83f",
+      "head": "7105367d7d607653c3ab758f0131c029c4373faf",
+      "tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r1/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "a3667bb019a7717a2476fbfeace5a9c7aa83f8c9a8d301e26cfbe1884c875729",
+      "canonical_manifest_sha256": "6bd4a498802990919789e1a172ad1f640290ab23528a59c612d4b5c88cfde83f",
+      "head": "7105367d7d607653c3ab758f0131c029c4373faf",
+      "tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "141ee843a9a843d469bc66923da4e53c10f9c67b27c458a3d44c5379a9e1b485",
+      "canonical_manifest_sha256": "a63f034915b97f52baea56998ee01946f50bfe9a165babf20547c9d4badc7ceb",
+      "head": "8a7c0652c4be02321d1fac6346b19b9ce7931476",
+      "tree": "e8bbba1a5b1af45fdec8be9bcd74df2e63153f6b"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "141ee843a9a843d469bc66923da4e53c10f9c67b27c458a3d44c5379a9e1b485",
+      "canonical_manifest_sha256": "a63f034915b97f52baea56998ee01946f50bfe9a165babf20547c9d4badc7ceb",
+      "head": "8a7c0652c4be02321d1fac6346b19b9ce7931476",
+      "tree": "e8bbba1a5b1af45fdec8be9bcd74df2e63153f6b"
+    },
+    {
+      "path": "local-sfu-patch-r1/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "local-sfu-patch-r1/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "chinese-synthetic-patch-r1/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "chinese-synthetic-patch-r1/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "chinese-synthetic-patch-r2/source-before.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "chinese-synthetic-patch-r2/source-after.json",
+      "bytes": 452641,
+      "raw_file_sha256": "efc0a946f12e3690b8f0138d9044a578661c388de2dc3e348f23568b9c04f3ce",
+      "canonical_manifest_sha256": "7b6f71081faf4a2ef8a62237f9d84f80f435cb5e94d85c76ec594adbbc426f12",
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/gate.json",
+      "bytes": 4847,
+      "raw_file_sha256": "8742900391023c593bf900d0710f523c547a48727309c53860ec9e2b273f52ff"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/preparation.json",
+      "bytes": 4595,
+      "raw_file_sha256": "183c9668ad818502be22d04a35a8f2f48075692c6046c77c60c2b759fc8101b6"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/environment.json",
+      "bytes": 2003,
+      "raw_file_sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    {
+      "path": "full-workspace-rust-1.99.0-r2/cargo-test-workspace.log",
+      "bytes": 602626,
+      "raw_file_sha256": "b0c28d096e751ed6ab185c7c16c9349fc7690ac70542e15e28dd9b08d7c48ecf"
+    },
+    {
+      "path": "task-helpers/run_full_gate.py",
+      "bytes": 5176,
+      "raw_file_sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "digest_note": "canonical_manifest_sha256 is the content digest recorded by run_full_gate.py; raw_file_sha256 is SHA256 of the complete original JSON bytes. They intentionally differ."
+}

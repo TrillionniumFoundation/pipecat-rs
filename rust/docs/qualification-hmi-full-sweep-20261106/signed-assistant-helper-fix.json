@@ -1,0 +1,29 @@
+{
+  "parent": "7105367d7d607653c3ab758f0131c029c4373faf",
+  "published_commit": "8a7c0652c4be02321d1fac6346b19b9ce7931476",
+  "tree": "e8bbba1a5b1af45fdec8be9bcd74df2e63153f6b",
+  "path": "rust/crates/pipecat-media-transport/tests/spoken_readiness_independent.rs",
+  "blob": "f29cfc72a830370a7a84adce819173145a9b3f8f",
+  "sha256": "1b2f688b72c3c8bd37be20816b4afc8a8c95fdcd4be6bb16367a9061481f6cdf",
+  "format": {
+    "toolchain": "Rust 1.99.0",
+    "argv": [
+      "rustfmt",
+      "--edition",
+      "2021",
+      "--check",
+      "<independent copy of spoken_readiness_independent.rs>"
+    ],
+    "exit_code": 0,
+    "stdout_empty": true,
+    "stderr_empty": true,
+    "source_sha256_before_after": "1b2f688b72c3c8bd37be20816b4afc8a8c95fdcd4be6bb16367a9061481f6cdf",
+    "remote_report_sha256": "ff7e43ff96f6d9003acacc15598a7a6ec196ee57f16bdc9847f1694a7e03f4fa"
+  },
+  "review": {
+    "product_adapter_changed": false,
+    "scenario_bodies_unchanged": true,
+    "original_deadlines_unchanged": true,
+    "reason": "Test helper flattened all roles and included the existing trailing user '.' compatibility message; final helper checks both roles exactly and preserves original signed assistant assertions."
+  }
+}

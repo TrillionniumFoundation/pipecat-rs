@@ -1,0 +1,44 @@
+    Blocking waiting for file lock on build directory
+   Compiling opusic-sys v0.7.5
+   Compiling p384 v0.13.1
+   Compiling p256 v0.13.2
+   Compiling webrtc-sctp v0.13.0
+   Compiling ccm v0.5.0
+   Compiling bincode v1.3.3
+   Compiling cbc v0.1.2
+   Compiling dtls v0.13.0
+   Compiling webrtc-data v0.12.0
+   Compiling sdp v0.10.0
+   Compiling webrtc-ice v0.14.0
+   Compiling interceptor v0.15.0
+   Compiling regex v1.13.1
+   Compiling webrtc-media v0.11.0
+   Compiling smol_str v0.2.2
+   Compiling hex v0.4.3
+   Compiling unicase v2.10.0
+   Compiling webrtc v0.14.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/vendor/webrtc-0.14.0)
+   Compiling pipecat-audio v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-audio)
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/pipecat-core/src/payload_budget.rs:91:19
+   |
+91 | ...   self.used.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |used| used.checked_add(bytes).filter(|total| *total <= self.limit)...
+   |                 ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+91 -         self.used.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |used| used.checked_add(bytes).filter(|total| *total <= self.limit)).ok()?;
+91 +         self.used.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| used.checked_add(bytes).filter(|total| *total <= self.limit)).ok()?;
+   |
+
+   Compiling opus v0.4.0
+   Compiling pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+error: couldn't create a temp dir: No space left on device (os error 28) at path "/workspace/scratch/27653505a519/target/debug/deps/rmetauH5szN"
+
+error: could not compile `pipecat-webrtc` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: couldn't create a temp dir: No space left on device (os error 28) at path "/workspace/scratch/27653505a519/target/debug/deps/rustcbgrLUE"
+
+warning: `pipecat-core` (lib) generated 1 warning
+error: could not compile `pipecat-core` (lib) due to 1 previous error; 1 warning emitted

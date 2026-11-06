@@ -75,13 +75,20 @@ mod review_crosssocket_effects {
         expected: &Value,
     ) -> bool {
         if provider == Provider::Gemini {
-            request["contents"][0]["parts"] == json!([{ "text": user }])
-                && request["contents"][1]["parts"] == *expected
-                && request["contents"].as_array().is_some_and(|m| m.len() == 2)
+            request["contents"]
+                == json!([
+                    {"role":"user","parts":[{"text":user}]},
+                    {"role":"model","parts":expected}
+                ])
         } else {
-            request["messages"][0]["content"] == json!([{ "type": "text", "text": user }])
-                && request["messages"][1]["content"] == *expected
-                && request["messages"].as_array().is_some_and(|m| m.len() == 2)
+            // This harness uses the non-prefill "loopback" model. The existing
+            // Anthropic adapter appends one exact user turn on the wire.
+            request["messages"]
+                == json!([
+                    {"role":"user","content":[{"type":"text","text":user}]},
+                    {"role":"assistant","content":expected},
+                    {"role":"user","content":[{"type":"text","text":"."}]}
+                ])
         }
     }
 

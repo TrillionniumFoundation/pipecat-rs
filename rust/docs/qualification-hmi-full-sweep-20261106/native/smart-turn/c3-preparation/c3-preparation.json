@@ -1,0 +1,405 @@
+{
+  "schema": "pipecat-smart-turn-wheel-comparison-preparation-v1",
+  "created_unix": 1793986188.814723,
+  "status": "prepared_and_independently_reviewed_not_executed",
+  "scope": "Public primary provenance, complete wheel/RECORD and static ELF verification, plus a once-only standalone C API binary comparison plan. This file is not an inference result.",
+  "runner": {
+    "path": "workspace-evidence/task-helpers/desktop_smart_turn_wheel_pin_r3.py",
+    "bytes": 36363,
+    "sha256": "7d23169a11c4790a4cb7294932fb43143d6933c08e1f041ef34daee5b7b22e98",
+    "git_blob_sha1": "fe3ac2987eb69b0cfda7a6c2d1b5e666ccb2c587",
+    "full_git_blob_readback_equal": true,
+    "store_key": "smartTurnWheelC3RunnerFinalText"
+  },
+  "source_binding": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "source_directory": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+    "target_directory_untouched": true
+  },
+  "primary_sources": [
+    {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/pypi-metadata.json",
+      "bytes": 21104,
+      "sha256": "8817fbf4182ba56cb0ae80db6fc459a0c927c777247286603e66b88bbd90ee38",
+      "url": "https://pypi.org/pypi/onnxruntime/1.21.0/json"
+    },
+    {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/github-tag-ref.json",
+      "bytes": 347,
+      "sha256": "b1d29768c97011dd604a6ea9c22f564907e1dce72289e2fd7a89198a3d0721bc",
+      "url": "https://api.github.com/repos/microsoft/onnxruntime/git/ref/tags/v1.21.0"
+    },
+    {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/github-annotated-tag.json",
+      "bytes": 700,
+      "sha256": "f9468cb1b7016db5d4811fcf0f39ea95c571b948a8112ec1ea0789d00715ed93",
+      "url": "https://api.github.com/repos/microsoft/onnxruntime/git/tags/6d69a05a6b391997b34311b3df9b32b05af02764"
+    },
+    {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/official-setup.py",
+      "bytes": 32618,
+      "sha256": "6fb49e30a04116ff5280da8e9a5181a02453c2bbfa7272bf5629db2b1af35956",
+      "url": "https://github.com/microsoft/onnxruntime/blob/v1.21.0/setup.py",
+      "upstream_git_blob_sha1": "ced2f28e387781822bc2b7ab2592a82e859a2657"
+    },
+    {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/official-onnxruntime_python.cmake",
+      "bytes": 51748,
+      "sha256": "75b1088d343c1838ecf1c8b88f2f4784dc6a365789bc567355537d61ee2ca72d",
+      "url": "https://github.com/microsoft/onnxruntime/blob/v1.21.0/cmake/onnxruntime_python.cmake",
+      "upstream_git_blob_sha1": "aee6d2ff7655c0ef7ce05fdb51ac9b64d4b80e68"
+    }
+  ],
+  "official_release_identity": {
+    "tag": "v1.21.0",
+    "annotated_tag": "6d69a05a6b391997b34311b3df9b32b05af02764",
+    "commit": "e0b66cad282043d4377cea5269083f17771b6dfc",
+    "limit": "The restored runtime reports this official commit prefix. Neither that prefix nor its hardening options prove a custom or unofficial build."
+  },
+  "selected_public_wheel": {
+    "filename": "onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/8b/08/eead6895ed83b56711ca6c0d31d82f109401b9937558b425509e497d6fb4/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "bytes": 16019285,
+    "sha256": "9a04aafb802c1e5573ba4552f8babcb5021b041eb4cfa802c9b7644ca3510eca",
+    "upload_time_iso_8601": "2025-03-08T02:44:11.706529Z",
+    "yanked": false,
+    "public_metadata_unique_filename": true
+  },
+  "actual_preparation": {
+    "public_wheel_retrieval": {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/wheel-retrieval.json",
+      "bytes": 79180,
+      "sha256": "613f1a28edc83496d40afdf6e9683801f13e5c276d0d69b9f704a7c785cd103c"
+    },
+    "static_member_inspection": {
+      "path": "workspace-evidence/smart-turn/wheel-preparation-r1/static-member-inspection.json",
+      "bytes": 6444,
+      "sha256": "df4fe95ad0506603155388f2ab0475761e8f88438dc83fdeaaf95698808673a6"
+    },
+    "complete_wheel_verified": true,
+    "zip_names": 337,
+    "zip_names_unique": true,
+    "local_static_members": [
+      {
+        "member": "onnxruntime/capi/libonnxruntime.so.1.21.0",
+        "bytes": 20571088,
+        "sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+        "record_digest": "sha256=oN-E-uDwnZ7KPWkZ9oW6Q18a5stijhKLabzyorllUEw",
+        "record_size": 20571088,
+        "record_matches": true,
+        "local_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/smart-turn/wheel-preparation-r1/members/libonnxruntime.so.1.21.0"
+      },
+      {
+        "member": "onnxruntime/capi/onnxruntime_pybind11_state.cpython-312-x86_64-linux-gnu.so",
+        "bytes": 21406896,
+        "sha256": "0ca6ae827d5f5b2cc6abf3c0cf286063dee0f6c09947d6d34e2d199335b189f6",
+        "record_digest": "sha256=DKaugn1fWyzGq_PAzyhgY97g9sCZR9bTTi0ZkzWxifY",
+        "record_size": 21406896,
+        "record_matches": true,
+        "local_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/smart-turn/wheel-preparation-r1/members/onnxruntime_pybind11_state.cpython-312-x86_64-linux-gnu.so"
+      },
+      {
+        "member": "onnxruntime/capi/libonnxruntime_providers_shared.so",
+        "bytes": 14632,
+        "sha256": "e4706ea02be3999167f000bb1ff7391c86e95d2d96f78eb33225c14b172a8451",
+        "record_digest": "sha256=5HBuoCvjmZFn8AC7H_c5HIbpXS2W946zMiXBSxcqhFE",
+        "record_size": 14632,
+        "record_matches": true,
+        "local_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/smart-turn/wheel-preparation-r1/members/libonnxruntime_providers_shared.so"
+      },
+      {
+        "member": "onnxruntime-1.21.0.dist-info/METADATA",
+        "bytes": 4675,
+        "sha256": "0874cc80d0a027c2e38de34722d0d74af51b1bbcd96a6f3bc44b72eb3e0b3564",
+        "record_digest": "sha256=CHTMgNCgJ8LjjeNHItDXSvUbG7zZam87xEty6z4LNWQ",
+        "record_size": 4675,
+        "record_matches": true,
+        "local_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/smart-turn/wheel-preparation-r1/members/METADATA"
+      },
+      {
+        "member": "onnxruntime-1.21.0.dist-info/WHEEL",
+        "bytes": 152,
+        "sha256": "30c94a60d8e5bb42e26b95d2a3c4b9d5f390a922c3c3243e552b8f89133e69bd",
+        "record_digest": "sha256=MMlKYNjlu0Lia5XSo8S51fOQqSLDwyQ-VSuPiRM-ab0",
+        "record_size": 152,
+        "record_matches": true,
+        "local_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/smart-turn/wheel-preparation-r1/members/WHEEL"
+      }
+    ],
+    "library_loads": 0,
+    "onnxruntime_python_imports": 0,
+    "package_installations": 0,
+    "model_runs": 0,
+    "remote_host_jobs": 0,
+    "limit": "Existing local member copies and readelf outputs were inspected as file data only. C3 will download its own exact archive and extract only the one C API member into a fresh private runtime directory."
+  },
+  "binary_distinction": {
+    "c3_standalone_c_api": {
+      "member": "onnxruntime/capi/libonnxruntime.so.1.21.0",
+      "bytes": 20571088,
+      "sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+      "record": {
+        "member": "onnxruntime-1.21.0.dist-info/RECORD",
+        "bytes": 33985,
+        "sha256": "737bbc309e6304a5c005b789fb01ef85dd47484c4e489510341fcc8e00d14ea1"
+      },
+      "soname": "libonnxruntime.so.1",
+      "runpath": [
+        "$ORIGIN"
+      ],
+      "needed": [
+        "libdl.so.2",
+        "librt.so.1",
+        "libpthread.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "build_id": "0eaa11c67d5752719b7b06e34dda57c447f3b833"
+    },
+    "unchanged_c1_standalone_c_api": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "bytes": 20558800,
+      "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d"
+    },
+    "separate_python_pybind": {
+      "member": "onnxruntime/capi/onnxruntime_pybind11_state.cpython-312-x86_64-linux-gnu.so",
+      "bytes": 21406896,
+      "sha256": "0ca6ae827d5f5b2cc6abf3c0cf286063dee0f6c09947d6d34e2d199335b189f6",
+      "needed_does_not_list_libonnxruntime": true,
+      "c3_extracts_or_imports_this_member": false
+    },
+    "upstream_packaging_basis": "Pinned setup.py lists the standalone libonnxruntime separately from the Python extension; pinned onnxruntime_python.cmake links the Python extension against ORT components and separately copies the standalone shared library when enabled.",
+    "historical_oracle_binary_identity": "Unavailable. The tracked generator identifies NumPy 2.3.5 and ORT 1.21.0 and the fixed model/features, but does not identify the exact historical runtime binary, dependency build or CPU. C3 does not reconstruct those missing identities."
+  },
+  "fixed_execution_contract": {
+    "probe": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+      "bytes": 25576,
+      "sha256": "e20adb1f67f6bd5f42ce30b0ad13a0ae568dcb80d4fcd7b2a0237366892fffbc",
+      "recompiled": false
+    },
+    "api_requested": 20,
+    "header_api": 21,
+    "execution_mode": "ORT_SEQUENTIAL",
+    "inter_op_threads": 1,
+    "intra_op_threads": 1,
+    "graph_optimization": "ORT_ENABLE_ALL",
+    "memory_name": "Cpu",
+    "memory_allocator": "OrtArenaAllocator",
+    "memory_type": "OrtMemTypeCPUInput",
+    "case_order": [
+      "speech",
+      "tone",
+      "silence"
+    ],
+    "sessions": 1,
+    "run_calls_per_case": 1,
+    "total_run_calls": 3,
+    "input_shape": [
+      1,
+      80,
+      800
+    ],
+    "input_dtype": "float32",
+    "output_shape": [
+      1,
+      1
+    ],
+    "expected_records": 8,
+    "expected_release_receipt": {
+      "completed_cases": 3,
+      "release_calls_returned": true,
+      "exit_code": 0
+    },
+    "original_probability_tolerance": 1e-05,
+    "original_model_features_references_preserved": true,
+    "c1_all_execution_repeated": false,
+    "compile_or_cargo_invocations": 0,
+    "automatic_retry": false,
+    "explicit_providers": [],
+    "telemetry_enabled": false,
+    "cpu_provider_arena_explicitly_configured": false
+  },
+  "frozen_inputs": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe.c",
+      "bytes": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+      "bytes": 25576,
+      "sha256": "e20adb1f67f6bd5f42ce30b0ad13a0ae568dcb80d4fcd7b2a0237366892fffbc"
+    },
+    {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "bytes": 20558800,
+      "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+      "bytes": 8679182,
+      "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-ort-reference-pin-r1/reference.json",
+      "bytes": 27385,
+      "sha256": "7c0720620aaea61615e1a50795ad84118c6881563198e4d42534f9e565c67b4e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-ort-reference-pin-r1/probe.stdout.log",
+      "bytes": 1814,
+      "sha256": "09afb06777afba21d8055a6ecb08712ab6a077e2b6829382f12ef5d9837a1780"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r4/environment.json",
+      "bytes": null,
+      "sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+      "bytes": 256000,
+      "sha256": "618645fb485f531de515aa83b13627cb3d19a5cb8a0d1faf617c99e76fb8b575"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+      "bytes": 256000,
+      "sha256": "f838341ea22fe1aac684c6eabfc2ccd8f38330b2dbca1220985963d4d90dedc5"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32",
+      "bytes": 256000,
+      "sha256": "c4a1d90bbbdc1c49cf89b8f73360019b1b0fe01ae48a9dfd6fc2c4a3228b8859"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.probability.txt",
+      "bytes": 20,
+      "sha256": "17f53fa2fd6586f8ccca5f8a576e972c8d0631ab0efcf6d84cc5747369940783"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.probability.txt",
+      "bytes": 21,
+      "sha256": "3c2b2ba20fc2d02511c3ab4371e12c03d2e1d6ddb06daa6e618b438305d2f4de"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.probability.txt",
+      "bytes": 20,
+      "sha256": "7ec5e2f9ea54c1b8aaf8701afb68b5742a99dce27ac5546adb9e06646cc24a8c"
+    }
+  ],
+  "preceding_stage_requirement": {
+    "all_authorized_current_source_stages_must_be_terminal": true,
+    "ordinary_nonzero_test_exits_remain_failures_and_do_not_require_success": true,
+    "all_available_source_asset_and_containment_receipts_must_be_intact": true,
+    "unknown_active_missing_or_integrity_failed_stage_blocks_c3": true,
+    "receipts": [
+      {
+        "stage": "grok",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-lifetime-qualification-pin-r1/repetitions.json",
+        "exit_key": "exit_code"
+      },
+      {
+        "stage": "default",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/gate.json",
+        "exit_key": "exit_code"
+      },
+      {
+        "stage": "expanded",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/expanded-batch-pin-r2/batch.json",
+        "exit_key": "exit_code"
+      },
+      {
+        "stage": "models",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/model-inputs-pin-r2/inputs.json",
+        "exit_key": "exit_code"
+      },
+      {
+        "stage": "webrtc",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/webrtc-stress-pin-r1/repetitions.json",
+        "exit_key": "exit_code"
+      },
+      {
+        "stage": "aishell",
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/result.json",
+        "exit_key": "wrapper_exit_code"
+      }
+    ],
+    "aishell_zero_attempt_rule": "A zero-inference receipt is allowed only as an explicit terminal nonzero failure with matching source, unchanged inputs and terminal/contained started processes. It is not treated as a completed inference or a pass.",
+    "runtime_authority": "The orchestrating agent must additionally observe durable/output-complete terminal runtime statuses. The helper checks immutable disk receipts and exclusive owner lock; it does not invent or infer authoritative remote runtime statuses."
+  },
+  "admission_and_cleanup": {
+    "owner_lock": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/qualification-owner-pin.lock",
+    "exclusive_nonblocking": true,
+    "lock_covers": "preflight, exact download/extraction, native invocation, containment, postflight, final receipt",
+    "create_only_requests": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3",
+    "create_only_evidence": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/smart-turn-wheel-reference-pin-r3",
+    "install_runner_outside_create_only_requests": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_smart_turn_wheel_pin_r3.py",
+    "outer_resources": {
+      "timeout_seconds": 210,
+      "cpu_percent": 200,
+      "memory_bytes": 4294967296,
+      "nice": 10
+    },
+    "inner_whole_seconds": 180,
+    "native_seconds": 60,
+    "cleanup_reserve_seconds": 10,
+    "download_seconds": 45,
+    "socket_inactivity_seconds": 10,
+    "download_wall_scope": "Checked between reads and after completion; a socket inactivity timeout is not a universal wall-time interrupt. The outer owned job is the ultimate containment boundary.",
+    "owned_process_group": "start_new_session, exact child PID/PGID, separate launch-attempt and process-start counters; PID saved immediately on successful spawn",
+    "cleanup": "Request TERM for this owned PGID, wait leader at most 2s; request KILL if still required, wait at most 2s; final leader wait at most 1s; record non-atomic group absence separately. No all-descendant join claim.",
+    "unexpected_surviving_group_or_postflight_failure_exit": 125,
+    "timeout_exit": 124,
+    "source_and_all_observed_files_checked_after": true
+  },
+  "environment_limits": {
+    "original_c1_environment_file_hash_retained": true,
+    "cpu_isa_or_provider_flags_added": false,
+    "narrow_current_loader_keys": [
+      "LD_PRELOAD",
+      "LD_LIBRARY_PATH",
+      "LD_AUDIT",
+      "LD_BIND_NOW"
+    ],
+    "unrecorded_c1_environment_or_dependencies_reconstructed": false
+  },
+  "result_accounting": {
+    "native_exit_separate_from_comparison": true,
+    "original_c1_native_exit": 0,
+    "original_c1_comparison_exit": 1,
+    "each_c3_case_records": [
+      "actual_f32",
+      "f32_bits",
+      "signed_delta_from_original_reference",
+      "within_unchanged_tolerance",
+      "delta_from_retained_c1_all",
+      "bitwise_equality_to_retained_c1_all"
+    ],
+    "preflight_or_spawn_failure_cannot_claim_three_completed_runs": true,
+    "interpretation": "Equal outputs support equality of these two identified standalone C API builds at these three inputs and settings. Different outputs demonstrate a binary/build-dependent observation in this controlled comparison, without uniquely assigning a cause inside either binary. Neither result identifies the historical Python oracle, proves a CPU cause, qualifies physical speech or production HMI, or authorizes a runtime replacement."
+  },
+  "static_review": {
+    "python_ast_parse_passed": true,
+    "native_execution_during_review": false,
+    "popen_calls": 1,
+    "urlopen_calls": 1,
+    "reviewer": "/root/webrtc_fix",
+    "independent_final_review_received": true,
+    "review_scope": "Exact member and RECORD, C1 executable/inputs/settings, six current-source terminal prerequisites, ordinary failures retained, one native process, output protocol, bounded containment and input/source postchecks."
+  }
+}

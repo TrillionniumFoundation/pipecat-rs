@@ -87,7 +87,7 @@ async fn signed_blocks_survive_native_tool_results_into_second_request() {
     let expected = fixture["expected_content"].clone();
     let expected_results: Vec<_> = expected.as_array().unwrap().iter()
         .filter(|block| block["type"] == "tool_use")
-        .map(|block| json!({"type":"tool_result","tool_use_id":block["id"],"content":[{"type":"text","text":block["input"].to_string()}]}))
+        .map(|block| json!({"type":"tool_result","tool_use_id":block["id"],"content":block["input"].to_string()}))
         .collect();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}/v1/messages", listener.local_addr().unwrap());

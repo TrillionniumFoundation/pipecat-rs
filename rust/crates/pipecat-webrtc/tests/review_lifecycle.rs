@@ -1,6 +1,7 @@
 //! Regression coverage for cancellation-safe peer shutdown using real UDP sockets.
-use pipecat_webrtc::{AudioCodec, SmallWebRtcConfig, SmallWebRtcConnection};
+use pipecat_webrtc::{AudioCodec, ConnectionDiagnostics, SmallWebRtcConfig, SmallWebRtcConnection};
 use std::{
+    collections::VecDeque,
     future::{poll_fn, Future},
     net::{SocketAddr, UdpSocket},
     task::Poll,
@@ -240,6 +241,72 @@ async fn short_close_deadline_keeps_cleanup_owned_for_a_retry() {
     assert_eq!(format!("{final_a:?}"), format!("{cached_a:?}"));
 }
 
+/// Sample both sides while keeping the original per-side five-second future.
+/// The trace is bounded, records state changes, and is diagnostic only: no
+/// retries, deadline extension, transport polling or readiness substitution.
+async fn wait_for_setup(
+    a: &SmallWebRtcConnection,
+    b: &SmallWebRtcConnection,
+    side: &str,
+    iteration: usize,
+    schedule: usize,
+) {
+    let started = std::time::Instant::now();
+    let waiting = if side == "A" { a } else { b }.wait_data_channel(Duration::from_secs(5));
+    tokio::pin!(waiting);
+    let mut tick = tokio::time::interval(Duration::from_millis(5));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut trace: VecDeque<(Duration, ConnectionDiagnostics, ConnectionDiagnostics)> =
+        VecDeque::with_capacity(32);
+    let mut previous_sample = started;
+    let mut max_sample_gap = Duration::ZERO;
+    let mut samples = 0_u64;
+    let mut evicted_transitions = 0_u64;
+    loop {
+        let outcome = tokio::select! { biased;
+            result = &mut waiting => Some(result),
+            _ = tick.tick() => None,
+        };
+        let now = std::time::Instant::now();
+        max_sample_gap = max_sample_gap.max(now.duration_since(previous_sample));
+        previous_sample = now;
+        samples += 1;
+        let left = a.diagnostics();
+        let right = b.diagnostics();
+        if trace
+            .back()
+            .is_none_or(|(_, old_left, old_right)| *old_left != left || *old_right != right)
+        {
+            if trace.len() == 32 {
+                trace.pop_front();
+                evicted_transitions += 1;
+            }
+            trace.push_back((started.elapsed(), left, right));
+        }
+        if let Some(result) = outcome {
+            result.unwrap_or_else(|error| {
+                panic!(
+                    "data-channel setup schedule={schedule}, iteration={iteration}, \
+                     side={side}, wait_elapsed={:?}, error={error:?}; \
+                     sampling: samples={samples}, max_gap={max_sample_gap:?}, \
+                     evicted_transitions={evicted_transitions}; \
+                     A: id={}, last_error={:?}, stats={:?}; \
+                     B: id={}, last_error={:?}, stats={:?}; \
+                     sampled_layer_transitions={trace:#?}",
+                    started.elapsed(),
+                    a.pc_id(),
+                    a.last_error(),
+                    a.stats(),
+                    b.pc_id(),
+                    b.last_error(),
+                    b.stats(),
+                )
+            });
+            return;
+        }
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn repeated_peer_shutdown_schedules_release_both_udp_ports() {
     use pipecat_webrtc::ConnectionState;
@@ -261,8 +328,9 @@ async fn repeated_peer_shutdown_schedules_release_both_udp_ports() {
                 addresses.extend(candidate_addresses(&answer.sdp));
                 a.accept_answer(answer).await.unwrap();
                 if schedule != 5 {
-                    a.wait_data_channel(Duration::from_secs(5)).await.unwrap();
-                    b.wait_data_channel(Duration::from_secs(5)).await.unwrap();
+                    // Preserve the first error before Drop changes the pair.
+                    wait_for_setup(&a, &b, "A", iteration, schedule).await;
+                    wait_for_setup(&a, &b, "B", iteration, schedule).await;
                 }
                 match schedule {
                     0 => {

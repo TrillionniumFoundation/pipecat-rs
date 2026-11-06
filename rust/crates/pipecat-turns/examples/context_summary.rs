@@ -210,7 +210,7 @@ async fn run_pipeline(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pipecat_core::{ProcessorContext, ProcessorError, async_trait};
+    use pipecat_core::{async_trait, ProcessorContext, ProcessorError};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},

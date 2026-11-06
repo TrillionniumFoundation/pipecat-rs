@@ -10,5 +10,17 @@ pub use media_store::*;
 #[cfg(feature = "local-speech")]
 pub mod local_speech;
 
+#[cfg(feature = "process-supervision")]
+pub mod process_supervision;
+
+#[cfg(feature = "process-supervision")]
+pub mod parent_guard;
+
 mod speech_segments;
 pub use speech_segments::speech_segments;
+
+mod media_command;
+pub use media_command::{
+    MediaCommand, MediaCommandDecoder, MediaCommandError, MediaCommandGate, MediaConnectionBinding,
+    MediaDecodeError, MAX_MEDIA_COMMAND_BYTES, MAX_MEDIA_CONNECTION_REQUESTS,
+};

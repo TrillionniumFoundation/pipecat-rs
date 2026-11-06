@@ -1,0 +1,8 @@
+{
+  "result": "FAILED: strict Clippy collapsible_if in actual endpoint diagnostic branch",
+  "tested_local_commit": "5bd9c6434531b5ead9eeb5cd0ed88c3419b25e38",
+  "tree": "66e6a2f7688f2e5799eb36cc8a9301760205a8b4",
+  "unreferenced_remote_candidate_commit": "57ecda6fa42d7e1d1c3569fc3677439792e51eb1",
+  "remote_branch_moved": false,
+  "following_change": "Equivalent short-circuit condition replaces nested if; rerun final gates on new frozen source."
+}

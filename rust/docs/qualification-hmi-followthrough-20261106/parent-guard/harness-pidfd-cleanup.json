@@ -1,0 +1,13 @@
+{
+  "scope": "task-owned Python child only; no model, device, or owner",
+  "source": "/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/scripts/qualify_hmi_media_process.py",
+  "source_sha256": "92236514e64df01263a073fa2d8bf1020b217b89ff171172ed10599cfb992df7",
+  "python_syntax": "PASS",
+  "pidfd_supported": true,
+  "mismatched_incarnation_refused": true,
+  "child_alive_after_refusal": true,
+  "exact_child_sigkill_sent": true,
+  "child_exit_code": -9,
+  "direct_child_waitpid_completed": true,
+  "passed": true
+}

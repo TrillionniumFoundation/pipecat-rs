@@ -1,0 +1,84 @@
+{
+  "schema": "pipecat-smart-turn-reference-launch-v1",
+  "phase": "completed",
+  "start_unix": 1793981995.6210656,
+  "files_before": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe.c",
+      "name": "ort_reference_probe.c",
+      "bytes": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/onnxruntime_c_api.h",
+      "name": "onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/desktop_smart_turn_reference_pin_r1.py",
+      "name": "desktop_smart_turn_reference_pin_r1.py",
+      "bytes": 21084,
+      "sha256": "883d255905821c7e1b70141dd1b841d2dd16eeee26ba9ba1cf34b3eb09cf5abc"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "name": "run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "files_after": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe.c",
+      "name": "ort_reference_probe.c",
+      "bytes": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/onnxruntime_c_api.h",
+      "name": "onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/desktop_smart_turn_reference_pin_r1.py",
+      "name": "desktop_smart_turn_reference_pin_r1.py",
+      "bytes": 21084,
+      "sha256": "883d255905821c7e1b70141dd1b841d2dd16eeee26ba9ba1cf34b3eb09cf5abc",
+      "unchanged": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "name": "run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+      "unchanged": true
+    }
+  ],
+  "requested_resource_budget": {
+    "cpu_quota_percent": 200,
+    "memory_max_bytes": 4294967296,
+    "nice": 10,
+    "timeout_seconds": 120
+  },
+  "preceding_expanded_launcher": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/expanded-batch-launch-pin-r1/launcher.json",
+    "sha256": "5162d316079c6e7efae542b0e5ba0a01c8576c0d9b10ac53c0617e7e41d26b1b",
+    "exit_code": 1
+  },
+  "actual_argv": [
+    "/usr/bin/python3",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/desktop_smart_turn_reference_pin_r1.py",
+    "272671b95297313d24db921eceda8e95f3a8d545",
+    "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "expanded-batch-pin-r1"
+  ],
+  "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66",
+  "runner_exit_code": 1,
+  "files_unchanged": true,
+  "exit_code": 1,
+  "end_unix": 1793981997.7072394
+}

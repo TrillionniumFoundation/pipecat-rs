@@ -1,0 +1,65 @@
+{
+  "result": "failed",
+  "checks": [
+    "WASM bootstrap, JSON configuration and original-layout controls render",
+    "Real WebSocket open, encoded token/query, protobuf client-ready, fake-microphone PCM capture and scheduled PCM playback",
+    "RTVI v2 final transcript projection, segment upsert and text-only injection-safe rendering"
+  ],
+  "page_errors": [],
+  "failure": {
+    "type": "Error",
+    "message": "Page.evaluate: Error: fixture send failure\n    at window.openSockets.at.send (eval at evaluate (:311:30), <anonymous>:1:141)\n    at UtilityScript.evaluate (<anonymous>:318:18)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_acceptance.py\", line 432, in main\n    await page.evaluate(\"delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}\")\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/async_api/_generated.py\", line 9389, in evaluate\n    await self._impl_obj.evaluate(\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_page.py\", line 472, in evaluate\n    return await self._main_frame.evaluate(expression, arg)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_frame.py\", line 345, in evaluate\n    await self._channel.send(\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 76, in send\n    return await self._connection.wrap_api_call(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 632, in wrap_api_call\n    raise rewrite_error(error, f\"{parsed_st['apiName']}: {error}\") from None\nplaywright._impl._errors.Error: Page.evaluate: Error: fixture send failure\n    at window.openSockets.at.send (eval at evaluate (:311:30), <anonymous>:1:141)\n    at UtilityScript.evaluate (<anonymous>:318:18)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n"
+  },
+  "cleanup_errors": [],
+  "elapsed_seconds": 18.528275868971832,
+  "browser_executable": "/usr/bin/google-chrome",
+  "browser_version": "156.0.8078.79",
+  "chromium_sandbox": true,
+  "launch_args": [
+    "--use-fake-device-for-media-stream",
+    "--use-fake-ui-for-media-stream",
+    "--autoplay-policy=no-user-gesture-required"
+  ],
+  "fixture_sha256": "68934d0c4a7d9a53e6f9e7fe5b083c9e1fd1f338f2b5f87d0c8b713d9856117c",
+  "asset_sha256": {
+    "config.json": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+    "index.html": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+    "pkg/pipecat_browser_client.js": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+    "pkg/pipecat_browser_client_bg.wasm": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+    "style.css": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f"
+  },
+  "microphone": "Chromium synthetic device only",
+  "autoplay": "Policy override for synthetic transport fixture; normal autoplay restrictions are not qualified",
+  "provider": "Loopback transport fixtures only; no live bot/provider"
+}
+Traceback (most recent call last):
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_acceptance.py", line 689, in <module>
+    asyncio.run(main(parser.parse_args()))
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_acceptance.py", line 432, in main
+    await page.evaluate("delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}")
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/async_api/_generated.py", line 9389, in evaluate
+    await self._impl_obj.evaluate(
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_page.py", line 472, in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 345, in evaluate
+    await self._channel.send(
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 76, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.evaluate: Error: fixture send failure
+    at window.openSockets.at.send (eval at evaluate (:311:30), <anonymous>:1:141)
+    at UtilityScript.evaluate (<anonymous>:318:18)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)

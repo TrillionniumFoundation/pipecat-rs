@@ -1,0 +1,32 @@
+{
+  "voice": "zh_CN-huayan-medium",
+  "model": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/zh_CN-huayan-medium.onnx",
+    "sha256": "9929917bf8cabb26fd528ea44d3a6699c11e87317a14765312420be230be0f3d"
+  },
+  "config": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/zh_CN-huayan-medium.onnx.json",
+    "sha256": "d521dc45504a8ccc99e325822b35946dd701840bfb07e3dbb31a40929ed6a82b"
+  },
+  "runtime": {
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d"
+  },
+  "espeak": {
+    "library": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/lib/libespeak-ng.so.1.52.0.1",
+      "sha256": "3767caddfe3b90f8f65b50a8d1f66f58f52e0367ba4a385599e0aa3391446e80"
+    },
+    "data_directory": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/piper_phonemize/share/espeak-ng-data",
+    "data_sha256": "bba750d12c77a7714b579dc8a34e205417174963cfd05a54da8edd4031f09926"
+  },
+  "output_sample_rate": 48000,
+  "inference_threads": 2,
+  "queue_capacity": 4,
+  "max_text_bytes": 4096,
+  "max_phonemes": 8192,
+  "max_audio_samples": 5760000,
+  "max_model_bytes": 524288000,
+  "use_cuda": false,
+  "download": false
+}

@@ -7,12 +7,12 @@ use pipecat_pipeline::{LlmSwitcher, ServiceSwitcherStrategy};
 use pipecat_services::{
     ClientConfig, CompletionRequest, Context, LlmClient, LlmProcessor, Message, Provider, Role,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     error::Error,
     sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     },
     time::Duration,
 };

@@ -1,0 +1,560 @@
+--- reviewed-moq-bfbba41.py
++++ strict-after-moq-2d2a93.py
+@@ -1,9 +1,10 @@
+ #!/usr/bin/env python3
+-"""Run the reviewed MoQ diagnostic fixture in at most 20 original full suites.
+-
+-This script does not update the source checkout or retry a failed phase.
+-The launcher must enforce 600 seconds, CPU 800%, 32 GiB and nice 10, and
+-observe terminal managed-job statuses for every 0cc stage and C3 first.
++"""Run one original strict Clippy command after the exact Q MoQ window terminates.
++
++No checkout, patch, retry, test matrix, model inference, or legacy same-head
++default qualification is performed here. The launcher must enforce 900 seconds,
++CPU 800%, 32 GiB and nice 10 and observe terminal managed jobs before admission.
++The script holds one owner lock; it does not call the lock-taking v3 inner runner.
+ """
+ import contextlib
+ import fcntl
+@@ -22,15 +23,22 @@
+ 
+ ROOT = Path('/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66')
+ SOURCE, TARGET = ROOT / 'source-pin', ROOT / 'target-pin'
+-EVIDENCE = ROOT / 'evidence/moq-diagnostic-pin-r1'
++EVIDENCE = ROOT / 'evidence/strict-clippy-after-moq-pin-r1'
+ CONTRACT = ROOT / 'requests/moq-diagnostic-pin-r1.source-contract.json'
+-NAMES = ROOT / 'requests/moq-diagnostic-pin-r1.case-names.json'
++MOQ_RECEIPT = ROOT / 'evidence/moq-diagnostic-pin-r1/repetitions.json'
++MOQ_RUNNER = ROOT / 'desktop_moq_diagnostic_pin_r1.py'
++MOQ_RUNNER_SHA = 'bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af'
+ BASE = '0cc16e8123cb05aaad480d5ab7860a267d998bac'
+ BASE_TREE = 'aec037b9cf2be53fcf6f85fdc149382942277702'
+ BASE_MANIFEST = '1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535'
+-MOQU_TESTS = 'rust/crates/pipecat-moq/src/tests.rs'
+-DIAGNOSTIC_SHA = '8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219'
+-NAMES_SHA = 'e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41'
++Q_HEAD = 'c1c3addb07dde0a143462c10961ff2494eeba90a'
++Q_TREE = '4df0d197540551ed9b74d4e11c0936e5bedee5f5'
++Q_MANIFEST = '23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d'
++Q_CONTRACT_SHA = 'c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3'
++REVIEWED_SOURCES = {
++    'rust/crates/pipecat-moq/src/tests.rs': '8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219',
++    'rust/crates/pipecat-evals/src/simulation/quality.rs': '4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780',
++}
+ RUST_PREFIX = ROOT / 'tools/rust-1.99.0-r1/bin'
+ RUST_READY = ROOT / 'evidence/rust-1.99.0-restore-r1/ready.json'
+ RUST_READY_SHA = '0d8da014686ec0eb66874e90527e668836830f873a3ac98f43de4451fe7bf3c9'
+@@ -38,10 +46,25 @@
+ HELPER_SHA = 'c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4'
+ C3 = ROOT / 'evidence/smart-turn-wheel-reference-pin-r3/reference.json'
+ ENVIRONMENT = ROOT / 'evidence/full-workspace-rust-1.99.0-r5/environment.json'
+-REPETITIONS = 20
+-INNER_SECONDS = 570
+-OUTER_SECONDS = 600
+-RESERVE_SECONDS = 10
++ENVIRONMENT_SHA = '2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026'
++BASE_GATE = ROOT / 'evidence/full-workspace-rust-1.99.0-r5/gate.json'
++BASE_GATE_SHA = '3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af'
++ORIGINAL_STRICT = ROOT / 'evidence/strict-clippy-pin-r2/gate.json'
++ORIGINAL_STRICT_SHA = 'a9778f0aabaeeb9b6b12182978361f4d160c3f4b25dbe21e3ed2a8b09e89067e'
++STRICT_ARGV = [str(RUST_PREFIX / 'cargo'), 'clippy', '--workspace', '--all-targets',
++               '--all-features', '--locked', '--', '-D', 'warnings']
++INNER_SECONDS = 870
++OUTER_SECONDS = 900
++RESERVE_SECONDS = 15
++BUILD_ENVIRONMENT_KEYS = [
++    'CARGO_HOME', 'CARGO_TARGET_DIR', 'CARGO_BUILD_JOBS', 'CARGO_INCREMENTAL',
++    'CARGO_PROFILE_DEV_DEBUG', 'CARGO_PROFILE_TEST_DEBUG', 'RUSTC', 'RUSTDOC',
++    'RUSTUP_TOOLCHAIN', 'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CC', 'CXX',
++    'CXXFLAGS', 'CFLAGS', 'LDFLAGS', 'LIBCLANG_PATH', 'LD_LIBRARY_PATH',
++    'PKG_CONFIG_PATH', 'PKG_CONFIG_SYSROOT_DIR', 'LK_CUSTOM_WEBRTC',
++    'PIPECAT_ONNX_RUNTIME', 'ORT_DYLIB_PATH', 'PIPECAT_SILERO_MODEL',
++    'PIPECAT_SMART_TURN_MODEL', 'RUST_TEST_THREADS',
++]
+ 
+ 
+ class Failed(Exception):
+@@ -124,36 +147,37 @@
+     return result
+ 
+ 
++
+ def main():
+     began = time.monotonic()
+     deadline = began + INNER_SECONDS
+     expected, expected_tree, contract_sha = sys.argv[1:]
+     if (not all(re.fullmatch('[0-9a-f]{40}', value) for value in (expected, expected_tree)) or
+             not re.fullmatch('[0-9a-f]{64}', contract_sha) or expected == BASE):
+-        raise ValueError('a newly published exact commit, tree and contract SHA are required')
++        raise ValueError('the actual published Q commit, tree and complete contract SHA are required')
++    if (expected, expected_tree, contract_sha) != (Q_HEAD, Q_TREE, Q_CONTRACT_SHA):
++        raise ValueError('this prepared window is restricted to the actual published Q checkpoint')
+     EVIDENCE.mkdir(mode=0o700, exist_ok=False)
+-    result_path = EVIDENCE / 'repetitions.json'
++    result_path = EVIDENCE / 'verification.json'
+     record = {
+-        'schema': 'pipecat-moq-original-suite-diagnostic-v1',
++        'schema': 'pipecat-strict-clippy-after-moq-v1',
+         'head': expected, 'tree': expected_tree, 'base': BASE, 'base_tree': BASE_TREE,
+         'source': str(SOURCE), 'target': str(TARGET), 'phase': 'preparing',
+-        'start_unix': time.time(), 'requested_repetitions': REPETITIONS,
+-        'unique_coverage_cases': 81, 'case_names_sha256': NAMES_SHA,
+-        'diagnostic_source_sha256': DIAGNOSTIC_SHA,
++        'start_unix': time.time(), 'source_contract_sha256': contract_sha,
++        'reviewed_source_sha256': REVIEWED_SOURCES,
+         'inner_whole_seconds': INNER_SECONDS, 'outer_job_seconds': OUTER_SECONDS,
+         'cleanup_and_postflight_reserve_seconds': RESERVE_SECONDS,
+         'resource_budget': {'cpu_percent': 800, 'memory_bytes': 34359738368,
+                             'build_jobs': 8, 'nice': 10},
+-        'scope': 'Finite repeat window of the same original 81 cases with a diagnostic-only assertion message.',
+-        'parallelism': 'Original full harness, no selector or test-threads argument; RUST_TEST_THREADS is rejected.',
+-        'failure_policy': 'Stop on the first failed preparation, selection, process, containment, or suite result; no retry or replacement.',
+-        'original_deadlines': '150ms connect_timeout, 3s default end_timeout, and existing 10s bounded helper remain exact source bytes.',
+-        'historical_failure': 'Original 0cc default r5 absent-peer assertion remains a real failure with an unknown actual error variant.',
++        'scope': 'One original strict Clippy command and two independent leaf-file format checks on actual Q; no test matrix or model execution.',
++        'source_scope': 'Complete canonical source map includes documentation; the old 0cc default is an environment/history source, not Q runtime qualification.',
++        'failure_policy': 'No phase retries. Ordinary rustfmt diagnostic exits remain failures while the one Clippy command still runs; timeout, containment or integrity failure stops admission.',
+         'prior_failures_cleared': False, 'production_qualification': False,
+-        'processes': [], 'rounds': [], 'identity_before': {}, 'identity_after': {},
++        'processes': [], 'qualification_stages': [],
++        'identity_before': {}, 'identity_after': {},
+         'containment_exit_code': 0, 'integrity_exit_code': 0,
+     }
+-    lock, source_before, binary = None, None, None
++    lock, source_before = None, None
+     tracked = {}
+     status = 127
+     environment = dict(os.environ)
+@@ -180,18 +204,14 @@
+             raise ValueError('immutable file size mismatch: ' + str(path))
+         return item
+ 
+-    def run_owned(name, argv, limit, *, round_number=None, separate_stderr=False):
++    def run_owned(name, argv, limit, *, separate_stderr=False):
+         entry = {'name': name, 'argv': argv, 'cwd': str(SOURCE / 'rust'),
+                  'phase': 'preparing', 'start_unix': time.time(),
+                  'phase_limit_seconds': limit, 'launch_attempts': 0,
+                  'processes_started': 0, 'original_exit_code': None,
+                  'timed_out': False, 'containment_exit_code': 0,
+                  'log_integrity_exit_code': 0}
+-        if round_number is None:
+-            record['processes'].append(entry)
+-        else:
+-            entry['round'] = round_number
+-            record['rounds'].append(entry)
++        record['processes'].append(entry)
+         stdout_path = EVIDENCE / (name + '.stdout.log')
+         stderr_path = EVIDENCE / (name + '.stderr.log') if separate_stderr else None
+         phase_begin, execution_end, child = time.monotonic(), None, None
+@@ -222,7 +242,7 @@
+                 except subprocess.TimeoutExpired:
+                     entry['timed_out'] = True
+                     phase_status = 124
+-                    entry['timeout_scope'] = 'Runner process budget; original Rust deadlines were not modified.'
++                    entry['timeout_scope'] = 'Runner process budget; the original Clippy and rustfmt arguments were not modified.'
+                 finally:
+                     execution_end = time.monotonic()
+         except Failed as error:
+@@ -273,12 +293,14 @@
+         return entry
+ 
+     def stopped_phase(entry):
+-        record['stopped_phase'] = {
++        stopped = {
+             key: entry.get(key) for key in (
+                 'name', 'round', 'launch_attempts', 'processes_started',
+                 'original_exit_code_observed_before_cleanup', 'original_exit_code',
+                 'phase_exit_code_before_containment', 'containment_exit_code',
+                 'log_integrity_exit_code', 'wrapper_exit_code', 'timed_out')}
++        record.setdefault('first_failed_phase', stopped)
++        record['last_failed_phase'] = stopped
+ 
+     def require_process(entry):
+         if entry['wrapper_exit_code'] != 0:
+@@ -315,6 +337,18 @@
+         (EVIDENCE / (label + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+         return value
+ 
++
++    def intact_terminal(receipt, *, head, tree, manifest):
++        return (
++            receipt.get('phase') == 'completed' and
++            type(receipt.get('exit_code')) is int and receipt['exit_code'] != 125 and
++            receipt.get('head') == head and
++            receipt.get('tree', receipt.get('base_git_tree')) == tree and
++            receipt.get('source_before_sha256') == manifest and
++            receipt.get('source_after_sha256') == manifest and
++            receipt.get('source_unchanged') is True and
++            receipt.get('status_after') == '')
++
+     save()
+     try:
+         lock = (ROOT / 'qualification-owner-pin.lock').open('a')
+@@ -325,47 +359,76 @@
+         observe(Path(git).resolve())
+         observe(HELPER, HELPER_SHA, 5176)
+         observe(CONTRACT, contract_sha)
+-        observe(NAMES, NAMES_SHA, 6882)
+         observe(RUST_READY, RUST_READY_SHA, 6059)
+-        observe(ENVIRONMENT)
++        observe(ENVIRONMENT, ENVIRONMENT_SHA, 2003)
++        observe(BASE_GATE, BASE_GATE_SHA, 4847)
++        observe(ORIGINAL_STRICT, ORIGINAL_STRICT_SHA, 3214)
++        observe(MOQ_RUNNER, MOQ_RUNNER_SHA, 33499)
++        observe(MOQ_RECEIPT)
+         observe(C3)
+         owner = TARGET / '.pipecat-source-owner.json'
+         observe(owner)
+         if json.loads(owner.read_bytes()) != {'source': str(SOURCE), 'task': 'workspace-f9f576cc6c66'}:
+             raise ValueError('target is not exclusive to this source checkout')
+-        expected_names = json.loads(NAMES.read_bytes())
+-        if (not isinstance(expected_names, list) or len(expected_names) != 81 or
+-                sorted(set(expected_names)) != expected_names or
+-                not all(isinstance(name, str) for name in expected_names)):
+-            raise ValueError('original 81-name contract is invalid')
+-        record['case_names'] = expected_names
++
+         contract = json.loads(CONTRACT.read_bytes())
+         if (contract.get('schema') != 'pipecat-moq-diagnostic-source-contract-v1' or
+                 contract.get('base') != BASE or contract.get('base_tree') != BASE_TREE or
+                 contract.get('head') != expected or contract.get('tree') != expected_tree or
+-                not re.fullmatch('[0-9a-f]{64}', contract.get('source_manifest_sha256', '')) or
+-                contract.get('source_sha256', {}).get(MOQU_TESTS) != DIAGNOSTIC_SHA):
+-            raise ValueError('published source contract differs from the reviewed diagnostic')
++                contract.get('source_manifest_sha256') != Q_MANIFEST or
++                contract.get('source_sha256') != REVIEWED_SOURCES):
++            raise ValueError('Q source contract differs from the two reviewed fixture edits')
+         changes = contract.get('changed_paths')
+-        source_shas = contract.get('source_sha256')
+         if (not isinstance(changes, list) or not all(relative_path(p) for p in changes) or
+-                len(changes) != len(set(changes)) or not isinstance(source_shas, dict) or
+-                not source_shas or not set(source_shas).issubset(set(changes))):
+-            raise ValueError('invalid complete changed-path/source identity contract')
++                len(changes) != len(set(changes)) or
++                not set(REVIEWED_SOURCES).issubset(set(changes))):
++            raise ValueError('invalid complete published changed-path contract')
+         (EVIDENCE / 'source-contract.json').write_bytes(CONTRACT.read_bytes())
+-        (EVIDENCE / 'original-case-names.json').write_bytes(NAMES.read_bytes())
++
++        preceding_moq = json.loads(MOQ_RECEIPT.read_bytes())
++        if (not intact_terminal(preceding_moq, head=expected, tree=expected_tree,
++                                manifest=contract['source_manifest_sha256']) or
++                preceding_moq.get('head_after') != expected or
++                preceding_moq.get('tree_after') != expected_tree or
++                preceding_moq.get('containment_exit_code') != 0 or
++                preceding_moq.get('integrity_exit_code') != 0 or
++                preceding_moq.get('all_observed_files_unchanged') is not True or
++                preceding_moq.get('identity_before', {}).get(str(CONTRACT), {}).get('sha256') != contract_sha or
++                preceding_moq.get('identity_before', {}).get(str(MOQ_RUNNER), {}).get('sha256') != MOQ_RUNNER_SHA):
++            raise ValueError('MoQ must reach a recorded terminal state on this exact unchanged Q contract')
++        for entry in preceding_moq.get('processes', []) + preceding_moq.get('rounds', []):
++            if entry.get('processes_started'):
++                cleanup = entry.get('cleanup', {})
++                if (type(entry.get('original_exit_code')) is not int or
++                        entry.get('containment_exit_code') != 0 or
++                        entry.get('log_integrity_exit_code') != 0 or
++                        cleanup.get('checks_succeeded') is not True or
++                        cleanup.get('group_survived_leader') or cleanup.get('errors')):
++                    raise ValueError('MoQ process containment or raw-log integrity is unresolved')
++        moq_contract = MOQ_RECEIPT.parent / 'source-contract.json'
++        observe(moq_contract, contract_sha)
++        if moq_contract.read_bytes() != CONTRACT.read_bytes():
++            raise ValueError('MoQ did not record this exact Q contract')
++        (EVIDENCE / 'preceding-moq.json').write_bytes(MOQ_RECEIPT.read_bytes())
++        record['preceding_moq'] = {
++            'path': str(MOQ_RECEIPT), 'sha256': record['identity_before'][str(MOQ_RECEIPT)]['sha256'],
++            'head': preceding_moq['head'], 'tree': preceding_moq['tree'],
++            'exit_code': preceding_moq['exit_code'],
++            'execution_exit_code_before_integrity_checks': preceding_moq.get('execution_exit_code_before_integrity_checks'),
++            'source_unchanged': True,
++            'scope': 'A prior nonzero functional/phase result is retained, not retried or counted as Q workspace success.',
++        }
++
+         prior = json.loads(C3.read_bytes())
+-        if (prior.get('head') != BASE or prior.get('tree') != BASE_TREE or
+-                prior.get('phase') != 'completed' or type(prior.get('exit_code')) is not int or
+-                prior['exit_code'] == 125 or prior.get('source_unchanged') is not True or
+-                prior.get('all_observed_files_unchanged') is not True or prior.get('status_after') or
+-                prior.get('source_before_sha256') != BASE_MANIFEST or
+-                prior.get('source_after_sha256') != BASE_MANIFEST or
++        if (not intact_terminal(prior, head=BASE, tree=BASE_TREE, manifest=BASE_MANIFEST) or
++                prior.get('all_observed_files_unchanged') is not True or
+                 set(prior.get('preceding', {})) != {'grok', 'default', 'expanded', 'models', 'webrtc', 'aishell'}):
+             raise ValueError('all original 0cc stages and C3 must be terminal with intact inputs')
++        if preceding_moq.get('preceding_c3', {}).get('sha256') != record['identity_before'][str(C3)]['sha256']:
++            raise ValueError('C3 receipt differs from the one admitted by MoQ')
+         started = prior.get('probe_processes_started')
+         if type(started) is not int or started not in (0, 1):
+-            raise ValueError('C3 native process count is unavailable')
++            raise ValueError('C3 process count is unavailable')
+         if started:
+             cleanup = prior.get('process_cleanup', {})
+             if (cleanup.get('checks_succeeded') is not True or
+@@ -373,9 +436,10 @@
+                 raise ValueError('C3 owned process cleanup is unresolved')
+         record['preceding_c3'] = {
+             'path': str(C3), 'sha256': record['identity_before'][str(C3)]['sha256'],
+-            'exit_code': prior['exit_code'], 'native_exit_code': prior.get('native_exit_code'),
++            'head': BASE, 'tree': BASE_TREE, 'exit_code': prior['exit_code'],
++            'native_exit_code': prior.get('native_exit_code'),
+             'comparison_exit_code': prior.get('comparison_exit_code'),
+-            'earlier_failure_preserved': prior['exit_code'] != 0}
++        }
+         (EVIDENCE / 'preceding-c3.json').write_bytes(C3.read_bytes())
+         for name, receipt in prior['preceding'].items():
+             path = Path(receipt['path'])
+@@ -383,6 +447,23 @@
+                     'completed', 'completed_successfully', 'completed_with_failures'):
+                 raise ValueError('C3 preceding receipt path/phase escaped its owned evidence')
+             observe(path, receipt['sha256'])
++
++        base_gate = json.loads(BASE_GATE.read_bytes())
++        old_strict = json.loads(ORIGINAL_STRICT.read_bytes())
++        if (not intact_terminal(base_gate, head=BASE, tree=BASE_TREE, manifest=BASE_MANIFEST) or
++                not intact_terminal(old_strict, head=BASE, tree=BASE_TREE, manifest=BASE_MANIFEST) or
++                base_gate.get('exit_code') != 101 or old_strict.get('exit_code') != 101 or
++                old_strict.get('argv') != STRICT_ARGV):
++            raise ValueError('the original 0cc default/strict evidence or strict command changed')
++        record['original_0cc_scope'] = {
++            'default_exit_code': base_gate['exit_code'],
++            'strict_exit_code': old_strict['exit_code'],
++            'head': BASE, 'tree': BASE_TREE,
++            'statement': 'Historical nonzero evidence and native environment provenance only; this default was not run on Q.',
++        }
++        (EVIDENCE / 'original-0cc-strict-gate.json').write_bytes(ORIGINAL_STRICT.read_bytes())
++        (EVIDENCE / 'original-0cc-default-gate.json').write_bytes(BASE_GATE.read_bytes())
++
+         rust_ready = json.loads(RUST_READY.read_bytes())
+         if (rust_ready.get('prefix') != str(RUST_PREFIX.parent) or
+                 rust_ready.get('manifest_sha256') != 'ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2'):
+@@ -392,30 +473,35 @@
+             if path.parent != RUST_PREFIX or name != path.name or tool.get('exit_code') != 0:
+                 raise ValueError('unexpected pinned Rust executable')
+             observe(path, tool['sha256'])
++        for name in ('rustdoc', 'clippy-driver'):
++            observe(RUST_PREFIX / name)
+         overrides = json.loads(ENVIRONMENT.read_bytes())
+         if not isinstance(overrides, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in overrides.items()):
+             raise ValueError('native environment receipt is invalid')
+         overrides.update(CARGO_BUILD_JOBS='8', CARGO_TARGET_DIR=str(TARGET))
++        if overrides != old_strict.get('environment_overrides'):
++            raise ValueError('native environment overrides differ from the original strict command')
+         environment = dict(os.environ, **overrides)
+-        if 'RUST_TEST_THREADS' in environment:
+-            raise ValueError('original default harness parallelism rejects RUST_TEST_THREADS')
++        effective = {key: environment[key] for key in BUILD_ENVIRONMENT_KEYS if key in environment}
++        if effective != base_gate.get('effective_build_environment'):
++            raise ValueError('recorded effective native build environment differs from original 0cc')
+         if (environment.get('RUSTC') != str(RUST_PREFIX / 'rustc') or
+                 environment.get('RUSTDOC') != str(RUST_PREFIX / 'rustdoc') or
+                 environment.get('RUSTUP_TOOLCHAIN') != '1.99.0'):
+             raise ValueError('native environment is not bound to the exact Rust pin')
+-        observe(RUST_PREFIX / 'rustdoc')
+         for name in ('CC', 'CXX'):
+             value = environment.get(name)
+             if value and Path(value).is_absolute() and Path(value).is_file():
+                 observe(Path(value).resolve())
+         record['environment_overrides'] = overrides
+-        record['inherited_test_environment'] = {
+-            name: value for name, value in environment.items() if name.startswith('RUST_TEST_')}
++        record['effective_build_environment'] = effective
++        record['environment_comparison_scope'] = 'Exact original overrides plus the original full-gate whitelist; no claim of an unrecorded historical complete environment.'
+         (EVIDENCE / 'environment.json').write_text(json.dumps(overrides, indent=2) + '\n')
++
+         if git_read('source-head', ['rev-parse', 'HEAD']).decode().strip() != expected:
+-            raise ValueError('source checkout must already be updated to the published diagnostic freeze')
++            raise ValueError('source checkout must already be updated to the published Q freeze')
+         if git_read('source-tree', ['rev-parse', 'HEAD^{tree}']).decode().strip() != expected_tree:
+-            raise ValueError('source tree differs')
++            raise ValueError('Q source tree differs')
+         if git_read('source-status', ['status', '--porcelain=v1']):
+             raise ValueError('source checkout has unreviewed changes')
+         if git_read('base-tree', ['rev-parse', BASE + '^{tree}']).decode().strip() != BASE_TREE:
+@@ -423,111 +509,57 @@
+         actual_changes = [os.fsdecode(p) for p in git_read(
+             'source-diff', ['diff', '--no-renames', '--name-only', '-z', BASE, expected]).split(b'\0') if p]
+         if sorted(actual_changes) != sorted(changes):
+-            raise ValueError('published source diff differs from the exact root-reviewed list')
+-        if [p for p in actual_changes if p.startswith('rust/crates/pipecat-moq/')] != [MOQU_TESTS]:
+-            raise ValueError('MoQ source changes exceed the reviewed diagnostic-only fixture')
+-        for relative, digest in source_shas.items():
+-            if not relative_path(relative) or not re.fullmatch('[0-9a-f]{64}', digest):
+-                raise ValueError('invalid source-file hash contract')
++            raise ValueError('published Q diff differs from the complete root-reviewed path list')
++        if sorted(p for p in actual_changes if not p.startswith('rust/docs/')) != sorted(REVIEWED_SOURCES):
++            raise ValueError('Q changes outside documentation exceed the two reviewed fixture files')
++        for relative, digest in REVIEWED_SOURCES.items():
+             observe(SOURCE / relative, digest)
+         source_before = snapshot('source-before')
+         record['source_before_sha256'] = source_before['manifest_sha256']
+         if source_before['manifest_sha256'] != contract['source_manifest_sha256']:
+-            raise ValueError('complete source manifest differs from the published freeze')
+-        cargo = str(RUST_PREFIX / 'cargo')
+-        metadata = run_owned('metadata', [cargo, 'metadata', '--no-deps', '--locked',
+-                                         '--offline', '--format-version', '1'], 60,
+-                             separate_stderr=True)
+-        require_process(metadata)
+-        data = json.loads(Path(metadata['logs']['stdout']['path']).read_bytes())
+-        if (Path(data['workspace_root']).resolve() != SOURCE / 'rust' or
+-                Path(data['target_directory']).resolve() != TARGET):
+-            raise ValueError('Cargo metadata selected another workspace or target')
+-        packages = [p for p in data['packages'] if p['name'] == 'pipecat-moq']
+-        if len(packages) != 1:
+-            raise ValueError('expected exactly one MoQ package identity')
+-        package = packages[0]
+-        if (Path(package['manifest_path']).resolve() != SOURCE / 'rust/crates/pipecat-moq/Cargo.toml' or
+-                package['id'] not in data['workspace_members']):
+-            raise ValueError('MoQ package identity is outside the owned workspace')
+-        binding_argv = [cargo, 'test', '--workspace', '--locked', '--offline', '--no-run',
+-                        '--message-format=json-render-diagnostics']
+-        binding = run_owned('binding', binding_argv, 300)
+-        require_process(binding)
+-        artifacts, finished = [], []
+-        with Path(binding['logs']['stdout']['path']).open('rb') as stream:
+-            for line in stream:
+-                try:
+-                    message = json.loads(line)
+-                except (ValueError, UnicodeDecodeError):
+-                    continue
+-                if message.get('reason') == 'build-finished':
+-                    finished.append(message.get('success'))
+-                if (message.get('reason') == 'compiler-artifact' and
+-                        message.get('package_id') == package['id'] and
+-                        message.get('target', {}).get('name') == 'pipecat_moq' and
+-                        message.get('target', {}).get('kind') == ['lib'] and
+-                        message.get('profile', {}).get('test') is True):
+-                    artifacts.append(message)
+-        if finished != [True] or len(artifacts) != 1:
+-            raise ValueError('workspace build did not report one unique successful MoQ libtest artifact')
+-        artifact = artifacts[0]
+-        if Path(artifact['target']['src_path']).resolve() != SOURCE / 'rust/crates/pipecat-moq/src/lib.rs':
+-            raise ValueError('reported MoQ libtest source path differs')
+-        binary = Path(artifact['executable']).resolve()
+-        if binary.parent != TARGET / 'debug/deps' or not binary.name.startswith('pipecat_moq-'):
+-            raise ValueError('compiler-reported harness escaped the exclusive target')
+-        record['binary'] = observe(binary)
+-        record['compiler_artifact'] = artifact
+-        (EVIDENCE / 'compiler-artifact.json').write_text(json.dumps(artifact, indent=2) + '\n')
+-        selection = run_owned('selection', [str(binary), '--list'], 10)
+-        require_process(selection)
+-        listed = Path(selection['logs']['stdout']['path']).read_text().splitlines()
+-        actual_names = [line[:-6] for line in listed if line.endswith(': test')]
+-        nonempty = [line for line in listed if line]
+-        if (sorted(actual_names) != expected_names or len(actual_names) != 81 or
+-                len(nonempty) != 82 or nonempty[-1] != '81 tests, 0 benchmarks'):
+-            stopped_phase(selection)
+-            record['selection_exit_code'] = 126
+-            raise Failed('the actual harness does not list exactly the original 81 cases', 126)
+-        record['selection_verified'] = True
++            raise ValueError('complete Q canonical manifest differs, including documentation')
++
++        commands = [
++            ('format-moq-diagnostic', [str(RUST_PREFIX / 'rustfmt'), '--check', '--edition', '2021',
++                                       '--config', 'skip_children=true', str(SOURCE / 'rust/crates/pipecat-moq/src/tests.rs')], 30),
++            ('format-quality-ledger', [str(RUST_PREFIX / 'rustfmt'), '--check', '--edition', '2021',
++                                      '--config', 'skip_children=true', str(SOURCE / 'rust/crates/pipecat-evals/src/simulation/quality.rs')], 30),
++            ('strict-clippy', STRICT_ARGV, INNER_SECONDS),
++        ]
++        record['qualification_argv'] = [{'name': name, 'argv': argv, 'limit_seconds': limit}
++                                        for name, argv, limit in commands]
+         record['phase'] = 'running'
+         save()
+         status = 0
+-        for number in range(1, REPETITIONS + 1):
++        for name, argv, limit in commands:
+             budget()
+-            entry = run_owned(f'round-{number:02d}', [str(binary)], INNER_SECONDS,
+-                              round_number=number)
+-            log = Path(entry['logs']['stdout']['path'])
+-            if log.exists():
+-                text = log.read_text(errors='replace')
+-                outcomes = re.findall(r'^test ([^\n]+) \.\.\. (ok|FAILED|ignored[^\n]*)$', text, re.MULTILINE)
+-                summaries = re.findall(
+-                    r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out;',
+-                    text, re.MULTILINE)
+-                entry['observed_case_results'] = [{'name': name, 'outcome': outcome} for name, outcome in outcomes]
+-                entry['observed_summaries'] = summaries
+-                entry['complete_original_suite_passed'] = (
+-                    summaries == [('ok', '81', '0', '0', '0', '0')] and
+-                    len(outcomes) == 81 and
+-                    sorted(name for name, outcome in outcomes) == expected_names and
+-                    all(outcome == 'ok' for name, outcome in outcomes))
+-            else:
+-                entry['complete_original_suite_passed'] = False
+-            save()
++            entry = run_owned(name, argv, limit)
++            record['qualification_stages'].append({
++                key: entry.get(key) for key in (
++                    'name', 'argv', 'phase', 'launch_attempts', 'processes_started',
++                    'original_exit_code_observed_before_cleanup', 'original_exit_code',
++                    'phase_exit_code_before_containment', 'containment_exit_code',
++                    'log_integrity_exit_code', 'wrapper_exit_code', 'timed_out',
++                    'execution_elapsed_seconds', 'elapsed_seconds', 'logs')})
++            if name == 'strict-clippy':
++                record['strict_clippy_original_exit_code'] = entry.get('original_exit_code')
++                record['strict_clippy_wrapper_exit_code'] = entry['wrapper_exit_code']
+             if entry['wrapper_exit_code'] != 0:
+                 stopped_phase(entry)
+-                status = entry['wrapper_exit_code']
+-                record['stop_reason'] = 'first failed original harness process or containment; no replacement'
++                if status == 0:
++                    status = entry['wrapper_exit_code']
++            save()
++            unsafe = (entry['timed_out'] or entry['containment_exit_code'] or
++                      entry['log_integrity_exit_code'] or entry.get('exception') or
++                      entry['processes_started'] != 1 or
++                      type(entry.get('original_exit_code')) is not int or
++                      entry['original_exit_code'] < 0)
++            if unsafe:
++                status = entry['wrapper_exit_code'] or 127
++                record['stop_reason'] = 'Failed phase admission, timeout, termination, containment or integrity; no retry.'
+                 break
+-            if not entry['complete_original_suite_passed']:
+-                stopped_phase(entry)
+-                status = 126
+-                entry['selection_exit_code'] = 126
+-                record['stop_reason'] = 'first incomplete or mismatched original-suite result; no replacement'
+-                break
+-        if len(record['rounds']) == REPETITIONS and status == 0:
+-            record['stop_reason'] = 'all 20 same-suite repeats completed; original r5 failure remains open'
++        else:
++            record['stop_reason'] = 'All three independent checks ran once; earlier failed checks remain failed.'
+     except Failed as error:
+         status = error.code
+         record['failure'] = str(error)
+@@ -575,13 +607,16 @@
+                 record['integrity_exit_code'] = 125
+         record['all_observed_files_unchanged'] = bool(tracked) and all(
+             item.get('unchanged') for item in record['identity_after'].values())
+-        record['attempted_repetitions'] = len(record['rounds'])
+-        record['started_repetitions'] = sum(r.get('processes_started', 0) for r in record['rounds'])
+-        record['completed_repetitions'] = sum(
+-            r.get('phase') == 'completed' for r in record['rounds'])
+-        record['successful_repetitions'] = sum(
+-            r.get('wrapper_exit_code') == 0 and r.get('complete_original_suite_passed', False)
+-            for r in record['rounds'])
++        record['qualification_commands_attempted'] = sum(
++            p['name'] in ('format-moq-diagnostic', 'format-quality-ledger', 'strict-clippy')
++            and p.get('launch_attempts', 0) for p in record['processes'])
++        record['qualification_commands_started'] = sum(
++            p['name'] in ('format-moq-diagnostic', 'format-quality-ledger', 'strict-clippy')
++            and p.get('processes_started', 0) for p in record['processes'])
++        record['strict_clippy_launch_attempts'] = sum(
++            p.get('launch_attempts', 0) for p in record['processes'] if p['name'] == 'strict-clippy')
++        record['strict_clippy_processes_started'] = sum(
++            p.get('processes_started', 0) for p in record['processes'] if p['name'] == 'strict-clippy')
+         record['elapsed_seconds'] = time.monotonic() - began
+         if record['elapsed_seconds'] > INNER_SECONDS:
+             record['whole_budget_exceeded'] = True
+@@ -600,8 +635,9 @@
+             lock.close()
+         print(json.dumps({key: record.get(key) for key in [
+             'phase', 'exit_code', 'execution_exit_code_before_integrity_checks',
+-            'containment_exit_code', 'integrity_exit_code', 'attempted_repetitions',
+-            'started_repetitions', 'completed_repetitions', 'successful_repetitions',
++            'containment_exit_code', 'integrity_exit_code', 'qualification_commands_started',
++            'strict_clippy_launch_attempts', 'strict_clippy_processes_started',
++            'strict_clippy_original_exit_code', 'strict_clippy_wrapper_exit_code',
+             'source_unchanged', 'all_observed_files_unchanged', 'stop_reason', 'failure']}),
+               flush=True)
+     return status

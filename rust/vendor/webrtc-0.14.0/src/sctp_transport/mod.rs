@@ -124,6 +124,13 @@ impl RTCSctpTransport {
         Arc::clone(&self.dtls_transport)
     }
 
+    /// Reports whether startup has been entered. The initial public state is
+    /// Connecting even before start is called; this read-only observation lets
+    /// diagnostics distinguish that state from an association in progress.
+    pub fn has_started(&self) -> bool {
+        self.is_started.load(Ordering::SeqCst)
+    }
+
     /// get_capabilities returns the SCTPCapabilities of the SCTPTransport.
     pub fn get_capabilities(&self) -> SCTPTransportCapabilities {
         SCTPTransportCapabilities {

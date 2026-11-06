@@ -1,0 +1,26 @@
+[
+  {
+    "name": "venv",
+    "argv": [
+      "/usr/bin/python3",
+      "-m",
+      "venv",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "dependencies",
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/bin/python",
+      "-m",
+      "pip",
+      "install",
+      "--disable-pip-version-check",
+      "--no-cache-dir",
+      "playwright==1.62.0",
+      "aiohttp==3.14.4"
+    ],
+    "exit_code": 1
+  }
+]

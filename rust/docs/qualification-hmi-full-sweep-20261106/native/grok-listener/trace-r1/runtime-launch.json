@@ -1,0 +1,33 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-c",
+      "import base64,hashlib,json,pathlib,re,shutil,subprocess,sys,time,traceback\nroot=pathlib.Path('/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66')\npayload=json.load(sys.stdin)\nrequest=root/'requests/grok-strace-pin-r1'\nrequest.mkdir(mode=0o700,exist_ok=False)\nreceipt={'schema':'pipecat-strace-launcher-v1','phase':'preparing','start_unix':time.time(),'requested_resource_budget':{'cpu_quota_percent':800,'memory_max_bytes':34359738368,'nice':10,'timeout_seconds':270},'scripts_before':[],'scripts_after':[]}\ndef sha(b): return hashlib.sha256(b).hexdigest()\ndef save(): (request/'launcher.json').write_text(json.dumps(receipt,indent=2)+'\\n')\nstatus=127\ntry:\n raw=payload['source'].encode()\n if len(raw)!=27235 or sha(raw)!='4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6': raise ValueError('reviewed strace runner bytes changed')\n script=root/'desktop_grok_strace_pin_r1.py'\n if script.exists():\n  if script.read_bytes()!=raw: raise ValueError('existing runner path differs')\n else:\n  with script.open('xb') as out: out.write(raw)\n helper=root/'run_full_gate.py'\n helper_raw=helper.read_bytes()\n if sha(helper_raw)!='c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4': raise ValueError('source manifest helper differs')\n for role,path,data in [('runner',script,raw),('source_manifest_helper',helper,helper_raw)]:\n  (request/(role+'-before.py')).write_bytes(data)\n  receipt['scripts_before'].append({'role':role,'path':str(path),'bytes':len(data),'sha256':sha(data)})\n receipt['resources_before']={'free_disk_bytes':shutil.disk_usage(root).free,'mem_available_bytes':next(int(x.split()[1])*1024 for x in pathlib.Path('/proc/meminfo').read_text().splitlines() if x.startswith('MemAvailable:'))}\n if receipt['resources_before']['mem_available_bytes']<64424509440: raise ValueError('8-job trace binding requires 60GiB MemAvailable')\n log=root/'evidence/default-no-fail-fast-pin-r1/command.log'\n data=log.read_bytes()\n starts=list(re.finditer(rb'(?m)^[ \\t]*(?:Running|Doc-tests) [^\\n]*\\n',data))\n slices=[]\n patterns=[('vad-lib',b'pipecat_vad-'),('smart-turn-analyzer',b'smart_turn_model_analyzer'),('smart-turn-pipeline',b'smart_turn_onnx_pipeline')]\n for label,pattern in patterns:\n  found=[]\n  for i,item in enumerate(starts):\n   if pattern in item.group(0):\n    begin=item.start(); end=starts[i+1].start() if i+1<len(starts) else len(data)\n    segment=data[begin:end]\n    name=label+('.log' if not found else '-'+str(len(found))+'.log')\n    (request/name).write_bytes(segment)\n    found.append({'path':str(request/name),'source_start_byte':begin,'source_end_byte':end,'bytes':len(segment),'sha256':sha(segment),'header':item.group(0).decode('utf-8','strict').strip()})\n  slices.extend(found)\n extraction={'source':str(log),'source_bytes':len(data),'source_sha256':sha(data),'scope':'Exact original byte slices for inspection; complete original log retained unchanged.','slices':slices}\n (request/'smart-turn-log-slices.json').write_text(json.dumps(extraction,indent=2)+'\\n')\n print(json.dumps({'smart_turn_log_slices':extraction}),flush=True)\n receipt['actual_argv']=[sys.executable,str(script)]\n receipt['cwd']=str(root)\n receipt['phase']='running';save()\n result=subprocess.run(receipt['actual_argv'],cwd=root)\n status=result.returncode\n receipt['runner_exit_code']=status\nexcept Exception as exc:\n receipt['failure']=repr(exc)\n (request/'launcher-error.log').write_text(traceback.format_exc())\nfinally:\n for before in receipt['scripts_before']:\n  try:\n   after=pathlib.Path(before['path']).read_bytes()\n   (request/(before['role']+'-after.py')).write_bytes(after)\n   receipt['scripts_after'].append({'role':before['role'],'path':before['path'],'bytes':len(after),'sha256':sha(after),'unchanged':sha(after)==before['sha256']})\n  except Exception as exc:\n   receipt['scripts_after'].append({'role':before['role'],'unchanged':False,'error':repr(exc)})\n receipt['scripts_unchanged']=len(receipt['scripts_after'])==2 and all(x['unchanged'] for x in receipt['scripts_after'])\n if not receipt['scripts_unchanged']: status=125\n receipt.update(phase='completed',exit_code=status,end_unix=time.time());save()\n print(json.dumps(receipt),flush=True)\nraise SystemExit(status)\n"
+    ],
+    "created_unix_ms": 1793979746750,
+    "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "desktop",
+    "id": "1a1b18689be-fc05-7958",
+    "idempotency_key": "pipecat-grok-strace-pin-f9f576cc6c66-r1",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1b18689be-fc05-7958",
+    "request_digest": "3955f16ad15e0359d177072ac1dfce220b25c313c77aed721e86ae2abd41efaa",
+    "request_fingerprint": 4131473674263724889,
+    "ssh_target": "desktop-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b18689be-fc05-7958"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b18689be-fc05-7958"
+  },
+  "local_record_pending": false,
+  "reused": false
+}
