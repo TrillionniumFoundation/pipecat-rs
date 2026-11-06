@@ -161,8 +161,8 @@ fn all_correlated_commands_reject_zero_before_effects() {
             Err(MediaCommandError::InvalidRequest)
         );
     }
-    assert!(binding.validate(&MediaCommand::Interrupt).is_ok());
-    assert!(binding.validate(&MediaCommand::Shutdown).is_ok());
+    assert!(binding.validate(&MediaCommand::Interrupt {}).is_ok());
+    assert!(binding.validate(&MediaCommand::Shutdown {}).is_ok());
 }
 
 #[test]
@@ -214,8 +214,8 @@ fn admitted_ids_allow_arbitrary_gaps_and_reordering_but_never_replay() {
         gate.admit(&MediaCommand::RevokeCapture { request_id: 3 }),
         Err(MediaCommandError::Capacity)
     );
-    assert!(gate.admit(&MediaCommand::Interrupt).is_ok());
-    assert!(gate.admit(&MediaCommand::Shutdown).is_ok());
+    assert!(gate.admit(&MediaCommand::Interrupt {}).is_ok());
+    assert!(gate.admit(&MediaCommand::Shutdown {}).is_ok());
     assert_eq!(
         gate.admit(&MediaCommand::VerifySource {
             request_id: 1,
@@ -336,9 +336,9 @@ fn two_commands_in_one_read_keep_wire_order_without_swallowing_the_next_line() {
     let wire = b"{\"type\":\"interrupt\"}\n{\"type\":\"shutdown\"}\n";
     let mut decoder = MediaCommandDecoder::default();
     let (used, first) = decoder.push(wire).unwrap();
-    assert!(matches!(first, Some(MediaCommand::Interrupt)));
+    assert!(matches!(first, Some(MediaCommand::Interrupt {})));
     let (rest, second) = decoder.push(&wire[used..]).unwrap();
-    assert!(matches!(second, Some(MediaCommand::Shutdown)));
+    assert!(matches!(second, Some(MediaCommand::Shutdown {})));
     assert_eq!(used + rest, wire.len());
     decoder.finish().unwrap();
     assert!(matches!(
@@ -356,7 +356,7 @@ fn exactly_one_bounded_line_is_admitted_and_overflow_never_resynchronizes() {
     let mut decoder = MediaCommandDecoder::default();
     let (used, result) = decoder.push(&exact).unwrap();
     assert_eq!(used, MAX_MEDIA_COMMAND_BYTES);
-    assert!(matches!(result, Some(MediaCommand::Shutdown)));
+    assert!(matches!(result, Some(MediaCommand::Shutdown {})));
 
     let mut decoder = MediaCommandDecoder::default();
     exact.pop();

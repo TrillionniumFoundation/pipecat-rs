@@ -16,7 +16,7 @@ pub enum MediaCommand {
         scope: HeptaOutputScope,
         text: String,
     },
-    Interrupt,
+    Interrupt {},
     Turn {
         request_id: u64,
         scope: HeptaOutputScope,
@@ -36,7 +36,7 @@ pub enum MediaCommand {
     RevokeCapture {
         request_id: u64,
     },
-    Shutdown,
+    Shutdown {},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -193,7 +193,7 @@ impl MediaConnectionBinding {
             | MediaCommand::RevokeCapture { request_id } => *request_id,
             // Uncorrelated stop commands may only arrive through this binding's
             // trusted pipe. They cannot admit output or observations.
-            MediaCommand::Interrupt | MediaCommand::Shutdown => return Ok(()),
+            MediaCommand::Interrupt {} | MediaCommand::Shutdown {} => return Ok(()),
         };
         if request_id == 0 {
             return Err(MediaCommandError::InvalidRequest);
@@ -236,7 +236,7 @@ impl MediaCommandGate {
             | MediaCommand::VerifySource { request_id, .. }
             | MediaCommand::ReleaseSource { request_id, .. }
             | MediaCommand::RevokeCapture { request_id } => *request_id,
-            MediaCommand::Interrupt | MediaCommand::Shutdown => return Ok(()),
+            MediaCommand::Interrupt {} | MediaCommand::Shutdown {} => return Ok(()),
         };
         if self.admitted.contains(&request_id) {
             return Err(MediaCommandError::Replay);

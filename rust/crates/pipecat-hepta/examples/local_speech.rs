@@ -137,7 +137,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let command = match incoming { Ok(Some(command)) => command, Ok(None) => break Ok(()), Err(error) => break Err(error) };
                 if let Err(error) = commands.admit(&command) { break Err(error.to_string()); }
                 match command {
-                    Command::Shutdown => break Ok(()),
+                    Command::Shutdown {} => break Ok(()),
                     Command::RevokeCapture { request_id } => { revoke_request = Some(request_id); break Ok(()); }
                     Command::Retire { request_id, output_epoch } => {
                         let error = match session.retire_output(output_epoch, media) { Ok(error) => error, Err(error) => Some(error.to_string()) };
@@ -154,7 +154,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         let store = match speech.media_store() { Some(store) => store.clone(), None => break Err("no owner media store configured".into()) };
                         verification = Some((request_id,"release_source",tokio::task::spawn_blocking(move || store.release(&source).map_err(|error|error.to_string()))));
                     }
-                    Command::Interrupt => {
+                    Command::Interrupt {} => {
                         let outcome = match session.barge_in(media) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
                         if let Err(error) = retire_active(&mut session, &mut active, &tx, outcome.local_error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"turn_interrupt", "stream":session.identity(), "request":outcome.request, "local_error":outcome.local_error})) { break Err(error); }
