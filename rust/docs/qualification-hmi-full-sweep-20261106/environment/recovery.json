@@ -1,0 +1,499 @@
+{
+  "schema_version": 2,
+  "date_utc": "2026-11-06",
+  "host": "desktop",
+  "result": "historical_native_environment_recovered; production_composition_not_established",
+  "project_root": "/home/qian-qi/workspace/hepta-hmi-20261029",
+  "source_context": {
+    "pipecat_report_commit": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+    "historical_evidence": "rust/docs/hmi-native-evidence-20261029.json and hmi-native-fault-evidence-20261029.json",
+    "owner_contract_commit": "7bbdd715957e72274bc13209c4a619913e880129"
+  },
+  "probe_jobs": [
+    {
+      "job_id": "1a1b0a883db-fc05-71fd",
+      "status": "succeeded",
+      "exit_code": 0,
+      "output_complete": true
+    },
+    {
+      "job_id": "1a1b0a9ddc3-fc05-7205",
+      "status": "succeeded",
+      "exit_code": 0,
+      "output_complete": true
+    },
+    {
+      "job_id": "1a1b0ac828f-fc05-7218",
+      "status": "succeeded",
+      "exit_code": 0,
+      "output_complete": true
+    }
+  ],
+  "codec": {
+    "path": "/proc/asound/card0/codec#0",
+    "codec": "Realtek ALC897",
+    "vendor_id": "0x10ec0897",
+    "subsystem_id": "0x10ec0897",
+    "revision_id": "0x100402",
+    "read_range_inclusive": [
+      1,
+      10
+    ],
+    "read_only_source": "HeptaRuntime view of exact /proc/asound/card0/codec#0; captured desktop_codec.json"
+  },
+  "repositories": [
+    {
+      "relative_path": "pipecat-rs",
+      "head": "ec40f982205cb2c87f61094d78d163c5c2febb39",
+      "tree": "77d7b8084d60d81d2f3cce6255ba1597075d49e2",
+      "branch": "work/hmi-closeout-20261029",
+      "clean": true
+    },
+    {
+      "relative_path": "hepta-private-ci",
+      "head": "7bbdd715957e72274bc13209c4a619913e880129",
+      "tree": "59199c7036d9144b328a1b7d5d985215ac89f68c",
+      "branch": "work/hmi-closeout-20261029",
+      "clean": true
+    }
+  ],
+  "historical_logs": [
+    {
+      "relative_path": "native-long-output-release.log",
+      "bytes": 2012,
+      "sha256": "cad7863e592789254b60238f127bf09610340c81e996e503dc408ea22a4e13f9",
+      "matches_published_20261029": true
+    },
+    {
+      "relative_path": "chinese-models-release.log",
+      "bytes": 3745,
+      "sha256": "4737ad35a71f5b2b73a0a6c1956e6e73fa709ca09b07a5e02d82e5eabd3d648c",
+      "matches_published_20261029": true
+    },
+    {
+      "relative_path": "process-qualification-final.log",
+      "bytes": 1899,
+      "sha256": "a6ead6610c1277f08ee3b61c84881230dd576f8141fb1c6f6328a5f3639985de",
+      "matches_published_20261029": true
+    }
+  ],
+  "model_files": [
+    {
+      "relative_path": "assets/whisper-base.bin",
+      "bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "pipecat-rs/src/pipecat/audio/vad/data/silero_vad.onnx",
+      "bytes": 2327524,
+      "sha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "assets/zh_CN-huayan-medium.onnx",
+      "bytes": 63201294,
+      "sha256": "9929917bf8cabb26fd528ea44d3a6699c11e87317a14765312420be230be0f3d",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "assets/zh_CN-huayan-medium.onnx.json",
+      "bytes": 4822,
+      "sha256": "d521dc45504a8ccc99e325822b35946dd701840bfb07e3dbb31a40929ed6a82b",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "bytes": 20558800,
+      "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "assets/piper_phonemize/lib/libespeak-ng.so.1.52.0.1",
+      "bytes": 580648,
+      "sha256": "3767caddfe3b90f8f65b50a8d1f66f58f52e0367ba4a385599e0aa3391446e80",
+      "matches_historical_manifest": true
+    },
+    {
+      "relative_path": "assets/whisper-small-q5_1.bin",
+      "bytes": 190085487,
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+      "matches_historical_manifest": true
+    }
+  ],
+  "model_limits": "Seven regular files rehashed; recursive eSpeak data directory not rehashed. Production adoption and fresh inference not established.",
+  "jack_controls": {
+    "Front Mic": "off",
+    "Rear Mic": "off",
+    "Line": "off",
+    "Line Out": "off",
+    "Front Headphone": "off",
+    "SPDIF Phantom": "on",
+    "limit": "Selected ALSA controls only; phantom on is not an acoustic route or heard-output proof."
+  },
+  "qualified_identity_only": {
+    "principal": "qualification:owner",
+    "session": "qualification:offline",
+    "turn": "qualification:native",
+    "device": "qualification:alc897",
+    "device_generation": 1,
+    "organ_generation": 1,
+    "capture_generations": [
+      1,
+      2
+    ],
+    "limit": "Recovered historical fixtures are not production authority; no identities or generations reused."
+  },
+  "owner_observation": {
+    "process_name_regex": "agentd|codex-hepta|hepta-super|pipecat|local_speech|app-server",
+    "matching_accessible_processes": [],
+    "matching_systemd_units": {
+      "user": [],
+      "system": []
+    },
+    "current_ssh_job_environment_presence": {
+      "HEPTA_FLEET_ROOT": false,
+      "HEPTA_AGENT_ID": false,
+      "HEPTA_AGENT_GENERATION": false,
+      "HEPTA_AGENT_HOME": false,
+      "HEPTA_AGENT_RUN_ROOT": false
+    },
+    "input_presence_job": "1a1b0b36328-fc05-7240",
+    "existing_hmi_templates": [
+      "README.md",
+      "agentd-args.template.json",
+      "audio-authority.template.json",
+      "authbus-trust.template.json"
+    ],
+    "existing_prior_product_evidence": "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104",
+    "limits": "Only readable /proc/*/comm matching the named regex, selected unit names, exact paths and current SSH job environment. No arbitrary process args/env or secret contents read. Cannot infer host-wide absence of a real owner.",
+    "template_directory": "/home/qian-qi/workspace/hepta-hmi-20261029/hepta-private-ci/codex-rs/hepta-agentd/config-templates/hmi",
+    "followup": "product-inputs.json records the four exact 11/04 engineering files; their build/test paths do not establish a live owner."
+  },
+  "browser_readiness": {
+    "path": "/usr/bin/google-chrome",
+    "version": "156.0.8078.79",
+    "normal_sandbox_about_blank_exit": 0,
+    "fresh_profile": true,
+    "sandbox_disabled": false,
+    "scope": "Native browser readiness only; application qualification is recorded separately.",
+    "when": "Initial environment probe; later application browser execution is recorded separately."
+  },
+  "historical_unknowns": [
+    {
+      "host": "desktop",
+      "job_id": "1a1b01f09b3-fc05-6e3b",
+      "same_id_reconciliation": "INVALID_ARGUMENT / FileNotFoundError",
+      "replayed": false,
+      "status": "unresolved"
+    },
+    {
+      "host": "ai395",
+      "job_id": "1a1b04f07ab-fc05-6fa9",
+      "same_id_reconciliation": "INVALID_ARGUMENT / FileNotFoundError",
+      "replayed": false,
+      "status": "unresolved"
+    }
+  ],
+  "remaining_environment_boundary": "This restores the 10/29 native desktop project. The separately identified 10/23 cloud executor has not been recovered; historical logs are not current-source test runs.",
+  "effects": {
+    "recording": false,
+    "playback": false,
+    "private_microphone_pcm_read": false,
+    "credentials_or_private_keys_read": false,
+    "permission_changes": false,
+    "production_config_changes": false,
+    "production_admission": false,
+    "native_model_inference": false,
+    "browser_synthetic_about_blank_only": true,
+    "fresh_about_blank_probe_profile_created": true
+  },
+  "source_binding": {
+    "report_base_commit": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+    "owner_contract_commit": "7bbdd715957e72274bc13209c4a619913e880129",
+    "historical_documents": [
+      {
+        "path": "rust/docs/hmi-native-evidence-20261029.json",
+        "git_blob_sha": "52b1226584d9ff569d70f40c26bf4546c9b6718c",
+        "sha256": "cf641d365ce79897dbdc26cadf6752dbc995219623b137565b98ec7cf5dda74e",
+        "ref": "e526aabaf98522b2294e744ac48d75d9ed89a254"
+      },
+      {
+        "path": "rust/docs/hmi-native-fault-evidence-20261029.json",
+        "git_blob_sha": "ad31cc4862ba54ae2b07293c8ed4b4e7802c3563",
+        "sha256": "aa22c34a5f17758d37cf829a058b33d4782a2b8b5141bbe7b91f57b86b131ddb",
+        "ref": "e526aabaf98522b2294e744ac48d75d9ed89a254"
+      }
+    ],
+    "current_source_execution_claimed": false
+  },
+  "selected_alsa_control_output": {
+    "exit_code": 0,
+    "selected_blocks": [
+      "numid=40,iface=CARD,name='Front Headphone Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=off\n",
+      "numid=37,iface=CARD,name='Front Mic Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=off\n",
+      "numid=38,iface=CARD,name='Line Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=off\n",
+      "numid=39,iface=CARD,name='Line Out Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=off\n",
+      "numid=36,iface=CARD,name='Rear Mic Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=off\n",
+      "numid=41,iface=CARD,name='SPDIF Phantom Jack'\n  ; type=BOOLEAN,access=r-------,values=1\n  : values=on\n",
+      "numid=20,iface=MIXER,name='Input Source'\n  ; type=ENUMERATED,access=rw------,values=1,items=3\n  ; Item #0 'Rear Mic'\n  ; Item #1 'Front Mic'\n  ; Item #2 'Line'\n  : values=1\n",
+      "numid=21,iface=MIXER,name='Input Source',index=1\n  ; type=ENUMERATED,access=rw------,values=1,items=3\n  ; Item #0 'Rear Mic'\n  ; Item #1 'Front Mic'\n  ; Item #2 'Line'\n  : values=0\n"
+    ],
+    "stderr": ""
+  },
+  "qualification_config_files": [
+    {
+      "relative_path": "qualification-speech.json",
+      "sha256": "cd4769d7d75a9543c1093026e9ff93c523f7b90b7c7824ec07ba27d3e609be4b",
+      "mode": "0o600"
+    },
+    {
+      "relative_path": "qualification-speech-release.json",
+      "sha256": "d6fcd5f1a04d0deae47fea2672b1c78707a1b2f136136faa33e05477cf77c1c6",
+      "mode": "0o600"
+    },
+    {
+      "relative_path": "qualification-output.json",
+      "sha256": "905091fcddacca0d78107a9b480a6ceae4f403775318a6a1c30cfc2364636686",
+      "mode": "0o600"
+    },
+    {
+      "relative_path": "qualification-output-small.json",
+      "sha256": "f07993211097cbf87a8449c52e37c7fdba137a9771bc2a627a3b99b1962acd9b",
+      "mode": "0o600"
+    }
+  ],
+  "owner_input_presence": {
+    "host": "desktop",
+    "job_id": "1a1b0b36328-fc05-7240",
+    "observation": {
+      "environment_presence": {
+        "HEPTA_FLEET_ROOT": false,
+        "HEPTA_AGENT_ID": false,
+        "HEPTA_AGENT_GENERATION": false,
+        "HEPTA_AGENT_HOME": false,
+        "HEPTA_AGENT_RUN_ROOT": false
+      },
+      "directories": {
+        "/home/qian-qi/workspace/hepta-hmi-20261029/hepta-private-ci/codex-rs/hepta-agentd/config-templates/hmi": {
+          "exists": true,
+          "names": [
+            "README.md",
+            "agentd-args.template.json",
+            "audio-authority.template.json",
+            "authbus-trust.template.json"
+          ]
+        },
+        "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104": {
+          "exists": true,
+          "names": [
+            "build-default.log",
+            "build-qualification.log",
+            "cognitive-original.log",
+            "command-plan.json",
+            "correct-selector-r2",
+            "environment.json",
+            "final-diff.patch",
+            "fix.log",
+            "fmt.log",
+            "original-diff.patch",
+            "phase-diagnostic-r3",
+            "source-after.json",
+            "source-before.json",
+            "supervisord-original.log",
+            "timeout-diagnostic",
+            "validation-results.json"
+          ]
+        }
+      }
+    },
+    "scope": "Only current SSH job environment and exact two existing directory first-level names. No credential values or file contents read. These false environment flags do not establish absence in all process environments.",
+    "evidence_source": "workspace-evidence/desktop-owner-input-presence.json"
+  },
+  "next_admission_requirements": [
+    {
+      "material": "existing Supervisor-managed Agentd identity",
+      "required": "Existing fleet registry agent record and current spawn generation, canonical owner home/run root/workspace; no replacement owner or invented generation",
+      "current_path": "not resolved from a current owner in this probe",
+      "code_anchor": "codex-rs/hepta-agentd/src/config.rs::from_process_environment/load"
+    },
+    {
+      "material": "exact existing thread",
+      "required": "Thread belonging to the same App Server/owner and allowed by the current registered issuer",
+      "current_path": "not established"
+    },
+    {
+      "material": "registered signer and public trust",
+      "required": "Existing independent producer signing boundary and paired --authbus-trust-file/--authbus-checkpoint-file; private key remains within signer",
+      "current_path": "not established; no private keys read",
+      "code_anchor": "codex-rs/hepta-agentd/src/main.rs"
+    },
+    {
+      "material": "independent replay witness",
+      "required": "Retained witness for this owner's original evidence history; cannot synthesize from a rolled-back or untrusted database",
+      "current_path": "not established"
+    },
+    {
+      "material": "current device/capture authority",
+      "required": "--hmi-audio-authority-file for exact issuer/epoch/device/organ/capture generation, unexpired/unrevoked policy, max segment bound, canonical private direct child of owner home",
+      "current_path": "not established; recovered qualification profile is not this file",
+      "code_anchor": "codex-rs/hepta-agentd/src/audio_policy.rs"
+    },
+    {
+      "material": "media execution configuration",
+      "required": "Owner-authorized private pipes, actual connection_id supplied to native argv and HmiJsonlMediaV1::bind, adopted immutable manifests, current capture generation and quota",
+      "current_path": "historical qualification manifests recovered; production composition unresolved"
+    },
+    {
+      "material": "physical input/output",
+      "required": "Adopted connected microphone/speaker routes and existing OS grants followed by human speech, heard-output, echo, hotplug/revocation and recovery evidence",
+      "current_path": "ALC897 device metadata observed; acoustic route unestablished"
+    }
+  ],
+  "post_interruption_recovery": {
+    "scope": "hashes reverified after temporary executor disconnect/recovery; retained files were not lost",
+    "prior_manifest": "SHA256SUMS.json",
+    "prior_manifest_sha256": "ebd10b9a1fa3cbb637952b7abc8e16d591c3d6abd5b6704ef10ee39862a98575",
+    "files": [
+      {
+        "name": "ai395_cards.json",
+        "expected_sha256": "d53f53edb110bf116853557e9f7bbf92c657dff9fb72b102d214eacae1e0c7ea",
+        "actual_sha256": "d53f53edb110bf116853557e9f7bbf92c657dff9fb72b102d214eacae1e0c7ea",
+        "bytes": 369,
+        "matches": true
+      },
+      {
+        "name": "ai395_codec.json",
+        "expected_sha256": "8ad23ef0a6f194eddd75059e08f889abba00c55753d976e2af126648e0ec40ce",
+        "actual_sha256": "8ad23ef0a6f194eddd75059e08f889abba00c55753d976e2af126648e0ec40ce",
+        "bytes": 427,
+        "matches": true
+      },
+      {
+        "name": "ai395_old_status.json",
+        "expected_sha256": "ef01a8f91650f91cc2db46856a86ce077adc481637aab37f68170455846a663a",
+        "actual_sha256": "ef01a8f91650f91cc2db46856a86ce077adc481637aab37f68170455846a663a",
+        "bytes": 505,
+        "matches": true
+      },
+      {
+        "name": "ai395_workspace.json",
+        "expected_sha256": "0ce7c49a90d0cb46fd1355e83b66f8e03e8413b8fe8616ebf796ed7e7f27e036",
+        "actual_sha256": "0ce7c49a90d0cb46fd1355e83b66f8e03e8413b8fe8616ebf796ed7e7f27e036",
+        "bytes": 233,
+        "matches": true
+      },
+      {
+        "name": "desktop_cards.json",
+        "expected_sha256": "590895abaa87cf5f1d21cee81ca219c73a1ffe6379e690143cffbe706a3ef297",
+        "actual_sha256": "590895abaa87cf5f1d21cee81ca219c73a1ffe6379e690143cffbe706a3ef297",
+        "bytes": 349,
+        "matches": true
+      },
+      {
+        "name": "desktop_codec.json",
+        "expected_sha256": "de75e969df95113945c1ca0d15faeae467f3045a9535338d6cf1b12261511528",
+        "actual_sha256": "de75e969df95113945c1ca0d15faeae467f3045a9535338d6cf1b12261511528",
+        "bytes": 472,
+        "matches": true
+      },
+      {
+        "name": "desktop_current_owner_probe.json",
+        "expected_sha256": "82925da83beb035f01a5e3d905612f2fdaa59a257c20290e887662031aa739da",
+        "actual_sha256": "82925da83beb035f01a5e3d905612f2fdaa59a257c20290e887662031aa739da",
+        "bytes": 28284,
+        "matches": true
+      },
+      {
+        "name": "desktop_existing_project_probe.json",
+        "expected_sha256": "488e97f37660ce4cf33db6e24d9e2a64d85abdbf03a4fdc6edde08acfac97f83",
+        "actual_sha256": "488e97f37660ce4cf33db6e24d9e2a64d85abdbf03a4fdc6edde08acfac97f83",
+        "bytes": 61135,
+        "matches": true
+      },
+      {
+        "name": "desktop_native_inputs.json",
+        "expected_sha256": "7f3cfa91d34edc141af47e73393091aa4c3f789982f481437813d1c3d0303aea",
+        "actual_sha256": "7f3cfa91d34edc141af47e73393091aa4c3f789982f481437813d1c3d0303aea",
+        "bytes": 20213,
+        "matches": true
+      },
+      {
+        "name": "desktop_old_status.json",
+        "expected_sha256": "f78419c1d9864e938b89a86a4efe4c19470c155f461790aa6cabfc3c0a23cdf3",
+        "actual_sha256": "f78419c1d9864e938b89a86a4efe4c19470c155f461790aa6cabfc3c0a23cdf3",
+        "bytes": 436,
+        "matches": true
+      },
+      {
+        "name": "desktop_project_presence.json",
+        "expected_sha256": "8e45d3183fa116921d902a26ad2f90ca5d7f4d2cc0c9084f6d21af43239f5f76",
+        "actual_sha256": "8e45d3183fa116921d902a26ad2f90ca5d7f4d2cc0c9084f6d21af43239f5f76",
+        "bytes": 79276,
+        "matches": true
+      },
+      {
+        "name": "desktop_workspace.json",
+        "expected_sha256": "2828cf086bf8985d317a7110e9b72c6f5861039f0d65402e0c40053cb72bd79e",
+        "actual_sha256": "2828cf086bf8985d317a7110e9b72c6f5861039f0d65402e0c40053cb72bd79e",
+        "bytes": 237,
+        "matches": true
+      },
+      {
+        "name": "environment_old.json",
+        "expected_sha256": "790ada0fb72a48bb32e3032c8a0de0ab6f5a84dfcd7890c8d8d08403e033b849",
+        "actual_sha256": "790ada0fb72a48bb32e3032c8a0de0ab6f5a84dfcd7890c8d8d08403e033b849",
+        "bytes": 7856,
+        "matches": true
+      },
+      {
+        "name": "native_inputs_probe.sh",
+        "expected_sha256": "10d496221ff773659c079ecbd4498e61b719de215b17a8f707e5d1ee882202a0",
+        "actual_sha256": "10d496221ff773659c079ecbd4498e61b719de215b17a8f707e5d1ee882202a0",
+        "bytes": 5302,
+        "matches": true
+      },
+      {
+        "name": "owner_contract.json",
+        "expected_sha256": "8ecaa1d65c5a8df32e1d3080700e724b18ceb67a97ae741f8f30664528146b35",
+        "actual_sha256": "8ecaa1d65c5a8df32e1d3080700e724b18ceb67a97ae741f8f30664528146b35",
+        "bytes": 19991,
+        "matches": true
+      },
+      {
+        "name": "recovery-summary.json",
+        "expected_sha256": "ef85e0e48039ba1ecdee5b9c82ff2258dd9aee0265d8b5b3626bf2dfb503db80",
+        "actual_sha256": "ef85e0e48039ba1ecdee5b9c82ff2258dd9aee0265d8b5b3626bf2dfb503db80",
+        "bytes": 8421,
+        "matches": true
+      },
+      {
+        "name": "x230_cards.json",
+        "expected_sha256": "b136cad11dfdf965dbf440502793b15b56d686e93835b1a5d3aac6aa47472b06",
+        "actual_sha256": "b136cad11dfdf965dbf440502793b15b56d686e93835b1a5d3aac6aa47472b06",
+        "bytes": 238,
+        "matches": true
+      },
+      {
+        "name": "x230_codec.json",
+        "expected_sha256": "8dab45ba919f42384125ab58a739f22eae18b605218c3dc03be20aba8b529f36",
+        "actual_sha256": "8dab45ba919f42384125ab58a739f22eae18b605218c3dc03be20aba8b529f36",
+        "bytes": 474,
+        "matches": true
+      }
+    ],
+    "all_match": true,
+    "same_native_job_refetched": "1a1b0ac828f-fc05-7218",
+    "same_native_fields_match": [
+      "logs",
+      "artifact_digests",
+      "browser",
+      "owner_units"
+    ],
+    "native_stdout_bytes": 14812,
+    "limit": "Only previously manifested environment files were compared. Later browser fixture versions/results are tracked separately."
+  },
+  "effects_scope": "Only these environment observations, not other full-sweep build/model/browser jobs.",
+  "effect_detail": "Created own durable probe logs and fresh browser profile; no production configuration or authorization modified.",
+  "prior_raw_public_artifact_sha256": "fe1d5a3bb7943910940d13bc7cb3d0105d132ed35b9f2f1d3a40d2ad5eb8efb9"
+}

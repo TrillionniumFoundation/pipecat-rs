@@ -180,14 +180,32 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings
 ./build.sh
 python3 tests/browser_acceptance.py
+python3 tests/browser_input_acceptance.py
 ```
 
-The browser fixture requires Python `aiohttp`, Python `playwright`, and system
-Chromium at `/usr/bin/chromium`. It starts only loopback HTTP/WebSocket services,
+Both browser fixtures require Python `aiohttp`, Python `playwright`, and system
+Chromium at `/usr/bin/chromium`. Pass `--browser /path/to/chromium`,
+`--assets /path/to/dist`, and `--output /path/to/evidence` to select an existing
+browser, a built bundle, and a separate evidence directory. Both retain the normal
+Chromium sandbox. Success and failure JSON include completed checks, elapsed time,
+source and asset hashes, and browser version; cleanup errors fail the run.
+
+`browser_acceptance.py` starts only loopback HTTP/WebSocket services,
 uses Chromium's synthetic microphone and synthetic remote audio, and creates a
 real paired RTCPeerConnection. Test-only JavaScript implements the remote fixture
-and instrumentation; none is bundled in the app. Results and screenshot are
-written under ignored `target/`.
+and instrumentation; none is bundled in the app. Its autoplay override is part of
+this protocol fixture and does not qualify normal autoplay policy. Results and
+screenshot default to ignored `target/`.
+
+`browser_input_acceptance.py` uses explicit WebSocket text input without microphone
+capture and without an autoplay override. It checks that a trusted Connect click
+resumes the native AudioContext and that synthetic PCM is scheduled and ends;
+the browser output is muted. It drives Chromium's IME composition engine through
+CDP, verifies literal Chinese/emoji/newline text and one explicit Send, then aborts
+the loopback TCP connection and verifies cleanup and a manual reconnect without
+draft replay. It checks Chromium composition, not an OS Pinyin candidate UI, and
+native audio scheduling, not acoustic playback or user hearing. Each invocation
+has a bounded scenario deadline and retains partial evidence on failure.
 
 Unit tests cover wire-compatible protobuf golden bytes, PCM conversion and
 validation, URL/token handling, config/adapter validation, RTVI projection,

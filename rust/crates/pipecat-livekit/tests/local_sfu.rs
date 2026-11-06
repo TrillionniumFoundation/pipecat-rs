@@ -1,8 +1,11 @@
 //! Opt-in real-SFU qualification. This test is compiled by default and executed
 //! only with --ignored and PIPECAT_LIVEKIT_SERVER pointing to the pinned binary.
 //! It never connects to an existing service or uses account credentials.
+//! Run this integration binary with --test-threads=1: the SDK WebSocket client is global.
 #[path = "support/loopback_ws.rs"]
 mod loopback_ws;
+#[path = "local_sfu/media_control.rs"]
+mod media_control;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, Mac};
@@ -15,7 +18,10 @@ use std::{
     net::{TcpListener, UdpSocket},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -26,6 +32,7 @@ use tokio_util::sync::CancellationToken;
 
 const DEADLINE: Duration = Duration::from_secs(10);
 const BINARY_SHA256: &str = "0fbb1246f555fc3d27ae92530273f53d9463bbccd93c7edb398e0c6ccfe1536b";
+static NEXT_SERVER: AtomicU64 = AtomicU64::new(0);
 
 struct Server {
     child: Child,
@@ -46,9 +53,10 @@ impl Server {
         let rtc_udp = UdpSocket::bind("127.0.0.1:0").unwrap();
         let port = tcp.local_addr().unwrap().port();
         let directory = std::env::temp_dir().join(format!(
-            "pipecat-livekit-sfu-{}-{}",
+            "pipecat-livekit-sfu-{}-{}-{}",
             std::process::id(),
-            now()
+            now(),
+            NEXT_SERVER.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&directory).unwrap();
         let config = directory.join("loopback.yaml");
@@ -121,7 +129,19 @@ impl Drop for Server {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
-        let _ = fs::remove_dir_all(&self.directory);
+        // A later media assertion must not erase the SFU's original log while
+        // unwinding. Explicit qualification runs may retain successful evidence
+        // too; this affects files only, never process ownership or test verdicts.
+        let keep =
+            std::env::var_os("PIPECAT_LIVEKIT_KEEP_EVIDENCE").is_some_and(|value| value == "1");
+        if keep || std::thread::panicking() {
+            eprintln!(
+                "owned local SFU stopped; evidence retained at {}",
+                self.directory.display()
+            );
+        } else {
+            let _ = fs::remove_dir_all(&self.directory);
+        }
     }
 }
 fn now() -> u64 {

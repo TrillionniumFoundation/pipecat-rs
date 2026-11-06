@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-11-06",
+  "scope": "exact historical engineering metadata; no production owner admission or historical tests rerun",
+  "source_binding": {
+    "pipecat_report_base": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+    "host": "desktop",
+    "root": "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104",
+    "files": [
+      {
+        "file": "command-plan.json",
+        "bytes": 1527,
+        "sha256": "7d9170401c815bb1b62b915086bef42cd50338a02af85bea3a18b2293e05faa2"
+      },
+      {
+        "file": "environment.json",
+        "bytes": 287,
+        "sha256": "46699dfb80d49b68e060de08f8dbf62473de489ab598dbcbb20a10792051cc3c"
+      },
+      {
+        "file": "validation-results.json",
+        "bytes": 2222,
+        "sha256": "a573d01982631d324ffe435c0d5d7e1c0ae2f32dd9320d663cc07eb207059052"
+      },
+      {
+        "file": "source-after.json",
+        "bytes": 361,
+        "sha256": "251a718701312fef0734d0e6d9e2a3963137faabbbbbfa069bb8570eb09d4af9"
+      }
+    ],
+    "hepta_current_runtime_revision": null,
+    "revision_limit": "Recorded test source digests are preserved below; no live owner or checkout revision inferred from this evidence directory."
+  },
+  "observation": {
+    "observed_unix": 1793966974.8177571,
+    "jobs": [
+      {
+        "host": "desktop",
+        "job_id": "1a1b0c06bde-fc05-7295",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true,
+        "stdout_bytes": 6060,
+        "stderr_bytes": 0,
+        "role": "bounded structure and public-path extraction"
+      },
+      {
+        "host": "desktop",
+        "job_id": "1a1b0c3a2d8-fc05-72b1",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true,
+        "stdout_bytes": 4425,
+        "stderr_bytes": 0,
+        "role": "exact public build/test arguments, phases and recorded test source metadata"
+      }
+    ]
+  },
+  "command_plan": [
+    {
+      "phase": "build-qualification",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--profile",
+        "dev-small",
+        "-p",
+        "codex-hepta-agentd",
+        "--bin",
+        "codex-hepta-agentd",
+        "--features",
+        "qualification-cognitive-write"
+      ],
+      "original_auxiliary_boolean": false
+    },
+    {
+      "phase": "cognitive-original",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/just",
+        "test",
+        "--locked",
+        "--offline",
+        "--profile",
+        "dev-small",
+        "-p",
+        "codex-hepta-agentd",
+        "--features",
+        "qualification-cognitive-write",
+        "--test",
+        "cognitive_product_e2e"
+      ],
+      "original_auxiliary_boolean": true
+    },
+    {
+      "phase": "build-default",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "--profile",
+        "dev-small",
+        "-p",
+        "codex-hepta-agentd",
+        "--bin",
+        "codex-hepta-agentd"
+      ],
+      "original_auxiliary_boolean": false
+    },
+    {
+      "phase": "supervisord-original",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/just",
+        "test",
+        "--locked",
+        "--offline",
+        "--profile",
+        "dev-small",
+        "-p",
+        "codex-hepta-agentd",
+        "--test",
+        "supervisord_product_e2e"
+      ],
+      "original_auxiliary_boolean": true
+    },
+    {
+      "phase": "fix",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/just",
+        "fix",
+        "-p",
+        "codex-hepta-agentd",
+        "--features",
+        "qualification-cognitive-write",
+        "--locked",
+        "--offline"
+      ],
+      "original_auxiliary_boolean": false
+    },
+    {
+      "phase": "fmt",
+      "argv": [
+        "/home/qian-qi/.cargo/bin/just",
+        "fmt"
+      ],
+      "original_auxiliary_boolean": false
+    }
+  ],
+  "auxiliary_boolean_limit": "Preserved third element from each source row; its meaning is not inferred.",
+  "build_environment": {
+    "RUSTUP_TOOLCHAIN": "1.95.0",
+    "CARGO_TARGET_DIR": "/home/qian-qi/worktrees/hepta-product-p0-objective-evidence-20261103/target",
+    "CARGO_BUILD_JOBS": "4",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never"
+  },
+  "environment_keys": [
+    "RUSTUP_TOOLCHAIN",
+    "CARGO_TARGET_DIR",
+    "CARGO_BUILD_JOBS",
+    "CARGO_INCREMENTAL",
+    "CARGO_TERM_COLOR",
+    "RUSTY_V8_ARCHIVE",
+    "RUSTY_V8_SRC_BINDING_PATH"
+  ],
+  "validation_results": [
+    {
+      "phase": "build-qualification",
+      "exit": 0,
+      "seconds": 566.0565075840568,
+      "log_sha256": "c4cd9cc9db59166fb34b1e890e0aec370c25b6ffbd3965c6251873cf67a02076"
+    },
+    {
+      "phase": "cognitive-original",
+      "exit": 96,
+      "seconds": 7.5545940299052745,
+      "log_sha256": "e6a7c45afce0cbeb86acf4187c21146d27c832e63178d179a281b5b71baa70d6",
+      "fresh_junit": false,
+      "agentd_binary_sha256": "651dc1524de021096b1841fde8c68468b78b0bcba29fc5d503602da04e488af3",
+      "agentd_binary_bytes": 329133448,
+      "tested_sources": [
+        {
+          "path": "codex-rs/hepta-agentd/tests/cognitive_product_e2e.rs",
+          "sha256": "a286ad2caedc1996b99697a3e6ac93ed6bce734fd26d75c966157ed8dfcd6a4e",
+          "bytes": 98121
+        },
+        {
+          "path": "codex-rs/hepta-agentd/tests/supervisord_product_e2e.rs",
+          "sha256": "ef1130e8d18845498fc8edb1769f2d4475782fe1209efb8f7840a336b29bf0b0",
+          "bytes": 26352
+        }
+      ]
+    },
+    {
+      "phase": "build-default",
+      "exit": 0,
+      "seconds": 51.704405053984374,
+      "log_sha256": "2bcae989d8434546f581bab192534a91cc72300bdc0218b60a691d51ade4bb78"
+    },
+    {
+      "phase": "supervisord-original",
+      "exit": 96,
+      "seconds": 0.5052671030862257,
+      "log_sha256": "e6a7c45afce0cbeb86acf4187c21146d27c832e63178d179a281b5b71baa70d6",
+      "fresh_junit": false,
+      "agentd_binary_sha256": "beb3ee81c9cbcb415c6b6fcfa98e463ee87e5b316d5c13535996aa468f965dff",
+      "agentd_binary_bytes": 328934088,
+      "tested_sources": [
+        {
+          "path": "codex-rs/hepta-agentd/tests/cognitive_product_e2e.rs",
+          "sha256": "a286ad2caedc1996b99697a3e6ac93ed6bce734fd26d75c966157ed8dfcd6a4e",
+          "bytes": 98121
+        },
+        {
+          "path": "codex-rs/hepta-agentd/tests/supervisord_product_e2e.rs",
+          "sha256": "ef1130e8d18845498fc8edb1769f2d4475782fe1209efb8f7840a336b29bf0b0",
+          "bytes": 26352
+        }
+      ]
+    },
+    {
+      "phase": "fix",
+      "exit": 0,
+      "seconds": 356.97262778307777,
+      "log_sha256": "8ac36bf77b734933fc0b25d6bf620b3c443233c0c8e1729e0565b5dfef52db76"
+    },
+    {
+      "phase": "fmt",
+      "exit": 0,
+      "seconds": 1.5620824010111392,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "recorded_source_after": [
+    {
+      "path": "codex-rs/hepta-agentd/tests/cognitive_product_e2e.rs",
+      "sha256": "a286ad2caedc1996b99697a3e6ac93ed6bce734fd26d75c966157ed8dfcd6a4e",
+      "bytes": 98121
+    },
+    {
+      "path": "codex-rs/hepta-agentd/tests/supervisord_product_e2e.rs",
+      "sha256": "ef1130e8d18845498fc8edb1769f2d4475782fe1209efb8f7840a336b29bf0b0",
+      "bytes": 26352
+    }
+  ],
+  "findings": {
+    "commands": "Two builds, cognitive_product_e2e, supervisord_product_e2e, fix and format; no service launch is inferred from cargo build.",
+    "original_test_phases": "cognitive-original and supervisord-original recorded exit 96 and fresh_junit=false. Their failure cause was not inferred because referenced logs were not read in this probe.",
+    "current_owner_inputs": "These four exact JSON files did not identify a current owner/thread, service unit, HMI socket, trust/checkpoint or audio-authority configuration.",
+    "target_directory": "CARGO_TARGET_DIR is a build output path; it is not a fleet/owner run root."
+  },
+  "limits": [
+    "Only these four JSON files were inspected; other directory contents and nested later-run evidence were not read.",
+    "No credentials/private key values or referenced secret files were read, and no owner/process/configuration was created or changed.",
+    "A missing field in engineering records or an absent HEPTA variable in the separate SSH job does not establish absence in another running process.",
+    "Metadata from 2026-11-04 is not a current-source qualification result."
+  ]
+}

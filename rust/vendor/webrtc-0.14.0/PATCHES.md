@@ -33,9 +33,10 @@ The upstream code deltas are restricted to two transport modules.
   publication locks, so a late handshake completion cannot recreate closed media
 - Closed state cannot regress when an earlier asynchronous state callback returns
 
-No dependency versions, cryptographic algorithms, wire formats, ICE routing,
-or public APIs are changed. Shutdown is terminal, matching the existing peer
-connection lifecycle.
+The shutdown repairs do not change dependency versions, cryptographic algorithms,
+wire formats, ICE routing or public APIs. Shutdown is terminal, matching the
+existing peer connection lifecycle. The later read-only diagnostic API addition
+is documented separately below.
 
 Local regression coverage is in `pipecat-webrtc`: a deterministic incoming
 channel callback barrier reproduces the missed shutdown notification, verifies
@@ -49,3 +50,24 @@ start future with an error and releases the UDP sockets. Repeated sequential/con
 close, Drop and handshake-close tests exercise both peers. The separate wrapper error classifier only accepts the exact SCTP
 reset-after-close aggregate after all transports report Closed; mixed errors
 remain failures.
+
+## Read-only SCTP startup observation
+
+`src/sctp_transport/mod.rs` additionally exposes
+`RTCSctpTransport::has_started() -> bool`. It reads the existing `is_started`
+atomic with its existing sequentially consistent ordering. It does not write
+state, add a task, retain transport ownership, change start admission or retry
+association setup. This is a public diagnostic API addition; the earlier
+no-public-API-change statement applies to the shutdown repairs only.
+
+The flag is set when start is entered, before association completion. It must
+not be interpreted as a Connected state, successful DCEP negotiation, application
+channel publication or remote receipt. `pipecat-webrtc::ConnectionDiagnostics`
+uses it alongside independent ICE, DTLS, SCTP and channel observations.
+
+The unresolved historical data-channel setup timeout is not attributed to the
+SCTP flag or repaired by this getter. A controlled real-UDP wrapper-publication
+barrier test checks the distinction between native Open and application-ready
+publication; it is not a reproduction of that stochastic failure. See
+`pipecat-webrtc/SHUTDOWN_REGRESSION.md` for qualification limits and retained
+failures.

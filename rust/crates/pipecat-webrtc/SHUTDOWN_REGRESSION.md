@@ -125,18 +125,72 @@ SCTP startup failure is therefore not established by the original log's generic
 Timeout. There is no evidence that this branch caused the retained failure, so
 no transport behavior is changed on that hypothesis.
 
-The stress test now records schedule, iteration, A/B side, monotonic elapsed
-wait time and both peers' public state, cancellation, retained fatal error and
-transport counters if either existing wait fails. It takes those observations
-before panic/drop can change ownership or state. It neither retries the failed
-wait nor changes its result or deadline. No production API is expanded to obtain
-private native state.
+That initial diagnostic checkpoint records schedule, iteration, A/B side,
+monotonic elapsed wait time and both peers' public state, cancellation, retained
+fatal error and transport counters if either existing wait fails. It takes those
+observations before panic/drop can change ownership or state. It neither retries
+the failed wait nor changes its result or deadline. That checkpoint did not expand
+production APIs to inspect native state.
 
-If the setup timeout occurs again, attribution still requires a phase timeline
-for both peers (ICE selection, DTLS completion, SCTP association completion,
-channel Open and publication) plus scheduling-delay evidence during that exact
-wait. The new failure context can identify the affected pair and show deadline
-overshoot; overshoot alone does not prove CPU contention. Capturing native
-library logs or a separately scoped native-transport diagnostic harness would
-be necessary to resolve the remaining phase ambiguity. Successful subsequent
-runs do not close this setup stability observation.
+Attribution still requires observations of both peers during the actual failed
+wait. Deadline overshoot alone does not prove CPU contention. The layered
+observations added below narrow the missing phase information, without assigning
+a cause to the retained timeout. Successful subsequent runs do not close this
+setup stability observation.
+
+### Layered setup observations, 2026-11-06
+
+`SmallWebRtcConnection::diagnostics()` now returns `ConnectionDiagnostics`: the
+wrapper state, native peer/ICE/DTLS/SCTP/channel states, whether SCTP start was
+entered, whether the wrapper channel watch contains a channel, cancellation, and
+bounded first-occurrence `SetupMilestones`. Milestones distinguish channel
+registration, peer/ICE connected callbacks, the open callback, wrapper publication
+and the close callback. They use elapsed monotonic time and fixed-size storage;
+SDP, payloads and unbounded event histories are not collected.
+
+These fields are sampled independently, not one atomic transport snapshot.
+The channel observer holds a Weak reference. A diagnostic call may briefly
+clone the native peer while reading its states; observations retain no persistent
+peer or channel owner. Native-state fields become absent when wrapper close
+takes its peer handle, which can precede completion of asynchronous transport
+cleanup. Absence therefore does not attest that native shutdown has completed.
+Likewise, the watch waiter can wake before the following publication timestamp
+is stored. Callbacks and their milestones do not provide a global protocol clock.
+
+The vendor adds only `RTCSctpTransport::has_started()`, a read of its existing
+atomic flag. True means start was entered, not that SCTP association or DCEP
+completed. Native peer Connected still describes ICE/DTLS. Native channel Open
+and wrapper publication remain separate observations. No SCTP start admission,
+DTLS algorithm, transport retry or timeout is changed by these additions.
+
+The original stress test still waits for A and then B, with five seconds per
+side, and keeps all 32 batches, six shutdown schedules and the original UDP
+rebind criteria. During each wait it samples both peers every five milliseconds
+and retains at most 32 changed observations. Failure records the affected pair,
+elapsed times, sample/eviction counts and maximum sampling gap before panic/drop.
+Sampling can miss short transitions and can affect scheduling. A sampling gap
+is an observation, not proof of a resource-pressure cause.
+
+`diagnostics_distinguish_native_open_from_delayed_publication` is a controlled
+real-UDP regression. Its test barrier holds only the offerer's wrapper open
+callback before ordinary publication. It checks native DTLS/SCTP/channel
+readiness while the wrapper is unpublished, the existing data-channel timeout,
+an already-pending watch waiter waking after release, readiness for a later
+waiter, and terminal wrapper cleanup with retained milestone observations.
+It waits separately for the diagnostic publication timestamp because readiness
+can be observed first. This fixture verifies the exposed states and readiness
+semantics; it does not reproduce or explain the historical invocation-25 failure.
+
+Source review also inspected the native SCTP start flag's separate load/store.
+The original initial-SDP path queues transport and RTP startup on the same
+serialized Operations worker. No concurrent SCTP-start execution was established
+for the retained stress failure, so no speculative admission repair was applied.
+
+The local current-source all-target Clippy check completed successfully with
+`-D warnings`. Two attempts to build runtime tests were interrupted by rustc
+SIGKILL in dependencies, with no new-source test executed; the cause of those
+signals was not established. Forty additional invocations of an inherited
+stress executable passed, but that executable predates these diagnostics and
+does not qualify the modified source. Current-source package and full-workspace
+runtime gates remain required. The retained setup timeout and the unreproduced
+historical workspace UDP-retention schedule remain open.
