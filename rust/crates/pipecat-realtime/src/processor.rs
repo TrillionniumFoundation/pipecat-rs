@@ -2490,7 +2490,7 @@ mod connection_state_tests {
         let processor =
             Arc::new(OpenAiRealtimeProcessor::new(RealtimeClient::new(config).unwrap()).unwrap());
         let state = processor.subscribe_connection_state();
-        let mut worker = Pipeline::new(vec![processor])
+        let worker = Pipeline::new(vec![processor])
             .start(PipelineConfig::default())
             .await
             .unwrap();

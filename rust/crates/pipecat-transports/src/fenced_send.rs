@@ -126,7 +126,7 @@ mod tests {
             }
         }
     }
-    async fn finish(mut worker: PipelineWorker) {
+    async fn finish(worker: PipelineWorker) {
         worker.cancel("fixture complete").await.unwrap();
         worker.collect().await.unwrap();
     }
@@ -331,7 +331,7 @@ mod tests {
     #[tokio::test]
     async fn graceful_pipeline_end_waits_for_fenced_tail_barrier_before_retiring() {
         use crate::{Packet, SessionConfig, SessionSender, WebSocketSession};
-        use futures_util::{SinkExt, StreamExt};
+        use futures_util::StreamExt;
         use tokio_tungstenite::{
             tungstenite::{protocol::Role, Message},
             WebSocketStream,
