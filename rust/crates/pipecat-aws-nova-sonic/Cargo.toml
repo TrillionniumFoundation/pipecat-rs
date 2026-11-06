@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+autoexamples = false
+
+[[example]]
+name = "aws_nova_sonic_pcm_session"
+path = "examples/pcm_session.rs"
 
 [dependencies]
 tokio.workspace = true

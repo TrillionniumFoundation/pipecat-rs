@@ -121,10 +121,15 @@ retained, without claiming core diagnostics it does not surface.
 
 ## Recorded PCM executable
 
+The example target is now `azure_voice_live_pcm_session`. Migrate existing commands
+from `--example pcm_session` to `--example azure_voice_live_pcm_session`.
+The source remains `examples/pcm_session.rs`. Cargo builds only the uniquely named
+target so full-workspace builds keep each provider's executable separate.
+
 Build/run from `rust/`:
 
 ```sh
-cargo run --locked -p pipecat-azure-voice-live --example pcm_session -- --help
+cargo run --locked -p pipecat-azure-voice-live --example azure_voice_live_pcm_session -- --help
 ```
 
 Set `AZURE_VOICE_LIVE_ENDPOINT`, `AZURE_VOICE_LIVE_MODEL`,

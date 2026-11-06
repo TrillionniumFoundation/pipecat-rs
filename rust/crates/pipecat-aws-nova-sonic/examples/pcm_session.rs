@@ -29,9 +29,9 @@ const HELP: &str = "\
 Recorded AWS Nova Sonic PCM session
 
 Usage:
-  pcm_session --help
-  pcm_session --check-config --region REGION --model MODEL --voice VOICE [OPTIONS]
-  pcm_session --session INPUT.pcm OUTPUT.pcm --region REGION --model MODEL --voice VOICE [OPTIONS]
+  aws_nova_sonic_pcm_session --help
+  aws_nova_sonic_pcm_session --check-config --region REGION --model MODEL --voice VOICE [OPTIONS]
+  aws_nova_sonic_pcm_session --session INPUT.pcm OUTPUT.pcm --region REGION --model MODEL --voice VOICE [OPTIONS]
 
 Options:
   --endpoint URL            Explicit regional or literal-loopback endpoint override.

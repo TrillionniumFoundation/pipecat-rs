@@ -217,12 +217,17 @@ end-to-end wall-clock guarantee for arbitrary caller output/callback code.
 
 ## Recorded PCM example
 
+The example target is now `azure_realtime_pcm_session`. Migrate existing commands
+from `--example pcm_session` to `--example azure_realtime_pcm_session`.
+The source remains `examples/pcm_session.rs`. Cargo builds only the uniquely named
+target so full-workspace builds keep each provider's executable separate.
+
 ```text
-cargo run -p pipecat-azure-realtime --example pcm_session -- --help
-cargo run -p pipecat-azure-realtime --example pcm_session -- --check-config
-cargo run -p pipecat-azure-realtime --example pcm_session -- --check-config --server-vad
-cargo run -p pipecat-azure-realtime --example pcm_session -- --manual input.pcm output.pcm
-cargo run -p pipecat-azure-realtime --example pcm_session -- --server-vad input.pcm output.pcm
+cargo run -p pipecat-azure-realtime --example azure_realtime_pcm_session -- --help
+cargo run -p pipecat-azure-realtime --example azure_realtime_pcm_session -- --check-config
+cargo run -p pipecat-azure-realtime --example azure_realtime_pcm_session -- --check-config --server-vad
+cargo run -p pipecat-azure-realtime --example azure_realtime_pcm_session -- --manual input.pcm output.pcm
+cargo run -p pipecat-azure-realtime --example azure_realtime_pcm_session -- --server-vad input.pcm output.pcm
 ```
 
 Run these from `rust/`. Set `AZURE_REALTIME_BASE_URL` and

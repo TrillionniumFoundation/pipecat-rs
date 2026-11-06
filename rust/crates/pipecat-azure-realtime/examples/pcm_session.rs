@@ -28,10 +28,10 @@ const HELP: &str = "\
 Recorded Azure OpenAI Realtime PCM session
 
 Usage:
-  pcm_session --help
-  pcm_session --check-config [--manual|--server-vad]
-  pcm_session --manual INPUT.pcm OUTPUT.pcm
-  pcm_session --server-vad INPUT.pcm OUTPUT.pcm
+  azure_realtime_pcm_session --help
+  azure_realtime_pcm_session --check-config [--manual|--server-vad]
+  azure_realtime_pcm_session --manual INPUT.pcm OUTPUT.pcm
+  azure_realtime_pcm_session --server-vad INPUT.pcm OUTPUT.pcm
 
 Required explicit environment:
   AZURE_REALTIME_BASE_URL

@@ -120,12 +120,14 @@ async fn finish(
             Ok(result) => result.map_err(|error| format!("close {identity}: {error}")),
             Err(_) => Err(format!("close {identity} exceeded {DEADLINE:?}")),
         };
+        let close_succeeded = result.is_ok();
         if let Err(error) = result {
             failures.push(error);
         }
         if let Err(error) = evidence.record(
             "participant_close",
-            json!({"identity": identity, "state": format!("{:?}", peer.state())}),
+            json!({"identity": identity, "state": format!("{:?}", peer.state()),
+                "close_succeeded": close_succeeded}),
         ) {
             failures.push(error);
         }
@@ -144,11 +146,13 @@ async fn finish(
             client.live_connections()
         ));
     }
-    if let Err(error) = server.child.kill() {
-        failures.push(format!("stop owned SFU: {error}"));
-    }
-    if let Err(error) = server.child.wait() {
-        failures.push(format!("reap owned SFU: {error}"));
+    match server.stop_and_reap("media_cleanup") {
+        Ok(details) => {
+            if let Err(error) = evidence.record("server_reaped", details) {
+                failures.push(error);
+            }
+        }
+        Err(error) => failures.push(error),
     }
     match timeout(
         Duration::from_secs(1),

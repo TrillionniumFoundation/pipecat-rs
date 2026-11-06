@@ -28,10 +28,10 @@ const HELP: &str = "\
 Recorded Azure Voice Live PCM session
 
 Usage:
-  pcm_session --help
-  pcm_session --check-config [--manual|--semantic-vad]
-  pcm_session --manual INPUT.pcm OUTPUT.pcm
-  pcm_session --semantic-vad INPUT.pcm OUTPUT.pcm
+  azure_voice_live_pcm_session --help
+  azure_voice_live_pcm_session --check-config [--manual|--semantic-vad]
+  azure_voice_live_pcm_session --manual INPUT.pcm OUTPUT.pcm
+  azure_voice_live_pcm_session --semantic-vad INPUT.pcm OUTPUT.pcm
 
 Required explicit environment:
   AZURE_VOICE_LIVE_ENDPOINT

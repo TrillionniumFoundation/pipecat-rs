@@ -95,6 +95,15 @@ remain in memory and are never logged or persisted. It attempts to verify:
 
 Startup and individual operations are bounded, with a 60-second scenario
 limit. The process has a cleanup guard for assertion failure and cancellation.
+SFU termination is confirmed only when `try_wait()` returns an exit status:
+each cleanup or Drop fallback polls for at most three seconds and records the
+PID, kill-request result, actual reap status and any timeout/error in
+`server-cleanup.jsonl`. No blocking `Child::wait()` or unbounded join is used.
+An unconfirmed reap is a failure, retains evidence, and is not reported as
+cleaned; a normal Drop also fails the test in that case. During an existing
+panic the original failure is preserved. Run the harness inside an owned job
+with a hard process deadline as the final boundary for any child whose exit
+cannot be confirmed by the bounded fallback.
 No automatic reconnection, network-loss recovery, server-failure rollback or
 playback/audibility result is covered by this harness.
 
@@ -150,10 +159,16 @@ another actual `AudioSubscribed` for the same current track SID and at least ten
 new nonzero frames; the witness must remain subscribed throughout.
 
 The new scenarios return errors through cleanup before asserting: established
-participants receive awaited bounded `close()` calls, signaling socket references
-are checked for release, and the owned SFU is killed/reaped and its listening port
-checked. Scenario work is bounded to 60 seconds; cleanup has separate bounded
-waits and reports its own failures. `media-events.jsonl` records stage times,
+participants receive `close()` calls with individual ten-second deadlines,
+signaling socket references have a three-second release check, the owned SFU
+has the bounded reap attempt above, and its listening port has a one-second
+closure check. A close timeout records failure and requests cancellation; it
+does not establish that the participant owner was joined. The original
+audio/data scenario keeps its original assertions and uses its existing Drop
+cancellation path when it unwinds, rather than promising awaited peer joins on
+failure. Scenario work remains bounded to 60 seconds; cleanup and its Drop
+fallback have separate deadlines and preserve their own failures.
+`media-events.jsonl` records stage times,
 subscription observations, PCM counters and decoded color statistics alongside
 the unchanged `server.log`. Failed runs keep both; the retention flag also keeps
 successful evidence. Tokens and media payloads are not written to these records.

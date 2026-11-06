@@ -47,7 +47,7 @@ impl FrameProcessor for PcmOutput {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--help"] {
-        println!("pcm_session --manual|--server-vad INPUT.pcm OUTPUT.pcm\npcm_session --check-config\nExplicit INWORLD_API_KEY required (already encoded Basic credential). Mono signed little-endian PCM16 at 24000 Hz, input <= 8 MiB, new output file only. Server-VAD input must include end-of-speech silence. Uses InworldApp and records generated speech; no audible playback. Network occurs only in session mode.");
+        println!("inworld_realtime_pcm_session --manual|--server-vad INPUT.pcm OUTPUT.pcm\ninworld_realtime_pcm_session --check-config\nExplicit INWORLD_API_KEY required (already encoded Basic credential). Mono signed little-endian PCM16 at 24000 Hz, input <= 8 MiB, new output file only. Server-VAD input must include end-of-speech silence. Uses InworldApp and records generated speech; no audible playback. Network occurs only in session mode.");
         return Ok(());
     }
     let check = args == ["--check-config"];

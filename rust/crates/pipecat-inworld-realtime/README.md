@@ -64,11 +64,16 @@ paired topology and only final interruptible native ToolExecutor callbacks.
 
 ### Recorded PCM example
 
+The example target is now `inworld_realtime_pcm_session`. Migrate existing commands
+from `--example pcm_session` to `--example inworld_realtime_pcm_session`.
+The source remains `examples/pcm_session.rs`. Cargo builds only the uniquely named
+target so full-workspace builds keep each provider's executable separate.
+
 ```
-cargo run -p pipecat-inworld-realtime --example pcm_session -- --help
-cargo run -p pipecat-inworld-realtime --example pcm_session -- --check-config
-cargo run -p pipecat-inworld-realtime --example pcm_session -- --manual input.pcm output.pcm
-cargo run -p pipecat-inworld-realtime --example pcm_session -- --server-vad input.pcm output.pcm
+cargo run -p pipecat-inworld-realtime --example inworld_realtime_pcm_session -- --help
+cargo run -p pipecat-inworld-realtime --example inworld_realtime_pcm_session -- --check-config
+cargo run -p pipecat-inworld-realtime --example inworld_realtime_pcm_session -- --manual input.pcm output.pcm
+cargo run -p pipecat-inworld-realtime --example inworld_realtime_pcm_session -- --server-vad input.pcm output.pcm
 ```
 
 Set `INWORLD_API_KEY` explicitly to the provider's already encoded Basic
