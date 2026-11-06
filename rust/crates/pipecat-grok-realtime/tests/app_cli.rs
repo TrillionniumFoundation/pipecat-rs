@@ -9,12 +9,12 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::oneshot,
+    sync::{oneshot, RwLock, RwLockReadGuard},
     time::{sleep, timeout},
 };
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
@@ -22,6 +22,11 @@ use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 const WAIT: Duration = Duration::from_secs(10);
 const KEY: &str = "synthetic-cli-key-never-live";
 const TRANSCRIPT: &str = "private-generated-transcript";
+// Parallel children can inherit other cases' CLOEXEC listeners. A release
+// waits for every potential inheritor to be reaped before its single rebind.
+// Reader leases allow live children and test bodies to run concurrently.
+static CHILD_LIFETIMES: RwLock<()> = RwLock::const_new(());
+static CHILD_REAP_FAILED: AtomicBool = AtomicBool::new(false);
 type Ws = WebSocketStream<TcpStream>;
 struct Directory(PathBuf);
 impl Directory {
@@ -49,13 +54,23 @@ impl Drop for Directory {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
-struct ChildOwner(Option<Child>);
+struct ChildOwner(Option<Child>, Option<RwLockReadGuard<'static, ()>>);
 impl Drop for ChildOwner {
     fn drop(&mut self) {
         if let Some(child) = &mut self.0 {
             let _ = child.kill();
-            let _ = child.wait();
+            if let Err(error) = child.wait() {
+                CHILD_REAP_FAILED.store(true, Ordering::Release);
+                eprintln!(
+                    "compiled Grok fixture child {} could not be reaped: {error}",
+                    child.id()
+                );
+            }
         }
+        // collect observes try_wait(Some) before taking the Child. On a Drop
+        // wait error, publish the failure before admission can reopen.
+        drop(self.0.take());
+        drop(self.1.take());
     }
 }
 fn command(address: Option<SocketAddr>) -> Command {
@@ -81,8 +96,15 @@ fn active(command: &mut Command, input: &Path, output: &Path) {
         .arg(output)
         .args(["--responses", "1", "--timeout-ms", "3000"]);
 }
-fn spawn(command: &mut Command) -> ChildOwner {
-    ChildOwner(Some(command.spawn().unwrap()))
+async fn spawn(command: &mut Command) -> ChildOwner {
+    let lease = timeout(WAIT, CHILD_LIFETIMES.read())
+        .await
+        .expect("compiled Grok fixture child admission timed out");
+    assert!(
+        !CHILD_REAP_FAILED.load(Ordering::Acquire),
+        "fixture child reaping failed; new child admission is blocked"
+    );
+    ChildOwner(Some(command.spawn().unwrap()), Some(lease))
 }
 async fn collect(mut child: ChildOwner) -> Output {
     timeout(WAIT, async {
@@ -216,8 +238,10 @@ fn tcp_endpoint_snapshot(address: SocketAddr, ipv6: bool) -> Value {
         },
     };
     let hex: String = octets
-        .chunks_exact(4)
-        .map(|word| format!("{:08X}", u32::from_ne_bytes(word.try_into().unwrap())))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|word| format!("{:08X}", u32::from_ne_bytes(*word)))
         .collect();
     let exact = format!("{hex}:{:04X}", address.port());
     let wildcard = format!("{}:{:04X}", "0".repeat(hex.len()), address.port());
@@ -277,8 +301,20 @@ async fn release(listener: TcpListener) {
         .ok()
         .map(std::os::unix::fs::MetadataExt::ino);
     let descriptor_target = fs::read_link(&descriptor);
-    drop(listener);
-    let rebound = TcpListener::bind(address).await.unwrap_or_else(|error| {
+    let rebind_result = {
+        let _reaped_children = timeout(WAIT, CHILD_LIFETIMES.write())
+            .await
+            .expect("compiled Grok fixture child exit barrier timed out");
+        assert!(
+            !CHILD_REAP_FAILED.load(Ordering::Acquire),
+            "fixture child reaping failed; listener release cannot be qualified"
+        );
+        drop(listener);
+        // Keep the probe listener inside the barrier too, so a later child
+        // cannot inherit the socket created by this single rebind.
+        TcpListener::bind(address).await.map(drop)
+    };
+    rebind_result.unwrap_or_else(|error| {
         let before = json!({
             "pid":std::process::id(), "address":address.to_string(), "fd":fd, "socket_inode":inode,
             "descriptor":descriptor_target.ok().map(|path| path.to_string_lossy().into_owned()),
@@ -293,7 +329,6 @@ async fn release(listener: TcpListener) {
         });
         panic!("fixture listener not released: {error}; listener_release_diagnostic={diagnostic}")
     });
-    drop(rebound);
 }
 async fn wire(ws: &mut Ws, mut value: Value) {
     static EVENT: AtomicU64 = AtomicU64::new(0);
@@ -467,7 +502,7 @@ async fn default_help_and_check_are_credential_free_and_effect_free() {
                 std::ffi::OsString::from_vec(vec![0xff; 5000]),
             )
             .env("XAI_API_KEY", "ambient-key-must-not-be-used");
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(
             result.status.success(),
             "{}",
@@ -494,7 +529,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
         let mut command = command(Some(listener.local_addr().unwrap()));
         command.env(name, value);
         active(&mut command, &input, &output);
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(!result.status.success());
         sanitized(&result);
         assert!(!output.exists());
@@ -504,7 +539,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
         .env_remove("GROK_PCM_API_KEY")
         .env("XAI_API_KEY", KEY);
     active(&mut no_key, &input, &output);
-    assert!(!collect(spawn(&mut no_key)).await.status.success());
+    assert!(!collect(spawn(&mut no_key).await).await.status.success());
     for args in [
         vec!["--enable"],
         vec!["--help", "extra"],
@@ -519,7 +554,7 @@ async fn invalid_arguments_and_explicit_configuration_have_no_effects() {
     ] {
         let mut command = command(Some(listener.local_addr().unwrap()));
         command.args(args);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
     }
     assert!(!output.exists());
     release(listener).await;
@@ -535,7 +570,7 @@ async fn aligned_regular_bounded_input_and_create_new_paths_preflight_before_con
         fs::write(&input, bytes).unwrap();
         let mut command = command(Some(listener.local_addr().unwrap()));
         active(&mut command, &input, &output);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
         assert!(!output.exists());
     }
     fs::write(&input, [0, 0]).unwrap();
@@ -561,7 +596,7 @@ async fn aligned_regular_bounded_input_and_create_new_paths_preflight_before_con
     ] {
         let mut command = command(Some(listener.local_addr().unwrap()));
         active(&mut command, &source, &target);
-        assert!(!collect(spawn(&mut command)).await.status.success());
+        assert!(!collect(spawn(&mut command).await).await.status.success());
     }
     assert_eq!(fs::read(&input).unwrap(), [0, 0]);
     assert_eq!(fs::read(&existing).unwrap(), b"keep");
@@ -587,7 +622,7 @@ async fn actual_binary_explicit_run_records_fragmented_pcm_and_joins() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.arg("--run");
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     peer.await.unwrap();
 }
@@ -626,7 +661,7 @@ async fn actual_binary_server_vad_does_not_invent_explicit_run_or_playback() {
     });
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     assert!(!String::from_utf8_lossy(&result.stdout).contains("private-user-transcript"));
     peer.await.unwrap();
@@ -667,7 +702,7 @@ async fn actual_binary_server_vad_rapid_burst_preserves_speech_and_joins() {
     });
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     complete(&result, &output);
     assert!(!String::from_utf8_lossy(&result.stdout).contains("private-user-transcript"));
     peer.await.unwrap();
@@ -707,7 +742,7 @@ async fn actual_binary_final_echo_requires_assistant_continuation_and_generated_
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.args(["--run", "--echo-tool"]);
-    let mut child = spawn(&mut command);
+    let mut child = spawn(&mut command).await;
     timeout(WAIT, observed).await.unwrap().unwrap();
     assert!(
         child.0.as_mut().unwrap().try_wait().unwrap().is_none(),
@@ -743,7 +778,7 @@ async fn actual_binary_absent_required_speech_times_out_cancels_and_retains_part
         .arg("--output")
         .arg(&output)
         .args(["--responses", "1", "--timeout-ms", "500", "--run"]);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     assert!(!result.status.success());
     sanitized(&result);
     assert_eq!(report(&result)["status"], "partial");
@@ -782,7 +817,7 @@ async fn actual_binary_readiness_provider_and_protocol_failures_are_sanitized_pa
         let mut command = command(Some(address));
         active(&mut command, &input, &output);
         command.arg("--run");
-        let result = collect(spawn(&mut command)).await;
+        let result = collect(spawn(&mut command).await).await;
         assert!(!result.status.success());
         sanitized(&result);
         assert_eq!(report(&result)["status"], "partial");
@@ -852,7 +887,7 @@ async fn actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_af
                 "--run",
                 "--echo-tool",
             ]);
-        let mut child = spawn(&mut command);
+        let mut child = spawn(&mut command).await;
         timeout(WAIT, observed).await.unwrap().unwrap();
         assert!(child.0.as_mut().unwrap().try_wait().unwrap().is_none());
         let original = fs::metadata(&output).unwrap();
@@ -904,7 +939,7 @@ async fn actual_binary_output_exhaustion_retains_bounded_partial_bytes() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.args(["--run", "--max-output-bytes", "2"]);
-    let result = collect(spawn(&mut command)).await;
+    let result = collect(spawn(&mut command).await).await;
     assert!(!result.status.success());
     sanitized(&result);
     assert_eq!(report(&result)["status"], "partial");
@@ -938,7 +973,7 @@ async fn actual_binary_output_path_swap_does_not_write_replacement() {
     let mut command = command(Some(address));
     active(&mut command, &input, &output);
     command.arg("--run");
-    let child = spawn(&mut command);
+    let child = spawn(&mut command).await;
     timeout(WAIT, observed).await.unwrap().unwrap();
     fs::rename(&output, &retained).unwrap();
     fs::write(&output, b"replacement remains untouched").unwrap();

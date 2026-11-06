@@ -29,6 +29,9 @@ use tokio::{
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 const WAIT: Duration = Duration::from_secs(10);
+// The native-worker oracle observes this process, so participating tests own it
+// exclusively before starting any per-session deadline.
+static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const PCM: &[u8] = include_bytes!("../../pipecat-vad/tests/fixtures/smart_turn_speech.pcm16");
 // Leave room for the real 400 ms loudness window, smoothing, and VAD start
 // hysteresis. This 960 ms clip remains below the one-second wire-frame cap.
@@ -637,6 +640,7 @@ fn responses(result: &ScriptResult) -> Vec<&str> {
 
 #[tokio::test]
 async fn genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio() {
+    let _serial = TEST_LOCK.lock().await;
     let mut output = vec![
         wire("bot-llm-started", json!({})),
         wire("bot-llm-text", json!({"text":"forbidden LLM-only text"})),
@@ -680,6 +684,7 @@ async fn genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_a
 
 #[tokio::test]
 async fn empty_transcript_emits_no_response_and_later_real_segment_recovers() {
+    let _serial = TEST_LOCK.lock().await;
     let fixture = Fixture::new(
         expected("later valid phrase"),
         vec![start_speech()],
@@ -706,6 +711,7 @@ async fn empty_transcript_emits_no_response_and_later_real_segment_recovers() {
 
 #[tokio::test]
 async fn interruption_and_new_llm_epoch_discard_delayed_old_http_result() {
+    let _serial = TEST_LOCK.lock().await;
     let fixture = Fixture::new(
         expected("new epoch phrase"),
         vec![start_speech()],
@@ -744,6 +750,7 @@ async fn interruption_and_new_llm_epoch_discard_delayed_old_http_result() {
 
 #[tokio::test]
 async fn explicit_next_send_discards_previous_pending_recognition() {
+    let _serial = TEST_LOCK.lock().await;
     let s = scenario(json!([
         {"user":"first", "expect":[{"event":"user_transcription", "text_contains":"change epoch"}]},
         {"user":"second", "send_after":{"event":"user_transcription"}, "expect":[{"event":"response", "text_contains":"second phrase", "text_excludes":"stale"}]}
@@ -777,6 +784,7 @@ async fn explicit_next_send_discards_previous_pending_recognition() {
 
 #[tokio::test]
 async fn ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting() {
+    let _serial = TEST_LOCK.lock().await;
     let s = scenario(json!([
         {"user":"first", "expect":[{"event":"user_transcription", "text_contains":"audio queued"}]},
         {"user":"second", "expect":[{"event":"user_transcription", "text_contains":"second received"}]}
@@ -807,6 +815,7 @@ async fn ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting()
 
 #[tokio::test]
 async fn ordinary_next_send_settlement_timeout_fails_without_sending_it() {
+    let _serial = TEST_LOCK.lock().await;
     let s = scenario(json!([
         {"user":"first", "expect":[{"event":"user_transcription", "text_contains":"audio queued"}]},
         {"user":"must not send", "expect":[{"event":"response"}]}
@@ -845,6 +854,7 @@ async fn ordinary_next_send_settlement_timeout_fails_without_sending_it() {
 
 #[tokio::test]
 async fn cancellation_during_http_closes_connection_and_joins_session_and_peers() {
+    let _serial = TEST_LOCK.lock().await;
     let fixture = Fixture::new(
         expected("never released"),
         vec![start_speech()],
@@ -882,6 +892,7 @@ async fn cancellation_during_http_closes_connection_and_joins_session_and_peers(
 
 #[tokio::test]
 async fn dropping_run_future_with_queued_vad_work_closes_owned_websocket() {
+    let _serial = TEST_LOCK.lock().await;
     let s = scenario(
         json!([{"user":"play", "expect":[{"event":"response", "text_contains":"never"}]}]),
     );
@@ -926,6 +937,7 @@ async fn dropping_run_future_with_queued_vad_work_closes_owned_websocket() {
 
 #[tokio::test]
 async fn malformed_and_unsupported_pcm_fail_without_any_stt_upload() {
+    let _serial = TEST_LOCK.lock().await;
     for value in [
         wire(
             "eval-bot-audio",
@@ -965,7 +977,7 @@ fn ordinary_constructor_rejects_typed_response_and_opt_in_rejects_classifier_eva
     assert!(EvalSession::with_bot_transcription(s, "ws://127.0.0.1:1", options(), config).is_err());
 }
 
-// Linux integration runs use --test-threads=1. Check actual OS identities,
+// Tests using this process-wide oracle hold TEST_LOCK. Check actual OS identities,
 // including starttime to detect TID reuse. State is retained for diagnostics.
 // Non-Linux tests still require socket/task ownership to settle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1049,6 +1061,7 @@ fn bounded_config() -> BotTranscriptionConfig {
 
 #[test]
 fn invalid_bounds_are_rejected_before_connecting_or_starting_workers() {
+    let _serial = TEST_LOCK.blocking_lock();
     let before = vad_workers();
     for invalid_bound in 0..6 {
         let config = bounded_config();
@@ -1073,6 +1086,7 @@ fn invalid_bounds_are_rejected_before_connecting_or_starting_workers() {
 
 #[tokio::test]
 async fn two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order() {
+    let _serial = TEST_LOCK.lock().await;
     let fixture = Fixture::new(
         expected("first phrase second phrase"),
         vec![start_speech()],
@@ -1106,6 +1120,7 @@ async fn two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order
 
 #[tokio::test]
 async fn pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload() {
+    let _serial = TEST_LOCK.lock().await;
     for total_limit in [false, true] {
         let fixture = Fixture::with_config(
             expected("never"),
@@ -1208,15 +1223,18 @@ async fn spoken_absence_pcm_case(fresh: Option<&str>) {
 
 #[tokio::test]
 async fn spoken_absence_held_pcm_continuation_keeps_original_deadline() {
+    let _serial = TEST_LOCK.lock().await;
     spoken_absence_pcm_case(None).await;
 }
 
 #[tokio::test]
 async fn spoken_absence_held_pcm_new_llm_start_fails() {
+    let _serial = TEST_LOCK.lock().await;
     spoken_absence_pcm_case(Some("bot-llm-started")).await;
 }
 
 #[tokio::test]
 async fn spoken_absence_held_pcm_new_remote_speaking_start_fails() {
+    let _serial = TEST_LOCK.lock().await;
     spoken_absence_pcm_case(Some("bot-started-speaking")).await;
 }
