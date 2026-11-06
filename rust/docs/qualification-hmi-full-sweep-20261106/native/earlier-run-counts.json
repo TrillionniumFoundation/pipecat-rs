@@ -1,0 +1,187 @@
+{
+  "scope": "Completed libtest summaries from each original raw log; no global deduplication or merging across runs, no-run phases execute zero tests",
+  "runs": [
+    {
+      "log": "full-workspace-r1/cargo-test-workspace.log",
+      "log_sha256": "1eb99b9cb6f85c772872591fddce49f5a2e2a381b7ade515144a00e816eef06a",
+      "completed_suites": 0,
+      "counts_in_this_command": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "478ab3b8e0deca51571c41c2890b519f0faeab94",
+      "tree": "52644150c51bd2c66052ed4d32f2ad7a844ac71f",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 172.53552389144897,
+      "source_unchanged": true
+    },
+    {
+      "log": "full-workspace-r2/cargo-test-workspace.log",
+      "log_sha256": "173442b9a072ffb8000c6c7ff1fda46fc3504fc4c6c0eeddc22edc7a9ecbfc3d",
+      "completed_suites": 96,
+      "counts_in_this_command": {
+        "passed": 637,
+        "failed": 2,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 1443.6221475601196,
+      "source_unchanged": true
+    },
+    {
+      "log": "pin-prebuild-r1/cargo-test-workspace.log",
+      "log_sha256": "7655349d2f7d509fafcb81c06ddc488245ce79a8c587057fc72464b8822ad206",
+      "completed_suites": 0,
+      "counts_in_this_command": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "c45da3bd794af3640c28f8160285dcad31960c40",
+      "tree": "12a56abe43c39621e2d1e2639c828c4d85145f58",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-run"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 847.5129389762878,
+      "source_unchanged": true
+    },
+    {
+      "log": "full-workspace-rust-1.99.0-r1/cargo-test-workspace.log",
+      "log_sha256": "2b951d126ca771d7ad8f153e3d1395d1cd7deea3caf71ed8c14a62c37c5aa84a",
+      "completed_suites": 317,
+      "counts_in_this_command": {
+        "passed": 3630,
+        "failed": 2,
+        "ignored": 3,
+        "measured": 0
+      },
+      "head": "7105367d7d607653c3ab758f0131c029c4373faf",
+      "tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 226.3478970527649,
+      "source_unchanged": true
+    },
+    {
+      "log": "local-sfu-patch-r1/command.log",
+      "log_sha256": "811a2321ad5a10021bb97137fc67a6257c41cb2196660be56046d1b155a28d59",
+      "completed_suites": 1,
+      "counts_in_this_command": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-livekit",
+        "--test",
+        "local_sfu",
+        "--",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 185.32837796211243,
+      "source_unchanged": true
+    },
+    {
+      "log": "chinese-synthetic-patch-r1/command.log",
+      "log_sha256": "71809c356f71e7e6476b4ab9c8c4dfee233e477d08b80148b72a237ac5bd8356",
+      "completed_suites": 1,
+      "counts_in_this_command": {
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--lib",
+        "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 153.78569316864014,
+      "source_unchanged": true
+    },
+    {
+      "log": "chinese-synthetic-patch-r2/command.log",
+      "log_sha256": "76271ef07022b163f1f01c05cffe225713a15ff4ee91e3af1b9ac5f02ee4151d",
+      "completed_suites": 1,
+      "counts_in_this_command": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0
+      },
+      "head": "ae56473b029b81a8cb08ec2fd385aecd74287e9f",
+      "tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--locked",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--lib",
+        "local_speech::native_tests::chinese_tts_to_stt_records_clean_and_noisy_model_results",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 107.41488122940063,
+      "source_unchanged": true
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "scope": "observations from ae56473 / Rust 1.99.1 diagnostic only; final pin run separate",
+  "source_log": "chinese-synthetic-patch-r2/command.log inside earlier-runs.tar.gz",
+  "source_log_sha256": "76271ef07022b163f1f01c05cffe225713a15ff4ee91e3af1b9ac5f02ee4151d",
+  "original_json_rows": [
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": false,
+      "recognized": "你好,欢迎使用本地语音助手。",
+      "rss_kib": 784356,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 9081217
+    },
+    {
+      "expected": "你好，欢迎使用本地语音助手。",
+      "noisy": true,
+      "recognized": "你好欢迎使用本地语音助手。",
+      "rss_kib": 784408,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8797682
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": false,
+      "recognized": "请停止播放保留当前挥话。",
+      "rss_kib": 786216,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8732746
+    },
+    {
+      "expected": "请停止播放，保留当前会话。",
+      "noisy": true,
+      "recognized": "请停止播放保留当前,挥话。",
+      "rss_kib": 786232,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8598471
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": false,
+      "recognized": "今天我们测试中文语音识别。",
+      "rss_kib": 786236,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8748801
+    },
+    {
+      "expected": "今天我们测试中文语音识别。",
+      "noisy": true,
+      "recognized": "今天我们测试中文语音识别。",
+      "rss_kib": 786244,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8969806
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": false,
+      "recognized": "设备重新连接以后,继续工作。",
+      "rss_kib": 794792,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8822902
+    },
+    {
+      "expected": "设备重新连接以后继续工作。",
+      "noisy": true,
+      "recognized": "设备重新连接以后继续工作。",
+      "rss_kib": 794800,
+      "scope": "offline_synthetic_chinese_tts_to_stt",
+      "stt_us": 8780190
+    }
+  ],
+  "original_metric_rows": [
+    {
+      "n": 8,
+      "p50_us": 8780190,
+      "p95_us": 9081217,
+      "p99_us": 9081217,
+      "scope": "offline_stt_and_retention_not_mic_to_speaker"
+    }
+  ],
+  "limits": "Eight synthetic Piper-to-Whisper samples, not human microphone quality, acoustic playback or production latency. p50/p95/p99 are sorted sample indices 3/7/7. Raw native log includes non-UTF8 byte sequences and is preserved byte-for-byte."
+}

@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-11-06",
+  "result": "no_actionable_production_entry_recovered_from_this_bounded_projection",
+  "source": {
+    "host": "desktop",
+    "job_id": "1a1b12e0587-fc05-76a1",
+    "idempotency_key": "f9f576cc6c66-owner-entry-followup-r1-20261106",
+    "submission_count": 1,
+    "replayed": false,
+    "prior_unknown_jobs_replayed": false,
+    "script_blob_sha": "6f5d0890f304e2d95d1d2a6a799d557a316222f0",
+    "script_sha256": "646b61db8c4fa7897f984679234f4bf7b15d44edbc86a85edd7c43cfd140dd00",
+    "prerequisite_evidence": [
+      "recovery.json",
+      "product-inputs.json"
+    ],
+    "runtime_receipt": "owner-entry-followup-r1.runtime.json",
+    "complete_selected_output": "owner-entry-followup-r1.stdout.json"
+  },
+  "execution": {
+    "state": "succeeded",
+    "exit_code": 0,
+    "timed_out": false,
+    "output_complete": true,
+    "stdout_bytes": 10262,
+    "stderr_bytes": 0,
+    "stdout_eof": true,
+    "actual_probe_seconds": 0.1547466281335801,
+    "probe_deadline_seconds": 12,
+    "owned_job_timeout_seconds": 14,
+    "files_read": 12,
+    "bytes_read": 117406
+  },
+  "scope": {
+    "inspected_roots": [
+      "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104",
+      "/home/qian-qi/workspace/hepta-hmi-20261029"
+    ],
+    "subdirectories": [
+      "correct-selector-r2",
+      "phase-diagnostic-r3",
+      "timeout-diagnostic"
+    ],
+    "selection": "Two already named original logs; one-level public engineering JSON/log name allowlist in three already named subdirectories; one-level deployment-name/socket metadata in the historical 10/29 HMI root.",
+    "content_projection": "Only allowlisted structured owner/agent/thread/run-root/unit/socket/config-path fields and corresponding bounded log tokens. No raw engineering log/config bodies exported.",
+    "private_deployment_configs": "Unknown 10/29 deployment JSON would receive metadata only; no such candidate was opened.",
+    "not_done": [
+      "No production owner or thread created",
+      "No production job replayed or service started",
+      "No process/environment scan",
+      "No private key or credential file opened",
+      "No physical audio",
+      "No permissions changed",
+      "No recursive scan inside source, assets, process-qualification or media directories"
+    ]
+  },
+  "findings": {
+    "projected_field_count": 4,
+    "projected_values": [
+      "ThreadId"
+    ],
+    "interpretation": "The four captured agent_id values are the literal token ThreadId, with no concrete owner/thread/run-root/unit/socket relation. They are not adopted as live identities. No actionable path was available for the final metadata-only reference check.",
+    "exact_referenced_paths": 0,
+    "original_test_log_hash": "The two root original logs still hash to e6a7c45afce0cbeb86acf4187c21146d27c832e63178d179a281b5b71baa70d6, matching the earlier product-inputs record. Their runtime cause is not inferred from the token-only projection.",
+    "required_next_actual_input": "An existing authoritative owner identity with current generation and exact callable unit/socket/run-root plus its original App Server/thread binding; then same-run registered signer/replay witness and current device/grants/model admission."
+  },
+  "limits": [
+    "This is not evidence of host-wide absence of a real owner.",
+    "Historical metadata, test temporary paths, source-type tokens and directory names are not current production authority.",
+    "Only selected structured fields/log tokens were inspected; wrapped source text or other unselected metadata fields may contain information this projection does not extract.",
+    "Listed but unselected timeout diagnostic JSON, patches, source snapshots, JUnit XML and 10/29 human/acoustic filenames are not evaluated for contents or qualification.",
+    "All 12 selected files were read completely within the stated bounds and hashed; no content conclusion is made for metadata-only directory entries.",
+    "No follow-up probe was launched beyond the one authorized execution."
+  ],
+  "unselected_file_paths": [
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/correct-selector-r2/build-default.log",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/correct-selector-r2/build-qualification.log",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/correct-selector-r2/cognitive-original.junit.xml",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/correct-selector-r2/supervisord-original.junit.xml",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/build-default.log",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/build-qualification.log",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/cognitive-five-agent-phase.junit.xml",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/diagnostic.patch",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/fmt.log",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/original-candidate-0.rs",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/original-candidate-1.rs",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/original-candidate.patch",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/preflight.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/phase-diagnostic-r3/supervisord-original.junit.xml",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/actual-failed-phases-and-fixtures.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/cognitive-share-body.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/cognitive-sharing.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/daemon-child-fixture.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/daemon-create.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/daemon-loop.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/daemon-methods.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/daemon-mutation.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/supervisor-fixture-helpers.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/unix-health.json",
+    "/home/qian-qi/work/hepta-agentd-product-inputs-evidence-20261104/timeout-diagnostic/unix-methods.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/acoustic-probe-summary.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/chinese-human-actual.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/chinese-human.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/chinese-models-release.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/chinese-models-small-release.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/chinese-models.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/hepta-adapter.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/hepta-fix.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/hepta-fmt.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source-actual.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/human-configured-base.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/human-configured-small.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/media-process-build.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/mic-probe.wav",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/model-comparison.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-check.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-devices.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-long-output-final.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-long-output-release.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-long-output-rerun.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-long-output.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-release-build.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/native-test-build.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/physical-jack-status.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-baseline.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-clippy-final.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-clippy.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-final-tests.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-segments.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/pipecat-stt-example-clippy.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/piper-zh.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/process-qualification-final.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/process-qualification.log",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-output-small.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-output.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-small.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech.json",
+    "/home/qian-qi/workspace/hepta-hmi-20261029/small-model-source.json"
+  ],
+  "artifacts": [
+    {
+      "path": "owner-entry-followup-r1.py",
+      "sha256": "646b61db8c4fa7897f984679234f4bf7b15d44edbc86a85edd7c43cfd140dd00",
+      "bytes": 9580,
+      "encoding": "utf-8"
+    },
+    {
+      "path": "owner-entry-followup-r1.stdout.json",
+      "sha256": "15aa66f0cdffeb59f961eee375cb5e550a760dc6d6b7aa86a285672a7cfea4c9",
+      "bytes": 10262,
+      "encoding": "utf-8"
+    },
+    {
+      "path": "owner-entry-followup-r1.runtime.json",
+      "sha256": "7dbbf48abeb0596a969a8577a8e6d802c927e2191bd54393011dda33a3616f5f",
+      "bytes": 734,
+      "encoding": "utf-8"
+    }
+  ]
+}

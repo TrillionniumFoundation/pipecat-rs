@@ -1,0 +1,11 @@
+{
+  "checked": 59,
+  "errors": [],
+  "head": "8279c5566c861fc047b7e36f4a44524e34c00767",
+  "status": "?? rust/docs/HMI_FULL_SWEEP_20261106.md\n",
+  "main_report_blob": "4d87d30ea99b1ea7c9fe171edc5ce753c2a45c63",
+  "draft_backup_blob": "4d87d30ea99b1ea7c9fe171edc5ce753c2a45c63",
+  "old_data_permanently_lost_not_assumed": true,
+  "observed_utc": "2026-11-06 14:02:34 UTC",
+  "scope": "59 files from published evidence checkpoint plus the separately backed-up main draft; no claim about unobserved paths or all previous scratch data."
+}

@@ -1,0 +1,10 @@
+{
+  "commit": "ae134e942411c6b0ad64d7f5b6caa1c603919c57",
+  "tree": "b5115bcf53c8992d59117ffd8396f6eea57b9c9d",
+  "parent": "72cac7fdfc65585219ebf757992ffa5b12c63dcb",
+  "path": "rust/crates/pipecat-turns/tests/anthropic_redacted_runtime.rs",
+  "blob": "7b41c9dff86197ddabe0f0ee922ca20e7f47abd1",
+  "sha256": "8a36a2abe07550f58e75246ead8b61bec3dc046f06b42bdf6255ad15d038d03a",
+  "scope": "Two static trailing-user assertion sites, three runtime cases; no fabricated baseline run failure",
+  "format": "New two assertion blocks require exact rustfmt preflight before r3 test execution; prior scalar changes already passed independently"
+}
