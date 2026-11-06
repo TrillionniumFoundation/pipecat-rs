@@ -28,6 +28,42 @@
 
 精确 Rust 1.99.0 的 default r2 实际源码为8a7c065，原命令exit101、源前后不变，232.660532秒。原 Cargo log为 **602,626 bytes**，SHA-256 `b0c28d096e751ed6ab185c7c16c9349fc7690ac70542e15e28dd9b08d7c48ecf`；此前观察到的607,265 bytes是带末尾gate JSON的runtime stdout，不是该文件大小。独立从原bytes提取得到442 completed suites、5,210 passed／2 failed／16 ignored，失败位于RTVI first-answer-timing。它仍是中途停止的一次完整命令，不是全workspace通过。[本轮原计数](pin-full-r2-counts.json)
 
+## 默认 r3／r4、完整补充与诊断原件
+
+[native-through-default-r4-r1.tar.xz](native-through-default-r4-r1.tar.xz) 新回收83个索引原件，共10,265,256 bytes，另含18,344-byte原导出index，所以archive实际为**84个members、10,283,600 uncompressed bytes**。Archive本身407,932 bytes，SHA256 `72d5de97465c18df89f9ce261f609d25568b0de19c83d3abb141396b1350c890`。
+
+内容包括最早e526 prebuild的原E0004日志、default r3／r4、原完整default no-fail-fast、Grok两轮诊断与完整syscall trace／binding、12份完整source before/after、原Rust1.99.0恢复收据、实际runner及旧target受控退役记录。活动中的expanded阶段不在此包，二进制target／models也没有复制入包。
+
+Root逐项核对83个原件的size／SHA、archive内index与外部原index的字节一致性，并重新计算全部12份source canonical摘要。随后从原Cargo bytes按每个Running／Doc-tests边界独立计数，每块必须恰好有一个terminal summary，未发现缺项或嵌套summary；结果与另一份独立派生统计一致。[原index](native-through-default-r4-r1.original-manifest.json) · [原回收收据](native-through-default-r4-r1.retrieval-receipt.json) · [交付清单](native-through-default-r4-r1.delivery.json) · [Root核验与逐命令计数](native-through-default-r4-r1.root-verification.json)
+
+| 原命令阶段 | Source／Rust | 实际秒数 | Completed harnesses | Pass／fail／ignored | 原结果 |
+| --- | --- | ---: | ---: | ---: | --- |
+| 最早prebuild `--no-run` | e526aab／1.99.1 | 833.000812 | 0 | 0／0／0 | exit101，编译E0004，未执行测试 |
+| default r3 | ae134e9／1.99.0 | 154.894659 | 266 | 2871／1／0 | exit101，在Grok listener重绑停止 |
+| default r4 | 272671b／1.99.0 | 329.030442 | 656 | 7329／2／17 | exit101，在SmartTurn pipeline停止 |
+| default `--no-fail-fast` r1 | 272671b／1.99.0 | 324.642713 | 755 | 7748／4／33 | exit101，全部目标与doctests继续执行；3个SmartTurn targets共4fail |
+
+上述四个命令的source-before与after均相同。r3／r4两个原Cargo logs分别342,751／839,226 bytes，与包含末尾gate JSON的runtime stdout区别保存。最后一轮完整执行仍是失败；不用7,748通过抹掉4个失败，不与旧轮相加为独立覆盖。Grok重复诊断与strace是不同运行，亦不计入这张表的命令总数。
+
+## 首轮完整扩展矩阵与 SmartTurn C API 原件
+
+[expanded-and-reference-pin-r1.tar.xz](expanded-and-reference-pin-r1.tar.xz) 包含 **112 个原件、19,978,439 bytes**，另有39,183-byte原manifest，所以archive为113个members、20,017,622 uncompressed bytes。Archive为 **1,071,708 bytes**，SHA256 `a3442d8ccaa03134c124c58893102635346a7541d64eb3a9c13395c30cc74982`。包内保存普通examples build、原all-features/all-targets、唯一同配置no-fail-fast、strict Clippy、原fmt-all与owned格式，以及C1的实际脚本／输出／原source maps。此前已交付的default补充不在此包重复保存；C2是后续独立运行。
+
+Root核对112个原件的size／SHA、archive内manifest的原字节和14份完整source maps的canonical摘要。原两条测试命令分别219／731个harness，每块恰好有一个terminal summary，独立结果与另一个统计实现一致。实际command elapsed来自各自gate start/end，不用wrapper或控制RPC等待替代。[原manifest](expanded-and-reference-pin-r1.original-manifest.json) · [交付记录](expanded-and-reference-pin-r1.delivery.json) · [Root逐命令核验](expanded-and-reference-pin-r1.root-verification.json)
+
+| 阶段（source272671／Rust1.99.0） | Exit | Command秒数 | Harnesses | Pass／fail／ignored |
+| --- | ---: | ---: | ---: | ---: |
+| all-features普通examples build | 0 | 193.519372 | 不适用 | 0 runtime tests |
+| 原all-features/all-targets | 101 | 925.479220 | 219 | 2175／15／0 |
+| 同配置no-fail-fast | 101 | 482.644572 | 731 | 8839／24／63 |
+| strict all-features/all-targets Clippy | 101 | 123.712347 | 不适用 | 不计测试 |
+| 原fmt-all | 1 | 16.610195 | 不适用 | 不计测试 |
+| 精确62个owned members格式 | 0 | 14.473070 | 不适用 | 不计测试 |
+
+原扩展命令在bot_audio_response的1pass／15fail停止。补充完整执行后还有bot_audio_smart_turn 8/1、user_speech 15/1、Grok app_cli 10/2、cartesia_turns_eager 33/1、SmartTurn pipeline 0/2、VAD lib 17/1、SmartTurn analyzer 2/1，共8个失败targets、24个失败case。原始失败、修补fixture和新source复验保持不同身份。
+
+SmartTurn C1直接使用三份原golden feature输入同一ORT库；全部图优化时三份概率均未过原1e-5。C2分别关闭／仅启用基础图优化，每级三次Run，两级的三项输出分别bit-exact相等，但speech／tone仍失败，silence才与reference精确相同。各probe执行exit0，与comparison wrapper exit1区别记录；无Cargo或参数扫描。C2并未重跑C1的ALL。[原C1](smart-turn/ort-reference-pin-r1/reference.json) · [原C2](smart-turn/ort-levels-pin-r2/levels.json) · [Root对三份stdout的独立核对](smart-turn/c-api-root-verification.json)
+
 ## 中文诊断的原结果
 
 [原 JSON 行的独立提取](chinese-patch-diagnostic-observations.json) 保留8条转写和脚本输出的metric行；原始二进制log在archive中。完整原log含native输出交错形成的非UTF-8字节，保存时没有转码或replacement写回。提取仅按完整JSON行解析。

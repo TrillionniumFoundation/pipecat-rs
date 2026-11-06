@@ -1,0 +1,112 @@
+{
+  "schema": "controlled-cloexec-inheritance-v1",
+  "scope": "Single standalone local mechanism experiment. Not a Grok test, Tokio/Rust qualification, historical failure reproduction, or proof about the traced child696897.",
+  "argv": [
+    "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-spawn-gate-candidate-r1/controlled_inheritance.py",
+    "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-spawn-gate-candidate-r1/controlled-run-r1/experiment"
+  ],
+  "python": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+  "python_version": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "python_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "script_sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+  "kernel": "6.18.57",
+  "uid": 1000,
+  "parent_pid": 6,
+  "start_unix": 1793981243.9281757,
+  "phase": "completed",
+  "events": [
+    {
+      "kind": "parent_original_listener",
+      "unix": 1793981243.9286494,
+      "data": {
+        "endpoint": [
+          "127.0.0.1",
+          46473
+        ],
+        "fd": 3,
+        "pid": 6,
+        "inode": 601085,
+        "device": 8,
+        "mode": 49663,
+        "fd_flags": 1,
+        "link": "socket:[601085]"
+      }
+    },
+    {
+      "kind": "child_direct_pre_exec_fstat",
+      "unix": 1793981243.930361,
+      "data": {
+        "original_fd_state": {
+          "device": 8,
+          "fd": 3,
+          "fd_flags": 1,
+          "inode": 601085,
+          "link": "socket:[601085]",
+          "mode": 49663,
+          "pid": 7
+        },
+        "phase": "pre_exec_held"
+      }
+    },
+    {
+      "kind": "parent_direct_child_fd_after_parent_close",
+      "unix": 1793981243.9307346,
+      "data": {
+        "owned_child_pid": 7,
+        "fd": 3,
+        "inode": 601085,
+        "device": 8,
+        "link": "socket:[601085]"
+      }
+    },
+    {
+      "kind": "single_bind_while_child_holds_original_inode",
+      "unix": 1793981243.931374,
+      "data": {
+        "success": false,
+        "errno": 98,
+        "error": "[Errno 98] Address already in use"
+      }
+    },
+    {
+      "kind": "same_child_post_exec_user_code_ack",
+      "unix": 1793981243.9708834,
+      "data": {
+        "original_fd_state": {
+          "errno": 9,
+          "error": "[Errno 9] Bad file descriptor",
+          "fd": 3,
+          "pid": 7
+        },
+        "phase": "post_exec_alive"
+      }
+    },
+    {
+      "kind": "child_still_alive_before_post_exec_bind",
+      "unix": 1793981243.9712706,
+      "data": {
+        "pid": 7,
+        "waitpid_WNOHANG": 0
+      }
+    },
+    {
+      "kind": "single_bind_after_exec_while_same_child_is_alive",
+      "unix": 1793981243.971956,
+      "data": {
+        "success": true,
+        "endpoint": [
+          "127.0.0.1",
+          46473
+        ],
+        "inode": 607234
+      }
+    }
+  ],
+  "signal_requests": [],
+  "child_reaped": true,
+  "exit_code": 0,
+  "child_pid": 7,
+  "child_wait_status": 0,
+  "end_unix": 1793981243.9824975,
+  "script_sha256_after": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5"
+}

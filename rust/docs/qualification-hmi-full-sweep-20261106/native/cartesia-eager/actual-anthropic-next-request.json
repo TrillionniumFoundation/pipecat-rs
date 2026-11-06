@@ -1,0 +1,39 @@
+{
+  "max_tokens": 4096,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "same signed turn",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "signature": "live-B-opaque+/bytes==",
+          "thinking": "live-B closed\n思考",
+          "type": "thinking"
+        },
+        {
+          "text": "live-B Ready.",
+          "type": "text"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "text": ".",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "loopback",
+  "stream": true
+}

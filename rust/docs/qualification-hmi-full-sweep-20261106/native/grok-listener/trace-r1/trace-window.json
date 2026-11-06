@@ -1,0 +1,348 @@
+{
+  "schema": "pipecat-grok-strace-window-v1",
+  "head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+  "target": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin",
+  "source_file_sha256": "5f5d2cba7774aa4644cd7dd6dc67d86daf256223c78e65761705f59b67bf953f",
+  "scope": "Diagnostic only. Original r3 and diagnostic-r2 failures remain retained and unattributed by this run.",
+  "limits": {
+    "rounds": 10,
+    "window_seconds_including_cleanup": 90,
+    "binding_seconds": 120,
+    "internal_job_seconds": 240,
+    "outer_job_seconds": 270,
+    "trace_bytes_total": 33554432,
+    "round_stdout_bytes": 1048576,
+    "round_stderr_bytes": 262144
+  },
+  "resource_budget": {
+    "cpu_quota_percent": 800,
+    "memory_max_bytes": 34359738368,
+    "cargo_build_jobs": 8,
+    "nice": 10
+  },
+  "parallelism": "Original complete 12-case harness, no selector or test-threads override.",
+  "capture_scope": "Lifecycle syscalls only, no send/recv payloads. -f follows owned children; -yy decodes available FD information.",
+  "limitations": [
+    "Tracing and FIFO capture perturb scheduling; a traced success does not clear an untraced failure.",
+    "Implicit client local ports may be absent unless a later call or FD annotation exposes them.",
+    "Unrelated processes are outside the trace. Missing decoded endpoints or later absence are not proof of historical absence.",
+    "Signal requests and reaping the tracer leader do not prove every descendant was joined."
+  ],
+  "phase": "completed",
+  "start_unix": 1793979749.1155918,
+  "commands": [
+    {
+      "name": "binding",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--offline",
+        "--no-run",
+        "--message-format=json-render-diagnostics"
+      ],
+      "start_unix": 1793979749.9965258,
+      "timeout_seconds": 120,
+      "phase": "completed",
+      "signal_requests": [],
+      "leader_pid": 696738,
+      "outputs": {
+        "stdout": {
+          "bytes_read": 1245013,
+          "bytes_retained": 1245013,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/binding.stdout.log",
+          "sha256": "83a44f193d9a45bf75e317f9559452c6846e0ba19d2bbef87b1a5523c2033c2b",
+          "bytes": 1245013
+        },
+        "stderr": {
+          "bytes_read": 9322,
+          "bytes_retained": 9322,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/binding.stderr.log",
+          "sha256": "2e3006e38cadbee94565e4f8f2eb7f2c1879d3d1344417fc18c120c0f92ee05e",
+          "bytes": 9322
+        }
+      },
+      "leader_reaped": true,
+      "leader_exit_code": 0,
+      "process_group_present_at_final_probe": false,
+      "elapsed_seconds": 1.709936483995989,
+      "cleanup_scope": "Only owned process-group signal requests, tracer/command leader reaping, and a bounded final group-existence probe are reported; no claim of joining every descendant.",
+      "exit_code": 0
+    },
+    {
+      "name": "selection",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--list"
+      ],
+      "start_unix": 1793979751.9479823,
+      "timeout_seconds": 10,
+      "phase": "completed",
+      "signal_requests": [],
+      "leader_pid": 696794,
+      "outputs": {
+        "stdout": {
+          "bytes_read": 915,
+          "bytes_retained": 915,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/selection.stdout.log",
+          "sha256": "60fd293fbce2f8d56534ab76f1769381fd85554e0b81e8a0e9fb960529140bcb",
+          "bytes": 915
+        },
+        "stderr": {
+          "bytes_read": 0,
+          "bytes_retained": 0,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/selection.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "leader_reaped": true,
+      "leader_exit_code": 0,
+      "process_group_present_at_final_probe": false,
+      "elapsed_seconds": 0.0030853128992021084,
+      "cleanup_scope": "Only owned process-group signal requests, tracer/command leader reaping, and a bounded final group-existence probe are reported; no claim of joining every descendant.",
+      "exit_code": 0
+    }
+  ],
+  "rounds": [
+    {
+      "name": "round-01",
+      "argv": [
+        "/usr/bin/strace",
+        "-f",
+        "-yy",
+        "-ttt",
+        "-T",
+        "-s",
+        "96",
+        "-I",
+        "1",
+        "-e",
+        "trace=socket,socketpair,setsockopt,getsockopt,bind,listen,connect,accept,accept4,getsockname,getpeername,shutdown,close,close_range,dup,dup2,dup3,fcntl,%process",
+        "-o",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/round-01.fifo",
+        "--kill-on-exit",
+        "--",
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "--nocapture"
+      ],
+      "start_unix": 1793979751.9535267,
+      "timeout_seconds": 89.99945547687821,
+      "phase": "completed",
+      "signal_requests": [],
+      "round": 1,
+      "outputs": {
+        "trace": {
+          "bytes_read": 310585,
+          "bytes_retained": 310585,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/round-01.trace.trace",
+          "sha256": "81737afec1129dbd9f1ba9dd8c8b79304292b1e5463f9e78ebf285b5664ca3c2",
+          "bytes": 310585
+        },
+        "stdout": {
+          "bytes_read": 1192,
+          "bytes_retained": 1192,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/round-01.stdout.log",
+          "sha256": "12a1e1e0edfb90282cb1291e730f1128d3016df70ca5f7c5b441abd52c85db92",
+          "bytes": 1192
+        },
+        "stderr": {
+          "bytes_read": 2730,
+          "bytes_retained": 2730,
+          "bytes_discarded": 0,
+          "eof": true,
+          "file": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/grok-strace-pin-r1/round-01.stderr.log",
+          "sha256": "22b0186211dbc3bb78aae7ecebdbc42211181ca61961a5fc8b5ed1875590ee58",
+          "bytes": 2730
+        }
+      },
+      "leader_pid": 696795,
+      "leader_reaped": true,
+      "leader_exit_code": 101,
+      "process_group_present_at_final_probe": false,
+      "elapsed_seconds": 2.895118571119383,
+      "cleanup_scope": "Only owned process-group signal requests, tracer/command leader reaping, and a bounded final group-existence probe are reported; no claim of joining every descendant.",
+      "exit_code": 101,
+      "complete_unfiltered_success": false,
+      "trace_nonempty": true
+    }
+  ],
+  "trace_bytes_retained_total": 310585,
+  "source_before_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+  "strace": {
+    "path": "/usr/bin/strace",
+    "sha256_before": "28f957c227012de0b18d1bd7fff2d396cb693ea60ed8013be68de071e84b5001",
+    "version": "strace -- version 6.8\nCopyright (c) 1991-2024 The strace developers <https://strace.io>.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\nOptional features enabled: stack-trace=libunwind stack-demangle m32-mpers mx32-mpers\n"
+  },
+  "environment_overrides": {
+    "CARGO_HOME": "/home/qian-qi/.cargo",
+    "CARGO_BUILD_JOBS": "8",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUSTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+    "RUSTDOC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+    "RUSTUP_TOOLCHAIN": "1.99.0",
+    "PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.local/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.cargo/bin:/home/qian-qi/.local/bin:/opt/gradle/current/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.1:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin",
+    "PIPECAT_ONNX_RUNTIME": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "ORT_DYLIB_PATH": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "PIPECAT_SILERO_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/vad/data/silero_vad.onnx",
+    "PIPECAT_SMART_TURN_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+    "CC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+    "CXX": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang++",
+    "LD_LIBRARY_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LIBCLANG_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LK_CUSTOM_WEBRTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/native-ranged-r1/linux-x64-release",
+    "CARGO_TARGET_DIR": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin"
+  },
+  "effective_build_environment": {
+    "CARGO_HOME": "/home/qian-qi/.cargo",
+    "CARGO_TARGET_DIR": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin",
+    "CARGO_BUILD_JOBS": "8",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUSTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+    "RUSTDOC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+    "RUSTUP_TOOLCHAIN": "1.99.0",
+    "CC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+    "CXX": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang++",
+    "LIBCLANG_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LD_LIBRARY_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LK_CUSTOM_WEBRTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/native-ranged-r1/linux-x64-release",
+    "PIPECAT_ONNX_RUNTIME": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "ORT_DYLIB_PATH": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "PIPECAT_SILERO_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/vad/data/silero_vad.onnx",
+    "PIPECAT_SMART_TURN_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx"
+  },
+  "resources_before": {
+    "disk_free_bytes": 79808991232
+  },
+  "r4_app_cli_running_lines": [
+    "     Running tests/app_cli.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd)"
+  ],
+  "r4_log_sha256": "8153c08d39a751db11a8903bd7c597a0674fc4cee2d171f966807d5914e7bac9",
+  "old_pair_matches_after_r4": false,
+  "r4_ran_old_harness_path": false,
+  "binding_mode": "Fresh same-workspace/default no-run Cargo JSON; no package-only feature de-unification.",
+  "artifacts": {
+    "normal": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm",
+      "sha256_before": "e998bc223a8b49a1871d8737c1861c9b3e267e98e41b7def7fb97fb8a4d4895f",
+      "bytes": 47897800,
+      "compiler_artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime#0.1.0",
+        "manifest_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "grok_pcm",
+          "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/src/bin/grok_pcm.rs",
+          "edition": "2021",
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [],
+        "filenames": [
+          "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm"
+        ],
+        "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/grok_pcm",
+        "fresh": true
+      },
+      "sha256_after": "e998bc223a8b49a1871d8737c1861c9b3e267e98e41b7def7fb97fb8a4d4895f",
+      "unchanged": true
+    },
+    "harness": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+      "sha256_before": "15c9bb115742babb15b80260c549f1bf0aae816b6455f3acad33cdfa1a4e22ef",
+      "bytes": 7517336,
+      "compiler_artifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime#0.1.0",
+        "manifest_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/Cargo.toml",
+        "target": {
+          "kind": [
+            "test"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "app_cli",
+          "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+          "edition": "2021",
+          "doc": false,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": true
+        },
+        "features": [],
+        "filenames": [
+          "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd"
+        ],
+        "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd",
+        "fresh": true
+      },
+      "sha256_after": "15c9bb115742babb15b80260c549f1bf0aae816b6455f3acad33cdfa1a4e22ef",
+      "unchanged": true
+    }
+  },
+  "normal_path_embedded_in_harness": true,
+  "case_names": [
+    "actual_binary_absent_required_speech_times_out_cancels_and_retains_partial",
+    "actual_binary_explicit_run_records_fragmented_pcm_and_joins",
+    "actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join",
+    "actual_binary_final_echo_requires_assistant_continuation_and_generated_speech",
+    "actual_binary_output_exhaustion_retains_bounded_partial_bytes",
+    "actual_binary_output_path_swap_does_not_write_replacement",
+    "actual_binary_readiness_provider_and_protocol_failures_are_sanitized_partial",
+    "actual_binary_server_vad_does_not_invent_explicit_run_or_playback",
+    "actual_binary_server_vad_rapid_burst_preserves_speech_and_joins",
+    "aligned_regular_bounded_input_and_create_new_paths_preflight_before_connection",
+    "default_help_and_check_are_credential_free_and_effect_free",
+    "invalid_arguments_and_explicit_configuration_have_no_effects"
+  ],
+  "window_start_unix": 1793979751.952944,
+  "stop_reason": "first test, tracer, capture or cleanup failure; no replacement attempt",
+  "window_elapsed_seconds": 2.9015729380771518,
+  "execution_exit_code": 101,
+  "source_after_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+  "source_unchanged": true,
+  "status_after": "",
+  "strace_sha256_after": "28f957c227012de0b18d1bd7fff2d396cb693ea60ed8013be68de071e84b5001",
+  "exit_code": 101,
+  "end_unix": 1793979755.45103,
+  "attempted_rounds": 1,
+  "completed_rounds": 1
+}

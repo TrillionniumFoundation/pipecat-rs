@@ -1,0 +1,21 @@
+{
+  "source_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/expanded-and-reference-pin-r1/originals/evidence/all-features-all-targets-no-fail-fast-pin-r1/command.log",
+  "source_bytes": 1708509,
+  "source_sha256": "f451a13a8cdbc23579e1bbcd6a90602a3538d2324f3f60237005755026f0a2a8",
+  "slices": [
+    {
+      "target": "user_speech",
+      "bytes": 2922,
+      "sha256": "1d72ff6fd1eacf4f4e7ad9c6aaeff1cd7d93412d4c629d4d79776004d58961d1",
+      "start_byte": 981165,
+      "end_byte_exclusive": 984087
+    },
+    {
+      "target": "bot_audio_smart_turn",
+      "bytes": 1838,
+      "sha256": "3ca07d93a572aea5cb60c70b57b1510e3a6cd6918c3876e8ddfb976c3459eaa8",
+      "start_byte": 957187,
+      "end_byte_exclusive": 959025
+    }
+  ]
+}

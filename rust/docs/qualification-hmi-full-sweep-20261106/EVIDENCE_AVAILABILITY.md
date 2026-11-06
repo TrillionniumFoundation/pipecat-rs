@@ -6,6 +6,8 @@
 
 第四次短暂 transport／executor-key 中断后，原文件仍可读。以中断前保留的完整manifest重新核对71个browser候选证据／文档的size、SHA256与Git blob SHA，全部一致；另核主报告、AISHELL探针说明和原标注字节。它们当时是未提交候选文件，不误写成272671已包含这些68份新browser证据。没有为此重建71文件或重放desktop job，也不将此次可见性推及未观测路径。[第四次恢复收据](fourth-entrance-recovery.json)
 
+第五次入口于15:42:32 UTC检查时原checkout／workspace-evidence不再可见。15:44:27 UTC从已发布52243a的新浅克隆恢复后，95个checkpoint文件逐一核对先前保留的字节长度、SHA256与Git blob，全数相同；root README仍为0字节，Grok源码诊断摘要不变。原remote jobs没有重放。后续尚未提交的报告分析重新按观测记录撰写，并不冒称恢复原raw；原始证据只从原desktop文件、持久保存的完整内容或核实Git blob取回。这是当前入口可见性记录，不证明旧目录永久丢失。[第五次恢复收据](fifth-entrance-recovery.json)
+
 远端 durable job 具有自己的原 host/job ID。当前本地目录消失没有取消或重新执行远端作业；对其权威状态、原文件和完整输出分别读取。若重新执行某项 gate，使用新目录、专属 target 和新运行身份；新结果不冒充旧 raw。
 
 | 材料 | 当前可核对范围 | 不作出的替代 |

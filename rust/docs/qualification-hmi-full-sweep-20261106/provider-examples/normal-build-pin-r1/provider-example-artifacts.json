@@ -1,0 +1,136 @@
+{
+  "head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+    "build",
+    "--workspace",
+    "--all-features",
+    "--examples",
+    "--locked",
+    "--message-format=json-render-diagnostics"
+  ],
+  "artifact_profile_test": false,
+  "artifacts": [
+    {
+      "name": "aws_nova_sonic_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-aws-nova-sonic#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "aws_nova_sonic_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-aws-nova-sonic/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": false,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/aws_nova_sonic_pcm_session",
+      "bytes": 49430616,
+      "sha256": "c691ded85f7d554e3236ba83f1b8a58d47c3c16884544ccefc34722b06e812ee"
+    },
+    {
+      "name": "azure_realtime_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-realtime#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "azure_realtime_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-realtime/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": false,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/azure_realtime_pcm_session",
+      "bytes": 48070928,
+      "sha256": "cd4e90827240de7535abffb0b340dbeda59f1ffea2b6275b60c06912545f10b0"
+    },
+    {
+      "name": "azure_voice_live_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-voice-live#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "azure_voice_live_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-azure-voice-live/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": false,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/azure_voice_live_pcm_session",
+      "bytes": 44848488,
+      "sha256": "0aaf5a60f65246d603c26294667ea5c7e4b67fdf9034fb4ade52c09b53d00675"
+    },
+    {
+      "name": "inworld_realtime_pcm_session",
+      "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-inworld-realtime#0.1.0",
+      "target": {
+        "kind": [
+          "example"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "inworld_realtime_pcm_session",
+        "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-inworld-realtime/examples/pcm_session.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": false
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": false,
+      "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/inworld_realtime_pcm_session",
+      "bytes": 45158072,
+      "sha256": "1365eede7bdb62ab1597cb24f14aec8de7bb587a8008e94259acf3e05931625b"
+    }
+  ]
+}

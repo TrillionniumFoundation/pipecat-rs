@@ -1,0 +1,28 @@
+     Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-1ae35dd7b6b312e0)
+
+running 8 tests
+test smart_turn::tests::endpoint_window_pads_front_and_keeps_last_eight_seconds ... ok
+test analyzer::tests::cancellation_stops_between_fixed_size_inference_windows ... ok
+test smart_turn::tests::whisper_matches_python_speech_features ... ok
+test smart_turn::tests::whisper_matches_python_tone_features ... ok
+test smart_turn::tests::empty_audio_has_silence_features ... ok
+test smart_turn::tests::whisper_matches_python_silence_features ... ok
+test smart_turn::tests::smart_turn_real_model_matches_python_probabilities ... FAILED
+test smart_turn::tests::feature_function_pads_end_and_keeps_first_eight_seconds ... ok
+
+failures:
+
+---- smart_turn::tests::smart_turn_real_model_matches_python_probabilities stdout ----
+speech: native=0.9685282, Python=0.9823202
+
+thread 'smart_turn::tests::smart_turn_real_model_matches_python_probabilities' (663465) panicked at crates/pipecat-vad/src/smart_turn.rs:501:13:
+speech: actual=0.9685282, expected=0.9823202
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    smart_turn::tests::smart_turn_real_model_matches_python_probabilities
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+error: test failed, to rerun pass `-p pipecat-vad --lib`

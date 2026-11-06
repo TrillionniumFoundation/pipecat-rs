@@ -1,0 +1,10 @@
+{
+  "scope": "Exact byte slice of preserved expanded no-fail-fast log; no rerun.",
+  "source_log": "/workspace/scratch/f9f576cc6c66/workspace-evidence/expanded-and-reference-pin-r1/originals/evidence/all-features-all-targets-no-fail-fast-pin-r1/command.log",
+  "source_bytes": 1708509,
+  "source_sha256": "f451a13a8cdbc23579e1bbcd6a90602a3538d2324f3f60237005755026f0a2a8",
+  "start_byte": 1538673,
+  "end_byte_exclusive": 1543440,
+  "slice_bytes": 4767,
+  "slice_sha256": "f0f294a6f4358aabef125cf30738c172135b06a41412518ff0f9f51cabfdb232"
+}

@@ -1,0 +1,343 @@
+{
+  "schema": "pipecat-independent-smart-turn-fixed-feature-review-v1",
+  "review_scope": "Read-only audit of existing reports and stdout. No model, Cargo, native process, provider or device executed by this review.",
+  "native_source": {
+    "head": "272671b95297313d24db921eceda8e95f3a8d545",
+    "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+    "unchanged_in_both_diagnostics": true
+  },
+  "original_records": {
+    "all": {
+      "job_id": "1a1b1a8ce72-fc05-7a20",
+      "report": {
+        "path": "smart-turn/ort-reference-pin-r1/reference.json",
+        "bytes": 27385,
+        "sha256": "7c0720620aaea61615e1a50795ad84118c6881563198e4d42534f9e565c67b4e"
+      },
+      "native_exit": 0,
+      "wrapper_comparison_exit": 1
+    },
+    "two_levels": {
+      "job_id": "1a1b1b8836c-fc05-7a77",
+      "report": {
+        "path": "smart-turn/ort-levels-pin-r2/levels.json",
+        "bytes": 90134,
+        "sha256": "dd3c6c9a12efa88b451d68839bae202fd89bf2e2f53eaaa648562009358810e8"
+      },
+      "status_record": {
+        "path": "smart-turn/ort-levels-pin-r2/runtime-status.json",
+        "bytes": 951,
+        "sha256": "a9c72d9bb021ded6030bb64a8db09b2ea41b60f61f1dc5d285b957c13c23097d"
+      },
+      "state": "failed",
+      "runtime_exit": 1,
+      "output_complete": true,
+      "output_durable": true,
+      "timed_out": false
+    }
+  },
+  "audit_checks": {
+    "report_hashes": true,
+    "native_stdout_records": [
+      {
+        "level": "ORT_ENABLE_ALL",
+        "raw": {
+          "path": "smart-turn/ort-reference-pin-r1/probe.stdout.log",
+          "bytes": 1814,
+          "sha256": "09afb06777afba21d8055a6ecb08712ab6a077e2b6829382f12ef5d9837a1780"
+        },
+        "jsonl_records": 8,
+        "equals_embedded_records": true,
+        "native_exit": 0,
+        "comparison_exit": 1,
+        "cleanup": {
+          "kind": "cleanup",
+          "release_calls_returned": true,
+          "completed_cases": 3,
+          "exit_code": 0
+        }
+      },
+      {
+        "level": "ORT_DISABLE_ALL",
+        "raw": {
+          "path": "smart-turn/ort-levels-pin-r2/disable-probe.stdout.log",
+          "bytes": 1816,
+          "sha256": "867b32281f9f54a6057b362dbdd7a121b954b23ce4a7ae5ac43c2673ccdae451"
+        },
+        "jsonl_records": 8,
+        "equals_embedded_records": true,
+        "native_exit": 0,
+        "comparison_exit": 1,
+        "cleanup": {
+          "kind": "cleanup",
+          "release_calls_returned": true,
+          "completed_cases": 3,
+          "exit_code": 0
+        }
+      },
+      {
+        "level": "ORT_ENABLE_BASIC",
+        "raw": {
+          "path": "smart-turn/ort-levels-pin-r2/basic-probe.stdout.log",
+          "bytes": 1817,
+          "sha256": "1f8aa0ba6e6040afb7702b2b98f4cab73e4756a87b9101ca646de9c3ff10502b"
+        },
+        "jsonl_records": 8,
+        "equals_embedded_records": true,
+        "native_exit": 0,
+        "comparison_exit": 1,
+        "cleanup": {
+          "kind": "cleanup",
+          "release_calls_returned": true,
+          "completed_cases": 3,
+          "exit_code": 0
+        }
+      }
+    ],
+    "float32_bits_and_deltas_independently_recomputed": true,
+    "identities": [
+      {
+        "scope": "all-r1",
+        "existing_input_entries": 14,
+        "existing_inputs_unchanged": true,
+        "new_compiled_binary_entries": 0,
+        "new_binaries_bound_after_build_before_execution_and_unchanged": true
+      },
+      {
+        "scope": "levels-r2",
+        "existing_input_entries": 19,
+        "existing_inputs_unchanged": true,
+        "new_compiled_binary_entries": 0,
+        "new_binaries_bound_after_build_before_execution_and_unchanged": true
+      },
+      {
+        "scope": "disable",
+        "existing_input_entries": 17,
+        "existing_inputs_unchanged": true,
+        "new_compiled_binary_entries": 1,
+        "new_binaries_bound_after_build_before_execution_and_unchanged": true
+      },
+      {
+        "scope": "basic",
+        "existing_input_entries": 18,
+        "existing_inputs_unchanged": true,
+        "new_compiled_binary_entries": 1,
+        "new_binaries_bound_after_build_before_execution_and_unchanged": true
+      }
+    ],
+    "command_exits_and_actual_leader_reap_checked": true,
+    "cleanup_limit": "Actual leader reap and a non-atomic final absent PGID probe do not prove every descendant was individually joined.",
+    "c2_source_variant_contract": "Only the graph-optimization enum and matching JSON label changed: exactly two token replacements in each frozen C source.",
+    "all_reused_without_rerun": true,
+    "model_calls": {
+      "r1_all": 3,
+      "r2_disable": 3,
+      "r2_basic": 3
+    },
+    "combined_test_pass_count": null
+  },
+  "runtime": {
+    "kind": "runtime",
+    "api_requested": 20,
+    "header_api": 21,
+    "version": "1.21.0",
+    "loaded_filename": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "build_info": "ORT Build Info: git-branch=HEAD, git-commit-id=e0b66cad28, build type=Release, cmake cxx flags: -DNDEBUG -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fstack-protector-strong -O3 -pipe -fstack-clash-protection -fcf-protection -ffunction-sections -fdata-sections -DCPUINFO_SUPPORTED"
+  },
+  "fixed_session_except_level": {
+    "kind": "session",
+    "execution": "ORT_SEQUENTIAL",
+    "inter_threads": 1,
+    "intra_threads": 1,
+    "memory": "Cpu/Arena/CPUInput",
+    "telemetry": false,
+    "explicit_providers": []
+  },
+  "model_io": [
+    {
+      "kind": "model_input",
+      "name": "input_features",
+      "dtype": 1,
+      "shape": [
+        -1,
+        80,
+        800
+      ]
+    },
+    {
+      "kind": "model_output",
+      "name": "logits",
+      "dtype": 1,
+      "shape": [
+        -1,
+        1
+      ]
+    }
+  ],
+  "immutable_inputs": [
+    {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "resolved": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "bytes": 20558800,
+      "sha256": "3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+      "bytes": 8679182,
+      "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/onnxruntime_c_api.h",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+      "bytes": 256000,
+      "sha256": "618645fb485f531de515aa83b13627cb3d19a5cb8a0d1faf617c99e76fb8b575"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.probability.txt",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.probability.txt",
+      "bytes": 20,
+      "sha256": "17f53fa2fd6586f8ccca5f8a576e972c8d0631ab0efcf6d84cc5747369940783"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+      "bytes": 256000,
+      "sha256": "f838341ea22fe1aac684c6eabfc2ccd8f38330b2dbca1220985963d4d90dedc5"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.probability.txt",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.probability.txt",
+      "bytes": 21,
+      "sha256": "3c2b2ba20fc2d02511c3ab4371e12c03d2e1d6ddb06daa6e618b438305d2f4de"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32",
+      "bytes": 256000,
+      "sha256": "c4a1d90bbbdc1c49cf89b8f73360019b1b0fe01ae48a9dfd6fc2c4a3228b8859"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.probability.txt",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.probability.txt",
+      "bytes": 20,
+      "sha256": "7ec5e2f9ea54c1b8aaf8701afb68b5742a99dce27ac5546adb9e06646cc24a8c"
+    }
+  ],
+  "original_tolerance": 1e-05,
+  "observations": {
+    "ORT_ENABLE_ALL": [
+      {
+        "case": "speech",
+        "actual": 0.9685282111167908,
+        "f32_bits": "3f77f177",
+        "expected_f32": 0.9823201894760132,
+        "signed_delta": -0.013791978359222412,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "tone",
+        "actual": 0.28783851861953735,
+        "f32_bits": "3e935f92",
+        "expected_f32": 0.09577557444572449,
+        "signed_delta": 0.19206294417381287,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "silence",
+        "actual": 0.9880069494247437,
+        "f32_bits": "3f7cee06",
+        "expected_f32": 0.9870367050170898,
+        "signed_delta": 0.0009702444076538086,
+        "within_original_direct_tolerance": false
+      }
+    ],
+    "ORT_DISABLE_ALL": [
+      {
+        "case": "speech",
+        "actual": 0.9729918241500854,
+        "f32_bits": "3f7915fe",
+        "expected_f32": 0.9823201894760132,
+        "signed_delta": -0.009328365325927734,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "tone",
+        "actual": 0.06667384505271912,
+        "f32_bits": "3d888c4c",
+        "expected_f32": 0.09577557444572449,
+        "signed_delta": -0.02910172939300537,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "silence",
+        "actual": 0.9870367050170898,
+        "f32_bits": "3f7cae70",
+        "expected_f32": 0.9870367050170898,
+        "signed_delta": 0.0,
+        "within_original_direct_tolerance": true
+      }
+    ],
+    "ORT_ENABLE_BASIC": [
+      {
+        "case": "speech",
+        "actual": 0.9729918241500854,
+        "f32_bits": "3f7915fe",
+        "expected_f32": 0.9823201894760132,
+        "signed_delta": -0.009328365325927734,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "tone",
+        "actual": 0.06667384505271912,
+        "f32_bits": "3d888c4c",
+        "expected_f32": 0.09577557444572449,
+        "signed_delta": -0.02910172939300537,
+        "within_original_direct_tolerance": false
+      },
+      {
+        "case": "silence",
+        "actual": 0.9870367050170898,
+        "f32_bits": "3f7cae70",
+        "expected_f32": 0.9870367050170898,
+        "signed_delta": 0.0,
+        "within_original_direct_tolerance": true
+      }
+    ]
+  },
+  "conclusions": [
+    "Direct C API 20 with the same recorded ORT library, model and golden feature bytes reproduces the Rust speech result as the same float32. The original Rust log printed 0.9685282, not hexadecimal bits.",
+    "C1 ALL misses all three references. C2 DISABLE_ALL and BASIC are bit-exact equal for all three cases; silence matches the oracle, while speech and tone still miss it.",
+    "Selected optimization level affects these outputs in this immutable recorded environment. Neither lower level restores the complete probability contract.",
+    "The speech discrepancy does not require the Rust frontend or turn aggregator. This does not identify a responsible graph transform, kernel, build difference or CPU cause."
+  ],
+  "limitations": [
+    "The original Rust direct test stopped at speech. C1 tone and silence are independent frozen-feature observations, not recovered Rust PCM probabilities.",
+    "EXTENDED and individual-transform ablations were not run. No CPU or ISA flags were changed.",
+    "ORT_DISABLE_ALL still permits required transformations and execution-provider processing; it does not mean no graph transformation occurs.",
+    "Native exit zero establishes calls and recorded cleanup, not probability qualification. Comparison and runtime failures remain failures.",
+    "The original model, golden probabilities, tolerance, Rust production session options and previous failures remain unchanged.",
+    "Oracle metadata names NumPy 2.3.5 and ONNX Runtime 1.21.0, but lacks the original runtime library digest, build and CPU identity. Version equality does not reconstruct the original runtime."
+  ],
+  "next_discriminating_input_if_work_continues": {
+    "action": "Recover the actual original oracle runtime/build identity if available, then compare the same immutable model and golden features under that identified runtime. If unavailable, retain the missing input explicitly.",
+    "executed": false,
+    "not_authorized_by_this_receipt": "New runtime downloads, product-option changes, golden changes or further parameter trials."
+  },
+  "primary_source_scope": {
+    "onnxruntime_ref": "v1.21.0",
+    "graph_optimization_api_blob": "7ef23d6c9e895c511039f38ef913a70180d72dba",
+    "inference_session_blob": "a1903898ea7f0e21e5c3c8a2cb4b5a0321c56f52",
+    "graph_transformer_utils_blob": "9684394da0520f75eae4a99b925ab94cdca95cf5",
+    "oracle_metadata_sha256": "7e68a8cdc068f38791c6c5dcb67b2df68ec25db6db951ddfc305b75fa8a93e64",
+    "fixture_generator_sha256": "d8a1ce1a642987a82f5bdcc584bcf5bc852f85c578c78c7a12b2d9a8c608ada8",
+    "golden_semantics": "Generator front-pads/takes final 128000 PCM samples before feature extraction, writes those float32 features and immediately runs the same features. Direct feature tests apply that same endpoint window."
+  }
+}

@@ -26,3 +26,9 @@
 最终扩展矩阵必须先执行 `cargo build --workspace --all-features --examples --locked --message-format=json-render-diagnostics`，记录 Cargo compiler-artifact 的 package/target/features/profile.test=false/executable 和实际 SHA，再跑 all-features/all-targets 测试，并复核普通文件哈希。这是产物身份准入，不是改动产品断言。
 
 探针原脚本 blob 为 `381c17904fd9648a893a65566450fb58a9718551`，原打印 stdout blob 为 `9da1951a2e687b4e33da1798918466aa080ea9cc`。临时 Cargo JSONL/stderr 原文件当前不可访问，未重新拼装为原记录；最终真实构建会生成独立的新 compiler-artifact 记录。
+
+## 精确 pin 的实际普通产物构建
+
+源码272671／tree94424f、Rust1.99.0的上述原build命令已实际完成，command及wrapper均exit0，193.519372秒，源前后canonical摘要均为`ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384`。这是构建结果，测试执行数为0；随后扩展测试有独立记录。
+
+[原gate收据](normal-build-pin-r1/gate.json)和[四个provider普通产物清单](normal-build-pin-r1/provider-example-artifacts.json)保留实际package_id、example kind、source path、features、profile.test=false、executable、字节数及完整SHA。四个不同路径分别为49,430,616、48,070,928、44,848,488、45,158,072 bytes；清单文件SHA256是`41df11373085398c9dc40f39197bb6d983ac7f3d43dede4b1ae917bd294ac223`。这次所有四个compiler-artifact的fresh均为false，不是test harness或旧文件存在性推断。扩展阶段结束时的前后产物核验仍单独结算。

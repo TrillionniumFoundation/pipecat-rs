@@ -1,0 +1,112 @@
+{
+  "schema": "pipecat-root-smart-turn-c-comparison-v1",
+  "created_utc": "2026-11-06T16:43:19.105678+00:00",
+  "source_head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "c1_report_sha256": "7c0720620aaea61615e1a50795ad84118c6881563198e4d42534f9e565c67b4e",
+  "c2_report_sha256": "dd3c6c9a12efa88b451d68839bae202fd89bf2e2f53eaaa648562009358810e8",
+  "checks": [
+    {
+      "level": "all",
+      "stdout_bytes": 1814,
+      "stdout_sha256": "09afb06777afba21d8055a6ecb08712ab6a077e2b6829382f12ef5d9837a1780",
+      "native_records_exact": true,
+      "native_exit_code": 0,
+      "comparisons": [
+        {
+          "case": "speech",
+          "actual": 0.9685282111167908,
+          "expected_f32": 0.9823201894760132,
+          "signed_delta": -0.013791978359222412,
+          "within_1e_5": false,
+          "f32_bits": "3f77f177"
+        },
+        {
+          "case": "tone",
+          "actual": 0.28783851861953735,
+          "expected_f32": 0.09577557444572449,
+          "signed_delta": 0.19206294417381287,
+          "within_1e_5": false,
+          "f32_bits": "3e935f92"
+        },
+        {
+          "case": "silence",
+          "actual": 0.9880069494247437,
+          "expected_f32": 0.9870367050170898,
+          "signed_delta": 0.0009702444076538086,
+          "within_1e_5": false,
+          "f32_bits": "3f7cee06"
+        }
+      ]
+    },
+    {
+      "level": "disable",
+      "stdout_bytes": 1816,
+      "stdout_sha256": "867b32281f9f54a6057b362dbdd7a121b954b23ce4a7ae5ac43c2673ccdae451",
+      "native_records_exact": true,
+      "native_exit_code": 0,
+      "comparisons": [
+        {
+          "case": "speech",
+          "actual": 0.9729918241500854,
+          "expected_f32": 0.9823201894760132,
+          "signed_delta": -0.009328365325927734,
+          "within_1e_5": false,
+          "f32_bits": "3f7915fe"
+        },
+        {
+          "case": "tone",
+          "actual": 0.06667384505271912,
+          "expected_f32": 0.09577557444572449,
+          "signed_delta": -0.02910172939300537,
+          "within_1e_5": false,
+          "f32_bits": "3d888c4c"
+        },
+        {
+          "case": "silence",
+          "actual": 0.9870367050170898,
+          "expected_f32": 0.9870367050170898,
+          "signed_delta": 0.0,
+          "within_1e_5": true,
+          "f32_bits": "3f7cae70"
+        }
+      ]
+    },
+    {
+      "level": "basic",
+      "stdout_bytes": 1817,
+      "stdout_sha256": "1f8aa0ba6e6040afb7702b2b98f4cab73e4756a87b9101ca646de9c3ff10502b",
+      "native_records_exact": true,
+      "native_exit_code": 0,
+      "comparisons": [
+        {
+          "case": "speech",
+          "actual": 0.9729918241500854,
+          "expected_f32": 0.9823201894760132,
+          "signed_delta": -0.009328365325927734,
+          "within_1e_5": false,
+          "f32_bits": "3f7915fe"
+        },
+        {
+          "case": "tone",
+          "actual": 0.06667384505271912,
+          "expected_f32": 0.09577557444572449,
+          "signed_delta": -0.02910172939300537,
+          "within_1e_5": false,
+          "f32_bits": "3d888c4c"
+        },
+        {
+          "case": "silence",
+          "actual": 0.9870367050170898,
+          "expected_f32": 0.9870367050170898,
+          "signed_delta": 0.0,
+          "within_1e_5": true,
+          "f32_bits": "3f7cae70"
+        }
+      ]
+    }
+  ],
+  "all_retained_from_c1_without_reexecution": true,
+  "c2_total_seconds": 4.128910064697266,
+  "interpretation": "Graph level changes outputs. Disabling or using basic graph optimization still fails the original speech and tone references. Same version string is not proof of the original Python runtime binary/build/CPU identity. No Rust feature-extractor or aggregator participates in these golden-feature C probes. No golden, tolerance or production model/configuration was changed; prior native failures remain.",
+  "disable_and_basic_predictions_bit_equal_for_all_three_cases": true
+}

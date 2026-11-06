@@ -1,7 +1,7 @@
 # HMI 全量推进与资格结算（2026-11-06）
 
 <!-- FINAL_RESULTS_START -->
-> 执行中工作稿。最终 native 矩阵与固定次数 WebRTC 窗口仍在运行；本段将在原始结果结算后替换，不预填通过。
+> 执行中工作稿。完整 default、独立 no-fail-fast 补充及首轮扩展矩阵均已终态并保留实际失败；修补后的复验、最终模型与固定次数 WebRTC 窗口尚未结算。本段将在原始结果结算后替换，不预填通过。
 <!-- FINAL_RESULTS_END -->
 
 本轮继续原 Draft PR #2 的 owner、payload admission、Linux native supervision 与 DTLS shutdown 工作。所有变更保留原 Hepta 会话、权限、模型与工具执行权威，不引入第二套 thread、会话数据库或工具 owner。原根目录 README 保持空文件。以下把实际产品修补、测试辅助实现修补、运行结果、未覆盖能力和证据可用性分别说明。[前轮实现与失败](HMI_FOLLOWTHROUGH_20261106.md) · [上游全类别审计](AUDIT_UPSTREAM_20261106.md) · [owner 契约](OWNER_CONTRACT_20261106.md)
@@ -23,6 +23,8 @@
 | Redacted-history trailing user | `ae134e942411c6b0ad64d7f5b6caa1c603919c57` / `b5115bcf53c8992d59117ffd8396f6eea57b9c9d` | 两处静态旧长度期待，增加唯一wireuser点号的精确断言；完整default r3候选 |
 | 早期 raw 与 owner probe | `0d4da9a89473fdbc87ad528f3fe081e53226a3b5` / `9fc41d8346eed823ce75da7b1179a7d231bd9df7` | 15 个 docs/evidence 文件；与 ae134 编译源码相同 |
 | Grok listener 失败诊断 | `272671b95297313d24db921eceda8e95f3a8d545` / `94424ffa2a8fbcda0f81321ee68e7461663e191c` | 只增加 bounded 观测；原 12 个 app_cli scenario、单次重绑 oracle 与期限不变 |
+| Browser／native 原始证据 checkpoint | `52243a392065d474ea0d0aead585891c6010bb3d` / `276642de5386879c1f61030f77b7afd7384f5371` | 95 个 docs/evidence 文件；编译输入不变，native 后续运行继续绑定 272671，不伪称运行了 docs-only 新 HEAD |
+| 四项 fixture 修补冻结 | `0cc16e8123cb05aaad480d5ab7860a267d998bac` / `aec037b9cf2be53fcf6f85fdc149382942277702` | Grok child 生命周期、bot-audio 进程级观测隔离、Cartesia 精确 wire history、静默 HTTP 用例阶段选择；包含 Grok 诊断的等价 Clippy 写法修正。新的原始 gate 绑定此源码，SmartTurn 产品配置与原参考值未改 |
 
 早期本地 commit 与发布 commit 的 metadata 不同，但曾按全树逐字节核对相同；它们是同一源码检查点的不同 commit 身份，不是两次产品修补。最终运行以报告中的 published SHA 和运行前后 manifest 为准。[发布桥接](qualification-hmi-full-sweep-20261106/publication-artifact-cleanup.json) · [signed helper 修补](qualification-hmi-full-sweep-20261106/signed-assistant-helper-fix.json)
 
@@ -36,6 +38,19 @@
 
 <!-- GATE_MATRIX_START -->
 最终矩阵正在结算。当前已执行、已保留原始失败的默认阶段与下面历史 ledger 不会被后续通过覆盖。
+
+| 已完成命令 | Source／Rust | Exit | Completed harnesses | Pass／fail／ignored | 原执行秒数 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 完整default r3 | ae134e9／1.99.0 | 101 | 266 | 2871／1／0 | 154.894659 |
+| 完整default r4 | 272671b／1.99.0 | 101 | 656 | 7329／2／17 | 329.030442 |
+| default `--no-fail-fast` r1 | 272671b／1.99.0 | 101 | 755 | 7748／4／33 | 324.642713 |
+| all-features普通examples构建 | 272671b／1.99.0 | 0 | 不适用 | 0 runtime tests | 193.519372 |
+| 原all-features/all-targets r1 | 272671b／1.99.0 | 101 | 219 | 2175／15／0 | 925.479220 |
+| 同配置 `--no-fail-fast` r1 | 272671b／1.99.0 | 101 | 731 | 8839／24／63 | 482.644572 |
+
+default补充完成所有目标及doctests，四项失败属于三个SmartTurn targets；r3／r4在失败target后停止。Root从完整原始bytes重新计算每个Cargo harness的唯一terminal summary并核对source前后摘要，未发现缺summary或嵌套summary。[原件与核验](qualification-hmi-full-sweep-20261106/native/README.md)
+
+首轮expanded batch已完整终止，overall exit1、输出完整且无超时：普通examples build0，原all-features/all-targets101，唯一同配置no-fail-fast101，strict Clippy101，原fmt-all1，62个owned members的fmt0。各stage的source均未变，driver与实际执行script前后摘要一致。原扩展命令首先停在bot_audio_response的1pass／15fail；上表2175／15是原整条命令在此之前的汇总。完整补充的8个失败targets分别为evals bot_audio_response、bot_audio_smart_turn、user_speech，Grok app_cli，streaming-speech cartesia_turns_eager，turns smart_turn_onnx_pipeline，以及VAD lib／smart_turn_model_analyzer。Root从全部原bytes独立复算两个命令的逐harness summary，均无缺失或多重summary，与另一份独立统计一致。[完整112原件与计数核验](qualification-hmi-full-sweep-20261106/native/expanded-and-reference-pin-r1.root-verification.json)
 <!-- GATE_MATRIX_END -->
 
 ### 计数原则
@@ -85,7 +100,7 @@ Rust 1.99.1 的下一次完整 default 已编译通过，但在 Nova 的 85 个 
 
 本轮没有因后续重复通过就宣称 SCTP race、lost wakeup 或资源压力已确定。诊断公开 wrapper／native channel、peer、ICE、DTLS、SCTP、`has_started`、published／cancelled 状态及首次 milestone 时间；channel 只用 Weak 引用，不延长拥有期。状态采样不是原子快照，native None 也不等于已经 join／reap。
 
-原 stress 的 32×6 连接对、A 后 B 各 5 秒等待和 UDP 释放 2 秒都保留。新增有界状态转移采样记录 schedule／iteration／双方、monotonic elapsed、采样间隔与丢弃数量；失败立即保留，不在失败后重试并用后来的通过替换。受控 native UDP case 能观察 native channel Open 早于 wrapper publication 的阶段差异，但它不是对历史 timeout 的复现。[诊断契约](../crates/pipecat-webrtc/SHUTDOWN_REGRESSION.md)
+原 stress 的32批次×6种schedule都保留；原本等待setup的schedule仍先A后B、各5秒，schedule5仍在构造／setup过程中进入关闭，UDP释放仍为2秒。新增有界状态转移采样记录 schedule／iteration／双方、monotonic elapsed、采样间隔与丢弃数量；失败立即保留，不在失败后重试并用后来的通过替换。受控 native UDP case 能观察 native channel Open 早于 wrapper publication 的阶段差异，但它不是对历史 timeout 的复现。[诊断契约](../crates/pipecat-webrtc/SHUTDOWN_REGRESSION.md)
 
 ### 3.6 真实 SFU fixture 与有界 server reap
 
@@ -95,13 +110,61 @@ Rust 1.99.1 的下一次完整 default 已编译通过，但在 Nova 的 85 个 
 
 ### 3.7 Grok fixture listener 重绑失败仍未归因
 
-精确 pin 第三轮完整 default 在 Grok 的 `app_cli` 中得到 11 passed／1 failed：`actual_binary_server_vad_rapid_burst_preserves_speech_and_joins` 的辅助 listener 在 drop 后立即单次重绑，返回 `AddrInUse`，随后 peer join 传播 panic。实际产品 child 的退出、PCM／report 与 join 断言先于这一 peer await，已执行通过；失败的监听器由测试 peer 创建。原日志没有地址、inode、持有者或 TCP 状态，不能由此判断是 retained owner、端口重新分配、TIME_WAIT 或资源压力。
+精确 pin 第三轮完整 default 在 Grok 的 `app_cli` 中得到 11 passed／1 failed：`actual_binary_server_vad_rapid_burst_preserves_speech_and_joins` 的辅助 listener 在 drop 后立即单次重绑，返回 `AddrInUse`，随后 peer join 传播 panic。实际产品 child 的退出、PCM／report 与 join 断言先于主测试的这一 peer await，已执行通过；失败的监听器由并发测试 peer 创建。这一主任务语句顺序不证明并发 peer 的重绑发生在 child 退出之后。原日志没有地址、inode、持有者或 TCP 状态，不能由此判断是 retained owner、端口重新分配、TIME_WAIT 或资源压力。
 
 新增诊断记录 drop 前的 fd、socket inode 与 descriptor target；原 drop 与单次 bind 之间没有插入操作。失败先输出原 errno，再读取有界的当前进程 fd 与精确／mapped endpoint、同端口 wildcard 的 TCP 行。fd 扫描上限 4,096 entries／64 matches，单张 proc TCP 表上限 1 MiB／8,192 lines／64 matches；截断、read error、race／unreadable 均显式输出，不扫描全机进程。快照不是原子的，失败后找不到原 inode 也不证明 bind 当时无人持有。drop 前少量 metadata 读取本身可能影响调度；后续通过不能倒推原 r3 未失败。
 
 独立的本地 Linux socket 控制只证明一种可能性：原 inode 已释放后，受控竞争 listener 占用同一 endpoint，单次 bind 同样报 errno 98；竞争 listener 关闭后，下一次单次 bind 成功。它没有 TCP payload／连接，也不是 desktop 原 r3 的复现，没有给原失败指定原因。原 `no_connection` 60ms 与单次重绑断言继续保留。[独立控制与范围](qualification-hmi-full-sweep-20261106/native/grok-listener/control-delivery.json)
 
 诊断复查限定为原完整 12-case harness、默认并行、最多 20 次、重复窗口不超过 300 秒且首败停；编译时间与该窗口分账。后续完整 workspace 仍运行原命令，单独诊断的通过不清除 r3，也不转成 240 个新覆盖项。
+
+该诊断 r2 实际执行三轮：前两轮各 12/12，通过后的第三轮 11 passed／1 failed 即停止，没有执行余下 17 轮。重复窗口为 2.412084766 秒，失败改为 `actual_binary_server_vad_does_not_invent_explicit_run_or_playback`。原 listener 是 `127.0.0.1:46553`、fd31、inode1120236524；失败后 self 49 个 fd 未发现原 inode，TCP/tcp6 有界读取均为空、无错误或截断。这些后采样没有给出正向持有者或 TIME_WAIT 证据，也不能还原 bind 瞬间。原源码与两个实际 executable 的前后摘要均相同。
+
+随后在同一 272671 源码上进行独立系统调用诊断。全 workspace build 改变了 feature-unified 产物，因此先用同配置 `--no-run --message-format=json` 重新绑定实际 harness 与普通 `grok_pcm`，没有复用旧二进制身份。现有 strace 6.8 的同用户预检通过；正式运行保持 12 cases、默认并行、原期限与单次 bind，限定最多 10 轮／90 秒、首败停。实际首轮 11 passed／1 failed，2.895 秒；窗口 2.901573 秒即停止。完整 syscall trace 为 310,585 bytes，无丢失／截断，leader 已回收且最终 PGID 不存在，未请求清理信号。strace 会影响调度，这不是未插桩复现的时间测量。
+
+这次失败是第三个不同 case：`actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join`。原 fd28／inode1121549341／`127.0.0.1:34901` 明确带 CLOEXEC，父进程 close 返回0；随后原单次 bind 返回 errno98。另一并行 case 的 child696897 在 clone3 到 execve 之间处理 stdio，窗口覆盖了父 close 到 bind 失败，clone flags 没有 CLONE_FILES。该机制与 pre-exec 期间暂时继承 listener 高度吻合；但 trace 没有直接读取 child 的 fd28／inode，clone syscall 入口也不是内核复制 fd 表的精确时刻，因此仍是有具体 PID／时间线支持的候选解释。没有将它写成已直接证明持有原 inode，也没有倒推旧 r3 或诊断 r2 的原因。[原始 trace 与只读分析](qualification-hmi-full-sweep-20261106/native/grok-listener/trace-r1/README.md)
+
+随后一次独立本地控制直接验证了这个机制：child7在exec前与父进程都观察到原fd3／inode601085；父close后，原地址的单次bind失败。该child进入exec后的新user code，fd3已是EBADF；此时child仍存活，原地址的单次bind成功，最后正常回收。该实验没有执行Grok／Tokio／Cargo，也不补写原失败当轮缺失的child inode证据。
+
+据此准备并应用了测试fixture的生命周期隔离修补。每个中央spawn取得共享读许可，由实际ChildOwner一直持有到collect确认回收或Drop的wait路径结束；wait失败先设置单调失败标志，后续read admission与release qualification均拒绝。原60ms no_connection之后，release取得独占写许可，确认所有潜在fixture继承者都已退出，才执行原listener drop、原一次Tokio bind及检查listener的drop。原12case仍可并行；writer只暂时阻止新的child admission。新增两侧锁等待使用既有WAIT=10s，原产品3000／500ms、协议内容、数据断言、collect正文与60ms检查不变，不加入bind retry。既有Drop wait仍由原外层期限兜底，不声称被新的admission超时硬性限制。
+
+只锁到spawn返回的短方案被否决：明确版本的Rust／glibc／Linux primary源码显示，spawn返回与所有继承CLOEXEC文件关闭完成不能视为通用的同一边界。最终方案依据真实child回收，不依赖该中间状态。Root独立核对15处新增helper await撤销后全部scenario及wire helpers与原字节相同；当前精确工具链下的原harness复验尚未执行，历史三次失败仍保留各自身份。[修补应用审计](qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/application.json)
+
+### 3.8 SmartTurn 原概率门失败，继续分离特征与推理
+
+272671／Rust 1.99.0 的完整 default r4 越过 Grok 和 RTVI 后，在 `pipecat-turns --test smart_turn_onnx_pipeline` 的两项原概率断言失败，exit101。该命令实际运行 **329.03 秒**；早前按控制端仍显示 running 推算的约10–13分钟不是实际执行时长，不能计入性能结论。保留原 `1e-5` 阈值和所有接收／结束期限，没有因运行更远而标记完整 default 通过。
+
+独立的原命令 `cargo test --workspace --locked --no-fail-fast` 执行 **324.642713 秒**、exit101，继续跑完剩余 targets 与 doctests。原 Cargo log 为 893,156 bytes，SHA256 `60df6c85e3dfce912f720424a08467e92aeb9997b5b5aac71f3c05b967f0bf96`；896,180-byte runtime stdout 还包含最终 gate JSON，不是同一文件。最终失败目标只有 `pipecat-turns --test smart_turn_onnx_pipeline`、`pipecat-vad --lib` 与 `pipecat-vad --test smart_turn_model_analyzer`，不能因补充执行完成而改写其 nonzero。
+
+VAD lib 的8项中7通过／1失败。三份 speech／tone／silence 特征比较都在原 `2e-6` 容差内通过；libtest 对通过项的 stdout 默认捕获，因此没有观测其实际最大误差，也不证明字节相同。直接模型 case 在第一份 speech 打印 `native=0.9685282, Python=0.9823202`。对应 f32 的可往返十进制值分别为 `0.9685282111167908`、`0.9823201894760132`，绝对差 `0.013791978359222412`，约为 `1e-5` 的1,379倍。不是略超阈值，也不能靠放宽容差结案。
+
+原直接模型循环在 speech 概率断言处停止，因此 tone／silence 的直接概率及后续 sample-rate checks 尚未执行。Analyzer 的3项中2通过／1失败，失败在初次 tone 概率检查且未打印实际值，后续 speech／reanalysis 未到达；取消／复用及 silence timeout 两项通过。两个 pipeline case 均在概率检查失败，之后的 completion／context／End／join 断言不能计为通过。这排除了“仅 pipeline aggregation 导致差异”的解释，但不足以归因 CPU、特征前端、模型或 ORT。[原日志字节切片与偏移](qualification-hmi-full-sweep-20261106/native/smart-turn/default-no-fail-fast-slices-r1/smart-turn-log-slices.json)
+
+静态核对确认原14个源码／模型／PCM／feature／reference文件与该次native输入相同；speech为80,999 samples，endpoint窗口前补47,001个零。原图是QDQ量化模型，input_features的唯一消费者为QuantizeLinear，scale为0.009614553302526474、uint8 zero point为28。原speech特征中17个值在数学上距离有效量化半步不超过2e-6，因此特征容差通过不足以证明量化后的输入相同；tone没有这个近边界集合。这里没有观测Rust实际feature bytes或运行中的quantized bins，不构成前端／CPU原因判断。[静态路径核对](qualification-hmi-full-sweep-20261106/native/smart-turn/static-review-r1.json) · [QDQ静态诊断及限制](qualification-hmi-full-sweep-20261106/native/smart-turn/qdq-static-analysis-r1.json)
+
+随后在同一272671源树、同一模型和实际ORT共享库上完成两个独立C API对照，直接输入三份原冻结float32特征，不经过Rust特征前端或pipeline。r1保持顺序执行、inter/intra各1、CPU/Arena/CPUInput与全部图优化；native执行及release均exit0，wrapper因三项原概率门失败而exit1。r2只改变图优化枚举及相应日志标签，DISABLE_ALL与BASIC各执行三次Run；ALL直接引用r1，没有重复执行。两级的native均exit0，比较均exit1；全部观测输入与source前后摘要相同。
+
+| 原fixture | 原reference f32 | C API ALL | C API DISABLE_ALL／BASIC |
+| --- | ---: | ---: | ---: |
+| speech | 0.9823201894760132 | 0.9685282111167908 | 0.9729918241500854 |
+| tone | 0.09577557444572449 | 0.28783851861953735 | 0.06667384505271912 |
+| silence | 0.9870367050170898 | 0.9880069494247437 | 0.9870367050170898 |
+
+Root与独立审查分别解析三份原stdout，逐条匹配保存的native_records并重新计算float32 bits及差值。DISABLE_ALL与BASIC三项各自bit-exact相等，但speech／tone仍未达到原1e-5，只有silence精确匹配reference。r1的speech bits与原Rust直接speech输出相同；原Rust循环未执行tone／silence，不能把C结果追记为原Rust观测。结果证明该固定环境下图优化级别会改变输出，也证明更换为这两个级别不足以恢复原oracle；没有分离具体fusion、CPU kernel或原Python环境因素，故不改产品优化设置／golden／容差。
+
+实际加载库为ORT1.21.0、build commit e0b66cad28、SHA256 `3c8181b339025dd18899916357e74290029722e1d5a5778b4071a733f813420d`。原Python oracle元数据只有版本号，没有原库binary／build／CPU身份，版本字符串相同不足以认定运行环境相同。C1 wrapper实际1.988767秒，其中probe进程0.619064秒，包含session加载与释放；C2 runner实际4.128910秒，控制入口及结果回收的等待不计为推理时延。[C1原报告](qualification-hmi-full-sweep-20261106/native/smart-turn/ort-reference-pin-r1/reference.json) · [C2原报告](qualification-hmi-full-sweep-20261106/native/smart-turn/ort-levels-pin-r2/levels.json) · [Root独立对照核验](qualification-hmi-full-sweep-20261106/native/smart-turn/c-api-root-verification.json)
+
+### 3.9 扩展矩阵暴露的三个 fixture 契约问题
+
+`bot_audio_response`的原16项中1通过、15失败。14个async失败记录均在进程级`eval-bot-vad`线程身份集合的原严格等式处停止；其中7个case的原基线为空、结束时看到并发case的worker，另7个case捕获了其它case的6–7个worker、后来集合又改变。最后一个case的34次结束观测全部为Some([])，仍因原基线含其它worker而失败，不能称为该case残留worker。另一个同步invalid-bounds case未打印两端集合，不补造其值。原helper先完成session／HTTP／peer join，再观察整个进程；旧注释假定`--test-threads=1`，实际完整gate使用默认并行。
+
+修补在这个integration-test进程内加入一个共享async mutex：14个async入口先取得许可，同步invalid-bounds入口使用blocking_lock，纯constructor case保持原样。所有helper、场景、原严格集合等式、200ms观察与产品期限不变；等待许可发生在场景计时之前。它不是把整个workspace改成串行，也不把identity equality改成subset或空集宽容。原15个失败仍保留，复验按新source另列。[原日志逐case分析](qualification-hmi-full-sweep-20261106/native/bot-audio-response/original-raw-review-r1.json) · [应用核验](qualification-hmi-full-sweep-20261106/native/bot-audio-response/application.json)
+
+`cartesia_turns_eager`原34项中33通过、1失败，实际next request的user及live-B thinking／signature／text都精确匹配，唯一旧条件是消息总数必须为2。现有Anthropic adapter对`loopback`模型按原规则追加唯一user点号。修补只替换`exact_signed_history`，比较完整消息数组：Anthropic精确三条，Gemini精确两条，同时核role／顺序及原signed内容；原helper之外所有字节相同。原失败发生于Anthropic循环，随后Gemini分支未执行，不补记通过。[原诊断](qualification-hmi-full-sweep-20261106/native/cartesia-eager/diagnosis.json) · [应用核验](qualification-hmi-full-sweep-20261106/native/cartesia-eager/application.json)
+
+`user_speech`原16项中15通过、1失败。名为silent HTTP的case实际启用了Private cache，180ms生产期限先在Lookup阶段耗尽，原错误是`user_speech_cache_timeout`；原失败没有实际HTTP admission证据，不能写成HTTP超时被产品吞掉。该case现在显式选择Disabled cache进入HTTP阶段，仍保留180ms原预算、1500ms上界、两种chatty状态、精确`user_speech_timeout`、真实request=1／closed=1、无PCM与下一turn未执行等断言。其它Private cache case不变；其中原独立cache-lock期限case已实际通过，范围单独成立。原Private-cache失败仍是失败；新case对未使用空cache目录的检查不构成cache回收资格。[最小候选与边界](qualification-hmi-full-sweep-20261106/native/user-speech-http/audit.json) · [应用核验](qualification-hmi-full-sweep-20261106/native/user-speech-http/application.json)
+
+严格Clippy唯一owned错误是Grok地址诊断对固定4／16-byte IP地址使用`chunks_exact(4)`；现改成`as_chunks::<4>().0.iter()`，保留同样的native-endian u32转换和原输出格式。没有加allow或排除target。原strict命令exit101仍保留，新source的strict结果独立结算。
 
 ## 4. 真实媒体与本地模型的资格范围
 
@@ -151,6 +214,16 @@ Piper 四项使用真实 ORT/eSpeak/Piper CPU 路径，保留固定 English fixt
 | 精确 pin default r2 | RTVI first-answer-timing target 153pass／2fail；辅助端按旧 nested-text 读取本应为 scalar string 的工具结果，三处同类fixture最小修正，产品adapter不变 |
 | 精确 pin default r3 | Grok app_cli 11pass／1fail；fixture listener 单次重绑 AddrInUse。当前没有原 inode／TCP 状态证据，原因仍开放；新增诊断而未放宽 oracle |
 | Grok 诊断启动 r1 | source diff 白名单遗漏已发布的主报告路径，fetch／diff 后、checkout／编译／selection 前退出127；0 rounds，source-pin仍为干净ae134。这是运行器前置失败，精确16路径白名单修正后用新job/evidence身份执行，不计产品test失败 |
+| Grok 诊断 r2 | 两轮12/12后，第三轮11/1失败并停止；不同case重绑errno98，原inode／endpoint在事后有界快照为空，无截断；不归因为TIME_WAIT或资源压力 |
+| Grok strace r1 | 首轮11/1即停止，第三个不同case；父close成功后单次bind errno98，与另一child pre-exec窗口重叠。未直接见到child原inode，原两轮原因仍开放 |
+| 精确 pin default r4 | 329.03秒／exit101；SmartTurn pipeline 0pass／2fail，原1e-5概率门不变。控制端等待时长不计为native时长 |
+| 精确 pin default no-fail-fast r1 | 324.642713秒／exit101；3个SmartTurn targets失败，直接speech概率0.9685282对0.9823202，剩余targets／doctests继续执行；不清除r4 |
+| 首轮all-features/all-targets | source272671，原219个harness、2175pass／15fail，bot_audio_response停止；同配置补充731个harness、8839pass／24fail／63ignore，共8个失败targets，不清除原fail-fast结果 |
+| Grok扩展补充 | 原12项10pass／2fail，两个listener单次重绑失败；与default／repeat／strace分别保存，不相加成独立覆盖 |
+| Cartesia扩展补充 | 原34项33pass／1fail；signed blocks精确相同，旧helper拒绝原adapter的第三条user点号；修补后仍须新source运行 |
+| 静默HTTP扩展补充 | 原user_speech 15pass／1fail，180ms先在Private-cache Lookup耗尽；无原HTTP到达证据。新fixture选择HTTP阶段，不把原cache失败改记为通过 |
+| SmartTurn C1／C2 | C1的3Run执行0而三项原概率门失败；C2的DISABLE／BASIC各3Run执行0、speech／tone仍失败，silence匹配；wrapper比较均非零，不改golden／容差／产品优化设置 |
+| 首轮strict Clippy | 原命令exit101，实际报出Grok诊断chunks_exact_to_as_chunks；仅改等价固定数组分组写法，不加allow，后续strict单列 |
 | 中文合成诊断 r1 | 私有scope的 max_segment_bytes=16MiB 超过2MiB产品上限；在LocalSpeech::load准入即失败，没有native model或8次STT执行；只修fixture配置 |
 | Browser protocol r1/r2、input r1/r2 | 各自原partial groups、stdout/JSON/helper与修正均保留；最终r3/r4不覆盖旧失败 |
 | Browser Rust 补资格 r1 | 原生54 tests 与 strict Clippy分别通过；随后WASM std下载截断，整体failed。r2仅WASM恢复与Clippy通过，不改写r1整体结果 |
@@ -194,6 +267,6 @@ Piper 四项使用真实 ORT/eSpeak/Piper CPU 路径，保留固定 English fixt
 
 ## 9. 证据的可访问性也计入结论
 
-第二次本地入口恢复后旧scratch不再可见；原desktop jobs与browser artifacts仍按其原身份读取。源代码从已发布Git恢复，当前59文件browser／生产边界／WebRTC可用性checkpoint已独立比对Git blob与完整tree。缺失raw明确标记：原WebRTC60文件仅精确恢复4个，其余56个missing；原format archive和早期browser native raw不被摘要重建。新的验证使用新identity和专属target，不能冒充旧记录。
+第二次和第五次本地入口恢复后，原 scratch 路径在新入口不可见；原 desktop jobs 与 browser artifacts 仍按原身份读取，没有因入口变化重放。第五次恢复从已发布52243a重建checkout，95个checkpoint文件逐一匹配中断前保留的size／SHA256／Git blob，root README仍为0字节，Grok诊断源码仍为原摘要。未提交的分析段落重新依据事实撰写，未将其描述成追回原raw；原始材料只从远端原文件、完整保存内容或核实的Git blob恢复。缺失raw仍明确标记：原WebRTC60文件仅精确恢复4个，其余56个missing；原format archive和早期browser native raw不被摘要重建。新的验证使用新identity和专属target，不能冒充旧记录。[第五次恢复收据](qualification-hmi-full-sweep-20261106/fifth-entrance-recovery.json)
 
 完整探针输出、原始失败JSON/log、版本／SHA／source-before-after、普通executable compiler-artifact和实际exit状态是不同证据。文件存在、已构建、test listing、运行返回0、效果真实发生和用户感知也保持区别。[总证据索引](qualification-hmi-full-sweep-20261106/README.md) · [可用性账](qualification-hmi-full-sweep-20261106/EVIDENCE_AVAILABILITY.md)

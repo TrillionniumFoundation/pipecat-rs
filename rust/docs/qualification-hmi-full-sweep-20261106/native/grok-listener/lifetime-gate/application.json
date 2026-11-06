@@ -1,0 +1,24 @@
+{
+  "schema": "pipecat-grok-lifetime-fixture-application-v1",
+  "observed_utc": "2026-11-06T16:21:58.668893+00:00",
+  "phase": "applied_local_candidate_before_publication_and_native_requalification",
+  "parent_commit": "52243a392065d474ea0d0aead585891c6010bb3d",
+  "original_native_source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "path": "rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+  "before_sha256": "5f5d2cba7774aa4644cd7dd6dc67d86daf256223c78e65761705f59b67bf953f",
+  "after_bytes": 41107,
+  "after_sha256": "b7e2420e488e7c2a348bfa7084bba4e6dde1376a2099b1d530efb3956bdf1913",
+  "after_git_blob": "bfc0c74269589b037eebb45cde5ec29c28085fe1",
+  "root_independent_checks": {
+    "spawn_await_only_scenario_changes": 15,
+    "all_original_wire_helpers_and_scenarios_equal_after_removing_those_awaits": true,
+    "collect_body_byte_identical": true,
+    "original_60ms_no_connection_body_byte_identical": true,
+    "central_process_spawn_sites": 1,
+    "single_bind_check_sites": 1,
+    "source_diff_whitespace_check_exit": 0
+  },
+  "controlled_mechanism_run": "One original local standalone fork/exec run, directly witnessed same socket inode in the child; does not reproduce or determine cause of the three earlier Grok failures.",
+  "runtime_requalification": "Not yet executed on this candidate; prior source272 records remain separate.",
+  "owner_scope": "Test fixture isolation only; no product owner, provider protocol, model setting or production authorization change."
+}

@@ -1,0 +1,32 @@
+{
+  "scope": "Read-only parsing of the original failed native request; this is not a new Rust test or native rerun. Candidate is unapplied.",
+  "source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "failure_case": "eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests",
+  "target_result": {
+    "passed": 33,
+    "failed": 1,
+    "ignored": 0,
+    "seconds": 0.51
+  },
+  "target_log_sha256": "f0f294a6f4358aabef125cf30738c172135b06a41412518ff0f9f51cabfdb232",
+  "original_source_path": "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+  "original_source_sha256": "c40cfcb287fb6e83e2d8c2b6dc18039687276622d07c362a49a30a9430c4808b",
+  "candidate_bytes": 23727,
+  "candidate_sha256": "96ad703190d83041feea27fe1570d158d503491a958fd80b614615c668c77cf0",
+  "patch_sha256": "df3d82963a338e8ed8c604094ef2ec192f08db7852adcd2cf04afdc7fd5806c3",
+  "only_changed_function": "exact_signed_history",
+  "all_scenarios_outside_helper_byte_identical": true,
+  "original_check_breakdown": {
+    "original_first_user_content_matches": true,
+    "original_exact_signed_content_matches": true,
+    "original_len_equals_two": false,
+    "actual_message_count": 3,
+    "exact_full_request_history_matches_proposed_oracle": true,
+    "trailing_user_is_exact_existing_adapter_padding": true,
+    "cleanups_empty_in_original_panic": true
+  },
+  "reason": "The signed blocks and original user content match exactly. Only the hard-coded two-message count rejects the existing Anthropic adapter padding for the loopback model.",
+  "provider_stage_limit": "The failing case iterates Anthropic first; its assertion terminates the case, so this raw does not establish execution of the Gemini branch in that case.",
+  "candidate_contract": "Compare the whole exact history: Gemini user/model with unchanged signed parts; Anthropic user/assistant plus exactly one prescribed user dot. No arbitrary extra message, weakened >= length, product change or deadline change."
+}

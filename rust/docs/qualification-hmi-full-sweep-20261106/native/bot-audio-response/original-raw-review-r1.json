@@ -1,0 +1,1789 @@
+{
+  "schema": "pipecat.bot_audio_response.original_raw_review.v1",
+  "status": "ORIGINAL_FAILURE_RETAINED_INDEPENDENT_STATIC_AND_RAW_REVIEW",
+  "native_source": {
+    "commit": "272671b95297313d24db921eceda8e95f3a8d545",
+    "file": "rust/crates/pipecat-evals/tests/bot_audio_response.rs",
+    "bytes": 44922,
+    "sha256": "e12c2e0c4daaa9b4a45a9d3882bfd7ccce84e7a5418d88b60bcb1bfce82ba70c",
+    "git_blob_sha1": "18078e352e5e21e67e247bc3fa38dea6f46f7c98"
+  },
+  "original_target": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/expanded-original-failure-r1/bot_audio_response.log",
+    "bytes": 704077,
+    "sha256": "61fa134f9505f8f1509bbb60950c7d2a7d86ccd575398d089ac687abbc78710d",
+    "command_log_range": [
+      260269,
+      964346
+    ],
+    "summary": "16 tests; 1 passed; 15 failed; 9.08s; original expanded command exit101",
+    "passed_case": "ordinary_constructor_rejects_typed_response_and_opt_in_rejects_classifier_eval",
+    "original_command_log": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/all-features-all-targets-pin-r1/command.log",
+      "bytes": 964346,
+      "sha256": "21c764ff5aa031ca37cee5e0f09c9aef5f4a71440b0b621c8013d7e7457698a5"
+    },
+    "slice_manifest": {
+      "path": "workspace-evidence/expanded-original-failure-r1/slice.json",
+      "bytes": 492,
+      "sha256": "51d58e33bd4514001c0a9d2f12d14d034991f537a57fdafaff8c5e1ddee7ec69",
+      "exact_range_matches_original_command": true
+    }
+  },
+  "observations": {
+    "failed_async_cases_with_full_snapshots": 14,
+    "synchronous_failure_without_snapshots": 1,
+    "empty_initial_snapshots": 7,
+    "nonempty_initial_snapshots": 7,
+    "samples_total": 434,
+    "none_samples": 0,
+    "all_14_async_HTTP_tasks_returned_Ok": true,
+    "all_failure_sites_are_identity_assertions": true
+  },
+  "causal_scope": [
+    "The source explicitly required --test-threads=1 for a process-global strict (tid,starttime) equality oracle, but this original target did not enforce that prerequisite.",
+    "The last continuation case has six baseline identities and 34 consecutive empty post-join snapshots; those baseline threads were already present before its native owner was started. This observed failure is not evidence of a surviving VAD thread at its check.",
+    "The complete raw has no None VAD snapshots or None convergence samples in these 14 cases; inaccessible-/proc hypotheses do not explain their recorded failures.",
+    "Other global nonempty snapshots lack a per-fixture owner-to-TID binding. Do not label every listed TID a leak, or claim the raw alone proves which owner each belonged to.",
+    "One synchronous invalid_bounds failure has no logged values. Its exact original inequality cannot be reconstructed.",
+    "Normal HTTP replies set replied=true without setting closed; explicit cancel/drop/settlement-timeout paths record closed=true. All 14 logged HTTP task results are Ok. No separate HTTP failure is reported by this target.",
+    "Behavioral assertions following the identity checks were not reached; matching data printed in Outcome is not counted as those assertions passing."
+  ],
+  "candidate": {
+    "path": "workspace-evidence/bot-audio-response/gate-candidate-r1/bot_audio_response.rs",
+    "sha256": "d605033588e78252bcc0518d2b5f7470cf9f23b5833dc6822cc5b9db0f7491a3",
+    "scope": "Enforce the existing process-wide oracle exclusivity within this integration-test binary. No subset check, deadline extension, native implementation change, or whole-workspace serial flag.",
+    "runtime_status": "NOT_EXECUTED by this review; candidate does not clear the original 15 failures."
+  },
+  "cases": [
+    {
+      "case": "malformed_and_unsupported_pcm_fail_without_any_stt_upload",
+      "target_section_byte_start": 1473,
+      "target_section_byte_end_exclusive": 64091,
+      "target_section_sha256": "81bc002fe9d6dcaf047c55ff7576b21e2275c63a61f06cf3894d7ec29861a54c",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 204
+      },
+      "failure_messages": [
+        "thread 'malformed_and_unsupported_pcm_fail_without_any_stt_upload' (813762) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=false, request_bytes=0, replied=false, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813768,
+            105881286
+          ],
+          [
+            813769,
+            105881286
+          ],
+          [
+            813771,
+            105881287
+          ],
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 6,
+          "after": 6
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "invalid_bounds_are_rejected_before_connecting_or_starting_workers",
+      "target_section_byte_start": 64091,
+      "target_section_byte_end_exclusive": 64395,
+      "target_section_sha256": "3021ce363b83434f5a84632d5b484c0c681fbd7bd10a43e282081588a23f7235",
+      "workers_before": {
+        "available_in_log": false
+      },
+      "workers_first": {
+        "available_in_log": false
+      },
+      "workers_after": {
+        "available_in_log": false
+      },
+      "samples": {
+        "count": 0,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": null,
+        "last_elapsed_ms": null
+      },
+      "failure_messages": [
+        "thread 'invalid_bounds_are_rejected_before_connecting_or_starting_workers' (813761) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:1071:5:\nassertion failed: same_worker_identities(&vad_workers(), &before)"
+      ],
+      "http_result_ok": null,
+      "http_gate_lines": [],
+      "run_result": "not_logged",
+      "interpretation": "Only original assertion failure is logged; before/after snapshots and exact inequality cause are unavailable."
+    },
+    {
+      "case": "cancellation_during_http_closes_connection_and_joins_session_and_peers",
+      "target_section_byte_start": 64395,
+      "target_section_byte_end_exclusive": 127415,
+      "target_section_sha256": "475b9e815b75cabd6426f76f8c15a0e2392853fa8059d872e6a72d12fbaa0b67",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "R"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 1,
+        "last_elapsed_ms": 205
+      },
+      "failure_messages": [
+        "thread 'cancellation_during_http_closes_connection_and_joins_session_and_peers' (813755) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813769,
+            105881286
+          ],
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 7,
+          "after": 6
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "dropping_run_future_with_queued_vad_work_closes_owned_websocket",
+      "target_section_byte_start": 127415,
+      "target_section_byte_end_exclusive": 188644,
+      "target_section_sha256": "3e556b7b429476049d8f8bf7a21082f81ff39e0e1225383afcf0b08fe2efb47b",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 203
+      },
+      "failure_messages": [
+        "thread 'dropping_run_future_with_queued_vad_work_closes_owned_websocket' (813756) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:914:5:\nnative VAD worker identities survived session drop and bounded observation"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "run_result": "Err_expected_abort",
+      "identity_set_delta": {
+        "added": [
+          [
+            813769,
+            105881286
+          ],
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 6,
+          "after": 6
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload",
+      "target_section_byte_start": 188644,
+      "target_section_byte_end_exclusive": 261717,
+      "target_section_sha256": "042fb7422987c568b249db1eb7600f51536c2b64266d99773720a47228fd86d1",
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 201
+      },
+      "failure_messages": [
+        "thread 'pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload' (813866) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=false, request_bytes=0, replied=false, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 6,
+          "first": 7,
+          "after": 7
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio",
+      "target_section_byte_start": 261717,
+      "target_section_byte_end_exclusive": 332235,
+      "target_section_sha256": "0b734e00bc38a4ce36bfaa5a94db9c3204a740714a67e1c9821ae6e17a1cd2f8",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 203
+      },
+      "failure_messages": [
+        "thread 'genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio' (813759) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ],
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 6,
+          "after": 7
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "ordinary_next_send_settlement_timeout_fails_without_sending_it",
+      "target_section_byte_start": 332235,
+      "target_section_byte_end_exclusive": 395218,
+      "target_section_sha256": "186334778fc95c9bfa4ef03701f3d06986fbedcf37ffbdbfd9ea90a23202f4bd",
+      "workers_before": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "R"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 29,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 1,
+        "last_elapsed_ms": 200
+      },
+      "failure_messages": [
+        "thread 'ordinary_next_send_settlement_timeout_fails_without_sending_it' (813785) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ],
+          [
+            813898,
+            105881517
+          ]
+        ],
+        "removed": [
+          [
+            813768,
+            105881286
+          ],
+          [
+            813769,
+            105881286
+          ],
+          [
+            813771,
+            105881287
+          ]
+        ],
+        "counts": {
+          "before": 6,
+          "first": 7,
+          "after": 6
+        }
+      },
+      "interpretation": "At least the removed baseline identities belonged to workers already present before this fixture started. Their disappearance alone invalidates a global equality oracle under concurrent fixtures; added identities have no per-owner binding in this log."
+    },
+    {
+      "case": "ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting",
+      "target_section_byte_start": 395218,
+      "target_section_byte_end_exclusive": 459939,
+      "target_section_sha256": "5e7415a5fa02cac97f23394dd5f69b834c74f5479613d8899693305e3837a665",
+      "workers_before": [
+        {
+          "tid": 813768,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813771,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 30,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 203
+      },
+      "failure_messages": [
+        "thread 'ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting' (813790) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ],
+          [
+            813898,
+            105881517
+          ]
+        ],
+        "removed": [
+          [
+            813768,
+            105881286
+          ],
+          [
+            813769,
+            105881286
+          ],
+          [
+            813771,
+            105881287
+          ]
+        ],
+        "counts": {
+          "before": 6,
+          "first": 6,
+          "after": 6
+        }
+      },
+      "interpretation": "At least the removed baseline identities belonged to workers already present before this fixture started. Their disappearance alone invalidates a global equality oracle under concurrent fixtures; added identities have no per-owner binding in this log."
+    },
+    {
+      "case": "interruption_and_new_llm_epoch_discard_delayed_old_http_result",
+      "target_section_byte_start": 459939,
+      "target_section_byte_end_exclusive": 510772,
+      "target_section_sha256": "be4b0a36cbd552c8ab73b08156ba50d26d06ee88d2df93991c8f004966f25b8e",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 31,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 203
+      },
+      "failure_messages": [
+        "thread 'interruption_and_new_llm_epoch_discard_delayed_old_http_result' (813760) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=true",
+        "HTTP gate 1: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ],
+          [
+            813898,
+            105881517
+          ],
+          [
+            813940,
+            105881570
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 6,
+          "after": 4
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "empty_transcript_emits_no_response_and_later_real_segment_recovers",
+      "target_section_byte_start": 510772,
+      "target_section_byte_end_exclusive": 560560,
+      "target_section_sha256": "337ce6f347bab514fbb979d07d4f8993c31306cac811cc897b3aee8de25ac53d",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "R"
+        }
+      ],
+      "samples": {
+        "count": 31,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 204
+      },
+      "failure_messages": [
+        "thread 'empty_transcript_emits_no_response_and_later_real_segment_recovers' (813757) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=47660, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ],
+          [
+            813898,
+            105881517
+          ],
+          [
+            813940,
+            105881570
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 5,
+          "after": 4
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "explicit_next_send_discards_previous_pending_recognition",
+      "target_section_byte_start": 560560,
+      "target_section_byte_end_exclusive": 608058,
+      "target_section_sha256": "f6687fc64c916a51b069a24571efe391dafc958048a99479ce3205ac9331dec5",
+      "workers_before": [],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 31,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 200
+      },
+      "failure_messages": [
+        "thread 'explicit_next_send_discards_previous_pending_recognition' (813758) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=false, closed=true, expected_disconnect=true",
+        "HTTP gate 1: received=true, request_bytes=34860, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813871,
+            105881456
+          ],
+          [
+            813888,
+            105881488
+          ],
+          [
+            813898,
+            105881517
+          ],
+          [
+            813940,
+            105881570
+          ]
+        ],
+        "removed": [],
+        "counts": {
+          "before": 0,
+          "first": 4,
+          "after": 4
+        }
+      },
+      "interpretation": "The global post-join set contains additional identities during overlapping fixtures. The log does not bind these identities to individual owners; it cannot classify them as this fixture leaking solely from set inequality."
+    },
+    {
+      "case": "spoken_absence_held_pcm_new_llm_start_fails",
+      "target_section_byte_start": 608058,
+      "target_section_byte_end_exclusive": 641478,
+      "target_section_sha256": "198a7759a05959d911b214f1a3f4e8ab13f6a16840acf34035d2c8a1b417ea57",
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        },
+        {
+          "tid": 813940,
+          "starttime": 105881570,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 33,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 204
+      },
+      "failure_messages": [
+        "thread 'spoken_absence_held_pcm_new_llm_start_fails' (813885) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [
+          [
+            813898,
+            105881517
+          ]
+        ],
+        "removed": [
+          [
+            813769,
+            105881286
+          ],
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ]
+        ],
+        "counts": {
+          "before": 7,
+          "first": 3,
+          "after": 2
+        }
+      },
+      "interpretation": "At least the removed baseline identities belonged to workers already present before this fixture started. Their disappearance alone invalidates a global equality oracle under concurrent fixtures; added identities have no per-owner binding in this log."
+    },
+    {
+      "case": "two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order",
+      "target_section_byte_start": 641478,
+      "target_section_byte_end_exclusive": 670703,
+      "target_section_sha256": "46f2c04f78f2e435231a20f095abf48978e33733aa7457ec5b85ef94cada0e65",
+      "workers_before": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "R"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813898,
+          "starttime": 105881517,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 32,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 202
+      },
+      "failure_messages": [
+        "thread 'two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order' (813929) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=47660, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [],
+        "removed": [
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813888,
+            105881488
+          ]
+        ],
+        "counts": {
+          "before": 6,
+          "first": 2,
+          "after": 2
+        }
+      },
+      "interpretation": "At least the removed baseline identities belonged to workers already present before this fixture started. Their disappearance alone invalidates a global equality oracle under concurrent fixtures; added identities have no per-owner binding in this log."
+    },
+    {
+      "case": "spoken_absence_held_pcm_new_remote_speaking_start_fails",
+      "target_section_byte_start": 670703,
+      "target_section_byte_end_exclusive": 692400,
+      "target_section_sha256": "f664e31e08bb99f229035a1588fbcdee5c87aa46380fb1006ceb64e53592ca3a",
+      "workers_before": [
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        },
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        },
+        {
+          "tid": 813888,
+          "starttime": 105881488,
+          "state": "S"
+        }
+      ],
+      "workers_first": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "workers_after": [
+        {
+          "tid": 813871,
+          "starttime": 105881456,
+          "state": "S"
+        }
+      ],
+      "samples": {
+        "count": 33,
+        "none_count": 0,
+        "empty_count": 0,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 202
+      },
+      "failure_messages": [
+        "thread 'spoken_absence_held_pcm_new_remote_speaking_start_fails' (813895) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [],
+        "removed": [
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ],
+          [
+            813888,
+            105881488
+          ]
+        ],
+        "counts": {
+          "before": 7,
+          "first": 1,
+          "after": 1
+        }
+      },
+      "interpretation": "At least the removed baseline identities belonged to workers already present before this fixture started. Their disappearance alone invalidates a global equality oracle under concurrent fixtures; added identities have no per-owner binding in this log."
+    },
+    {
+      "case": "spoken_absence_held_pcm_continuation_keeps_original_deadline",
+      "target_section_byte_start": 692400,
+      "target_section_byte_end_exclusive": 704077,
+      "target_section_sha256": "0213ff7e6999f907ae3fbc6caab3c3fbcd3fb06e4c8c572ddf81824d29568952",
+      "workers_before": [
+        {
+          "tid": 813769,
+          "starttime": 105881286,
+          "state": "S"
+        },
+        {
+          "tid": 813772,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813773,
+          "starttime": 105881287,
+          "state": "S"
+        },
+        {
+          "tid": 813774,
+          "starttime": 105881288,
+          "state": "S"
+        },
+        {
+          "tid": 813791,
+          "starttime": 105881332,
+          "state": "S"
+        },
+        {
+          "tid": 813794,
+          "starttime": 105881341,
+          "state": "S"
+        }
+      ],
+      "workers_first": [],
+      "workers_after": [],
+      "samples": {
+        "count": 34,
+        "none_count": 0,
+        "empty_count": 34,
+        "first_elapsed_ms": 0,
+        "last_elapsed_ms": 205
+      },
+      "failure_messages": [
+        "thread 'spoken_absence_held_pcm_continuation_keeps_original_deadline' (813867) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:\nnative VAD thread identities did not return to baseline after all owners joined"
+      ],
+      "http_result_ok": true,
+      "http_gate_lines": [
+        "HTTP gate 0: received=true, request_bytes=32300, replied=true, closed=false, expected_disconnect=false",
+        "HTTP gate 1: received=true, request_bytes=43820, replied=true, closed=false, expected_disconnect=false"
+      ],
+      "run_result": "Ok",
+      "identity_set_delta": {
+        "added": [],
+        "removed": [
+          [
+            813769,
+            105881286
+          ],
+          [
+            813772,
+            105881287
+          ],
+          [
+            813773,
+            105881287
+          ],
+          [
+            813774,
+            105881288
+          ],
+          [
+            813791,
+            105881332
+          ],
+          [
+            813794,
+            105881341
+          ]
+        ],
+        "counts": {
+          "before": 6,
+          "first": 0,
+          "after": 0
+        }
+      },
+      "interpretation": "Foreign baseline workers had disappeared; repeated empty observations are not residual-worker evidence. Strict baseline equality still fails."
+    }
+  ],
+  "source_job": {
+    "host": "desktop",
+    "enclosing_batch_job_id": "1a1b18ad914-fc05-797a",
+    "enclosing_batch_exit_code": 1,
+    "output_complete": true,
+    "output_durable": true,
+    "command_exit_code": 101,
+    "command_argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "test",
+      "--workspace",
+      "--all-features",
+      "--all-targets",
+      "--locked"
+    ],
+    "source_unchanged": true,
+    "original_gate_receipt_sha256": "8accc0ffce88b7ca9ea58a113b3f8b360524ba10e80f3d49f41fcc0d1461f44f",
+    "runtime_status_receipt_sha256": "d07a4a14d9186b4b4f6535cf839cdf1f239a18e5e67f46c6600ff24ce622686d",
+    "scope": "This review covers the original all-features-all-targets target bytes, not the later independent no-fail-fast supplement."
+  }
+}

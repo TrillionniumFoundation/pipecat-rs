@@ -1,0 +1,22 @@
+{
+  "bootstrap_sha256": "9d8a4fdac9e31b840e70cbe5a1644935eceebdcf8e604cfac765a38a9b8b027e",
+  "files": {
+    "ort_reference_probe_disable.c": [
+      11816,
+      "4e5623210792a87b71509d0ff2ba538ec9fd73baef4cab897c72f132abfc7844"
+    ],
+    "ort_reference_probe_basic.c": [
+      11818,
+      "d110fe4fd5e76856f8d9874a16da2899e9c92437659b0af289b17d675d7e35b1"
+    ],
+    "onnxruntime_c_api.h": [
+      219712,
+      "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    ],
+    "desktop_smart_turn_levels_pin_r2.py": [
+      30275,
+      "51eb47b6ed022620d98074e0063afa52c547cfa5f2086e67e130d0c526be6450"
+    ]
+  },
+  "local_preparation_note": "The earlier oversized local argv was rejected before creating any process; no desktop submission occurred before this launcher."
+}

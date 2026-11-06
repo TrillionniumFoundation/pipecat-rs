@@ -1,0 +1,446 @@
+{
+  "schema": "pipecat-original-byte-evidence-export-v1",
+  "started_unix": 1793980549.9169714,
+  "scope": "Completed historical native/default/diagnostic runs only; active expanded gate and targets are not read or modified. Original failed logs retained without UTF8 replacement.",
+  "digest_note": "raw_file_sha256 is complete original file bytes; canonical_manifest_sha256, where present, is the independent manifest content digest stored by the source-manifest helper.",
+  "files": [
+    {
+      "path": "desktop_additional_gate_pin_v4.py",
+      "bytes": 12714,
+      "raw_file_sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "path": "desktop_grok_strace_pin_r1.py",
+      "bytes": 27235,
+      "raw_file_sha256": "4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6"
+    },
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/command.log",
+      "bytes": 893156,
+      "raw_file_sha256": "60df6c85e3dfce912f720424a08467e92aeb9997b5b5aac71f3c05b967f0bf96"
+    },
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/gate.json",
+      "bytes": 3162,
+      "raw_file_sha256": "ccf2fc714ca13f3d218bfa319f68edc23c152474a47b145e1d31f3dac6373f1a"
+    },
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/source-after.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/source-before.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/cargo-test-workspace.log",
+      "bytes": 342751,
+      "raw_file_sha256": "c1bbe646215edf15f9cbc5e11c893c0f4e5ca735308510dd0c35274894dba45b"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/environment.json",
+      "bytes": 2003,
+      "raw_file_sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/gate.json",
+      "bytes": 4847,
+      "raw_file_sha256": "0e85f51fc7b2d9ea567d74e297b6a835f2bcf4695c4703c8e79f48aca7625c05"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/preparation.json",
+      "bytes": 15590,
+      "raw_file_sha256": "1008cf95258eb783494fee375902ea0b00bcd6aacb6e8bdcba7c72b3cbc490b2"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/source-after.json",
+      "bytes": 466297,
+      "raw_file_sha256": "8287ced797a4145356aad2e96d3e4fa35bfbfe6f73c978108f78c96261c133db",
+      "canonical_manifest_sha256": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/source-before.json",
+      "bytes": 466297,
+      "raw_file_sha256": "8287ced797a4145356aad2e96d3e4fa35bfbfe6f73c978108f78c96261c133db",
+      "canonical_manifest_sha256": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/cargo-test-workspace.log",
+      "bytes": 839226,
+      "raw_file_sha256": "8153c08d39a751db11a8903bd7c597a0674fc4cee2d171f966807d5914e7bac9"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/environment.json",
+      "bytes": 2003,
+      "raw_file_sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/gate.json",
+      "bytes": 4846,
+      "raw_file_sha256": "d83fee90773fb235028d0897395beff8628b6f2f21753e39df8009e49a57a153"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/preparation.json",
+      "bytes": 2394,
+      "raw_file_sha256": "377917d5ee838c5e8f5da7270bd3b33beb826210069bff68b0ea430c048dc975"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/source-after.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/source-before.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r1/repetitions.json",
+      "bytes": 5449,
+      "raw_file_sha256": "f3aea7b915e79e7a2f8cb53eca6169e80e44a9fa5a52d9da8ea007f3fd8ce21a"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/binding.log",
+      "bytes": 186521,
+      "raw_file_sha256": "b0cfff9cfac17aa626555d94669cfe24e60bfe233bf9cfa4ba994b40096fdc68"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/environment.json",
+      "bytes": 2094,
+      "raw_file_sha256": "16c5f7328e5bae8baee2427e4a82269d400432bc9fd763a61e02a08d325c9355"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/metadata.stderr.log",
+      "bytes": 0,
+      "raw_file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/metadata.stdout.json",
+      "bytes": 454312,
+      "raw_file_sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/repetitions.json",
+      "bytes": 15680,
+      "raw_file_sha256": "5b7daa7e9e9b814ebd5073220ce33a7e102a69fbf0c1bb30896a6f70b12ea5e5"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/round-01.log",
+      "bytes": 1078,
+      "raw_file_sha256": "55cb4a8029e24c3d74c34de39df44588f5f065504a34ee26164b2486e73a9ca7"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/round-02.log",
+      "bytes": 1078,
+      "raw_file_sha256": "1bce3b52bacb3a8375f7d0220c2cb6ddb430fc664988309e0ad456897d40d9b3"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/round-03.log",
+      "bytes": 3880,
+      "raw_file_sha256": "d43ea87c995f5ad93ba0ef0f94a7ce48833168cb8060505323553da5832550ed"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/selection.log",
+      "bytes": 915,
+      "raw_file_sha256": "60fd293fbce2f8d56534ab76f1769381fd85554e0b81e8a0e9fb960529140bcb"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/source-after.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/source-before.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/SHA256SUMS",
+      "bytes": 1404,
+      "raw_file_sha256": "6720aed1052e55a6229a972d09bbd2a13dfb0a966475bd7ba444f92f6cd54281"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/binding.stderr.log",
+      "bytes": 9322,
+      "raw_file_sha256": "2e3006e38cadbee94565e4f8f2eb7f2c1879d3d1344417fc18c120c0f92ee05e"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/binding.stdout.log",
+      "bytes": 1245013,
+      "raw_file_sha256": "83a44f193d9a45bf75e317f9559452c6846e0ba19d2bbef87b1a5523c2033c2b"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/capability-probe.json",
+      "bytes": 3489,
+      "raw_file_sha256": "f42a84e151d6eb794789a03a4fc287d70734149c79d739507d5ef8929a5d16d8"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/environment.json",
+      "bytes": 2003,
+      "raw_file_sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/preceding-default-no-fail-fast-gate.json",
+      "bytes": 3162,
+      "raw_file_sha256": "ccf2fc714ca13f3d218bfa319f68edc23c152474a47b145e1d31f3dac6373f1a"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/preceding-diagnostic.json",
+      "bytes": 15680,
+      "raw_file_sha256": "5b7daa7e9e9b814ebd5073220ce33a7e102a69fbf0c1bb30896a6f70b12ea5e5"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/preceding-full-gate.json",
+      "bytes": 4846,
+      "raw_file_sha256": "d83fee90773fb235028d0897395beff8628b6f2f21753e39df8009e49a57a153"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/round-01.stderr.log",
+      "bytes": 2730,
+      "raw_file_sha256": "22b0186211dbc3bb78aae7ecebdbc42211181ca61961a5fc8b5ed1875590ee58"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/round-01.stdout.log",
+      "bytes": 1192,
+      "raw_file_sha256": "12a1e1e0edfb90282cb1291e730f1128d3016df70ca5f7c5b441abd52c85db92"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/round-01.trace.trace",
+      "bytes": 310585,
+      "raw_file_sha256": "81737afec1129dbd9f1ba9dd8c8b79304292b1e5463f9e78ebf285b5664ca3c2"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/selection.stderr.log",
+      "bytes": 0,
+      "raw_file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/selection.stdout.log",
+      "bytes": 915,
+      "raw_file_sha256": "60fd293fbce2f8d56534ab76f1769381fd85554e0b81e8a0e9fb960529140bcb"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/source-after.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/source-before.json",
+      "bytes": 469607,
+      "raw_file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_manifest_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/toolchain-ready.json",
+      "bytes": 6059,
+      "raw_file_sha256": "0d8da014686ec0eb66874e90527e668836830f873a3ac98f43de4451fe7bf3c9"
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/trace-window.json",
+      "bytes": 17155,
+      "raw_file_sha256": "9f482686eeb83fbb653b668ea6ff79edd282d3c39b287192c8947a6fe35f4e55"
+    },
+    {
+      "path": "evidence/old-1.99.1-target-retirement-r1/original-target-owner.json",
+      "bytes": 116,
+      "raw_file_sha256": "21f296c616ebe58f50c319df095706f23b27aff99679d1c5fe73f23d55c164ef"
+    },
+    {
+      "path": "evidence/old-1.99.1-target-retirement-r1/report.json",
+      "bytes": 2443,
+      "raw_file_sha256": "5d79efd240e4d9f931b6c757409833a36c7ee38c1ff9809fdc9820ece7fc8ea4"
+    },
+    {
+      "path": "evidence/prebuild-r1/cargo-test-workspace.log",
+      "bytes": 21812,
+      "raw_file_sha256": "73bcee03519aba1f635576efc927e2233f4bf4bbb7be26f22f91ff113b8906aa"
+    },
+    {
+      "path": "evidence/prebuild-r1/environment.json",
+      "bytes": 1405,
+      "raw_file_sha256": "78cd13f9890f6e3b8aa52c5ea2776aa6719d87084eafbb75ca6a23a0baf1c1b7"
+    },
+    {
+      "path": "evidence/prebuild-r1/gate.json",
+      "bytes": 3642,
+      "raw_file_sha256": "cb37d0e53171a2844098bf3e7cd3788a1e368a36e55c738f9e6d6f3323e5d383"
+    },
+    {
+      "path": "evidence/prebuild-r1/preparation.json",
+      "bytes": 2365,
+      "raw_file_sha256": "d5cb2fa8b9dbecd7211703754a54156b9a2751b4daf4bbaebe539ac4dd117917"
+    },
+    {
+      "path": "evidence/prebuild-r1/source-after.json",
+      "bytes": 451520,
+      "raw_file_sha256": "b10b3e0aae2949be7e98d5fb602a2ba2b71b3ff15b59bdde431127f4a2eca02b",
+      "canonical_manifest_sha256": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14"
+    },
+    {
+      "path": "evidence/prebuild-r1/source-before.json",
+      "bytes": 451520,
+      "raw_file_sha256": "b10b3e0aae2949be7e98d5fb602a2ba2b71b3ff15b59bdde431127f4a2eca02b",
+      "canonical_manifest_sha256": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/cargo-install.log",
+      "bytes": 200,
+      "raw_file_sha256": "55ee01830ff89552b858afec4c6131079a9de2057383525790dedeab9d0eb572"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/clippy-preview-install.log",
+      "bytes": 210,
+      "raw_file_sha256": "8bc03b4dae0e2f829d2ffea0a2fe12f5c4a63b0d3d5147b7980e75771c7838e7"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/progress.json",
+      "bytes": 196,
+      "raw_file_sha256": "55de45aa8510a7ad2705207544b6f213f756fd1cb8c9dbd8a1bbe74b24a0a68d"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/ready.json",
+      "bytes": 6059,
+      "raw_file_sha256": "0d8da014686ec0eb66874e90527e668836830f873a3ac98f43de4451fe7bf3c9"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/report.json",
+      "bytes": 82347,
+      "raw_file_sha256": "7f1ead3a503394ad449c2af0d6b16dc4126ab428911de28d65299a9f3fb1b5b8"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/rust-std-install.log",
+      "bytes": 231,
+      "raw_file_sha256": "f396c1674508e899b36f25bb5817d03177debe8abb2e4521254dcf6ca655e92b"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/rustc-install.log",
+      "bytes": 200,
+      "raw_file_sha256": "7c400c8c70d55a07590c5fbed4ba7b34bbd4cea56b7f178de5f97595e643a07f"
+    },
+    {
+      "path": "evidence/rust-1.99.0-restore-r1/rustfmt-preview-install.log",
+      "bytes": 212,
+      "raw_file_sha256": "2271ad3bd98deac2e67f3033ae62e2e7e0c89f83678d1670326907fe0822b32e"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/argv.json",
+      "bytes": 155,
+      "raw_file_sha256": "8f6be360bdfbc79841bc321ef4e973956ea8b60235016fd4fbd2ea251d5581ca"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/environment.json",
+      "bytes": 2094,
+      "raw_file_sha256": "16c5f7328e5bae8baee2427e4a82269d400432bc9fd763a61e02a08d325c9355"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/executed-runner.py",
+      "bytes": 4657,
+      "raw_file_sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/executed-wrapper.py",
+      "bytes": 12714,
+      "raw_file_sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/preceding-default.json",
+      "bytes": 376,
+      "raw_file_sha256": "308058deb8be1a2c8e96cef947151250a0c0e87b780ceb3d79f2c05f6e972ac8"
+    },
+    {
+      "path": "requests/default-no-fail-fast-pin-r1/runner-execution.json",
+      "bytes": 2573,
+      "raw_file_sha256": "6d5067d00656d709daa9e5e2558fa0201ce434a14d22d3527c4fd653de4a9087"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/launcher.json",
+      "bytes": 1754,
+      "raw_file_sha256": "3d7b5f34e1b8461c6487978525e962764b34a1ff7aa6824b46d0a50dee518c2c"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/runner-after.py",
+      "bytes": 27235,
+      "raw_file_sha256": "4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/runner-before.py",
+      "bytes": 27235,
+      "raw_file_sha256": "4fc4b51bce44b9ab03e5ed7b79c1a0f10198f0a8d6d8dd14356c087fe7d544e6"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/smart-turn-analyzer.log",
+      "bytes": 1106,
+      "raw_file_sha256": "78ec7bbcdb81a1fefedbc2163eacad216e61f01d910451d114d0ee3f39136735"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/smart-turn-log-slices.json",
+      "bytes": 1789,
+      "raw_file_sha256": "37c1bf03e6bb7d1e53f842563030638afccc5337fa07dafd08c89ba4aa3b028e"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/smart-turn-pipeline.log",
+      "bytes": 1337,
+      "raw_file_sha256": "88e8ec28874e113e477b91ae78f04b098048e14cc1ff633b6aa8d38c9f3b9f3c"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/source_manifest_helper-after.py",
+      "bytes": 5176,
+      "raw_file_sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/source_manifest_helper-before.py",
+      "bytes": 5176,
+      "raw_file_sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "path": "requests/grok-strace-pin-r1/vad-lib.log",
+      "bytes": 1431,
+      "raw_file_sha256": "8ef2cebb834d94f581320ce6fba0505dd3ee358982f55e0194114db09169bfd6"
+    },
+    {
+      "path": "run_full_gate.py",
+      "bytes": 5176,
+      "raw_file_sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    {
+      "path": "run_qualification_command_pin_v3.py",
+      "bytes": 4657,
+      "raw_file_sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    {
+      "path": "runtime-api-receipts/full-default-r4-status.json",
+      "bytes": 734,
+      "raw_file_sha256": "6c7f8f9139cb6d212039d3353765751cfa22db4ed3dfc40c9dc6ff7ec95e1035",
+      "provenance": "Exact text block returned by the Runtime API, supplied by controller as an immutable receipt."
+    },
+    {
+      "path": "runtime-api-receipts/default-no-fail-fast-status.json",
+      "bytes": 734,
+      "raw_file_sha256": "8895db0a1bab839f061a0a65da81e5cb9882af55c8ca72356cb84bf2e79a17fe",
+      "provenance": "Exact text block returned by the Runtime API, supplied by controller as an immutable receipt."
+    },
+    {
+      "path": "runtime-api-receipts/grok-strace-status.json",
+      "bytes": 730,
+      "raw_file_sha256": "daa5604d0615fb72f8c2a8af36e9f159fb756fc56eca1d345b6dc592da0fa75f",
+      "provenance": "Exact text block returned by the Runtime API, supplied by controller as an immutable receipt."
+    }
+  ],
+  "missing": [],
+  "excluded": [],
+  "limits": {
+    "file_bytes": 16777216,
+    "total_bytes": 167772160
+  },
+  "total_bytes": 10265256,
+  "ended_unix": 1793980550.2655904
+}

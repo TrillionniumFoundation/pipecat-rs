@@ -1,0 +1,176 @@
+{
+  "schema": "grok-lifetime-gate-deliverable-blobs-v1",
+  "repository": "TrillionniumFoundation/pipecat-rs",
+  "source_directory": "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-lifetime-gate-deliverable-r1",
+  "destination_directory": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate",
+  "scope": "16 ready-to-copy files; exact frozen member bytes unchanged. Root alone copies to repository/publishes. No new experiment or native runtime execution.",
+  "file_count": 16,
+  "total_bytes": 156224,
+  "archive_recovery_transport": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-lifetime-gate-deliverable-r1.archive-transport.json",
+    "bytes": 119567,
+    "sha256": "dba907bb1fa1cdd0a7746d25e9d66159881acd17caea6d82e7b44e94bbc3acda",
+    "git_blob": "87407d84511c6b6615184ea76521a8e62399ff66",
+    "decoded_archive_exact": true,
+    "github_readback_exact": true
+  },
+  "binary_fetch_limit": {
+    "binary_create_returned_expected_git_blob": true,
+    "native_blob_fetch_error": {
+      "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xfd in position 0: invalid start byte",
+      "error_code": "UNKNOWN"
+    },
+    "native_api_fetch_error": {
+      "error": "HTTPError: 400: GitHub Fetch only accepts UTF-8 text. (Response: None)",
+      "error_code": "INVALID_ARGUMENT"
+    },
+    "interpretation": "The connector attempts UTF-8 decoding for binary fetch. The raw archive blob was created with the exact local Git identity; full byte recovery/readback was instead verified through the separately stored UTF-8 base64 envelope. These fetch errors are preserved and are not archive verification failures."
+  },
+  "files": [
+    {
+      "path": "DESIGN.md",
+      "bytes": 8482,
+      "sha256": "700bee4098bf490374a3f0d67112b9edd06aae914ddb0536b201773fd7f4eb79",
+      "git_blob": "74d89a378cb67bd03655ee037a2377118bf928e4",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/DESIGN.md",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "README.md",
+      "bytes": 4440,
+      "sha256": "a012716a25237764e56e051d4f7b778c26785475e642eb3445ec56d40492840b",
+      "git_blob": "0c936cc0cdcf46afde774f06c635a622997f501d",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/README.md",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "SHA256SUMS",
+      "bytes": 1425,
+      "sha256": "279b4935b3c8c443551b2fed803a5b43eb9aec6a98dac99f45a6df178be877a7",
+      "git_blob": "a9153027393fce5431f01237d9bdacaf414f7448",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/SHA256SUMS",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "archive-verification.json",
+      "bytes": 13641,
+      "sha256": "87cb0ab42e9f13a6f76fcf9bcfa09134d1b3c9bf55621dfd5e4e8223a42014b1",
+      "git_blob": "b423f012e32cbc53437cbd28d74c2fb4dbd680b6",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/archive-verification.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "audit.json",
+      "bytes": 1598,
+      "sha256": "d1be21a6f2dd9997251e62e6f10ddbc920b8a12593d554295e5bcd12119fd4ff",
+      "git_blob": "173045ba10494b24732da0605b6d24bf15580caa",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/audit.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "controlled-experiment/controlled_inheritance.py",
+      "bytes": 10157,
+      "sha256": "05a512e743b555e3ce3188047d377c5e37ff99f50ec38885f46e568b6727ecb5",
+      "git_blob": "eeb49539405574b74e4efaddd9b891030c085a2b",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/controlled_inheritance.py",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "controlled-experiment/execution.json",
+      "bytes": 1141,
+      "sha256": "fac8f9534c0737c40547782279381055aa7d7d6c2e4d3aef1af1cc39d4901a50",
+      "git_blob": "5ec14f73d7c39854d4140cb9c2af91114f597fa4",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/execution.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "controlled-experiment/experiment.json",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/experiment.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "controlled-experiment/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/stderr.log",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "controlled-experiment/stdout.log",
+      "bytes": 3129,
+      "sha256": "05cd93c2a6c3ecabfa929e86f04514b1c6fc3200c0e9b8450a33df32a5769ed9",
+      "git_blob": "fbc4d6aab576185e95c57ccc561768c54d2eba23",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/controlled-experiment/stdout.log",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "format-r2/local-format-check-r2.json",
+      "bytes": 1131,
+      "sha256": "352b1e3f3d1a60045fb466ac762145061c01c97c42114cda08466a10f882faec",
+      "git_blob": "61e85a78c9adf6759ba980a991e4f9120f960b58",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-check-r2.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "format-r2/local-format-r2.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-r2.stderr.log",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "format-r2/local-format-r2.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/format-r2/local-format-r2.stdout.log",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "frozen-evidence.tar.xz",
+      "bytes": 89444,
+      "sha256": "2ab1f9fd30d57085d688f5010e5048e50968e5debb49f8bfd8c5ae6b07f848d3",
+      "git_blob": "6dcf00e429e9e9fe3a9301a6ae266e87cdc2df5f",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/frozen-evidence.tar.xz",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": false,
+      "binary_readback_via_transport": "87407d84511c6b6615184ea76521a8e62399ff66"
+    },
+    {
+      "path": "immutable-backup-manifest.json",
+      "bytes": 11923,
+      "sha256": "5e14937ab49e1c759aab6f8214a8cdfd6b72e604a5cdb02f5cb97ce8f1968c0e",
+      "git_blob": "1cd42a4bcb318f9cae01270b64846566b037b99e",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/immutable-backup-manifest.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    },
+    {
+      "path": "primary-boundaries.json",
+      "bytes": 6584,
+      "sha256": "7e82b0f0c6727de1a8aae6d7e7856f273d8273549450ab1125e064c2ec42e415",
+      "git_blob": "ddcfbd717a15c171a705f7beb9d04af05bcb532e",
+      "repository_path": "rust/docs/qualification-hmi-full-sweep-20261106/native/grok-listener/lifetime-gate/primary-boundaries.json",
+      "blob_created_with_matching_local_identity": true,
+      "readback_exact": true
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "scope": "Final candidate static rustfmt check only with available Rust 1.95.0; not pinned Rust 1.99.0 compilation, Clippy, or runtime qualification. Prior local-format-check.json remains tied to its earlier candidate.",
+  "argv": [
+    "/workspace/scratch/bf693a71b444/toolchain/rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustfmt",
+    "--edition",
+    "2021",
+    "--check",
+    "/workspace/scratch/f9f576cc6c66/workspace-evidence/grok-spawn-gate-candidate-r2/app_cli.rs"
+  ],
+  "started_unix": 1793981805.5145264,
+  "finished_unix": 1793981805.6158943,
+  "exit_code": 0,
+  "tool_sha256": "56b31ad3ec8fe0277a2884a189e243b8f04e9b48e5fd22e547c1516c5f8fd34c",
+  "version": "rustfmt 1.9.0-stable (59807616e1 2026-04-14)",
+  "candidate_before_sha256": "b7e2420e488e7c2a348bfa7084bba4e6dde1376a2099b1d530efb3956bdf1913",
+  "candidate_after_sha256": "b7e2420e488e7c2a348bfa7084bba4e6dde1376a2099b1d530efb3956bdf1913",
+  "source_unchanged": true,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,56 @@
+{
+  "schema": "pipecat.user_speech.http_deadline_fixture_candidate.v1",
+  "status": "STATIC_CANDIDATE_NO_RUNTIME_EXECUTION",
+  "native_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "original": {
+    "bytes": 30887,
+    "sha256": "17cac6b7b25c06a3b5eadf79240a56f3c8afa59aca2f3b457a3c25317c19c203",
+    "git_blob_sha1": "b20a379d06d22d384e334de8ba8d9217de732c69"
+  },
+  "candidate": {
+    "bytes": 30969,
+    "sha256": "1b45c80e8d220aff0b42ce0b556034d0e468b838f64f7059b40b8667fb9b0d95",
+    "git_blob_sha1": "56721a90b01d928fc71b3af6b7c85a2cc815a7d5"
+  },
+  "patch_sha256": "62f0f4587f5c4f70090178396cee78d65a18b3211085e28b0ecacd643a218974",
+  "target_case": "silent_http_production_deadline_is_fixed_even_when_bot_events_continue",
+  "scope": "Only this case selects Disabled cache, so the existing silent-HTTP deadline oracle measures the Synthesizing stage without a preceding asynchronous private-cache lookup.",
+  "changed_code": "settings(&http.url, Some(&root), Duration::from_millis(180)) -> settings(&http.url, None, Duration::from_millis(180)); one explanatory comment.",
+  "preserved": {
+    "undo_two_declared_text_changes_restores_original_bytes": true,
+    "all_16_test_definitions_order_and_other_bodies_unchanged": true,
+    "original_180ms_producer_budget": true,
+    "original_1500ms_upper_bound": true,
+    "both_chatty_branches": true,
+    "exact_user_speech_timeout_assertion": true,
+    "actual_HTTP_request_count_1_and_closed_count_1": true,
+    "joined_HTTP_active_zero_and_empty_playback_checks": true,
+    "next_turn_not_run_assertion": true,
+    "all_other_private_cache_tests": true,
+    "production_source": true
+  },
+  "original_failure": {
+    "source_log": "workspace-evidence/evals-additional-failure-review-r1/user_speech.log",
+    "bytes": 2922,
+    "sha256": "1d72ff6fd1eacf4f4e7ad9c6aaeff1cd7d93412d4c629d4d79776004d58961d1",
+    "result": "15 passed, 1 failed",
+    "panic_line": 337,
+    "kind": "user_speech_cache_timeout",
+    "reason": "invalid scenario: user speech cache lookup timed out",
+    "turn_duration_ms": 182,
+    "whole_session_duration_ms": 1368,
+    "HTTP_admission_observed_in_original_failure": false
+  },
+  "interpretation": [
+    "Original Private-cache failure is retained. The candidate does not classify that original run as an HTTP test pass or a cache-cleanup pass.",
+    "The untouched assert_no_cached_audio on the unselected empty cache directory is only an absence-of-artifacts guard; it is not cache-owner reclamation qualification in this Disabled-cache case.",
+    "Existing final request-count and closed-count assertions remain real HTTP admission/cleanup witnesses. If HTTP admission never occurs, those assertions still fail.",
+    "Original cache_lock_wait_has_its_own_fixed_deadline_without_second_http_call passed in the same no-fail-fast target; it supplies its separate stated cache scope, not evidence that this failed original private-cache case entered HTTP.",
+    "Warm same-key cache would yield a Hit and skip HTTP, so it would not establish the intended stalled-HTTP contract."
+  ],
+  "validation": {
+    "rustfmt": "NOT_RUN locally: unavailable on PATH",
+    "Cargo_or_native": "NOT_RUN",
+    "git_apply_check_whitespace_error_all_exit_code": 0
+  }
+}

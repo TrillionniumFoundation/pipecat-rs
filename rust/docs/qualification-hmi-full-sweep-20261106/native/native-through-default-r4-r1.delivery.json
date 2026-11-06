@@ -1,0 +1,77 @@
+{
+  "archive": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/original-evidence.tar.xz",
+    "bytes": 407932,
+    "sha256": "72d5de97465c18df89f9ce261f609d25568b0de19c83d3abb141396b1350c890"
+  },
+  "manifest": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/original-files-manifest.json",
+    "bytes": 18344,
+    "sha256": "31be575dc7956e6cb8b397206473ed4d0fff01e968be483ad04d8dba79d5c74b"
+  },
+  "file_count": 83,
+  "original_bytes": 10265256,
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-000.b64",
+      "bytes": 49152,
+      "sha256": "f27f511b699016182a8b263844c49130b485cc42aac15d001649a5cd0ec8ebee"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-001.b64",
+      "bytes": 49152,
+      "sha256": "79986efcccf74c1b77a0d944ff6a029cdf7c8c1affa8c1e98ab79dc19e15925e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-002.b64",
+      "bytes": 49152,
+      "sha256": "c24f2ec231a6a0504684ef054c01726014ecc41533e99d9714b25bd6e5e314b0"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-003.b64",
+      "bytes": 49152,
+      "sha256": "d96d360def5f1b232429d3093a7f306809ba5a4b7e974af1d4dfe3d381ee2736"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-004.b64",
+      "bytes": 49152,
+      "sha256": "76cf17cc6cb29376671fe14adc59c6fe200257b52f2d9576fb1b34472edad31e"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-005.b64",
+      "bytes": 49152,
+      "sha256": "a7f367412ff6fe1e36f4de11f91616c18d239cf4f0ad50210be2ad1b6a8e2bee"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-006.b64",
+      "bytes": 49152,
+      "sha256": "4f376b42434a1dc52ba164b3c740bc37c0d92909707a50e37ad2ae15474f6582"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-007.b64",
+      "bytes": 49152,
+      "sha256": "6299ec99ffe8494604abc8ed1c8d5703c63b35b8f20fcffbff0256fb586faeaa"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-008.b64",
+      "bytes": 49152,
+      "sha256": "95e7f3106654992dd4c64a4e6d8b5623e566f5469579a0096c68198d4fa6efbb"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-009.b64",
+      "bytes": 49152,
+      "sha256": "0286ba6f0fccccadad97a42769c876537de75bd1561f7cd95c9d756eb6c28fa5"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-010.b64",
+      "bytes": 49152,
+      "sha256": "e60b404543c3426ae29b25b5b4554cbae3c9b1c8e1f2e5b3397b988ab88395b0"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/native-through-default-r4-r1/part-011.b64",
+      "bytes": 3240,
+      "sha256": "7c8566157e2f717e9790091a04bb07e9b8b3120209dc4fababfd7c0fdfe1cdf6"
+    }
+  ],
+  "missing": []
+}

@@ -9,8 +9,18 @@
 - [追加 owner 入口探针](environment/owner-entry-followup-r1.json)：12 份选定工程文件的完整读取与摘要；没有得到真实 thread／unit／socket 组合，不外推为整机不存在。
 - [WebRTC 当前证据可用性](webrtc/RECOVERY.md)：旧 60 文件中确切恢复 4 份、56 份未恢复；原 invocation-25 失败仍有完整原文。以该入口解释 preserved README/index，不能将其中旧相对链接当成现已交付。
 - [Provider 示例产物身份修复](provider-examples/README.md)：四个同名 Cargo example 的覆盖、普通 executable 与 test harness 的区别，以及最终 gate 的显式 build 要求。
-- [早期 native 完整原始记录](native/README.md)：38 份原文件的 byte-verified archive、实际 completed-suite 计数和8条原始合成中文输出。
+- [Native 完整原始记录](native/README.md)：早期38原件、source／pin r2另包、最新83索引原件及其导出index；完整default补充原log和独立计数、失败诊断、8条原合成中文输出分别保存。
 - [Grok 重绑独立控制](native/grok-listener/control-delivery.json)：本地受控端口竞争，只证明错误的非唯一归因；不清除 desktop r3 的未归因失败。
+- [Grok 原系统调用记录](native/grok-listener/trace-r1/README.md)：原12-case首轮11/1、父close成功后bind失败与另一child pre-exec窗口重叠；完整310,585-byte trace及其观测限制。
+- [Grok 生命周期隔离修补](native/grok-listener/lifetime-gate/README.md)：真实child回收前保留共享许可，listener原单次bind位于独占窗口；独立继承FD控制不冒充历史失败的当轮证据。
+- [首轮完整扩展矩阵](native/expanded-and-reference-pin-r1.root-verification.json)：112份原件、14份完整source map，原219个harness与完整补充731个harness的独立计数；原24项失败及strict/fmt失败全部保留。
+- [Bot-audio进程级观测隔离](native/bot-audio-response/original-raw-review-r1.json)：原15个失败的逐case worker身份／HTTP状态与同进程fixture互扰；原严格等式和期限不变。
+- [Cartesia精确签名历史](native/cartesia-eager/README.md)：原request的signed blocks正确，旧helper拒绝既有wire user点号；完整消息数组和roles按实际provider精确核对。
+- [静默HTTP阶段选择](native/user-speech-http/audit.json)：原Private-cache lookup timeout仍是失败；该HTTP case显式禁用cache后保留原180ms与实际request／close断言，不能称作cache回收资格。
+- [SmartTurn 原失败切片](native/smart-turn/default-no-fail-fast-slices-r1/smart-turn-log-slices.json)：完整no-fail-fast log的精确偏移和原字节摘要；直接speech概率差异、analyzer与pipeline失败分开。
+- [SmartTurn 静态路径核对](native/smart-turn/static-review-r1.json)与[QDQ数学诊断](native/smart-turn/qdq-static-analysis-r1.json)：不改原模型、参考值或容差，不将静态近边界值称作实际运行bins或CPU原因。
+- [SmartTurn固定输入C API对照](native/smart-turn/c-api-root-verification.json)：同一模型／runtime／原golden features的ALL、DISABLE_ALL、BASIC；原始stdout逐项核对，后两级仍未恢复speech／tone oracle，不更改产品设置或参考值。
+- [四项源码冻结与精确路径](fixture-source-freeze.json)：0cc16e8/tree aec037b，只有四份测试源码相对522改变；后续docs提交与实际native测试HEAD分开。
 - [证据入口变化与可用性](EVIDENCE_AVAILABILITY.md)：哪些是原字节回收、哪些是新观察，哪些旧 raw 当前取不到。
 
 完整 workspace、精确 Rust 1.99.0、真实本地 SFU、合成中文模型、Piper／Whisper 生命周期和 WebRTC 固定次数连跑，由 [本轮主报告](../HMI_FULL_SWEEP_20261106.md) 逐项结算。此索引不为仍在运行或尚未执行的阶段预填通过。

@@ -1,0 +1,275 @@
+{
+  "schema": "pipecat-smart-turn-qdq-static-analysis-v1",
+  "scope": "Static protobuf and mathematical inspection of unchanged tracked bytes only. No model execution, runtime kernel observation, native feature dump, or CPU attribution.",
+  "native_freeze_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "native_freeze_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "graph": {
+    "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+    "bytes": 8679182,
+    "ir_version": 10,
+    "producer_name": "onnx.quantize",
+    "producer_version": "0.1.0",
+    "opset_imports": [
+      {
+        "1": "",
+        "2": 18
+      },
+      {
+        "1": "ai.onnx.ml",
+        "2": 5
+      },
+      {
+        "1": "ai.onnx.training",
+        "2": 1
+      },
+      {
+        "1": "ai.onnx.preview.training",
+        "2": 1
+      },
+      {
+        "1": "com.microsoft",
+        "2": 1
+      },
+      {
+        "1": "com.microsoft.experimental",
+        "2": 1
+      },
+      {
+        "1": "com.microsoft.nchwc",
+        "2": 1
+      },
+      {
+        "1": "org.pytorch.aten",
+        "2": 1
+      }
+    ],
+    "input_names": [
+      "input_features"
+    ],
+    "output_names": [
+      "logits"
+    ],
+    "ops": {
+      "DequantizeLinear": 114,
+      "QuantizeLinear": 78,
+      "Shape": 5,
+      "Conv": 2,
+      "Concat": 11,
+      "Div": 8,
+      "Erf": 8,
+      "Add": 39,
+      "Mul": 25,
+      "Transpose": 21,
+      "LayerNormalization": 10,
+      "MatMul": 34,
+      "Reshape": 24,
+      "Gather": 4,
+      "Slice": 12,
+      "Softmax": 5,
+      "Tanh": 1,
+      "ReduceSum": 1,
+      "Gemm": 3,
+      "Sigmoid": 1
+    },
+    "domains": {
+      "": 406
+    },
+    "initializer_dtypes_onnx_enum": {
+      "1": 161,
+      "2": 78,
+      "3": 62,
+      "6": 10,
+      "7": 13
+    },
+    "metadata": [
+      {
+        "1": "onnx.infer",
+        "2": "onnxruntime.quant"
+      },
+      {
+        "1": "onnx.quant.pre_process",
+        "2": "onnxruntime.quant"
+      }
+    ],
+    "quantize_linear_nodes_count": 78,
+    "quantize_linear_nodes_sample": [
+      {
+        "name": "input_features_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "conv1d_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "gelu_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "conv1d_1_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "layer_norm_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "linear_1_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "val_18_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      },
+      {
+        "name": "val_33_QuantizeLinear",
+        "op": "QuantizeLinear",
+        "domain": ""
+      }
+    ]
+  },
+  "input_consumers": [
+    {
+      "name": "input_features_QuantizeLinear",
+      "op_type": "QuantizeLinear",
+      "inputs": [
+        "input_features",
+        "input_features_scale",
+        "input_features_zero_point"
+      ],
+      "outputs": [
+        "input_features_QuantizeLinear_Output"
+      ]
+    }
+  ],
+  "feature_reference_quantization_margin": {
+    "input_quantize": {
+      "inputs": [
+        "input_features",
+        "input_features_scale",
+        "input_features_zero_point"
+      ],
+      "outputs": [
+        "input_features_QuantizeLinear_Output"
+      ],
+      "initializers": {
+        "input_features_scale": {
+          "dtype": 1,
+          "scalar": 0.009614553302526474,
+          "raw_fields": [
+            {
+              "field": 2,
+              "wire": 0,
+              "value": 1
+            },
+            {
+              "field": 4,
+              "wire": 2,
+              "value": "5c861d3c"
+            }
+          ]
+        },
+        "input_features_zero_point": {
+          "dtype": 2,
+          "scalar": 28,
+          "raw_fields": [
+            {
+              "field": 2,
+              "wire": 0,
+              "value": 2
+            },
+            {
+              "field": 5,
+              "wire": 2,
+              "value": "1c"
+            }
+          ]
+        }
+      }
+    },
+    "feature_reference_quantization_margin": {
+      "speech": {
+        "feature_count": 64000,
+        "minimum_distance_to_quantization_half_step_real_arithmetic": 8.754432204690938e-8,
+        "nearest_index": 21183,
+        "nearest_feature": 1.033564567565918,
+        "count_within_2e_minus_6_of_half_step": 17
+      },
+      "tone": {
+        "feature_count": 64000,
+        "minimum_distance_to_quantization_half_step_real_arithmetic": 0.000024423468858004036,
+        "nearest_index": 42299,
+        "nearest_feature": 0.004831700120121241,
+        "count_within_2e_minus_6_of_half_step": 0
+      },
+      "silence": {
+        "feature_count": 64000,
+        "minimum_distance_to_quantization_half_step_real_arithmetic": 0.004677591845393246,
+        "nearest_index": 0,
+        "nearest_feature": -1.5,
+        "count_within_2e_minus_6_of_half_step": 0
+      }
+    },
+    "limitation": "Static model/reference arithmetic only, not native inference or observed Rust feature values. QuantizeLinear performs finite-precision arithmetic; these distances are screening evidence, not proof of a native quantized-bin difference."
+  },
+  "active_range_check": {
+    "formula": "For each reference feature x, d=abs(frac(x/scale)-0.5)*scale in Python double arithmetic. An active uint8 quantization boundary additionally requires 0 <= floor(x/scale)+28 <= 254.",
+    "speech": {
+      "active_values": 64000,
+      "near_active_boundaries_within_2e_minus_6": 17,
+      "minimum_distance": 8.754432204690938e-8,
+      "nearest_index": 21183,
+      "reference_feature": 1.033564567565918,
+      "lower_uint8_bin": 135
+    },
+    "tone": {
+      "active_values": 64000,
+      "near_active_boundaries_within_2e_minus_6": 0,
+      "minimum_distance": 0.000024423468858004036,
+      "nearest_index": 42299,
+      "reference_feature": 0.004831700120121241,
+      "lower_uint8_bin": 28
+    },
+    "silence": {
+      "active_values": 0,
+      "near_active_boundaries_within_2e_minus_6": 0,
+      "note": "All reference values are -1.5, below the input quantizer's active uint8 interval; the earlier unbounded nearest-half-step calculation is not an active clipping boundary."
+    }
+  },
+  "inputs": [
+    {
+      "case": "speech",
+      "bytes": 256000,
+      "sha256": "618645fb485f531de515aa83b13627cb3d19a5cb8a0d1faf617c99e76fb8b575"
+    },
+    {
+      "case": "tone",
+      "bytes": 256000,
+      "sha256": "f838341ea22fe1aac684c6eabfc2ccd8f38330b2dbca1220985963d4d90dedc5"
+    },
+    {
+      "case": "silence",
+      "bytes": 256000,
+      "sha256": "c4a1d90bbbdc1c49cf89b8f73360019b1b0fe01ae48a9dfd6fc2c4a3228b8859"
+    }
+  ],
+  "golden_input_semantics": {
+    "unit_test_helper": "pipecat-vad/src/smart_turn.rs assert_features_match computes extractor.extract(&endpoint_window(samples), true).",
+    "generator": "smart_turn_generate_fixtures.py converts PCM16 to float32 /32768, keeps final128000, front-pads zero to128000, computes features, writes those features.f32, and immediately passes the same features[np.newaxis] to ORT to generate probability.",
+    "speech_front_zero_samples": 47001,
+    "exclusion": "These golden feature files are not the standalone extractor's end-padded raw-input test."
+  },
+  "interpretation_limits": [
+    "Feature max-error <=2e-6 does not prove bit-identical feature inputs. Some speech reference values are close enough to a quantization boundary for a permitted frontend difference to matter.",
+    "This computation has not observed actual Rust feature differences or native quantized bins; it does not establish that any bin changed.",
+    "Finite-precision QuantizeLinear arithmetic and clipping are not executed by this inspection. Static margins are screening evidence only.",
+    "The model/runtime reference mismatch must be diagnosed with fixed-feature independent calls before attributing it to frontend rounding, optimized kernels, CPU features, or resource pressure."
+  ]
+}

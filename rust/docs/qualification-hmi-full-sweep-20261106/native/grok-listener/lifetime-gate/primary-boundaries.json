@@ -1,0 +1,179 @@
+{
+  "schema": "fixture-child-lifetime-primary-boundaries-v1",
+  "scope": "Primary source review for rejecting a spawn-return-only exclusion gate and evaluating an actual-child-reap barrier. Linux/glibc source tags below are explicit reference versions, not an assertion that the desktop is exactly those builds.",
+  "references": [
+    {
+      "repository": "rust-lang/rust",
+      "ref": "1.99.0",
+      "path": "library/std/src/sys/process/unix/unix.rs",
+      "git_blob": "34bf78e8bb325c8abb4da4dba66dbe0c44ae942f",
+      "url": "https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/process/unix/unix.rs",
+      "findings": [
+        {
+          "lines": [
+            73,
+            75
+          ],
+          "meaning": "Command::spawn first uses posix_spawn when eligible and returns its process result."
+        },
+        {
+          "lines": [
+            466,
+            474
+          ],
+          "meaning": "pre_exec closures and several process-attribute settings reject the posix_spawn fast path; the current Grok fixture has no pre_exec."
+        },
+        {
+          "lines": [
+            544,
+            554
+          ],
+          "meaning": "The Linux GNU fast path requires detected glibc at least 2.24."
+        },
+        {
+          "lines": [
+            773,
+            776,
+            823,
+            836
+          ],
+          "meaning": "The normal fast path calls libc::posix_spawnp and converts its success result; it has no additional fence proving every inherited CLOEXEC file has finished closing."
+        },
+        {
+          "lines": [
+            78,
+            94,
+            102,
+            121,
+            124,
+            140
+          ],
+          "meaning": "The fork fallback uses an error/CLOEXEC channel: child do_exec reports failure, parent accepts EOF. EOF of this one channel is not a separately observed completion of closing every other inherited file."
+        }
+      ]
+    },
+    {
+      "repository": "bminor/glibc",
+      "ref": "glibc-2.39",
+      "path": "sysdeps/unix/sysv/linux/spawni.c",
+      "git_blob": "e8ed2babb9b1396903466f631da0571504896aa5",
+      "url": "https://github.com/bminor/glibc/blob/glibc-2.39/sysdeps/unix/sysv/linux/spawni.c",
+      "findings": [
+        {
+          "lines": [
+            31,
+            47,
+            397,
+            418
+          ],
+          "meaning": "Linux posix_spawn uses CLONE_VM|CLONE_VFORK (plus other flags) and shared error state."
+        },
+        {
+          "lines": [
+            442,
+            463
+          ],
+          "meaning": "After clone returns, the parent checks args.err and unwinds spawn bookkeeping; no additional all-FD-closure acknowledgment appears."
+        }
+      ]
+    },
+    {
+      "repository": "torvalds/linux",
+      "ref": "v6.8",
+      "path": "fs/exec.c",
+      "git_blob": "af4fbb61cd53e97c788387a0d8277d1ce5495d7d",
+      "url": "https://github.com/torvalds/linux/blob/v6.8/fs/exec.c",
+      "findings": [
+        {
+          "lines": [
+            995,
+            1004
+          ],
+          "meaning": "exec_mmap invokes exec_mm_release."
+        },
+        {
+          "lines": [
+            1310,
+            1348
+          ],
+          "meaning": "begin_new_exec calls exec_mmap before do_close_on_exec."
+        }
+      ]
+    },
+    {
+      "repository": "torvalds/linux",
+      "ref": "v6.8",
+      "path": "kernel/fork.c",
+      "git_blob": "0d944e92a43ffa13bdbcce6c6a28c44bab29ca19",
+      "url": "https://github.com/torvalds/linux/blob/v6.8/kernel/fork.c",
+      "findings": [
+        {
+          "lines": [
+            1569,
+            1577,
+            1644,
+            1657
+          ],
+          "meaning": "exec_mm_release invokes mm_release, which completes vfork_done and can wake the parent."
+        }
+      ]
+    },
+    {
+      "repository": "torvalds/linux",
+      "ref": "v6.14",
+      "path": "fs/exec.c",
+      "git_blob": "506cd411f4ac2ecd8a4ba5711fb5952d44182064",
+      "url": "https://github.com/torvalds/linux/blob/v6.14/fs/exec.c",
+      "findings": [
+        {
+          "lines": [
+            964,
+            1267,
+            1305
+          ],
+          "meaning": "The later reference version retains exec_mm_release via exec_mmap before do_close_on_exec."
+        }
+      ]
+    },
+    {
+      "repository": "torvalds/linux",
+      "ref": "v6.8",
+      "path": "kernel/exit.c",
+      "git_blob": "dfb963d2f862ada6a2f06259c6df4923272cb218",
+      "url": "https://github.com/torvalds/linux/blob/v6.8/kernel/exit.c",
+      "findings": [
+        {
+          "lines": [
+            866,
+            871,
+            891
+          ],
+          "meaning": "do_exit performs exit_files and exit_task_work before exit_notify. An actual child reap is a more conservative boundary than a spawn return."
+        }
+      ]
+    },
+    {
+      "repository": "tokio-rs/tokio",
+      "ref": "tokio-1.53.2",
+      "path": "tokio/src/net/addr.rs",
+      "git_blob": "a098990bb79b22ce4ea96b1d5b4afc530e7dcc29",
+      "url": "https://github.com/tokio-rs/tokio/blob/tokio-1.53.2/tokio/src/net/addr.rs",
+      "findings": [
+        {
+          "lines": [
+            49,
+            59
+          ],
+          "meaning": "Concrete SocketAddr uses a ready one-element address iterator. This was considered for a synchronous one-poll variant, but the selected lifetime candidate keeps the original asynchronous bind and adds no immediate-Ready assertion."
+        }
+      ]
+    }
+  ],
+  "rejected_v1": "Short read guard around only Command::spawn prevents the large pre-exec overlap observed in the trace, but is not a general proof that all inherited socket references are already gone when the read guard releases. Therefore it remains rejected/unapplied.",
+  "v2_boundary": "Each successful spawn keeps a shared lease in ChildOwner. collect first observes try_wait(Some), and Drop checks wait; only after that cleanup path is the lease released. A wait failure sets a monotonic fixture failure flag before release. The exclusive writer must observe no read leases and reject the failure flag before listener drop plus one bind. Both subsequent read admission and exclusive write admission reject the monotonic failure flag.",
+  "limitations": [
+    "This source review does not prove that child696897 held inode1121549341 in the earlier trace; that direct witness was absent.",
+    "The standalone controlled experiment proves the inherited-socket mechanism for its explicitly synchronized child and inode only.",
+    "No candidate is applied or runtime-qualified by this document."
+  ]
+}

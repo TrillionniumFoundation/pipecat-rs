@@ -1,0 +1,32 @@
+{
+  "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/default-no-fail-fast-pin-r1/command.log",
+  "source_bytes": 893156,
+  "source_sha256": "60df6c85e3dfce912f720424a08467e92aeb9997b5b5aac71f3c05b967f0bf96",
+  "scope": "Exact original byte slices for inspection; complete original log retained unchanged.",
+  "slices": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/grok-strace-pin-r1/vad-lib.log",
+      "source_start_byte": 857894,
+      "source_end_byte": 859325,
+      "bytes": 1431,
+      "sha256": "8ef2cebb834d94f581320ce6fba0505dd3ee358982f55e0194114db09169bfd6",
+      "header": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-1ae35dd7b6b312e0)"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/grok-strace-pin-r1/smart-turn-analyzer.log",
+      "source_start_byte": 862055,
+      "source_end_byte": 863161,
+      "bytes": 1106,
+      "sha256": "78ec7bbcdb81a1fefedbc2163eacad216e61f01d910451d114d0ee3f39136735",
+      "header": "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-2845e05916b76d58)"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/grok-strace-pin-r1/smart-turn-pipeline.log",
+      "source_start_byte": 837745,
+      "source_end_byte": 839082,
+      "bytes": 1337,
+      "sha256": "88e8ec28874e113e477b91ae78f04b098048e14cc1ff633b6aa8d38c9f3b9f3c",
+      "header": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)"
+    }
+  ]
+}

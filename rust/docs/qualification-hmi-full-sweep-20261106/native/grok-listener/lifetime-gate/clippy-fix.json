@@ -1,0 +1,27 @@
+{
+  "schema": "pipecat-grok-diagnostic-clippy-fix-v1",
+  "observed_utc": "2026-11-06T16:24:21.174661+00:00",
+  "phase": "local_fix_before_exact_pin_requalification",
+  "reported_failure": {
+    "source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+    "command": "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+    "exit_code": 101,
+    "path": "rust/crates/pipecat-grok-realtime/tests/app_cli.rs",
+    "line_at_original_source": 219,
+    "lint": "clippy::chunks_exact_to_as_chunks"
+  },
+  "applied_after_lifetime_candidate": {
+    "bytes": 41107,
+    "sha256": "b7e2420e488e7c2a348bfa7084bba4e6dde1376a2099b1d530efb3956bdf1913"
+  },
+  "combined_file": {
+    "bytes": 41116,
+    "sha256": "6529eac0c56d6f3b0c6686d469d0305f672e516731b416b96afbd93f0dc76df5",
+    "git_blob": "220731111864e887e241da3b2628a0b407838969"
+  },
+  "exact_change": "Replace chunks_exact(4) plus slice try_into unwrap with as_chunks::<4>().0.iter() and direct copied [u8;4].",
+  "semantics": "IP octets are the same 4- or 16-byte sequence; both forms iterate exact four-byte groups in the same order, with the same native-endian u32 conversion, uppercase width8 formatting and string concatenation. Endpoint filtering, limits and diagnostic observations unchanged.",
+  "lint_suppression_added": false,
+  "new_runtime_execution": false,
+  "original_failure_retained": true
+}

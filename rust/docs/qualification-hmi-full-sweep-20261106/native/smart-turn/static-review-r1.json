@@ -1,0 +1,186 @@
+{
+  "schema": "pipecat-smart-turn-static-review-v1",
+  "review_date_utc": "2026-11-06",
+  "scope": "Independent local read-only source and tracked-byte review. No Rust execution, ONNX inference, fixture regeneration, remote call, product edit, tolerance change, or new runtime qualification.",
+  "source_binding": {
+    "inspected_checkout_head": "52243a392065d474ea0d0aead585891c6010bb3d",
+    "native_freeze_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+    "native_freeze_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "comparison": "Each listed local file was compared byte-for-byte with git show <native_freeze_commit>:<path>.",
+    "files": [
+      {
+        "path": "rust/crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs",
+        "bytes": 7961,
+        "sha256": "44f311f149c42ce3179121e38bcb497b6bcaffe335cd4d01b6e5c895bfb234b1",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-turns/src/smart_turn.rs",
+        "bytes": 16772,
+        "sha256": "4da9e9ec05498b040e299090061c07ed7d85cdd78dc2ebd3ab2ca0a83c3fa4c3",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/src/smart_turn_analyzer.rs",
+        "bytes": 26703,
+        "sha256": "a012085fda91891580ee3ceb671b1ad4a3be75180c53f7fd3df1d496be4d35eb",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/src/smart_turn.rs",
+        "bytes": 20262,
+        "sha256": "5ba1f9e0f48af711a184bffd86d5a8f6f7eb4de45ec3985c0a375bad2b345c76",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/src/runtime.rs",
+        "bytes": 1830,
+        "sha256": "e6dbe13d4940679d04f2f686ad9929f41c913b567b18b584a081cd119b8d64e5",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/smart_turn_model_analyzer.rs",
+        "bytes": 4712,
+        "sha256": "a94999e2f979503c8ee5bc7494ac5afd5259ec672263ee8bfaa50aebe16154a9",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_generate_fixtures.py",
+        "bytes": 2875,
+        "sha256": "d8a1ce1a642987a82f5bdcc584bcf5bc852f85c578c78c7a12b2d9a8c608ada8",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_oracle.json",
+        "bytes": 624,
+        "sha256": "7e68a8cdc068f38791c6c5dcb67b2df68ec25db6db951ddfc305b75fa8a93e64",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.pcm16",
+        "bytes": 161998,
+        "sha256": "ba61fe4440ff35e585bbd8ae418a0f6e08fc08485a578466155c1320a3c796f5",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+        "bytes": 256000,
+        "sha256": "618645fb485f531de515aa83b13627cb3d19a5cb8a0d1faf617c99e76fb8b575",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.probability.txt",
+        "bytes": 20,
+        "sha256": "17f53fa2fd6586f8ccca5f8a576e972c8d0631ab0efcf6d84cc5747369940783",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+        "bytes": 8679182,
+        "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/README.md",
+        "bytes": 11218,
+        "sha256": "d6d3c3449852f466a8f4dc9e44b236bc2ae8678ce75bf370dac1cc37cc01ca9b",
+        "matches_native_freeze_bytes": true
+      },
+      {
+        "path": "rust/crates/pipecat-vad/SMART_TURN.md",
+        "bytes": 11555,
+        "sha256": "b3084c74962fe5eb782278ce0ccff40e197bded46ce759645901559bf1f25913",
+        "matches_native_freeze_bytes": true
+      }
+    ]
+  },
+  "failure_context": {
+    "provenance": "Parent agent reported full-workspace-rust-1.99.0-r4 exit 101 at the two existing pipecat-turns integration cases. This receipt has not independently consumed that run's raw log.",
+    "target": "pipecat-turns --test smart_turn_onnx_pipeline",
+    "cases": [
+      "actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context",
+      "actual_smart_turn_onnx_drives_composable_analyzer_policy"
+    ],
+    "assertion": "smart_turn_onnx_pipeline.rs:213: (probability - expected).abs() < 1e-5",
+    "actual_probability": null,
+    "cannot_claim": "Later is_complete, paired context, one LLM call, buffer reset and worker End/join assertions lie after the failing assertion."
+  },
+  "tracked_input": {
+    "pcm_bytes": 161998,
+    "pcm_samples": 80999,
+    "rate_hz": 16000,
+    "channels": 1,
+    "encoding": "little-endian signed PCM16",
+    "duration_seconds": 5.0624375,
+    "pcm_sha256": "ba61fe4440ff35e585bbd8ae418a0f6e08fc08485a578466155c1320a3c796f5",
+    "endpoint_window_samples": 128000,
+    "front_zero_samples": 47001,
+    "expected_probability_text": "0.98232018947601318",
+    "expected_f32_bits_big_endian": "3f7b7956",
+    "expected_sha256": "17f53fa2fd6586f8ccca5f8a576e972c8d0631ab0efcf6d84cc5747369940783",
+    "representation_note": "The reference is exactly the f64 expansion of an f32 value. Reading the same f32 metric as f64 does not itself explain a 1e-5 discrepancy."
+  },
+  "statically_observed_path": [
+    "SyntheticStt forwards the original InputAudio frame, then emits a final fixed transcription; it does not transform PCM.",
+    "Detailed VAD start sets vad_start_secs=0.2 and vad_speaking=true. The default buffer pre_speech_ms=500 yields a 0.7-second chunk-selection preroll, not synthetic audio.",
+    "The single speech chunk is shorter than the default 128000-sample maximum and is retained in full. analysis_samples selects whole chunks; the only chunk remains included.",
+    "Detailed VAD stop sets vad_speaking=false and requests analysis. Its stop_secs=0.2 is not converted to silence samples in this path.",
+    "The analyzer worker passes its snapshot to the same SmartTurnModel cancellable entry point. It does not resample or independently pad the PCM.",
+    "SmartTurnModel endpoint_window retains the final 128000 samples and front-pads this short sample with 47001 zeros, dividing PCM16 values by 32768 as float32.",
+    "WhisperFeatureExtractor then computes the same normalized 80x800 log-mel tensor used by the direct golden path.",
+    "Model session construction requests sequential execution, one inter-op and one intra-op thread, full graph optimization. Per-run cancellation uses fresh RunOptions.",
+    "The aggregator publishes the analyzer's f32 probability in smart_turn metadata; it does not recompute the probability."
+  ],
+  "oracle_provenance_limits": {
+    "generator_record": "smart_turn_oracle.json records NumPy 2.3.5, onnxruntime 1.21.0, source/model/WAV SHA256 and front-pad/final-128000 semantics.",
+    "model_sha_matches_record": true,
+    "model_bytes": 8679182,
+    "model_sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+    "original_python_feature_source_present_in_inspected_checkout": false,
+    "original_provider_watch_wav_present_in_inspected_checkout": false,
+    "missing_paths": [
+      "src/pipecat/audio/turn/smart_turn/_whisper_features.py",
+      "scripts/provider-watch/assets/speech-16k.wav"
+    ],
+    "note": "The oracle speech_sha256 dbfccc2e39b708ff8cad6ec3139e87e42004be04b6328ad42304ff215e80d8ad identifies the original WAV, not the tracked PCM blob. This review verifies current tracked model/PCM/features/reference bytes against the native freeze; it does not claim fresh Python reproduction or loss/absence of those files on every host.",
+    "historical_scope": "README/SMART_TURN.md describe contracts and fixture provenance. Accessible earlier full-workspace logs did not establish execution of the actual Smart Turn suites; earlier retained DRAFT_QUALIFICATION.md explicitly marked smart_turn_onnx_pipeline NOT_RUN. Prior documentation is not a fresh passing result."
+  },
+  "unchanged_existing_diagnostics_to_read_next": {
+    "execution_owner": "workspace_gate's original default --no-fail-fast supplemental gate on the same native freeze; no separate model invocation requested by this review",
+    "feature_tests": [
+      "pipecat-vad::smart_turn::tests::whisper_matches_python_speech_features",
+      "pipecat-vad::smart_turn::tests::whisper_matches_python_tone_features",
+      "pipecat-vad::smart_turn::tests::whisper_matches_python_silence_features"
+    ],
+    "feature_tolerance": "maximum absolute error <= 2e-6 over all 64000 values per case",
+    "direct_model_test": "pipecat-vad::smart_turn::tests::smart_turn_real_model_matches_python_probabilities",
+    "direct_model_note": "Already prints actual and Python expected probabilities; its original <= 1e-5 gate remains unchanged.",
+    "analyzer_test": "pipecat-vad --test smart_turn_model_analyzer: smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse",
+    "analyzer_tolerance": "original absolute error < 1e-5",
+    "pipeline_tolerance_and_deadlines": "original strict < 1e-5, recv_until 20s and STT timeout 10s unchanged"
+  },
+  "interpretation_branches": [
+    {
+      "observation": "Feature golden fails",
+      "conclusion_limit": "Investigate native preprocessing vs pinned features. Do not first blame the aggregator or change model/reference."
+    },
+    {
+      "observation": "Features pass and direct model probability golden fails",
+      "conclusion_limit": "Failure exists below the aggregator; compare actual model/runtime identity and numeric inference with pinned oracle. This alone does not establish CPU or resource causation."
+    },
+    {
+      "observation": "Direct model passes but independent analyzer fails",
+      "conclusion_limit": "Focus on analyzer snapshot, worker and cancellation path; obtain exact input and actual probability."
+    },
+    {
+      "observation": "Direct model and independent analyzer pass but pipeline still fails",
+      "conclusion_limit": "Obtain pipeline's actual probability/expected/delta before attributing the discrepancy; a transparent real-model input-boundary observation may then be justified."
+    }
+  ],
+  "minimum_candidate_if_new_observation_is_needed": {
+    "status": "Proposed only; not applied. Parent requested waiting for existing no-fail-fast results first.",
+    "change": "Add actual probability, unchanged expected, absolute delta and existing smart_turn metric metadata to the original pipeline assertion's failure message.",
+    "preserved": "Original test cases, real model, fixture/reference bytes, <1e-5 predicate, 20s receive timeout, 10s STT timeout, subsequent assertions and owner cleanup.",
+    "excluded_now": "No predictor wrapper, new model case, re-run, regenerated oracle, altered padding or widened tolerance."
+  }
+}

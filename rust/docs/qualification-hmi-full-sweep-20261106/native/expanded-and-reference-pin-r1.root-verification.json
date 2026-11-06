@@ -1,0 +1,388 @@
+{
+  "schema": "pipecat-root-expanded-originals-verification-v1",
+  "created_utc": "2026-11-06T16:41:10.603717+00:00",
+  "source_head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "archive": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/expanded-and-reference-pin-r2/expanded-and-reference.tar.xz",
+    "bytes": 1071708,
+    "sha256": "a3442d8ccaa03134c124c58893102635346a7541d64eb3a9c13395c30cc74982"
+  },
+  "original_count": 112,
+  "original_bytes": 19978439,
+  "archive_member_count": 113,
+  "all_original_sizes_hashes_and_local_bytes_verified": true,
+  "embedded_manifest_exact": true,
+  "source_maps": [
+    {
+      "name": "evidence/all-features-all-targets-no-fail-fast-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/all-features-all-targets-no-fail-fast-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/all-features-all-targets-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/all-features-all-targets-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/build-normal-examples-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/build-normal-examples-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/format-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/format-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/owned-format-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/owned-format-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/smart-turn-ort-reference-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/smart-turn-ort-reference-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/strict-clippy-pin-r1/source-after.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "name": "evidence/strict-clippy-pin-r1/source-before.json",
+      "file_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    }
+  ],
+  "command_counts": [
+    {
+      "stage": "all-features-all-targets-pin-r1",
+      "raw_bytes": 964346,
+      "raw_sha256": "21c764ff5aa031ca37cee5e0f09c9aef5f4a71440b0b621c8013d7e7457698a5",
+      "gate_sha256": "8accc0ffce88b7ca9ea58a113b3f8b360524ba10e80f3d49f41fcc0d1461f44f",
+      "exit_code": 101,
+      "source_unchanged": true,
+      "seconds": 925.4792199134827,
+      "harness_count": 219,
+      "counts": {
+        "passed": 2175,
+        "failed": 15,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "missing_or_multiple_summaries": [],
+      "all_summary_count": 219,
+      "failed_harnesses": [
+        {
+          "harness": "Running tests/bot_audio_response.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_response-0b1505c6e9996230)",
+          "counts": {
+            "passed": 1,
+            "failed": 15,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 9.08,
+          "start_byte": 260268,
+          "end_byte": 964346,
+          "sha256": "77f8da3ddb51979ce09a96b020366bd41e685ba83cb7d2bbd1ed8442ef4e3ca1",
+          "failed_case_lines": [
+            "test malformed_and_unsupported_pcm_fail_without_any_stt_upload ... FAILED",
+            "test invalid_bounds_are_rejected_before_connecting_or_starting_workers ... FAILED",
+            "test cancellation_during_http_closes_connection_and_joins_session_and_peers ... FAILED",
+            "test dropping_run_future_with_queued_vad_work_closes_owned_websocket ... FAILED",
+            "test pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload ... FAILED",
+            "test genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio ... FAILED",
+            "test ordinary_next_send_settlement_timeout_fails_without_sending_it ... FAILED",
+            "test ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting ... FAILED",
+            "test interruption_and_new_llm_epoch_discard_delayed_old_http_result ... FAILED",
+            "test empty_transcript_emits_no_response_and_later_real_segment_recovers ... FAILED",
+            "test explicit_next_send_discards_previous_pending_recognition ... FAILED",
+            "test spoken_absence_held_pcm_new_llm_start_fails ... FAILED",
+            "test two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order ... FAILED",
+            "test spoken_absence_held_pcm_new_remote_speaking_start_fails ... FAILED",
+            "test spoken_absence_held_pcm_continuation_keeps_original_deadline ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'malformed_and_unsupported_pcm_fail_without_any_stt_upload' (813762) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'invalid_bounds_are_rejected_before_connecting_or_starting_workers' (813761) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:1071:5:",
+            "thread 'cancellation_during_http_closes_connection_and_joins_session_and_peers' (813755) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'dropping_run_future_with_queued_vad_work_closes_owned_websocket' (813756) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:914:5:",
+            "thread 'pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload' (813866) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio' (813759) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'ordinary_next_send_settlement_timeout_fails_without_sending_it' (813785) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting' (813790) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'interruption_and_new_llm_epoch_discard_delayed_old_http_result' (813760) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'empty_transcript_emits_no_response_and_later_real_segment_recovers' (813757) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'explicit_next_send_discards_previous_pending_recognition' (813758) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_new_llm_start_fails' (813885) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order' (813929) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_new_remote_speaking_start_fails' (813895) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_continuation_keeps_original_deadline' (813867) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:"
+          ]
+        }
+      ]
+    },
+    {
+      "stage": "all-features-all-targets-no-fail-fast-pin-r1",
+      "raw_bytes": 1708509,
+      "raw_sha256": "f451a13a8cdbc23579e1bbcd6a90602a3538d2324f3f60237005755026f0a2a8",
+      "gate_sha256": "cb489696a0f52d5ed019402ff0e9ac7b01681ed22f48135beb3659203ed68d3a",
+      "exit_code": 101,
+      "source_unchanged": true,
+      "seconds": 482.6445722579956,
+      "harness_count": 731,
+      "counts": {
+        "passed": 8839,
+        "failed": 24,
+        "ignored": 63,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "missing_or_multiple_summaries": [],
+      "all_summary_count": 731,
+      "failed_harnesses": [
+        {
+          "harness": "Running tests/bot_audio_response.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_response-0b1505c6e9996230)",
+          "counts": {
+            "passed": 1,
+            "failed": 15,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 9.12,
+          "start_byte": 249842,
+          "end_byte": 954879,
+          "sha256": "a9584f578b1165219240f0faee0b3a967efd3bb02524386f40de5463f89afdb4",
+          "failed_case_lines": [
+            "test malformed_and_unsupported_pcm_fail_without_any_stt_upload ... FAILED",
+            "test invalid_bounds_are_rejected_before_connecting_or_starting_workers ... FAILED",
+            "test cancellation_during_http_closes_connection_and_joins_session_and_peers ... FAILED",
+            "test dropping_run_future_with_queued_vad_work_closes_owned_websocket ... FAILED",
+            "test pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload ... FAILED",
+            "test genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio ... FAILED",
+            "test ordinary_next_send_settlement_timeout_fails_without_sending_it ... FAILED",
+            "test ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting ... FAILED",
+            "test empty_transcript_emits_no_response_and_later_real_segment_recovers ... FAILED",
+            "test interruption_and_new_llm_epoch_discard_delayed_old_http_result ... FAILED",
+            "test explicit_next_send_discards_previous_pending_recognition ... FAILED",
+            "test spoken_absence_held_pcm_new_llm_start_fails ... FAILED",
+            "test two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order ... FAILED",
+            "test spoken_absence_held_pcm_new_remote_speaking_start_fails ... FAILED",
+            "test spoken_absence_held_pcm_continuation_keeps_original_deadline ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'malformed_and_unsupported_pcm_fail_without_any_stt_upload' (826882) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'invalid_bounds_are_rejected_before_connecting_or_starting_workers' (826881) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:1071:5:",
+            "thread 'cancellation_during_http_closes_connection_and_joins_session_and_peers' (826875) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'dropping_run_future_with_queued_vad_work_closes_owned_websocket' (826876) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:914:5:",
+            "thread 'pcm_admission_budgets_reject_whole_frame_without_partial_stt_upload' (826962) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'genuine_pcm_response_waits_for_http_and_remote_stop_cannot_cut_queued_audio' (826879) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'ordinary_next_send_settlement_timeout_fails_without_sending_it' (826922) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'ordinary_next_send_waits_for_queued_audio_and_pending_http_accounting' (826924) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'empty_transcript_emits_no_response_and_later_real_segment_recovers' (826877) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'interruption_and_new_llm_epoch_discard_delayed_old_http_result' (826880) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'explicit_next_send_discards_previous_pending_recognition' (826878) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_new_llm_start_fails' (826973) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'two_acoustic_segments_with_first_http_pending_aggregate_in_spoken_order' (826980) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_new_remote_speaking_start_fails' (826975) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:",
+            "thread 'spoken_absence_held_pcm_continuation_keeps_original_deadline' (826963) panicked at crates/pipecat-evals/tests/bot_audio_response.rs:620:9:"
+          ]
+        },
+        {
+          "harness": "Running tests/bot_audio_smart_turn.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/bot_audio_smart_turn-a9e4829c48b09ba2)",
+          "counts": {
+            "passed": 8,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 23.02,
+          "start_byte": 957187,
+          "end_byte": 959025,
+          "sha256": "3ca07d93a572aea5cb60c70b57b1510e3a6cd6918c3876e8ddfb976c3459eaa8",
+          "failed_case_lines": [
+            "test genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'genuine_full_fixtures_retain_incomplete_and_complete_with_the_recorded_oracles' (828657) panicked at crates/pipecat-evals/tests/bot_audio_smart_turn.rs:1007:9:"
+          ]
+        },
+        {
+          "harness": "Running tests/user_speech.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/user_speech-7329fd8d04281fe0)",
+          "counts": {
+            "passed": 15,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 5.65,
+          "start_byte": 981165,
+          "end_byte": 984087,
+          "sha256": "1d72ff6fd1eacf4f4e7ad9c6aaeff1cd7d93412d4c629d4d79776004d58961d1",
+          "failed_case_lines": [
+            "test silent_http_production_deadline_is_fixed_even_when_bot_events_continue ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'silent_http_production_deadline_is_fixed_even_when_bot_events_continue' (831780) panicked at crates/pipecat-evals/tests/user_speech.rs:337:9:"
+          ]
+        },
+        {
+          "harness": "Running tests/app_cli.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-c683d574f664c3a8)",
+          "counts": {
+            "passed": 10,
+            "failed": 2,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 0.77,
+          "start_byte": 1111307,
+          "end_byte": 1117092,
+          "sha256": "8dbe79d68fdbeaa09b1051adf111f013d1f50399792bf2ea093522795a701b86",
+          "failed_case_lines": [
+            "test actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join ... FAILED",
+            "test aligned_regular_bounded_input_and_create_new_paths_preflight_before_connection ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join' (835921) panicked at crates/pipecat-grok-realtime/tests/app_cli.rs:294:9:",
+            "thread 'actual_binary_failure_after_accepted_pcm_persists_exact_partial_only_after_join' (835921) panicked at crates/pipecat-grok-realtime/tests/app_cli.rs:884:20:",
+            "thread 'aligned_regular_bounded_input_and_create_new_paths_preflight_before_connection' (835939) panicked at crates/pipecat-grok-realtime/tests/app_cli.rs:294:9:"
+          ]
+        },
+        {
+          "harness": "Running tests/cartesia_turns_eager.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/cartesia_turns_eager-25f622cc5eb07119)",
+          "counts": {
+            "passed": 33,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 0.51,
+          "start_byte": 1538672,
+          "end_byte": 1543440,
+          "sha256": "19f2c2a114825ae1df660167a14429e8368cf8b0726fdeff06cecf85c9a54f8e",
+          "failed_case_lines": [
+            "test eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'eager::review_crosssocket_effects::signed_concurrent_owner_restart_keeps_foreign_receipts_out_of_both_next_requests' (850721) panicked at crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs:343:13:"
+          ]
+        },
+        {
+          "harness": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-adb22a02b2ba759a)",
+          "counts": {
+            "passed": 0,
+            "failed": 2,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 0.47,
+          "start_byte": 1659719,
+          "end_byte": 1661057,
+          "sha256": "20a50e5f6ea8363dbe664d4287982f4ea581c94ddada1f565ab1e8831d54f7b3",
+          "failed_case_lines": [
+            "test actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context ... FAILED",
+            "test actual_smart_turn_onnx_drives_composable_analyzer_policy ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'actual_smart_turn_onnx_gates_synthetic_stt_llm_and_paired_context' (854089) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:",
+            "thread 'actual_smart_turn_onnx_drives_composable_analyzer_policy' (854088) panicked at crates/pipecat-turns/tests/smart_turn_onnx_pipeline.rs:213:5:"
+          ]
+        },
+        {
+          "harness": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-23786cc7a223be1a)",
+          "counts": {
+            "passed": 17,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 0.57,
+          "start_byte": 1680584,
+          "end_byte": 1682930,
+          "sha256": "da46bc387d63de0addb985a807c91a35d5bfb6878500c3eb11f704cd44e4d88e",
+          "failed_case_lines": [
+            "test smart_turn::tests::smart_turn_real_model_matches_python_probabilities ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn::tests::smart_turn_real_model_matches_python_probabilities' (854574) panicked at crates/pipecat-vad/src/smart_turn.rs:501:13:"
+          ]
+        },
+        {
+          "harness": "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-ffcc52f9b2c092a5)",
+          "counts": {
+            "passed": 2,
+            "failed": 1,
+            "ignored": 0,
+            "measured": 0,
+            "filtered_out": 0
+          },
+          "seconds": 0.62,
+          "start_byte": 1686398,
+          "end_byte": 1687505,
+          "sha256": "9fd17da72bd36dc2714c74ab657648c04c58342093d6d602edb926b7928d8081",
+          "failed_case_lines": [
+            "test smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse ... FAILED"
+          ],
+          "panic_sites": [
+            "thread 'smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse' (854981) panicked at crates/pipecat-vad/tests/smart_turn_model_analyzer.rs:45:9:"
+          ]
+        }
+      ]
+    }
+  ],
+  "count_scope": "Counts are actual executions in each original Cargo command, not unique source test functions or new coverage. Different feature variants and repeated commands are not added together."
+}

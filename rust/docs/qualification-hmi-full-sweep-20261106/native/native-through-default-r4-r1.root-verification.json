@@ -1,0 +1,241 @@
+{
+  "schema": "pipecat-root-original-archive-verification-v1",
+  "verified_utc": "2026-11-06T16:08:36.176937+00:00",
+  "archive_bytes": 407932,
+  "archive_sha256": "72d5de97465c18df89f9ce261f609d25568b0de19c83d3abb141396b1350c890",
+  "manifest_bytes": 18344,
+  "manifest_sha256": "31be575dc7956e6cb8b397206473ed4d0fff01e968be483ad04d8dba79d5c74b",
+  "listed_original_files": 83,
+  "listed_original_bytes": 10265256,
+  "archive_members_including_index": 84,
+  "archive_uncompressed_bytes_including_index": 10283600,
+  "all_original_sizes_and_hashes_match": true,
+  "embedded_index_exactly_matches_separate_index": true,
+  "canonical_source_maps": [
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/source-after.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/default-no-fail-fast-pin-r1/source-before.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/source-after.json",
+      "raw_sha256": "8287ced797a4145356aad2e96d3e4fa35bfbfe6f73c978108f78c96261c133db",
+      "canonical_sha256": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e",
+      "files": 2227
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r3/source-before.json",
+      "raw_sha256": "8287ced797a4145356aad2e96d3e4fa35bfbfe6f73c978108f78c96261c133db",
+      "canonical_sha256": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e",
+      "files": 2227
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/source-after.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/full-workspace-rust-1.99.0-r4/source-before.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/source-after.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/grok-rebind-diagnostic-pin-r2/source-before.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/source-after.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/grok-strace-pin-r1/source-before.json",
+      "raw_sha256": "25a8af403bef0598b5b57d0fc800c6a0f064c811d9e9326da709388a35c5ec83",
+      "canonical_sha256": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "files": 2241
+    },
+    {
+      "path": "evidence/prebuild-r1/source-after.json",
+      "raw_sha256": "b10b3e0aae2949be7e98d5fb602a2ba2b71b3ff15b59bdde431127f4a2eca02b",
+      "canonical_sha256": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14",
+      "files": 2165
+    },
+    {
+      "path": "evidence/prebuild-r1/source-before.json",
+      "raw_sha256": "b10b3e0aae2949be7e98d5fb602a2ba2b71b3ff15b59bdde431127f4a2eca02b",
+      "canonical_sha256": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14",
+      "files": 2165
+    }
+  ],
+  "counts_method": "Original byte regex with each Cargo Running/Doc-tests boundary required to contain exactly one terminal summary; zero missing or multi-summary blocks. Counts independently matched the separately generated agent records. No cross-run sum or unique-source-function interpretation.",
+  "runs": [
+    {
+      "label": "prebuild-r1",
+      "log_archive_path": "evidence/prebuild-r1/cargo-test-workspace.log",
+      "log_bytes": 21812,
+      "log_sha256": "73bcee03519aba1f635576efc927e2233f4bf4bbb7be26f22f91ff113b8906aa",
+      "gate_archive_path": "evidence/prebuild-r1/gate.json",
+      "gate_sha256": "cb37d0e53171a2844098bf3e7cd3788a1e368a36e55c738f9e6d6f3323e5d383",
+      "head": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+      "tree": "6370a6a2c1133e352e85d5bdcdff2f318dcf23d0",
+      "argv": [
+        "/home/qian-qi/.rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-run"
+      ],
+      "exit_code": 101,
+      "duration_seconds": 833.0008115768433,
+      "source_before": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14",
+      "source_after": "ec08280346e9aeebb62926c63d015573691ca885244643b2ec54e02e79e54e14",
+      "source_unchanged": true,
+      "completed_harnesses": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "failed_harnesses": []
+    },
+    {
+      "label": "full-workspace-rust-1.99.0-r3",
+      "log_archive_path": "evidence/full-workspace-rust-1.99.0-r3/cargo-test-workspace.log",
+      "log_bytes": 342751,
+      "log_sha256": "c1bbe646215edf15f9cbc5e11c893c0f4e5ca735308510dd0c35274894dba45b",
+      "gate_archive_path": "evidence/full-workspace-rust-1.99.0-r3/gate.json",
+      "gate_sha256": "0e85f51fc7b2d9ea567d74e297b6a835f2bcf4695c4703c8e79f48aca7625c05",
+      "head": "ae134e942411c6b0ad64d7f5b6caa1c603919c57",
+      "tree": "b5115bcf53c8992d59117ffd8396f6eea57b9c9d",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "duration_seconds": 154.89465856552124,
+      "source_before": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e",
+      "source_after": "d85a6b4e45f1da30b3e99ee92279a8ef59728f8544d43149d2162fef4e9aa19e",
+      "source_unchanged": true,
+      "completed_harnesses": 266,
+      "totals": {
+        "passed": 2871,
+        "failed": 1,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "failed_harnesses": [
+        {
+          "header": "Running tests/app_cli.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/app_cli-dc62c608200d75cd)",
+          "offset": 342575,
+          "summary": "test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s"
+        }
+      ]
+    },
+    {
+      "label": "full-workspace-rust-1.99.0-r4",
+      "log_archive_path": "evidence/full-workspace-rust-1.99.0-r4/cargo-test-workspace.log",
+      "log_bytes": 839226,
+      "log_sha256": "8153c08d39a751db11a8903bd7c597a0674fc4cee2d171f966807d5914e7bac9",
+      "gate_archive_path": "evidence/full-workspace-rust-1.99.0-r4/gate.json",
+      "gate_sha256": "d83fee90773fb235028d0897395beff8628b6f2f21753e39df8009e49a57a153",
+      "head": "272671b95297313d24db921eceda8e95f3a8d545",
+      "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked"
+      ],
+      "exit_code": 101,
+      "duration_seconds": 329.030442237854,
+      "source_before": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "source_after": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "source_unchanged": true,
+      "completed_harnesses": 656,
+      "totals": {
+        "passed": 7329,
+        "failed": 2,
+        "ignored": 17,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "failed_harnesses": [
+        {
+          "header": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)",
+          "offset": 839042,
+          "summary": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s"
+        }
+      ]
+    },
+    {
+      "label": "default-no-fail-fast-pin-r1",
+      "log_archive_path": "evidence/default-no-fail-fast-pin-r1/command.log",
+      "log_bytes": 893156,
+      "log_sha256": "60df6c85e3dfce912f720424a08467e92aeb9997b5b5aac71f3c05b967f0bf96",
+      "gate_archive_path": "evidence/default-no-fail-fast-pin-r1/gate.json",
+      "gate_sha256": "ccf2fc714ca13f3d218bfa319f68edc23c152474a47b145e1d31f3dac6373f1a",
+      "head": "272671b95297313d24db921eceda8e95f3a8d545",
+      "tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-fail-fast"
+      ],
+      "exit_code": 101,
+      "duration_seconds": 324.64271330833435,
+      "source_before": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "source_after": "ceb575197bebc2865e46f0262591104ade84a75dbbb6067c16ae259dcfe47384",
+      "source_unchanged": true,
+      "completed_harnesses": 755,
+      "totals": {
+        "passed": 7748,
+        "failed": 4,
+        "ignored": 33,
+        "measured": 0,
+        "filtered_out": 0
+      },
+      "failed_harnesses": [
+        {
+          "header": "Running tests/smart_turn_onnx_pipeline.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_onnx_pipeline-22cd9abbd585cdfc)",
+          "offset": 838898,
+          "summary": "test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s"
+        },
+        {
+          "header": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_vad-1ae35dd7b6b312e0)",
+          "offset": 859169,
+          "summary": "test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s"
+        },
+        {
+          "header": "Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-2845e05916b76d58)",
+          "offset": 862978,
+          "summary": "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s"
+        }
+      ]
+    }
+  ]
+}

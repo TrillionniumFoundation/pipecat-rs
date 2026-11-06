@@ -1,0 +1,59 @@
+{
+  "schema": "cartesia-eager-failure-source-bindings-v1",
+  "source_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "scope": "Current local source files compared byte for byte with GitHub files at the exact failed native source commit; no Cargo/native execution.",
+  "files": [
+    {
+      "path": "rust/crates/pipecat-streaming-speech/tests/cartesia_turns_eager.rs",
+      "sha256": "fb5645a8add645fbc8e1d72a094129d4f618fa1e9fb194bb2aec6c01a762b6a4",
+      "bytes": 155775,
+      "same_as_272": true,
+      "git_blob": "041b6cf6f7efdcb9ba6e622a8272cf3775a83327",
+      "isError": false,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-streaming-speech/tests/cartesia_turns_eager.rs"
+    },
+    {
+      "path": "rust/crates/pipecat-streaming-speech/src/cartesia_turns_eager.rs",
+      "sha256": "7b746cc0f057eb7482e46a215542a11332b3cb9100165a19d575800a3da630fc",
+      "bytes": 25583,
+      "same_as_272": true,
+      "git_blob": "063e9017c796352545cd2f6e6a0e6acf01525249",
+      "isError": false,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-streaming-speech/src/cartesia_turns_eager.rs"
+    },
+    {
+      "path": "rust/crates/pipecat-streaming-speech/Cargo.toml",
+      "sha256": "1da26182cf36f00fe3e4799c1e97c6bb0483f5b7facda9df421e404adac7131b",
+      "bytes": 862,
+      "same_as_272": true,
+      "git_blob": "d8795f8a816ad9e1b79c2341567596881dfeb814",
+      "isError": false,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-streaming-speech/Cargo.toml"
+    },
+    {
+      "path": "rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs",
+      "bytes": 23543,
+      "sha256": "c40cfcb287fb6e83e2d8c2b6dc18039687276622d07c362a49a30a9430c4808b",
+      "git_blob": "823586307e40d497275b510835551fe87f301d76",
+      "same_as_failure_source": true,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-streaming-speech/tests/reviewer/crosssocket_effects.rs"
+    },
+    {
+      "path": "rust/crates/pipecat-services/src/adapters.rs",
+      "bytes": 42246,
+      "sha256": "eb6927f45d0d0d11651daa22a03ce06eb3b8b0a75d2805bdad5a6e329e97b838",
+      "git_blob": "8889b4e0838babd1e6f8a1c624dd686118d1310c",
+      "same_as_failure_source": true,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-services/src/adapters.rs"
+    },
+    {
+      "path": "rust/crates/pipecat-services/tests/anthropic_trailing_user.rs",
+      "bytes": 6747,
+      "sha256": "4a0a83a702d38873d4484c064f8f495901e97c631c38e08c52230fb0eaea71a4",
+      "git_blob": "bc75abce7e1aa5a5e419a1e7ae636d55bbe61636",
+      "same_as_failure_source": true,
+      "url": "https://github.com/TrillionniumFoundation/pipecat-rs/blob/272671b95297313d24db921eceda8e95f3a8d545/rust/crates/pipecat-services/tests/anthropic_trailing_user.rs"
+    }
+  ]
+}

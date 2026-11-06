@@ -1,0 +1,22 @@
+     Running tests/smart_turn_model_analyzer.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/smart_turn_model_analyzer-2845e05916b76d58)
+
+running 3 tests
+test smart_turn_real_model_silence_timeout_does_not_fabricate_metrics ... ok
+test smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse ... FAILED
+test smart_turn_real_model_cancellation_terminates_onnx_and_preserves_reuse ... ok
+
+failures:
+
+---- smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse stdout ----
+
+thread 'smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse' (663635) panicked at crates/pipecat-vad/tests/smart_turn_model_analyzer.rs:45:9:
+assertion failed: (metrics.probability - expected_tone).abs() < 1e-5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    smart_turn_real_model_controller_reanalysis_complete_reset_and_reuse
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+error: test failed, to rerun pass `-p pipecat-vad --test smart_turn_model_analyzer`

@@ -1,0 +1,54 @@
+{
+  "source_head": "272671b95297313d24db921eceda8e95f3a8d545",
+  "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "archive": {
+    "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/grok-strace-analysis-r1/grok-strace-analysis.tar.xz",
+    "bytes": 34996,
+    "sha256": "ee270d3f0bd7de4457ad4c059f42c3745ad9b4201f538178a69dc62bb1227e00"
+  },
+  "members": [
+    {
+      "name": "trace-window.json",
+      "bytes": 17155,
+      "sha256": "9f482686eeb83fbb653b668ea6ff79edd282d3c39b287192c8947a6fe35f4e55"
+    },
+    {
+      "name": "round-01.stdout.log",
+      "bytes": 1192,
+      "sha256": "12a1e1e0edfb90282cb1291e730f1128d3016df70ca5f7c5b441abd52c85db92"
+    },
+    {
+      "name": "round-01.stderr.log",
+      "bytes": 2730,
+      "sha256": "22b0186211dbc3bb78aae7ecebdbc42211181ca61961a5fc8b5ed1875590ee58"
+    },
+    {
+      "name": "round-01.trace.trace",
+      "bytes": 310585,
+      "sha256": "81737afec1129dbd9f1ba9dd8c8b79304292b1e5463f9e78ebf285b5664ca3c2"
+    }
+  ],
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/grok-strace-analysis-r1/part-0.b64",
+      "bytes": 46664,
+      "sha256": "30e653b0629388781ed6c6c756c4383c449185a1ce9369bfa8a30fd84b65a344"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/grok-strace-analysis-r1/part-1.b64",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/grok-strace-analysis-r1/part-2.b64",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/grok-strace-analysis-r1/part-3.b64",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "Exact original completed trace and test outputs; compression is a transport envelope only."
+}
