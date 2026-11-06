@@ -22,8 +22,8 @@ pub mod openai_stt;
 mod openai_stt_processor;
 #[cfg(feature = "openai-stt")]
 pub use openai_stt::{
-    OpenAiSttClient, OpenAiSttConfig, OpenAiSttDelay, OpenAiSttEvent,
-    OpenAiSttNoiseReduction, OpenAiSttSender, OpenAiSttSession,
+    OpenAiSttClient, OpenAiSttConfig, OpenAiSttDelay, OpenAiSttEvent, OpenAiSttNoiseReduction,
+    OpenAiSttSender, OpenAiSttSession,
 };
 #[cfg(feature = "openai-stt")]
 pub use openai_stt_processor::{OpenAiRealtimeSttProcessor, OpenAiSttProcessor};

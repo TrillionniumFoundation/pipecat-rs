@@ -571,7 +571,10 @@ impl FrameProcessor for Consumer {
                         let response_ctx = ctx.clone();
                         ctx.spawn("joint-final-peer-response", false, async move {
                             let response_owner = owner;
-                            response_owner.0.finish_response(n, true, &response_ctx).await
+                            response_owner
+                                .0
+                                .finish_response(n, true, &response_ctx)
+                                .await
                         })?;
                     } else {
                         self.finish_response(n, last_clip, ctx).await?;

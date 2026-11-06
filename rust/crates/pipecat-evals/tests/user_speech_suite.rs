@@ -1273,7 +1273,10 @@ mod joint {
     }
 
     async fn joint_cli_orders(controlled: bool) {
-        for reverse in [false, true].into_iter().take(if controlled { 1 } else { 2 }) {
+        for reverse in [false, true]
+            .into_iter()
+            .take(if controlled { 1 } else { 2 })
+        {
             let b = Bundle::new();
             let speech = input::pcm(21);
             let recording = input::pcm(41);
@@ -1306,15 +1309,24 @@ mod joint {
                 b.put("controlled-peer-hold", b"hold");
                 let directory = b.0.clone();
                 Some(tokio::spawn(async move {
-                    let entered = duplex::observed(|| std::fs::read_dir(&directory).unwrap()
-                        .any(|p| p.unwrap().file_name().to_string_lossy().starts_with("peer-enter-"))).await;
+                    let entered = duplex::observed(|| {
+                        std::fs::read_dir(&directory).unwrap().any(|p| {
+                            p.unwrap()
+                                .file_name()
+                                .to_string_lossy()
+                                .starts_with("peer-enter-")
+                        })
+                    })
+                    .await;
                     duplex::stage(&format!("controlled_peer_entered={entered}"));
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     std::fs::write(directory.join("controlled-peer-release"), b"go").unwrap();
                     duplex::stage("controlled_peer_released");
                     entered
                 }))
-            } else { None };
+            } else {
+                None
+            };
             let output = duplex::cli(
                 &duplex::arguments(&manifest, &speech_runtime, &stt_runtime, reverse),
                 &b.0,
@@ -1322,7 +1334,10 @@ mod joint {
             .await;
             let tts = tts.finish().await;
             let stt = stt.finish().await;
-            let controlled_entered = match controller { Some(t) => t.await.unwrap(), None => true };
+            let controlled_entered = match controller {
+                Some(t) => t.await.unwrap(),
+                None => true,
+            };
             duplex::snapshot(&b, "cli_joined");
             eprintln!("joint-cli-output {output:?}");
             assert!(controlled_entered);
@@ -1483,7 +1498,13 @@ mod joint {
         let stt = stt.finish().await;
         let retired = duplex::retired().await;
         duplex::snapshot(&b, "all_wav_joined");
-        eprintln!("joint-all-wav result={result:?} stt_admitted={}", stt.gates.iter().filter(|g| !g.request.lock().unwrap().is_empty()).count());
+        eprintln!(
+            "joint-all-wav result={result:?} stt_admitted={}",
+            stt.gates
+                .iter()
+                .filter(|g| !g.request.lock().unwrap().is_empty())
+                .count()
+        );
         let result = result.unwrap();
         assert!(result.passed, "{result:?}");
         tts.checked(0);
@@ -1764,13 +1785,24 @@ mod joint {
         let path = duplex::one(&b, "peer-cancel", std::slice::from_ref(&bytes), "normal");
         // No peer exists: cancellation must retire the tracked final response
         // while its original 30-second peer barrier is still pending.
-        input::profile(&b, "peer-cancel", std::slice::from_ref(&bytes),
-            "isolated peer-cancel", "normal", 1);
+        input::profile(
+            &b,
+            "peer-cancel",
+            std::slice::from_ref(&bytes),
+            "isolated peer-cancel",
+            "normal",
+            1,
+        );
         let tts = Http::start(Kind::Tts, vec![Reply::Pcm(bytes)]).await;
         let stt = Http::start(Kind::Stt, vec![]).await;
         let cancel = Cancellation::new();
-        let future = run_path(&path, input::settings(&tts.url, None),
-            duplex::stt_settings(&b, &stt.url), duplex::options(), cancel.clone());
+        let future = run_path(
+            &path,
+            input::settings(&tts.url, None),
+            duplex::stt_settings(&b, &stt.url),
+            duplex::options(),
+            cancel.clone(),
+        );
         tokio::pin!(future);
         let entry = tokio::select! {
             result = &mut future => Err(result),

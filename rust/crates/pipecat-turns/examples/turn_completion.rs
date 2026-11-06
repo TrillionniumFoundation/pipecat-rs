@@ -1,8 +1,8 @@
 //! Credential-free demonstration of the existing unsigned completion topology.
 //! The loopback server scripts replies; it does not perform turn detection.
 use pipecat_core::{
-    Direction, FlushFrame, Frame, FrameData, FrameProcessor, Pipeline, PipelineConfig,
-    PipelineWorker, ProcessorContext, ProcessorError, TextFrame, async_trait,
+    async_trait, Direction, FlushFrame, Frame, FrameData, FrameProcessor, Pipeline, PipelineConfig,
+    PipelineWorker, ProcessorContext, ProcessorError, TextFrame,
 };
 use pipecat_services::{
     ClientConfig, CompletionRequest, Content, Context, LlmClient, LlmProcessor, Message, Provider,
@@ -12,7 +12,7 @@ use pipecat_turns::{
     AssistantAggregatorConfig, AssistantTextMode, LLMContextAggregatorPair,
     LLMTurnCompletionConfig, LLMTurnCompletionProcessor,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     error::Error,
     sync::{Arc, Mutex},
