@@ -12,3 +12,9 @@ pub mod local_speech;
 
 mod speech_segments;
 pub use speech_segments::speech_segments;
+
+mod media_command;
+pub use media_command::{
+    MediaCommand, MediaCommandDecoder, MediaCommandError, MediaCommandGate, MediaConnectionBinding,
+    MediaDecodeError, MAX_MEDIA_COMMAND_BYTES, MAX_MEDIA_CONNECTION_REQUESTS,
+};

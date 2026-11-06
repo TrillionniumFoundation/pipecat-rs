@@ -12,6 +12,11 @@ An authorized existing owner must provide its real stream/turn/output epoch,
 monotonic capture incarnation, existing private media root and matching signed
 audio policy, native devices and trusted immutable local artifacts. Set Piper's
 phonemizer inputs for the adopted voice; do not replace them with mock speech.
+The JSONL executable also requires `OWNER_CONNECTION_ID` as its second argument,
+obtained from that owner's `HmiRequestsV1` and matching `HmiJsonlMediaV1::bind`.
+It is intentionally absent from the speech-engine JSON template. Reconnection
+requires a fresh media process bound to the new connection; this value grants
+no authority and does not replace the owner or capture generations.
 The listed queue, retention and thread budgets are preparation defaults, not a
 claim that a target device meets its resource or latency acceptance limits.
 

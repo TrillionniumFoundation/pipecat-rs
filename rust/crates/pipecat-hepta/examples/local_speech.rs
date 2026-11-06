@@ -1,9 +1,9 @@
 //! JSONL media endpoint. Hepta remains the model/session/tool owner.
 use pipecat_hepta::{
-    local_speech::*, speech_segments, HeptaOutputScope, HmiSession, OutputIdentity,
-    PresentationState,
+    local_speech::*, speech_segments, HmiSession, MediaCommand as Command, MediaCommandDecoder,
+    MediaCommandGate, MediaConnectionBinding, OutputIdentity, PresentationState,
+    MAX_MEDIA_CONNECTION_REQUESTS,
 };
-use serde::Deserialize;
 use serde_json::json;
 use std::{future::Future, io::Read, pin::Pin, time::Duration};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -11,36 +11,6 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[path = "local_speech/ledger.rs"]
 mod ledger;
 
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-enum Command {
-    Speak {
-        request_id: u64,
-        scope: HeptaOutputScope,
-        text: String,
-    },
-    Interrupt,
-    Turn {
-        request_id: u64,
-        scope: HeptaOutputScope,
-    },
-    Retire {
-        request_id: u64,
-        output_epoch: u64,
-    },
-    VerifySource {
-        request_id: u64,
-        source: pipecat_hepta::CapturedAudioRef,
-    },
-    ReleaseSource {
-        request_id: u64,
-        source: pipecat_hepta::CapturedAudioRef,
-    },
-    RevokeCapture {
-        request_id: u64,
-    },
-    Shutdown,
-}
 type Render<'a> = Pin<Box<dyn Future<Output = Result<(), LocalSpeechError>> + 'a>>;
 struct Active<'a> {
     identity: OutputIdentity,
@@ -52,37 +22,21 @@ type SourceIo = (
     tokio::task::JoinHandle<Result<(), String>>,
 );
 
-// Cancellation-safe: partial reads live in the caller's bounded buffer.
+// Cancellation-safe: partial reads live in the caller's bounded decoder.
 async fn line<R: AsyncBufRead + Unpin>(
     reader: &mut R,
-    pending: &mut Vec<u8>,
-) -> std::io::Result<Option<Vec<u8>>> {
+    decoder: &mut MediaCommandDecoder,
+) -> Result<Option<Command>, String> {
     loop {
-        let available = reader.fill_buf().await?;
+        let available = reader.fill_buf().await.map_err(|error| error.to_string())?;
         if available.is_empty() {
-            return if pending.is_empty() {
-                Ok(None)
-            } else {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "incomplete JSONL command",
-                ))
-            };
+            decoder.finish().map_err(|error| error.to_string())?;
+            return Ok(None);
         }
-        let count = available
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map_or(available.len(), |index| index + 1);
-        if count > 65_536 - pending.len() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "JSONL command exceeds 64 KiB",
-            ));
-        }
-        pending.extend_from_slice(&available[..count]);
+        let (count, command) = decoder.push(available).map_err(|error| error.to_string())?;
         reader.consume(count);
-        if pending.last() == Some(&b'\n') {
-            return Ok(Some(std::mem::take(pending)));
+        if command.is_some() {
+            return Ok(command);
         }
     }
 }
@@ -123,9 +77,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 1 {
-        return Err("usage: local_speech CONFIG_JSON; stdin/stdout use bounded JSONL".into());
+    if args.len() != 2 {
+        return Err(
+            "usage: local_speech CONFIG_JSON OWNER_CONNECTION_ID; stdin/stdout use bounded JSONL"
+                .into(),
+        );
     }
+    let connection_id = args[1].parse::<std::num::NonZeroU64>()?;
     let mut config_bytes = Vec::new();
     std::fs::File::open(&args[0])?
         .take(128 * 1024 + 1)
@@ -134,6 +92,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("configuration exceeds 128 KiB".into());
     }
     let config: LocalSpeechConfig = serde_json::from_slice(&config_bytes)?;
+    let binding = MediaConnectionBinding::new(config.stream.clone(), connection_id.get())?;
+    let mut commands = MediaCommandGate::new(binding, MAX_MEDIA_CONNECTION_REQUESTS)?;
     let mut session = HmiSession::with_epoch(
         config.stream.clone(),
         config.turn_id.clone(),
@@ -157,20 +117,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         stdout.flush().await.map_err(|error| error.to_string())
     });
     let mut reader = BufReader::new(tokio::io::stdin());
-    let mut partial = Vec::new();
+    let mut decoder = MediaCommandDecoder::default();
     let mut active: Option<Active<'_>> = None;
     let mut writer_finished = false;
     let mut verification: Option<SourceIo> = None;
     let mut revoke_request = None;
     let result: Result<(), String> = loop {
         tokio::select! {
-            _ = &mut writer => {
+            completion = &mut writer => {
                 writer_finished = true;
-                break Err("media event receiver closed or stalled".into());
+                let cause = match completion {
+                    Ok(Err(error)) => error,
+                    Err(error) => error.to_string(),
+                    Ok(Ok(())) => "media event receiver closed".into(),
+                };
+                break Err(format!("media event writer failed: {cause}"));
             }
-            incoming = line(&mut reader, &mut partial) => {
-                let bytes = match incoming { Ok(Some(bytes)) => bytes, Ok(None) => break Ok(()), Err(error) => break Err(error.to_string()) };
-                let command = match serde_json::from_slice::<Command>(&bytes) { Ok(command) => command, Err(_) => break Err("invalid JSONL command".into()) };
+            incoming = line(&mut reader, &mut decoder) => {
+                let command = match incoming { Ok(Some(command)) => command, Ok(None) => break Ok(()), Err(error) => break Err(error) };
+                if let Err(error) = commands.admit(&command) { break Err(error.to_string()); }
                 match command {
                     Command::Shutdown => break Ok(()),
                     Command::RevokeCapture { request_id } => { revoke_request = Some(request_id); break Ok(()); }

@@ -26,7 +26,7 @@ def run_case(args, name):
     started = time.monotonic()
     with open(args.output.parent / f"{name}.stderr.log", "wb") as stderr:
         child = subprocess.Popen(
-            [str(args.binary), str(args.config)], stdin=subprocess.PIPE,
+            [str(args.binary), str(args.config), str(args.connection_id)], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=stderr, bufsize=0,
         )
         poller = selectors.DefaultSelector()
@@ -86,7 +86,7 @@ def run_case(args, name):
                 scope = {"principalId": stream["principal_id"], "deviceId": stream["device_id"],
                          "deviceGeneration": stream["device_generation"], "organId": stream["organ_id"],
                          "organGeneration": stream["organ_generation"], "logicalSessionId": stream["logical_session_id"],
-                         "utteranceSequence": 1, "connectionId": 1, "outputEpoch": 2,
+                         "utteranceSequence": 1, "connectionId": args.connection_id, "outputEpoch": 2,
                          "turnId": "qualification:crash-turn", "utteranceId": "qualification:crash-utterance"}
                 for request, operation in [({"type": "turn", "request_id": 2, "scope": scope}, "turn"),
                                            ({"type": "speak", "request_id": 3, "scope": scope,
@@ -145,7 +145,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ["binary", "config", "output", "capture-status"]:
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--connection-id", type=int, required=True,
+                        help="nonzero isolated qualification incarnation; never a production grant")
     args = parser.parse_args()
+    if not 0 < args.connection_id <= 2**64 - 1:
+        raise ValueError("connection ID must be a nonzero u64")
     config = json.loads(args.config.read_text())
     if config.get("media_store") is not None:
         raise ValueError("use an output-only qualification config; this harness retains no microphone audio")

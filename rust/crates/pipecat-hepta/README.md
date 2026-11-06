@@ -75,7 +75,7 @@ cd rust
 cargo test -p pipecat-hepta --locked
 cargo check -p pipecat-hepta --features local-speech --all-targets --locked
 cargo clippy -p pipecat-hepta --all-targets --all-features --locked -- -D warnings
-cargo run -p pipecat-hepta --features local-speech --example local_speech -- /absolute/path/local-speech.json
+cargo run -p pipecat-hepta --features local-speech --example local_speech -- /absolute/path/local-speech.json "$HEPTA_OWNER_CONNECTION_ID"
 ```
 
 The runnable example opens real capture/output and uses bounded stdin/stdout
@@ -83,6 +83,33 @@ JSONL. Its configuration is a serialized `LocalSpeechConfig` containing an
 existing Piper manifest, hashed Whisper/Silero artifacts, device IDs and the
 exact stream/turn/epoch already assigned by Hepta. There is no automatic device,
 model or cloud-provider substitution after an error.
+
+The second argument is mandatory: the supervising owner must pass its actual
+`HmiRequestsV1::connection_id()`, the same value used for `HmiJsonlMediaV1::bind`.
+Missing/zero values reject before native loading or opening devices. Do not
+invent this value or learn it from an incoming command. It is a process-local
+connection incarnation, not authentication or a durable cross-restart identity;
+the existing owner, private pipe and device/organ/capture generations still apply.
+The previous one-argument invocation now fails closed. `LocalSpeechConfig` and
+the on-wire command shape are unchanged. The production owner still needs its
+authorized media-process composition; this CLI does not create one.
+
+`MediaCommandDecoder`, `MediaConnectionBinding` and `MediaCommandGate` are shared
+Rust Core code used by the actual endpoint. The decoder retains partial UTF-8
+bytes across cancelled reads, admits at most one 64 KiB line including newline,
+and becomes terminal on malformed, overlong or incomplete input. Before any
+command effect, the gate binds `turn`/`speak` to the exact owner connection and
+stream, rejects zero utterance/request IDs, and binds source operations to the
+same stream. Existing session/store checks remain at the effect boundary.
+
+Request IDs may arrive out of order and contain arbitrary gaps. The gate records
+up to 65,536 unique IDs per media process without eviction or reset. Reuse across
+any correlated operations, or capacity exhaustion, terminates the endpoint and
+retains uncertainty instead of replaying effects/acks. Uncorrelated `interrupt`
+and `shutdown` remain available at capacity. This is a bounded process-local
+admission budget, not persistent conversation/effect deduplication. A long-lived
+owner must close/join the old process and establish a new connection before
+renewing that budget; automatic production recovery is not implemented here.
 
 Commands are `{"type":"turn","request_id":1,"scope":...}` and
 `{"type":"speak","request_id":2,"scope":...,"text":"..."}`, plus
