@@ -4080,6 +4080,7 @@ dependencies = [
  "pipecat-piper",
  "pipecat-vad",
  "pipecat-whisper",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.10.9",

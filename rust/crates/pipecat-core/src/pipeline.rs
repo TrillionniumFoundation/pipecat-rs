@@ -91,6 +91,8 @@ pub enum PipelineError {
     TerminalUpstream,
     #[error("backpressure: {0}")]
     Backpressure(String),
+    #[error("payload admission rejected: {0}")]
+    InvalidPayload(String),
     #[error("processor task panicked: {0}")]
     ProcessorPanic(String),
     #[error("pipeline execution failed: {0}")]
@@ -102,7 +104,12 @@ impl From<QueueError> for PipelineError {
     fn from(error: QueueError) -> Self {
         match error {
             QueueError::Closed => Self::Closed,
-            QueueError::Full => Self::Backpressure("input queue is full".into()),
+            QueueError::Full => {
+                Self::Backpressure("input queue item or payload capacity is full".into())
+            }
+            QueueError::PayloadTooLarge | QueueError::UnmeasurablePayload => {
+                Self::InvalidPayload(error.to_string())
+            }
         }
     }
 }
@@ -123,6 +130,7 @@ pub struct Pipeline {
     observer_clock: Arc<dyn ObserverClock>,
     inherited_observers: Option<Arc<crate::observer::ObserverHub>>,
     lifecycle_owner: Option<LifecycleOwner>,
+    payload_limits: Option<PayloadLimits>,
 }
 impl Pipeline {
     pub fn new(processors: Vec<Arc<dyn FrameProcessor>>) -> Self {
@@ -134,7 +142,15 @@ impl Pipeline {
             observer_clock: Arc::new(MonotonicObserverClock::default()),
             inherited_observers: None,
             lifecycle_owner: None,
+            payload_limits: None,
         }
+    }
+    /// Enforce compact-JSON payload byte limits at actual node admission and
+    /// output. Native opaque payloads fail closed in this optional profile.
+    /// Limits do not cover processor caches, clones or allocator/RSS overhead.
+    pub fn with_payload_limits(mut self, limits: PayloadLimits) -> Self {
+        self.payload_limits = Some(limits);
+        self
     }
     /// Enable an explicit root-wide idle policy. Existing pipelines remain off.
     /// The configured default cancels this root after 300 seconds without a
@@ -192,6 +208,7 @@ impl Pipeline {
     /// each child output stream remain responsible for reading it; untracked
     /// external forwarding tasks are not implicitly owned by this lifecycle.
     pub fn inherit_lifecycle(mut self, context: &ProcessorContext) -> Self {
+        self.payload_limits = context.runtime.payload_limits;
         self.lifecycle_owner = Some(LifecycleOwner {
             runtime: Arc::downgrade(&context.runtime),
             index: context.index,
@@ -199,6 +216,22 @@ impl Pipeline {
         self
     }
     pub async fn start(mut self, config: PipelineConfig) -> Result<PipelineWorker, PipelineError> {
+        if let Some(limits) = self.payload_limits {
+            limits
+                .validate()
+                .map_err(|error| PipelineError::InvalidConfiguration(error.into()))?;
+        }
+        if let Some(parent) = self
+            .lifecycle_owner
+            .as_ref()
+            .and_then(|owner| owner.runtime.upgrade())
+        {
+            if self.payload_limits != parent.payload_limits {
+                return Err(PipelineError::InvalidConfiguration(
+                    "child payload limits must match its lifecycle owner".into(),
+                ));
+            }
+        }
         if let Some(idle) = self.idle {
             idle.validate()?;
             if self.lifecycle_owner.is_some() || self.inherited_observers.is_some() {
@@ -303,6 +336,7 @@ impl Pipeline {
                     Arc::new(FrameQueue::with_admission(
                         config.queue_capacity,
                         config.system_queue_capacity,
+                        self.payload_limits,
                         admission.clone(),
                         interruptions.clone(),
                         dropped.clone(),
@@ -319,6 +353,7 @@ impl Pipeline {
                     ))
                 })
                 .collect(),
+            payload_limits: self.payload_limits,
             config,
             output: Mutex::new(Some(output_tx)),
             state: state_tx,
@@ -489,6 +524,9 @@ impl PipelineSender {
     /// Wait for input capacity. Cancellation bypasses the normal-input mutex
     /// and remains possible while another producer is backpressured.
     pub async fn send(&self, frame: Frame, direction: Direction) -> Result<(), PipelineError> {
+        if let Some(limits) = self.runtime.payload_limits {
+            limits.measure(&frame).map_err(PipelineError::from)?;
+        }
         frame
             .validate_selected_tool_authority()
             .map_err(|error| PipelineError::Execution(error.to_string()))?;
@@ -800,6 +838,7 @@ pub(crate) struct Runtime {
     pub(crate) queues: Vec<Arc<FrameQueue>>,
     nodes: Vec<Arc<NodeState>>,
     pub(crate) config: PipelineConfig,
+    pub(crate) payload_limits: Option<PayloadLimits>,
     output: Mutex<Option<mpsc::Sender<DirectedFrame>>>,
     state: watch::Sender<WorkerState>,
     failure: Mutex<Option<PipelineError>>,
@@ -818,6 +857,12 @@ pub(crate) struct Runtime {
     health_observations: Mutex<Vec<Arc<crate::health::HealthObservation>>>,
 }
 impl Runtime {
+    pub(crate) fn validate_payload(&self, frame: &Frame) -> Result<(), ProcessorError> {
+        if let Some(limits) = self.payload_limits {
+            limits.measure(frame)?;
+        }
+        Ok(())
+    }
     fn start_idle(&self) {
         if self.lifecycle_owner.is_none() {
             let _admission = self.admission.lock().unwrap();
@@ -1136,6 +1181,7 @@ impl Runtime {
         direction: Direction,
         generation: Option<u64>,
     ) -> Result<(), ProcessorError> {
+        self.validate_payload(&frame)?;
         if direction == Direction::Downstream
             && self.lifecycle_owner.is_none()
             && self
@@ -1338,7 +1384,7 @@ impl Runtime {
         match self.queues[0].try_send_unlocked(frame, None) {
             Ok(()) => {}
             Err((QueueError::Full, frame)) => *pending = Some(*frame),
-            Err((QueueError::Closed, _)) => self.fail(PipelineError::Closed),
+            Err((error, _)) => self.fail(error.into()),
         }
     }
     pub(crate) fn record_frame_error(&self, frame: &mut Frame) -> Option<ErrorFrame> {

@@ -65,18 +65,63 @@ fn retire_active(
     })
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-    let result = runtime.block_on(run());
-    // Tokio stdin uses a non-cancellable OS read. Native owners have already
-    // joined before this bounded runtime teardown; no model work is detached.
-    runtime.shutdown_timeout(Duration::from_secs(2));
-    result
+fn main() -> std::process::ExitCode {
+    match endpoint_main() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            // A full inherited stderr pipe must not turn an observed native
+            // exit into an indefinitely blocked wrapper. Logging is best effort;
+            // the nonzero exit and missing/failed owner receipt remain failures.
+            let mut diagnostic = error.to_string();
+            if diagnostic.len() > 4096 {
+                let mut end = 4093;
+                while !diagnostic.is_char_boundary(end) {
+                    end -= 1;
+                }
+                diagnostic.truncate(end);
+                diagnostic.push_str("...");
+            }
+            let (done, completion) = std::sync::mpsc::sync_channel(1);
+            if std::thread::Builder::new()
+                .name("media-diagnostic".into())
+                .spawn(move || {
+                    use std::io::Write;
+                    let _ = writeln!(std::io::stderr(), "local_speech: {diagnostic}");
+                    let _ = done.send(());
+                })
+                .is_ok()
+                && completion.recv_timeout(Duration::from_millis(100)).is_err()
+            {
+                // On Linux a failed endpoint must not hang in stdio cleanup
+                // behind this logger. This signals only this exact process;
+                // a signal exit is a failure, never a clean media terminal.
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = rustix::process::kill_process(
+                        rustix::process::getpid(),
+                        rustix::process::Signal::KILL,
+                    );
+                }
+            }
+            std::process::ExitCode::FAILURE
+        }
+    }
 }
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+
+fn endpoint_main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args: Vec<_> = std::env::args().skip(1).collect();
+    let native_child = args.first().is_some_and(|arg| arg == "--native-child");
+    if native_child {
+        args.remove(0);
+        let parent_pid = args
+            .first()
+            .ok_or("missing native supervisor PID")?
+            .parse::<u32>()?;
+        args.remove(0);
+        // Before any runtime thread, model, file or device is opened. The
+        // creating parent thread stays alive for the full native lifetime.
+        pipecat_hepta::parent_guard::bind_native_parent(parent_pid)?;
+    }
     if args.len() != 2 {
         return Err(
             "usage: local_speech CONFIG_JSON OWNER_CONNECTION_ID; stdin/stdout use bounded JSONL"
@@ -84,6 +129,46 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     let connection_id = args[1].parse::<std::num::NonZeroU64>()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let result = if native_child || !cfg!(target_os = "linux") {
+        // Other OSes retain their original direct endpoint until their own
+        // process/job containment is implemented and qualified.
+        runtime.block_on(run(args, connection_id.get(), native_child))
+    } else {
+        use pipecat_hepta::process_supervision::{supervise_media_process, MediaProcessLimits};
+        runtime.block_on(async {
+            let mut child = tokio::process::Command::new(std::env::current_exe()?);
+            child.arg("--native-child").arg(std::process::id().to_string()).args(args);
+            let report = supervise_media_process(
+                &mut child,
+                connection_id.get(),
+                tokio::io::stdin(),
+                tokio::io::stdout(),
+                MediaProcessLimits::default(),
+            )
+            .await?;
+            if report.succeeded() {
+                Ok(())
+            } else {
+                Err(std::io::Error::other(format!(
+                    "native media process failed: {report:?}; already submitted effects are not undone"
+                ))
+                .into())
+            }
+        })
+    };
+    // Tokio stdio may retain a non-cancellable OS read. The parent has observed
+    // child exit or explicitly reported unreaped UNKNOWN before this teardown.
+    runtime.shutdown_timeout(Duration::from_secs(2));
+    result
+}
+async fn run(
+    args: Vec<String>,
+    connection_id: u64,
+    supervised: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut config_bytes = Vec::new();
     std::fs::File::open(&args[0])?
         .take(128 * 1024 + 1)
@@ -92,7 +177,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("configuration exceeds 128 KiB".into());
     }
     let config: LocalSpeechConfig = serde_json::from_slice(&config_bytes)?;
-    let binding = MediaConnectionBinding::new(config.stream.clone(), connection_id.get())?;
+    let binding = MediaConnectionBinding::new(config.stream.clone(), connection_id)?;
     let mut commands = MediaCommandGate::new(binding, MAX_MEDIA_CONNECTION_REQUESTS)?;
     let mut session = HmiSession::with_epoch(
         config.stream.clone(),
@@ -116,12 +201,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         stdout.flush().await.map_err(|error| error.to_string())
     });
+    // Consumed by this executable's supervising parent, never forwarded to the
+    // Hepta owner's existing JSONL event codec. This is liveness, not a grant.
+    if supervised {
+        emit(
+            &tx,
+            json!({"type":"media_process_ready","connection_id":connection_id}),
+        )?;
+    }
     let mut reader = BufReader::new(tokio::io::stdin());
     let mut decoder = MediaCommandDecoder::default();
     let mut active: Option<Active<'_>> = None;
     let mut writer_finished = false;
     let mut verification: Option<SourceIo> = None;
     let mut revoke_request = None;
+    let mut command_sequence = 0u64;
     let result: Result<(), String> = loop {
         tokio::select! {
             completion = &mut writer => {
@@ -135,6 +229,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             incoming = line(&mut reader, &mut decoder) => {
                 let command = match incoming { Ok(Some(command)) => command, Ok(None) => break Ok(()), Err(error) => break Err(error) };
+                command_sequence = match command_sequence.checked_add(1) { Some(sequence) => sequence, None => break Err("media command sequence exhausted".into()) };
                 if let Err(error) = commands.admit(&command) { break Err(error.to_string()); }
                 match command {
                     Command::Shutdown {} => break Ok(()),
@@ -143,6 +238,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         let error = match session.retire_output(output_epoch, media) { Ok(error) => error, Err(error) => Some(error.to_string()) };
                         if let Err(error) = retire_active(&mut session, &mut active, &tx, error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"media_ack","request_id":request_id,"operation":"retire","error":error})) { break Err(error); }
+                        if supervised { if let Err(error) = emit(&tx, json!({"type":"media_process_control_done","command_sequence":command_sequence})) { break Err(error); } }
                     }
                     Command::VerifySource { request_id, source } => {
                         if verification.is_some() { break Err("source verification is busy".into()); }
@@ -158,6 +254,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         let outcome = match session.barge_in(media) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
                         if let Err(error) = retire_active(&mut session, &mut active, &tx, outcome.local_error.as_deref()) { break Err(error); }
                         if let Err(error) = emit(&tx, json!({"type":"turn_interrupt", "stream":session.identity(), "request":outcome.request, "local_error":outcome.local_error})) { break Err(error); }
+                        if supervised { if let Err(error) = emit(&tx, json!({"type":"media_process_control_done","command_sequence":command_sequence})) { break Err(error); } }
                     }
                     Command::Turn { request_id, scope } => {
                         let identity = match OutputIdentity::try_from(scope) { Ok(value) => value, Err(error) => break Err(error.to_string()) };
@@ -169,6 +266,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         if let Err(error) = media.admit_turn(&identity.turn_id, identity.output_epoch) { break Err(error.to_string()); }
                         if let Err(error) = emit(&tx, json!({"type":"media_ack", "request_id":request_id,"operation":"turn","error":local_error})) { break Err(error); }
+                        if supervised { if let Err(error) = emit(&tx, json!({"type":"media_process_control_done","command_sequence":command_sequence})) { break Err(error); } }
                     }
                     Command::Speak { request_id, scope, text } => {
                         let identity = match OutputIdentity::try_from(scope) { Ok(value) => value, Err(error) => break Err(error.to_string()) };

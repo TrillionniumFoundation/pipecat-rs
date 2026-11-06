@@ -193,3 +193,48 @@ curves and an actual App Server/model session must be verified separately on the
 configured project environment. An ALSA null endpoint does not satisfy them.
 
 Selected native follow-up and remaining gates: [2026-10-29 evidence](../../docs/HMI_NATIVE_CLOSEOUT_20261029.md).
+
+## Linux native-process containment (2026-11-06)
+
+The existing `local_speech CONFIG_JSON OWNER_CONNECTION_ID` entry now supervises
+one native child on Linux. Its initial thread binds `PR_SET_PDEATHSIG(SIGKILL)`
+and checks the exact parent before/after arming, before model or device access.
+Private readiness/control sequence messages are removed by the parent; the Hepta
+owner's external JSONL command/event shapes stay the same. This does not register
+production media in Agentd, create a conversation store or grant device authority.
+
+Default parent deadlines are 120 seconds for startup, 5 seconds for a processed
+`interrupt`/`retire`/`turn`, 10 seconds for shutdown/revocation/EOF, 2 seconds for a pipe
+write/drain and 5 seconds to observe reap after a kill request. Control timing
+starts before a potentially blocked child-stdin write. Native VAD events cannot
+acknowledge a command: a private sequence must identify the exact processed
+control. At most eight such controls are monitored. Model loading is distinct
+from the shorter requested-control deadline.
+
+A deadline requests termination of this child and separately records whether it
+was reaped. Already submitted audio and remote effects remain uncertain; no clean
+terminal, rollback or successful acknowledgement is invented. A kernel-stuck
+process which misses reap is reported as unreaped. A successful supervisor exit
+requires native readiness, forwarding an actual complete successful media terminal,
+no unresolved control and a successful child exit. Rejected parent input is
+retained in the native child's actual terminal instead of being replaced by clean
+EOF. Missing native terminal stays missing. Diagnostics are bounded/best-effort
+so a full stderr pipe cannot indefinitely hold the wrapper's failure return.
+On Linux, a diagnostic that cannot finish within 100ms causes this already-failed
+process to signal itself with SIGKILL; the resulting signal exit is a failure,
+not a clean terminal. It never signals a PID taken from input.
+
+Linux parent-death tests use actual child processes, exact waitpid and a real TCP
+listener. These establish process containment, not audio permission or sound.
+Other OSes retain the former direct native path; equivalent macOS/Windows process
+containment and physical qualification have not been established. The private
+`--native-child EXPECTED_PARENT_PID ...` invocation is implementation-only and is
+not an alternate owner entry point.
+
+The CPAL → Silero → Whisper input pipeline now selects the strict
+[`PayloadLimits` profile](../pipecat-core/PAYLOAD_ADMISSION.md): 1 MiB per compact
+JSON payload, 8 MiB normal queue, 1 MiB system queue and independent Start/control
+reservations per processor. These are queue payload charges, not process RSS;
+model allocations, in-flight processing and caller/consumer retention remain
+outside them. The generic pipeline compatibility default still leaves this
+profile disabled for opaque LLM/tool capabilities.

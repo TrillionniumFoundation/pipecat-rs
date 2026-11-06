@@ -1825,3 +1825,7 @@ mod tests {
 #[cfg(test)]
 #[path = "worker_close_tests.rs"]
 mod worker_close_tests;
+
+#[cfg(test)]
+#[path = "shutdown_start_tests.rs"]
+mod shutdown_start_tests;

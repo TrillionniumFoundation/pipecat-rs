@@ -261,8 +261,35 @@ async fn repeated_peer_shutdown_schedules_release_both_udp_ports() {
                 addresses.extend(candidate_addresses(&answer.sdp));
                 a.accept_answer(answer).await.unwrap();
                 if schedule != 5 {
-                    a.wait_data_channel(Duration::from_secs(5)).await.unwrap();
-                    b.wait_data_channel(Duration::from_secs(5)).await.unwrap();
+                    // Retain the failing pair before unwinding and Drop changes
+                    // its state. These observations do not extend either wait.
+                    let setup_failed = |side, started: std::time::Instant, error| {
+                        panic!(
+                            "data-channel setup schedule={schedule}, iteration={iteration}, \
+                             side={side}, wait_elapsed={:?}, error={error:?}; \
+                             A: id={}, state={:?}, cancelled={}, last_error={:?}, stats={:?}; \
+                             B: id={}, state={:?}, cancelled={}, last_error={:?}, stats={:?}",
+                            started.elapsed(),
+                            a.pc_id(),
+                            a.state(),
+                            a.is_cancelled(),
+                            a.last_error(),
+                            a.stats(),
+                            b.pc_id(),
+                            b.state(),
+                            b.is_cancelled(),
+                            b.last_error(),
+                            b.stats(),
+                        )
+                    };
+                    let started = std::time::Instant::now();
+                    a.wait_data_channel(Duration::from_secs(5))
+                        .await
+                        .unwrap_or_else(|error| setup_failed("A", started, error));
+                    let started = std::time::Instant::now();
+                    b.wait_data_channel(Duration::from_secs(5))
+                        .await
+                        .unwrap_or_else(|error| setup_failed("B", started, error));
                 }
                 match schedule {
                     0 => {

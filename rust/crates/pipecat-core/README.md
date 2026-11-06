@@ -139,7 +139,7 @@ not consumption by the receiver.
 
 Each processor has independently bounded normal/system lanes and one reserved
 Start slot. External `sender.send` waits for capacity. System input bypasses the
-normal-input lock, so paused/full data cannot prevent Resume or Cancel.
+normal-input lock, so paused/full normal data cannot prevent Resume or Cancel.
 Every external capacity retry rechecks lifecycle admission under the same lock
 that closes input. End/Cancel wake pending producers to reject ordinary input;
 Cancel can close input even while its own system lane is backpressured.
@@ -166,8 +166,18 @@ ordinary non-error frames do not allocate an error-reporting set.
 
 Defaults: 128 normal frames, 64 system frames, 1 Start slot, 1024 output frames,
 128 concurrent background tasks per processor; 10-second startup and 30-second
-shutdown deadlines. Limits count frames/tasks, not bytes per payload. Hook
-timeouts cannot preempt CPU loops or blocking code.
+shutdown deadlines. These default limits count frames/tasks, not bytes per
+payload. Hook timeouts cannot preempt CPU loops or blocking code.
+
+`Pipeline::with_payload_limits(PayloadLimits)` additionally enables strict
+per-frame and queued-payload byte admission. It counts compact JSON payload
+bytes without allocating a serialized copy, rejects opaque native capabilities
+and callbacks, and reserves another one-frame slot for cancellation/interruption
+and urgent resume so system-priority media cannot consume control capacity.
+Inherited children keep the same profile. This is optional for compatibility;
+processor caches, pending callers, allocation capacity and RSS are not bounded
+by it. See [PAYLOAD_ADMISSION.md](PAYLOAD_ADMISSION.md) for precise accounting,
+release, output, nesting and unsupported-payload semantics.
 
 ## Representation and compatibility
 

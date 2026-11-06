@@ -25,6 +25,10 @@ The upstream code deltas are restricted to two transport modules.
 `src/dtls_transport/mod.rs`:
 
 - A durable stopped flag is set before cleanup awaits
+- A stop notification is registered before rechecking that flag and entering
+  the native DTLS constructor; stop cancels a handshake that has not yet
+  published its connection, allowing the owning peer operation and native
+  reader/writer tasks to release their ICE socket references
 - Native DTLS connections and SRTP/SRTCP sessions check that flag under their
   publication locks, so a late handshake completion cannot recreate closed media
 - Closed state cannot regress when an earlier asynchronous state callback returns
@@ -37,7 +41,11 @@ Local regression coverage is in `pipecat-webrtc`: a deterministic incoming
 channel callback barrier reproduces the missed shutdown notification, verifies
 late channel admission is rejected, and checks release of real UDP sockets.
 A second deterministic DTLS Connected-callback barrier verifies that shutdown
-cannot be followed by late SRTP publication. Repeated sequential/concurrent
+cannot be followed by late SRTP publication. A Connecting-callback barrier now
+holds both peers before their native constructors, stops them, and checks that
+resuming both starts cannot retain either real UDP candidate. A separate native
+ICE pair leaves one DTLS handshake pending and checks that stop terminates the
+start future with an error and releases the UDP sockets. Repeated sequential/concurrent
 close, Drop and handshake-close tests exercise both peers. The separate wrapper error classifier only accepts the exact SCTP
 reset-after-close aggregate after all transports report Closed; mixed errors
 remain failures.

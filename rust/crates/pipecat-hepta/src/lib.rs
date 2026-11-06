@@ -10,6 +10,12 @@ pub use media_store::*;
 #[cfg(feature = "local-speech")]
 pub mod local_speech;
 
+#[cfg(feature = "process-supervision")]
+pub mod process_supervision;
+
+#[cfg(feature = "process-supervision")]
+pub mod parent_guard;
+
 mod speech_segments;
 pub use speech_segments::speech_segments;
 

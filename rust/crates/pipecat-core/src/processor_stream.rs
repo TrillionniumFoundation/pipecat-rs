@@ -93,6 +93,7 @@ impl ProcessorContext {
         mut frame: Frame,
         adjacent_only: bool,
     ) -> Result<(), ProcessorError> {
+        self.runtime.validate_payload(&frame)?;
         let generation = self.frame_generation(&frame);
         let queues = self.stream_queues();
         if self.has_downstream_processor() {
@@ -149,8 +150,7 @@ impl ProcessorContext {
                     return self.with_admission(&self.runtime, || {
                         if self.stream_is_stale(&frame, generation) { self.runtime.drop_frame(); return Ok(()); }
                         self.runtime.stream_open()?;
-                        self.runtime.stream_output_unlocked(self.index, frame, permit);
-                        Ok(())
+                        self.runtime.stream_output_unlocked(self.index, frame, permit)
                     });
                 }
             }
