@@ -1,0 +1,187 @@
+{
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "selected": [
+    {
+      "name": "playwright",
+      "version": "1.62.0",
+      "filename": "playwright-1.62.0-py3-none-manylinux1_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/43/6b/b24aebc2b04bffcb342bccf96e287c78b363e1615bed5cea97500cc0393a/playwright-1.62.0-py3-none-manylinux1_x86_64.whl",
+      "digests": {
+        "blake2b_256": "436bb24aebc2b04bffcb342bccf96e287c78b363e1615bed5cea97500cc0393a",
+        "md5": "d6c6cd65d2edd6c225405d0052c37842",
+        "sha256": "ba33bae6a13b3d9d354c751cb618af357d20fe1d57767cbcce52079bbef17ad3"
+      },
+      "size": 47748926,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "aiohttp",
+      "version": "3.14.4",
+      "filename": "aiohttp-3.14.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/11/6c/a7a42701d9ea319140a3d44a24ec72a00b0b46d1b899b26d8a705e65bdd8/aiohttp-3.14.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "digests": {
+        "blake2b_256": "116ca7a42701d9ea319140a3d44a24ec72a00b0b46d1b899b26d8a705e65bdd8",
+        "md5": "661473ce01c34887e515e3116ca43ca5",
+        "sha256": "c5e93ab6e6330dce40f5b43996f1fc5f2543296d263a5e4b59ff09e73870b7d8"
+      },
+      "size": 1922895,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "filename": "aiohappyeyeballs-2.7.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/71/43/1947f06babed6b3f1d7f38b0c767f52df66bfb2bc10b468c4a7de9eceff2/aiohappyeyeballs-2.7.1-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "71431947f06babed6b3f1d7f38b0c767f52df66bfb2bc10b468c4a7de9eceff2",
+        "md5": "052c8e4d18a3d1f6f203ee0790e952be",
+        "sha256": "9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472"
+      },
+      "size": 15038,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "filename": "aiosignal-1.4.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "fb76641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba",
+        "md5": "acabfc37fbc3224ecac26c857e082d17",
+        "sha256": "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e"
+      },
+      "size": 7490,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "filename": "attrs-26.1.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "64b417d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395",
+        "md5": "643aa39724d0b47daf07adb1ba79027f",
+        "sha256": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"
+      },
+      "size": 67548,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "filename": "frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/6a/bd/d91c5e39f490a49df14320f4e8c80161cfcce09f1e2cde1edd16a551abb3/frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl",
+      "digests": {
+        "blake2b_256": "6abdd91c5e39f490a49df14320f4e8c80161cfcce09f1e2cde1edd16a551abb3",
+        "md5": "fb935dbddbaf1a462dee83cffb711188",
+        "sha256": "494a5952b1c597ba44e0e78113a7266e656b9794eec897b19ead706bd7074383"
+      },
+      "size": 242411,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "multidict",
+      "version": "6.7.1",
+      "filename": "multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/f3/8d/5e5be3ced1d12966fefb5c4ea3b2a5b480afcea36406559442c6e31d4a48/multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "digests": {
+        "blake2b_256": "f38d5e5be3ced1d12966fefb5c4ea3b2a5b480afcea36406559442c6e31d4a48",
+        "md5": "54d5d7d0a8637669788e04681e28f748",
+        "sha256": "bfde23ef6ed9db7eaee6c37dcec08524cb43903c60b285b172b6c094711b3961"
+      },
+      "size": 256322,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "propcache",
+      "version": "0.5.2",
+      "filename": "propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/14/15/5574111ae50dd6e879456888c0eadd4c5a869959775854e18e18a6b345f3/propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "digests": {
+        "blake2b_256": "14155574111ae50dd6e879456888c0eadd4c5a869959775854e18e18a6b345f3",
+        "md5": "b148482e55d98a2e88ad35bd3069285f",
+        "sha256": "6f328175a2cde1f0ff2c4ed8ce968b9dcfb55f3a7153f39e2957ed994da13476"
+      },
+      "size": 61639,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "yarl",
+      "version": "1.25.1",
+      "filename": "yarl-1.25.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/bc/7b/ca212cbe170ac8b96e45317ecbcf9c3c3ecf0cdec98d5b088a9c4088929b/yarl-1.25.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "digests": {
+        "blake2b_256": "bc7bca212cbe170ac8b96e45317ecbcf9c3c3ecf0cdec98d5b088a9c4088929b",
+        "md5": "ef36aed0b67f88c828f3b5d5112bdfb1",
+        "sha256": "c6f117789d22dce188e5754e8bc65b7e6ebf8cb73963b9fa761f672a5883769d"
+      },
+      "size": 117050,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "idna",
+      "version": "3.18",
+      "filename": "idna-3.18-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "1e5ed4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a",
+        "md5": "dbf22fd8e2a0cc51c209ff093585f573",
+        "sha256": "7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2"
+      },
+      "size": 65455,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "49d3b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80",
+        "md5": "aaa249e7f620bbcecbcbf2b7b11fbd12",
+        "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+      },
+      "size": 45571,
+      "requires_python": ">=3.9"
+    },
+    {
+      "name": "pyee",
+      "version": "13.0.1",
+      "filename": "pyee-13.0.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/a0/c4/b4d4827c93ef43c01f599ef31453ccc1c132b353284fc6c87d535c233129/pyee-13.0.1-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "a0c4b4d4827c93ef43c01f599ef31453ccc1c132b353284fc6c87d535c233129",
+        "md5": "94f5d12aa17a9440a0970a2accedcf58",
+        "sha256": "af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228"
+      },
+      "size": 15659,
+      "requires_python": ">=3.8"
+    },
+    {
+      "name": "greenlet",
+      "version": "3.5.5",
+      "filename": "greenlet-3.5.5-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/78/ac/5c5b959999b6f09c3026b5dfe171575bc3121c5236ce74f495096f25b203/greenlet-3.5.5-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+      "digests": {
+        "blake2b_256": "78ac5c5b959999b6f09c3026b5dfe171575bc3121c5236ce74f495096f25b203",
+        "md5": "34c08e3b4a2092d9d17f3a549f00594e",
+        "sha256": "147b25a42e5ca5be3d42356e8f608b37af715a1c196e9bf9d1627f3341adfe1d"
+      },
+      "size": 621439,
+      "requires_python": ">=3.10"
+    },
+    {
+      "name": "async-timeout",
+      "version": "5.0.1",
+      "filename": "async_timeout-5.0.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/fe/ba/e2081de779ca30d473f21f5b30e0e737c438205440784c7dfc81efc2b029/async_timeout-5.0.1-py3-none-any.whl",
+      "digests": {
+        "blake2b_256": "febae2081de779ca30d473f21f5b30e0e737c438205440784c7dfc81efc2b029",
+        "md5": "efe854d55a96998187975472b17f7774",
+        "sha256": "39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"
+      },
+      "size": 6233,
+      "requires_python": ">=3.8"
+    }
+  ]
+}

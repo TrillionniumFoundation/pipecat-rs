@@ -1,0 +1,99 @@
+{
+  "published_commit": "7105367d7d607653c3ab758f0131c029c4373faf",
+  "tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2",
+  "parent": "c45da3bd794af3640c28f8160285dcad31960c40",
+  "files": [
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/Cargo.toml",
+      "git_blob": "be59dc37e88f843cc041c67f8b575d468126934a",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/README.md",
+      "git_blob": "50bdf7e6bebd7fef9f23c44a02637ccd747c748b",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/examples/pcm_session.rs",
+      "git_blob": "fe354197ffdc349219d9140d88a46ea9a6dead66",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/src/app_tests.rs",
+      "git_blob": "dba9cecf0ef0ccdffac047fe0b9043ae0a51c4ec",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/Cargo.toml",
+      "git_blob": "8ee391a76c2a8b0fc0365d1a1e4b634201db9d83",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/README.md",
+      "git_blob": "be01304e405519c78c7f73b506d3de3340cf4d47",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/examples/pcm_session.rs",
+      "git_blob": "c03689e478e4f523e8174f4fc637dabdc51b60ad",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/Cargo.toml",
+      "git_blob": "19d895ef7648f3f2b9813902fc53799074d297a7",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/README.md",
+      "git_blob": "bb37b4b4f87f01adc027a57502c18207369a5b49",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/examples/pcm_session.rs",
+      "git_blob": "3aa5ad0bb2def96d2a5dd28332fd4e3205a4c17a",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/Cargo.toml",
+      "git_blob": "0a9430674d4a67bb0270382f9d56f876c57099e9",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/README.md",
+      "git_blob": "80a86b7c0598bf13b36627320f6ab87c36c34b49",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/examples/pcm_session.rs",
+      "git_blob": "3fe2a1939cf156d5c70d8d7a01e6afe52d7e10c0",
+      "sha256": null
+    },
+    {
+      "path": "rust/crates/pipecat-livekit/tests/local_sfu.rs",
+      "git_blob": "38cac78ece9b1dd40963c0c416ed84fedd5353ca",
+      "sha256": "ac1d13e6abd5e032da01dafae1834f7249da227dc00d298c0e4e5494238422e4"
+    },
+    {
+      "path": "rust/crates/pipecat-livekit/tests/local_sfu/media_control.rs",
+      "git_blob": "962c2ffc25d1120d92fd70427771e0b8d1c7881b",
+      "sha256": "b6bee7caf90fcf281f9f71ebd72efa6526cfbd22ce0d2309852d1eb135d9a974"
+    },
+    {
+      "path": "rust/crates/pipecat-livekit/qualification/LOCAL_SFU.md",
+      "git_blob": "de9a6a4aba0c5fd8ba2eaef101eeb1bad570fb41",
+      "sha256": "9b5e38b5a20b19b29d5fd9d07bb75f02501bb38cecd6ddbb6cc0b406ff65dcc4"
+    }
+  ],
+  "local_commit": null,
+  "provider_recovery_manifest_blob": "d29e2eebd0a5e37b9c523424064605b14936e18c",
+  "provider_static_job": "1a1b10c28e5-fc05-7559",
+  "local_executor_unavailable": true,
+  "verification_pending": "No longer pending for local recovered tree: fresh public clone independently matched published HEAD/tree. Runtime gates record their own source manifests.",
+  "local_recovery_verification": {
+    "checkout_head": "7105367d7d607653c3ab758f0131c029c4373faf",
+    "checkout_tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2",
+    "status_before_report_recovery": "clean",
+    "method": "fresh public git clone after local execution entrance replacement"
+  },
+  "provider_recovery_manifest_blob_initial_candidate": "6322bd450e64043d6b36e281b4f5a08d5c89da0d"
+}

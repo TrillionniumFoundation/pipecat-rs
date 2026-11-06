@@ -1,0 +1,86 @@
+[
+  {
+    "name": "playwright",
+    "version": "1.62.0",
+    "bytes": 47748926,
+    "sha256": "ba33bae6a13b3d9d354c751cb618af357d20fe1d57767cbcce52079bbef17ad3"
+  },
+  {
+    "name": "aiohttp",
+    "version": "3.14.4",
+    "bytes": 1922895,
+    "sha256": "c5e93ab6e6330dce40f5b43996f1fc5f2543296d263a5e4b59ff09e73870b7d8"
+  },
+  {
+    "name": "aiohappyeyeballs",
+    "version": "2.7.1",
+    "bytes": 15038,
+    "sha256": "9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472"
+  },
+  {
+    "name": "aiosignal",
+    "version": "1.4.0",
+    "bytes": 7490,
+    "sha256": "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e"
+  },
+  {
+    "name": "attrs",
+    "version": "26.1.0",
+    "bytes": 67548,
+    "sha256": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"
+  },
+  {
+    "name": "frozenlist",
+    "version": "1.8.0",
+    "bytes": 242411,
+    "sha256": "494a5952b1c597ba44e0e78113a7266e656b9794eec897b19ead706bd7074383"
+  },
+  {
+    "name": "multidict",
+    "version": "6.7.1",
+    "bytes": 256322,
+    "sha256": "bfde23ef6ed9db7eaee6c37dcec08524cb43903c60b285b172b6c094711b3961"
+  },
+  {
+    "name": "propcache",
+    "version": "0.5.2",
+    "bytes": 61639,
+    "sha256": "6f328175a2cde1f0ff2c4ed8ce968b9dcfb55f3a7153f39e2957ed994da13476"
+  },
+  {
+    "name": "yarl",
+    "version": "1.25.1",
+    "bytes": 117050,
+    "sha256": "c6f117789d22dce188e5754e8bc65b7e6ebf8cb73963b9fa761f672a5883769d"
+  },
+  {
+    "name": "idna",
+    "version": "3.18",
+    "bytes": 65455,
+    "sha256": "7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2"
+  },
+  {
+    "name": "typing-extensions",
+    "version": "4.16.0",
+    "bytes": 45571,
+    "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+  },
+  {
+    "name": "pyee",
+    "version": "13.0.1",
+    "bytes": 15659,
+    "sha256": "af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228"
+  },
+  {
+    "name": "greenlet",
+    "version": "3.5.5",
+    "bytes": 621439,
+    "sha256": "147b25a42e5ca5be3d42356e8f608b37af715a1c196e9bf9d1627f3341adfe1d"
+  },
+  {
+    "name": "async-timeout",
+    "version": "5.0.1",
+    "bytes": 6233,
+    "sha256": "39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"
+  }
+]

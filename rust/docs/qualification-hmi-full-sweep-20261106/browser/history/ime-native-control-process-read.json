@@ -1,0 +1,18 @@
+{
+  "audit_recorded": true,
+  "job_id": "1a1b0d24892-fc05-7332",
+  "stderr": {
+    "eof": true,
+    "next_offset": 0,
+    "offset": 0,
+    "size": 0,
+    "text": ""
+  },
+  "stdout": {
+    "eof": true,
+    "next_offset": 1365,
+    "offset": 0,
+    "size": 1365,
+    "text": "{\"scope\": \"independent blank native textarea; no application WASM or event dispatch calls\", \"browser\": \"156.0.8078.79\", \"sandbox\": true, \"events\": [{\"type\": \"compositionstart\", \"data\": \"\", \"trusted\": true, \"composing\": null, \"inputType\": null}, {\"type\": \"compositionupdate\", \"data\": \"中\", \"trusted\": true, \"composing\": null, \"inputType\": null}, {\"type\": \"input\", \"data\": \"中\", \"trusted\": true, \"composing\": true, \"inputType\": \"insertCompositionText\"}, {\"type\": \"compositionupdate\", \"data\": \"中文\", \"trusted\": true, \"composing\": null, \"inputType\": null}, {\"type\": \"input\", \"data\": \"中文\", \"trusted\": true, \"composing\": true, \"inputType\": \"insertCompositionText\"}, {\"type\": \"compositionupdate\", \"data\": \"中文\", \"trusted\": true, \"composing\": null, \"inputType\": null}, {\"type\": \"input\", \"data\": \"中文\", \"trusted\": true, \"composing\": true, \"inputType\": \"insertCompositionText\"}, {\"type\": \"compositionend\", \"data\": \"中文\", \"trusted\": false, \"composing\": null, \"inputType\": null}, {\"type\": \"input\", \"data\": \" 🦀\", \"trusted\": true, \"composing\": false, \"inputType\": \"insertText\"}, {\"type\": \"input\", \"data\": null, \"trusted\": true, \"composing\": false, \"inputType\": \"insertLineBreak\"}, {\"type\": \"input\", \"data\": \"第二行\", \"trusted\": true, \"composing\": false, \"inputType\": \"insertText\"}], \"value\": \"中文 🦀\\n第二行\", \"observed_unix\": 1793967945.4657228}\n"
+  }
+}

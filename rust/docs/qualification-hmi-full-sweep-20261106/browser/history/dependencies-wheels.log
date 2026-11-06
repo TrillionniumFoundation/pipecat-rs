@@ -1,0 +1,17 @@
+Looking in links: /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/wheels
+Processing ./wheels/playwright-1.62.0-py3-none-manylinux1_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 1))
+Processing ./wheels/aiohttp-3.14.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 2))
+Processing ./wheels/aiohappyeyeballs-2.7.1-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 3))
+Processing ./wheels/aiosignal-1.4.0-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 4))
+Processing ./wheels/attrs-26.1.0-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 5))
+Processing ./wheels/frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 6))
+Processing ./wheels/multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 7))
+Processing ./wheels/propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 8))
+Processing ./wheels/yarl-1.25.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 9))
+Processing ./wheels/idna-3.18-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 10))
+Processing ./wheels/typing_extensions-4.16.0-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 11))
+Processing ./wheels/pyee-13.0.1-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 12))
+Processing ./wheels/greenlet-3.5.5-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 13))
+Processing ./wheels/async_timeout-5.0.1-py3-none-any.whl (from -r /home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-requirements.txt (line 14))
+Installing collected packages: typing-extensions, propcache, multidict, idna, greenlet, frozenlist, attrs, async-timeout, aiohappyeyeballs, yarl, pyee, aiosignal, playwright, aiohttp
+Successfully installed aiohappyeyeballs-2.7.1 aiohttp-3.14.4 aiosignal-1.4.0 async-timeout-5.0.1 attrs-26.1.0 frozenlist-1.8.0 greenlet-3.5.5 idna-3.18 multidict-6.7.1 playwright-1.62.0 propcache-0.5.2 pyee-13.0.1 typing-extensions-4.16.0 yarl-1.25.1

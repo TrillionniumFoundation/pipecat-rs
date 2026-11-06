@@ -1,0 +1,32 @@
+[
+  {
+    "name": "protocol-r3",
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/bin/python",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_acceptance.py",
+      "--browser",
+      "/usr/bin/google-chrome",
+      "--assets",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dist",
+      "--output",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/evidence-r3"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 222.6172125339508
+  },
+  {
+    "name": "input-r2",
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/venv/bin/python",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py",
+      "--browser",
+      "/usr/bin/google-chrome",
+      "--assets",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dist",
+      "--output",
+      "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/input-evidence-r2"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 3.66103458404541
+  }
+]

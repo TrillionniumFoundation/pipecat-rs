@@ -1,0 +1,110 @@
+{
+  "host": "desktop",
+  "files": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/evidence/browser-acceptance.json",
+      "local": "protocol-r1.json",
+      "sha256": "fd0c01b1502ac295f99b0d99025a9fc3e505d99a345e86d8ace6e1c3bb3ad7a4",
+      "size": 3652,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/evidence-r2/browser-acceptance.json",
+      "local": "protocol-r2.json",
+      "sha256": "41ab06012d3562923d2c426cd7aa6995d789974662c49891a8ea05b4ff96ccad",
+      "size": 4294,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/input-evidence-r1/browser-input-acceptance.json",
+      "local": "input-r1.json",
+      "sha256": "f8e0a18d825ebc5470be3a9dabf7286020d17c54f78753f251c0abe38e1ba271",
+      "size": 3943,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-acceptance.log",
+      "local": "protocol-r1.log",
+      "sha256": "925e26905771f87dad58cbcca431fd71b64f7646d3b71a99669fa12fd1f8c1df",
+      "size": 6027,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/protocol-r2.log",
+      "local": "protocol-r2.log",
+      "sha256": "64cbbd3ab1ecd5b68669c83da4266c24e33e2657999ea1380408b5b41f1466d4",
+      "size": 6875,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-evaluate-fixture-repair.json",
+      "local": "browser-evaluate-fixture-repair.json",
+      "sha256": "7e4a7a7e9134503923c061d4832a464f1fbf11064d47c8a8835eae1983a9e6ce",
+      "size": 1816,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/reader-and-commandline-fixture-repair.json",
+      "local": "reader-and-commandline-fixture-repair.json",
+      "sha256": "bf7d251d0054b7b898d4105f2e58a3b568cc166d7c2e1e5713174de88a29468b",
+      "size": 708,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-r2-input-r1-results.json",
+      "local": "browser-r2-input-r1-results.json",
+      "sha256": "72ca3c58eb021a00bfadc38ed23e6ed1cc87c2b1a348fcf3e6e26616f6f2b149",
+      "size": 1134,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/browser-r3-input-r2-results.json",
+      "local": "browser-r3-input-r2-results.json",
+      "sha256": "5dffeed55a7acc1aa8767c087e8529b1f255fe848e68c821dae5e35d8f3a8dd0",
+      "size": 1133,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dependencies.log",
+      "local": "dependencies.log",
+      "sha256": "cccf53be2da55db314bd64be8ca33ed8659f9ec50eee1dce90d079afcee96261",
+      "size": 270,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dependencies-official.log",
+      "local": "dependencies-official.log",
+      "sha256": "a71e61e80b1b097895fd0db9464d37a4cbcbb67a942ac52f06120e4c28cb9e6a",
+      "size": 165,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dependencies-wheels.log",
+      "local": "dependencies-wheels.log",
+      "sha256": "c7bd3434a019834114a8688364d22359e67e79ac83e10d0bace5878f1e062f60",
+      "size": 3174,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/dependencies-check.log",
+      "local": "dependencies-check.log",
+      "sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+      "size": 30,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/wheel-downloads.json",
+      "local": "wheel-downloads.json",
+      "sha256": "49694c1f1cd5ad5de8de2e073dde8f5f2dc4265f0c801fc1fa4f9c9b22a34205",
+      "size": 2240,
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/setup.json",
+      "local": "setup.json",
+      "sha256": "296d6ab33f2dbd47ce78aa5d941fdb70afcd71df7024bfee7ee2873d88537282",
+      "size": 524,
+      "eof": true
+    }
+  ]
+}

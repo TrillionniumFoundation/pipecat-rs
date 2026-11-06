@@ -1,0 +1,329 @@
+{
+  "schema_version": 1,
+  "checkpoint": "Reconstructed provider target rename, independently statically validated on exact Rust 1.99.0; ready for final frozen-source runtime qualification.",
+  "repository": "TrillionniumFoundation/pipecat-rs",
+  "base_commit": "c45da3bd794af3640c28f8160285dcad31960c40",
+  "base_tree": "12a56abe43c39621e2d1e2639c828c4d85145f58",
+  "local_equivalent_base": "f9895dca975deabc15a3a1698daa01a09eac9452",
+  "original_local_post_edit_hashes_available": false,
+  "original_local_data_loss_not_assumed": true,
+  "files": [
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/Cargo.toml",
+      "base_blob_sha": "c74970653d9d99f1bdedb61c080e2d90159e9988",
+      "blob_sha": "be59dc37e88f843cc041c67f8b575d468126934a",
+      "chars": 1206,
+      "sha256": "70d7a67c23b5e0e668f992dc2598e21bfbc2d3b009838ad69289d8313e52633b"
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/README.md",
+      "base_blob_sha": "3fa917315864a749e7e75793c27539591b1293bc",
+      "blob_sha": "50bdf7e6bebd7fef9f23c44a02637ccd747c748b",
+      "chars": 8549,
+      "sha256": "8169e7d3ce71e7f3f614b677546e554dba276939c9d988ff3d6e9ef2e45c3be8"
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/examples/pcm_session.rs",
+      "base_blob_sha": "812eea09df5908ee9cb0742e29d991f537d9721e",
+      "blob_sha": "fe354197ffdc349219d9140d88a46ea9a6dead66",
+      "chars": 37317,
+      "sha256": "8bdde6e59751b1f27f120c0976ab6a7231a11f67969a66fdd2cfe3f5ed15c3d3"
+    },
+    {
+      "path": "rust/crates/pipecat-aws-nova-sonic/src/app_tests.rs",
+      "base_blob_sha": "625f4c811330e8f3b63841dd90ee65eec2e0a400",
+      "blob_sha": "dba9cecf0ef0ccdffac047fe0b9043ae0a51c4ec",
+      "chars": 107494,
+      "sha256": "be6eb20b50536b1c4c25803919a41f2cce4a566877eb8560da7311b6590a27a2"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/Cargo.toml",
+      "base_blob_sha": "684c8ce25fa8144455db7de5f6fd7158ef1f0e24",
+      "blob_sha": "8ee391a76c2a8b0fc0365d1a1e4b634201db9d83",
+      "chars": 789,
+      "sha256": "c83d43f63793acdf176aa692dc546cb43416cb5ed9bce2b5f4e08a9a750f4809"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/README.md",
+      "base_blob_sha": "4a071b6306bffcce2f2b6d2bb25282eca540165e",
+      "blob_sha": "be01304e405519c78c7f73b506d3de3340cf4d47",
+      "chars": 19718,
+      "sha256": "de1206f161706aaa34f4d7413a58548edae72e1940fa11117f0e54507651967e"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-realtime/examples/pcm_session.rs",
+      "base_blob_sha": "252f51245337dabc299e6a4146eff836ec58b7ab",
+      "blob_sha": "c03689e478e4f523e8174f4fc637dabdc51b60ad",
+      "chars": 23008,
+      "sha256": "206750622481da7d7f4e9644c9674368ca89baab1a009445e56bb5a8a21b3af9"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/Cargo.toml",
+      "base_blob_sha": "4378077f18bd0183e59efef5f42723d89d89f654",
+      "blob_sha": "19d895ef7648f3f2b9813902fc53799074d297a7",
+      "chars": 758,
+      "sha256": "349f1da5afb1cdfbbe8012f6bd727d36927a038237c0edf2eb74dab5fae110e2"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/README.md",
+      "base_blob_sha": "f5cc835d0d49d641f541779eb194baeb8242be52",
+      "blob_sha": "bb37b4b4f87f01adc027a57502c18207369a5b49",
+      "chars": 10419,
+      "sha256": "42b6ab77f2e127e8bd91e8b1afb1c6b881f5b16ea7477598a93c4570f2664e55"
+    },
+    {
+      "path": "rust/crates/pipecat-azure-voice-live/examples/pcm_session.rs",
+      "base_blob_sha": "040d421bb04dae80daf98d34cee99a36c8461889",
+      "blob_sha": "3aa5ad0bb2def96d2a5dd28332fd4e3205a4c17a",
+      "chars": 23158,
+      "sha256": "2e042d62a4542dcd17e03f4ba0898f89ef1793f23f1b6b1c5caced13f37aa680"
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/Cargo.toml",
+      "base_blob_sha": "4b623d6d11badbad9dad3867b082b237812afbeb",
+      "blob_sha": "0a9430674d4a67bb0270382f9d56f876c57099e9",
+      "chars": 803,
+      "sha256": "3a26df1ee994cd9f0ed4fe7cca434c367a6ff2eb3c8cec33fd30df370fafd923"
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/README.md",
+      "base_blob_sha": "cbfb7349a4a9692c1f6acf0df021fd3366ad96cc",
+      "blob_sha": "80a86b7c0598bf13b36627320f6ab87c36c34b49",
+      "chars": 14962,
+      "sha256": "25d70b224c2cf9e43e2762cbab391dd16b6432ec78b060e14a1dc338e3b37f86"
+    },
+    {
+      "path": "rust/crates/pipecat-inworld-realtime/examples/pcm_session.rs",
+      "base_blob_sha": "805061d1be8e7f3d2a742d1d18c4572d4bacba9a",
+      "blob_sha": "3fe2a1939cf156d5c70d8d7a01e6afe52d7e10c0",
+      "chars": 6108,
+      "sha256": "71c1634d5a4f08140390c5a47d26516cede2b826268d4cac10958df79f03e96e"
+    }
+  ],
+  "all_13_Git_blobs_read_back_equal": true,
+  "source_paths_preserved": true,
+  "library_interfaces_changed": false,
+  "title_assertion_and_12_second_deadline_preserved": true,
+  "local_metadata_before_disconnection": {
+    "workspace_example_targets": 28,
+    "collisions": [],
+    "old_pcm_session_alias_present": false,
+    "provider_features": {
+      "pipecat-aws-nova-sonic": {},
+      "pipecat-azure-realtime": {},
+      "pipecat-azure-voice-live": {},
+      "pipecat-inworld-realtime": {}
+    }
+  },
+  "remote_static_job": {
+    "host": "desktop",
+    "job_id": "1a1b10c28e5-fc05-7559",
+    "repository_directory": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/source",
+    "evidence_directory": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/evidence",
+    "status": "succeeded",
+    "exit_code": 0,
+    "output_complete": true,
+    "output_durable": true,
+    "timed_out": false,
+    "stderr_bytes": 0,
+    "stdout_bytes": 6579
+  },
+  "probe": {
+    "script_blob": "381c17904fd9648a893a65566450fb58a9718551",
+    "complete_printed_stdout_blob": "9da1951a2e687b4e33da1798918466aa080ea9cc",
+    "both_blobs_read_back_equal": true,
+    "scope": "Actual isolated no-dependency local Cargo 1.99.0 probe; original author script and complete printed tool output retained. Separate raw Cargo JSONL/stderr and original full per-source hash record temporarily inaccessible after entrance disconnect, not fabricated here. Not production runtime acceptance.",
+    "normal_executable_sha256": "8de4ff976c49cdeaa750f334d3b6383222b0dcfb93b9da18aeafd79a69c36b97",
+    "normal_same_hash_after_all_features_all_targets": true,
+    "fresh_all_targets_has_normal_executable": false,
+    "all_targets_harness_profile_test": true,
+    "cleanup": "All subprocess.run calls completed and were awaited; no socket/server/background fixture. Source and target directories retained as evidence, not deleted."
+  },
+  "gate_requirement": "Before --workspace --all-features --all-targets tests explicitly build --workspace --all-features --examples; bind compiler-artifact JSON profile/features/executable SHA. Do not treat a default-phase normal executable as all-features acceptance.",
+  "failures_preserved": {
+    "r2_log_sha256_reported_by_workspace_gate": "173442b9a072ffb8000c6c7ff1fda46fc3504fc4c6c0eeddc22edc7a9ecbfc3d",
+    "local_final_static_attempt": "exec process creation failed during entrance disconnection; no local fmt pass claimed"
+  },
+  "refs_modified": false,
+  "commits_created": false,
+  "remote_static_result": {
+    "repo": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/source",
+    "evidence": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/evidence",
+    "metadata_exit_code": 0,
+    "fmt": {
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "fmt",
+        "--verbose",
+        "--manifest-path",
+        "Cargo.toml",
+        "--package",
+        "pipecat-aws-nova-sonic",
+        "--package",
+        "pipecat-azure-realtime",
+        "--package",
+        "pipecat-azure-voice-live",
+        "--package",
+        "pipecat-inworld-realtime",
+        "--",
+        "--check"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/source/rust",
+      "exit_code": 0,
+      "elapsed_seconds": 0.916666,
+      "log": "fmt.log",
+      "sha256": "5a843068427466e06721c6b59dce16630390a05a77cd14e11c2b35a6cea88bf9"
+    },
+    "diff_check": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-provider-recovery-f9f576cc6c66/source",
+      "exit_code": 0,
+      "elapsed_seconds": 0.31601,
+      "log": "diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace_examples": 28,
+    "source_unchanged": true,
+    "files": [
+      {
+        "path": "rust/crates/pipecat-aws-nova-sonic/Cargo.toml",
+        "base_blob_sha": "c74970653d9d99f1bdedb61c080e2d90159e9988",
+        "git_blob_sha": "be59dc37e88f843cc041c67f8b575d468126934a",
+        "sha256": "70d7a67c23b5e0e668f992dc2598e21bfbc2d3b009838ad69289d8313e52633b"
+      },
+      {
+        "path": "rust/crates/pipecat-aws-nova-sonic/README.md",
+        "base_blob_sha": "3fa917315864a749e7e75793c27539591b1293bc",
+        "git_blob_sha": "50bdf7e6bebd7fef9f23c44a02637ccd747c748b",
+        "sha256": "8169e7d3ce71e7f3f614b677546e554dba276939c9d988ff3d6e9ef2e45c3be8"
+      },
+      {
+        "path": "rust/crates/pipecat-aws-nova-sonic/examples/pcm_session.rs",
+        "base_blob_sha": "812eea09df5908ee9cb0742e29d991f537d9721e",
+        "git_blob_sha": "fe354197ffdc349219d9140d88a46ea9a6dead66",
+        "sha256": "8bdde6e59751b1f27f120c0976ab6a7231a11f67969a66fdd2cfe3f5ed15c3d3"
+      },
+      {
+        "path": "rust/crates/pipecat-aws-nova-sonic/src/app_tests.rs",
+        "base_blob_sha": "625f4c811330e8f3b63841dd90ee65eec2e0a400",
+        "git_blob_sha": "dba9cecf0ef0ccdffac047fe0b9043ae0a51c4ec",
+        "sha256": "be6eb20b50536b1c4c25803919a41f2cce4a566877eb8560da7311b6590a27a2"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-realtime/Cargo.toml",
+        "base_blob_sha": "684c8ce25fa8144455db7de5f6fd7158ef1f0e24",
+        "git_blob_sha": "8ee391a76c2a8b0fc0365d1a1e4b634201db9d83",
+        "sha256": "c83d43f63793acdf176aa692dc546cb43416cb5ed9bce2b5f4e08a9a750f4809"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-realtime/README.md",
+        "base_blob_sha": "4a071b6306bffcce2f2b6d2bb25282eca540165e",
+        "git_blob_sha": "be01304e405519c78c7f73b506d3de3340cf4d47",
+        "sha256": "de1206f161706aaa34f4d7413a58548edae72e1940fa11117f0e54507651967e"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-realtime/examples/pcm_session.rs",
+        "base_blob_sha": "252f51245337dabc299e6a4146eff836ec58b7ab",
+        "git_blob_sha": "c03689e478e4f523e8174f4fc637dabdc51b60ad",
+        "sha256": "206750622481da7d7f4e9644c9674368ca89baab1a009445e56bb5a8a21b3af9"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-voice-live/Cargo.toml",
+        "base_blob_sha": "4378077f18bd0183e59efef5f42723d89d89f654",
+        "git_blob_sha": "19d895ef7648f3f2b9813902fc53799074d297a7",
+        "sha256": "349f1da5afb1cdfbbe8012f6bd727d36927a038237c0edf2eb74dab5fae110e2"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-voice-live/README.md",
+        "base_blob_sha": "f5cc835d0d49d641f541779eb194baeb8242be52",
+        "git_blob_sha": "bb37b4b4f87f01adc027a57502c18207369a5b49",
+        "sha256": "42b6ab77f2e127e8bd91e8b1afb1c6b881f5b16ea7477598a93c4570f2664e55"
+      },
+      {
+        "path": "rust/crates/pipecat-azure-voice-live/examples/pcm_session.rs",
+        "base_blob_sha": "040d421bb04dae80daf98d34cee99a36c8461889",
+        "git_blob_sha": "3aa5ad0bb2def96d2a5dd28332fd4e3205a4c17a",
+        "sha256": "2e042d62a4542dcd17e03f4ba0898f89ef1793f23f1b6b1c5caced13f37aa680"
+      },
+      {
+        "path": "rust/crates/pipecat-inworld-realtime/Cargo.toml",
+        "base_blob_sha": "4b623d6d11badbad9dad3867b082b237812afbeb",
+        "git_blob_sha": "0a9430674d4a67bb0270382f9d56f876c57099e9",
+        "sha256": "3a26df1ee994cd9f0ed4fe7cca434c367a6ff2eb3c8cec33fd30df370fafd923"
+      },
+      {
+        "path": "rust/crates/pipecat-inworld-realtime/README.md",
+        "base_blob_sha": "cbfb7349a4a9692c1f6acf0df021fd3366ad96cc",
+        "git_blob_sha": "80a86b7c0598bf13b36627320f6ab87c36c34b49",
+        "sha256": "25d70b224c2cf9e43e2762cbab391dd16b6432ec78b060e14a1dc338e3b37f86"
+      },
+      {
+        "path": "rust/crates/pipecat-inworld-realtime/examples/pcm_session.rs",
+        "base_blob_sha": "805061d1be8e7f3d2a742d1d18c4572d4bacba9a",
+        "git_blob_sha": "3fe2a1939cf156d5c70d8d7a01e6afe52d7e10c0",
+        "sha256": "71c1634d5a4f08140390c5a47d26516cede2b826268d4cac10958df79f03e96e"
+      }
+    ],
+    "checks": {
+      "pipecat-aws-nova-sonic": {
+        "only_example_usage_names_changed": true,
+        "autoexamples": false,
+        "explicit_target": "aws_nova_sonic_pcm_session"
+      },
+      "pipecat-azure-realtime": {
+        "only_example_usage_names_changed": true,
+        "autoexamples": false,
+        "explicit_target": "azure_realtime_pcm_session"
+      },
+      "pipecat-azure-voice-live": {
+        "only_example_usage_names_changed": true,
+        "autoexamples": false,
+        "explicit_target": "azure_voice_live_pcm_session"
+      },
+      "pipecat-inworld-realtime": {
+        "only_example_usage_names_changed": true,
+        "autoexamples": false,
+        "explicit_target": "inworld_realtime_pcm_session"
+      },
+      "nova_helper": {
+        "only_fixed_name_and_failure_diagnostic_changed": true,
+        "title_assertion_unchanged": true,
+        "limit_constant": [
+          "const LIMIT: Duration = Duration::from_secs(12);"
+        ],
+        "assertion_count": 288
+      }
+    },
+    "original_failure_copy": {
+      "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-r2/cargo-test-workspace.log",
+      "sha256": "173442b9a072ffb8000c6c7ff1fda46fc3504fc4c6c0eeddc22edc7a9ecbfc3d",
+      "copied_byte_identical": true
+    },
+    "reconstruction_sha256": "6264c4e138b7fbcf59a733cc5f93d4ddc4c701f33a502eb3a89e851b39563110",
+    "checksums_sha256": "ce7a36b8004060d36ece434d3a795b611c22b1dce04be792be419b279d9a8832"
+  },
+  "late_local_read_attempt": {
+    "available_entry_but_original_paths_absent": true,
+    "paths_checked": [
+      "/workspace/scratch/f9f576cc6c66/pipecat-rs",
+      "/workspace/scratch/f9f576cc6c66/workspace-evidence",
+      "/workspace/scratch/f9f576cc6c66/webrtc-evidence",
+      "/workspace/scratch/27653505a519/toolchain"
+    ],
+    "original_post_edit_hash_comparison_still_unavailable": true
+  },
+  "failure_evidence": {
+    "r2_log_sha256_reported_by_workspace_gate": "173442b9a072ffb8000c6c7ff1fda46fc3504fc4c6c0eeddc22edc7a9ecbfc3d",
+    "local_final_static_attempt": "exec process creation failed during entrance disconnection; no local fmt pass claimed",
+    "original_r2_raw_log_independently_rehashed_and_byte_identical_copy": {
+      "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-r2/cargo-test-workspace.log",
+      "sha256": "173442b9a072ffb8000c6c7ff1fda46fc3504fc4c6c0eeddc22edc7a9ecbfc3d",
+      "copied_byte_identical": true
+    }
+  },
+  "new_provider_source_runtime_tests_executed": 0
+}

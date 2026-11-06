@@ -1,0 +1,26 @@
+{
+  "host": "desktop",
+  "files": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/bundle.json",
+      "local": "bundle.json",
+      "size": 1395,
+      "sha256": "8aaab56fca34f1d26f694a8e28d15a40b4e166747b5693c5bd6e4c5dcdcaac45",
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/ime-cdp-native-control.json",
+      "local": "ime-cdp-native-control.json",
+      "size": 1823,
+      "sha256": "98c155e46f05b7bab93c93e3dc510e092037356e453838151204ac09810a8ba8",
+      "eof": true
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/wheel-manifest.json",
+      "local": "wheel-manifest.json",
+      "size": 9049,
+      "sha256": "f734667a27c7037081b0aa137736fb5c4ad26940e41c83c74c822867a4112434",
+      "eof": true
+    }
+  ]
+}

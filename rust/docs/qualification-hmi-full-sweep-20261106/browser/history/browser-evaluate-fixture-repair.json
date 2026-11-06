@@ -1,0 +1,25 @@
+{
+  "before_sha256": "68934d0c4a7d9a53e6f9e7fe5b083c9e1fd1f338f2b5f87d0c8b713d9856117c",
+  "after_sha256": "1ecb160b3885ca9f64fdd7c8cc15f9c914c8eaa4fa614f6bbf4f544074281812",
+  "original_assertions": 114,
+  "assertions_unchanged": true,
+  "changes": [
+    {
+      "before": "await page.evaluate(\"delete window.openSockets.at(-1).bufferedAmount; window.savedImageSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture image send failure')}\")",
+      "after": "await page.evaluate(\"() => { delete window.openSockets.at(-1).bufferedAmount; window.savedImageSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture image send failure')}; }\")"
+    },
+    {
+      "before": "await page.evaluate(\"window.openSockets.at(-1).send=window.savedImageSend\")",
+      "after": "await page.evaluate(\"() => { window.openSockets.at(-1).send=window.savedImageSend; }\")"
+    },
+    {
+      "before": "await page.evaluate(\"delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}\")",
+      "after": "await page.evaluate(\"() => { delete window.openSockets.at(-1).bufferedAmount; window.savedSend=window.openSockets.at(-1).send; window.openSockets.at(-1).send=()=>{throw new Error('fixture send failure')}; }\")"
+    },
+    {
+      "before": "await page.evaluate(\"window.openSockets.at(-1).send=window.savedSend\")",
+      "after": "await page.evaluate(\"() => { window.openSockets.at(-1).send=window.savedSend; }\")"
+    }
+  ],
+  "reason": "Playwright evaluate invokes a returned function; expression assignment returned the injected/restored send function instead of leaving it installed for the later application click"
+}

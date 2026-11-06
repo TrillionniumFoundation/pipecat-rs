@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "result": "failed",
+  "checks": [
+    "Trusted Connect click resumes native AudioContext and schedules/ends synthetic PCM with normal autoplay policy and muted output"
+  ],
+  "failure": {
+    "type": "AssertionError",
+    "message": "",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py\", line 249, in main\n    await asyncio.wait_for(scenario(), timeout=90)\n  File \"/usr/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/home/qian-qi/workspace/pipecat-browser-qa-20261106-f9f576cc6c66/tests/browser_input_acceptance.py\", line 198, in scenario\n    assert all(e['trusted'] for e in events)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+  },
+  "cleanup_errors": [],
+  "page_errors": [],
+  "elapsed_seconds": 3.1708294179989025,
+  "source_sha256": {
+    "tests/browser_input_acceptance.py": "262cfa38a401b2e21b6c81fe5fe474b58e80e1dd3c373b11ca3e1b1b1354971c",
+    "tests/browser_acceptance.py": "b44e646aa7179f4d7ab2d2e69362a17a7495b029a5695110c67325172661ae67"
+  },
+  "source_sha256_after": {
+    "tests/browser_input_acceptance.py": "262cfa38a401b2e21b6c81fe5fe474b58e80e1dd3c373b11ca3e1b1b1354971c",
+    "tests/browser_acceptance.py": "b44e646aa7179f4d7ab2d2e69362a17a7495b029a5695110c67325172661ae67"
+  },
+  "asset_sha256": {
+    "config.json": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+    "index.html": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+    "pkg/pipecat_browser_client.js": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+    "pkg/pipecat_browser_client_bg.wasm": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+    "style.css": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f"
+  },
+  "browser_version": "156.0.8078.79",
+  "application_source_present": false,
+  "browser_executable": "/usr/bin/google-chrome",
+  "chromium_sandbox": true,
+  "launch_args": [
+    "--mute-audio",
+    "--enable-automation"
+  ],
+  "browser_command_line": [
+    "/usr/bin/google-chrome",
+    "--disable-field-trial-config",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-back-forward-cache",
+    "--disable-breakpad",
+    "--disable-client-side-phishing-detection",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-component-update",
+    "--no-default-browser-check",
+    "--disable-default-apps",
+    "--disable-dev-shm-usage",
+    "--disable-edgeupdater",
+    "--disable-extensions",
+    "--disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion",
+    "--enable-features=CDPScreenshotNewSurface",
+    "--allow-pre-commit-input",
+    "--disable-hang-monitor",
+    "--disable-ipc-flooding-protection",
+    "--disable-popup-blocking",
+    "--disable-prompt-on-repost",
+    "--disable-renderer-backgrounding",
+    "--disable-updater-scheduler",
+    "--force-color-profile=srgb",
+    "--metrics-recording-only",
+    "--no-first-run",
+    "--password-store=basic",
+    "--use-mock-keychain",
+    "--no-service-autorun",
+    "--export-tagged-pdf",
+    "--disable-search-engine-choice-screen",
+    "--unsafely-disable-devtools-self-xss-warnings",
+    "--edge-skip-compat-layer-relaunch",
+    "--disable-infobars",
+    "--disable-search-engine-choice-screen",
+    "--disable-sync",
+    "--enable-unsafe-swiftshader",
+    "--headless",
+    "--hide-scrollbars",
+    "--mute-audio",
+    "--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4",
+    "--mute-audio",
+    "--enable-automation",
+    "--user-data-dir=/tmp/playwright_chromiumdev_profile-nLHsdM",
+    "--remote-debugging-pipe",
+    "--no-startup-window",
+    "--noerrdialogs",
+    "--ozone-platform=headless",
+    "--ozone-override-screen-size=800,600",
+    "--use-angle=swiftshader-webgl",
+    "--flag-switches-begin",
+    "--flag-switches-end",
+    "--enable-unsafe-swiftshader"
+  ],
+  "observations": [
+    {
+      "stage": "gesture-audio",
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "running",
+            "time": 1.0773333333333333
+          }
+        ],
+        "socketStates": [
+          1
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [],
+        "inputs": [],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 1
+      }
+    },
+    {
+      "stage": "failure",
+      "observed": {
+        "mediaRequests": 0,
+        "contexts": [
+          {
+            "state": "running",
+            "time": 1.2266666666666666
+          }
+        ],
+        "socketStates": [
+          1
+        ],
+        "starts": [
+          {
+            "state": "running",
+            "when": 0.06333333333333334,
+            "time": 0.05333333333333334,
+            "rate": 16000,
+            "length": 16000
+          }
+        ],
+        "ended": 1,
+        "compositions": [
+          {
+            "type": "compositionstart",
+            "data": "",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionupdate",
+            "data": "中文",
+            "trusted": true
+          },
+          {
+            "type": "compositionend",
+            "data": "中文",
+            "trusted": false
+          }
+        ],
+        "inputs": [
+          {
+            "type": "insertCompositionText",
+            "data": "中",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertCompositionText",
+            "data": "中文",
+            "composing": true,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": " 🦀",
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertLineBreak",
+            "data": null,
+            "composing": false,
+            "trusted": true
+          },
+          {
+            "type": "insertText",
+            "data": "第二行",
+            "composing": false,
+            "trusted": true
+          }
+        ],
+        "clicks": [
+          {
+            "trusted": true,
+            "active": true
+          }
+        ],
+        "intervals": 1
+      }
+    }
+  ],
+  "fixture": {
+    "starts": [
+      {
+        "transport": "websocket"
+      }
+    ],
+    "ready": [
+      {
+        "connection": 0,
+        "id": "1"
+      }
+    ],
+    "texts": [],
+    "closed": [
+      0
+    ],
+    "server_errors": []
+  },
+  "scope": {
+    "ime": "Chromium IME engine via CDP; not OS Pinyin/candidate UI",
+    "audio": "Connect gesture, native scheduling, muted synthetic PCM; not hearing or all autoplay policies",
+    "network": "Loopback TCP abort and manual reconnect; not WAN/offline/SFU recovery",
+    "owner": "Protocol fixture only; no Hepta production conversation or provider"
+  }
+}

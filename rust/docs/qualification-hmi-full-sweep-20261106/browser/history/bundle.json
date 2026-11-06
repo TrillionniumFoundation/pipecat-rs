@@ -1,0 +1,38 @@
+{
+  "source_commit": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+  "compiled_inputs_unchanged_from_source_commit": true,
+  "wasm_sha256": "4da183d30f96bc42e1942a739927397bb2f9982dd7d2da2de55ab99e0b28c586",
+  "wasm_bindgen_version": "wasm-bindgen 0.2.129",
+  "argv": [
+    "/workspace/scratch/f9f576cc6c66/browser-tools/wasm-bindgen/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl/wasm-bindgen",
+    "--target",
+    "web",
+    "--no-typescript",
+    "--out-dir",
+    "/workspace/scratch/f9f576cc6c66/pipecat-rs/rust/client-templates/dist/pkg",
+    "/workspace/scratch/f9f576cc6c66/browser-target/wasm32-unknown-unknown/release/pipecat_browser_client.wasm"
+  ],
+  "exit_code": 0,
+  "files": {
+    "config.json": {
+      "sha256": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+      "bytes": 116
+    },
+    "index.html": {
+      "sha256": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+      "bytes": 5172
+    },
+    "pkg/pipecat_browser_client.js": {
+      "sha256": "740992c4af3172fe8ef5eb960482bbcaf8ce3df33109b75919d06c3b0106f3a6",
+      "bytes": 47942
+    },
+    "pkg/pipecat_browser_client_bg.wasm": {
+      "sha256": "6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d",
+      "bytes": 776407
+    },
+    "style.css": {
+      "sha256": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f",
+      "bytes": 8754
+    }
+  }
+}

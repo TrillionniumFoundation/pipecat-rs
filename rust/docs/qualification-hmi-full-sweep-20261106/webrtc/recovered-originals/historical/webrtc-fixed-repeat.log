@@ -1,0 +1,539 @@
+suite=shutdown_start_tests; repeats=30; binary_sha256=59c66b7f8176f6b942c81944dd26a21cf64fd8a3e2be75c3d02419cfc5dcd28d
+
+=== shutdown_start_tests invocation 1 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 2 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 3 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 4 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 5 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 6 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 7 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 8 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 9 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 10 ===
+
+running 2 tests
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.02s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 11 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 12 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 13 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 14 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 15 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 16 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 17 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 18 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 19 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 20 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 21 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 22 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 23 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 24 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.02s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 25 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 26 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 27 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 28 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 29 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+
+=== shutdown_start_tests invocation 30 ===
+
+running 2 tests
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... ok
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.01s
+
+exit_code=0
+suite=repeated_peer_shutdown_schedules_release_both_udp_ports; repeats=30; binary_sha256=c0449275d19534deb5e85aa09fd458431bd8dbcc1e155cfc17d7a2a0bd5b3dab
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 1 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.36s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 2 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.12s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 3 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.33s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 4 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.11s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 5 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.26s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 6 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.25s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 7 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.90s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 8 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.37s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 9 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.12s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 10 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.20s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 11 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.09s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 12 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.23s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 13 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.47s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 14 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.23s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 15 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.25s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 16 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.17s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 17 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.22s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 18 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.17s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 19 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.32s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 20 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.24s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 21 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.23s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 22 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.31s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 23 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.09s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 24 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.71s
+
+exit_code=0
+
+=== repeated_peer_shutdown_schedules_release_both_udp_ports invocation 25 ===
+
+running 1 test
+
+thread 'tokio-rt-worker' (603) panicked at crates/pipecat-webrtc/tests/review_lifecycle.rs:264:71:
+called `Result::unwrap()` on an `Err` value: Timeout("data channel")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'repeated_peer_shutdown_schedules_release_both_udp_ports' (601) panicked at crates/pipecat-webrtc/tests/review_lifecycle.rs:304:34:
+called `Result::unwrap()` on an `Err` value: JoinError::Panic(Id(5426), "called `Result::unwrap()` on an `Err` value: Timeout(\"data channel\")", ...)
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... FAILED
+
+failures:
+
+failures:
+    repeated_peer_shutdown_schedules_release_both_udp_ports
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 23.83s
+
+exit_code=101

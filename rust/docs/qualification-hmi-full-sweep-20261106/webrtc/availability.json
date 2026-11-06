@@ -1,0 +1,428 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "New evidence availability receipt; not an original run manifest and not a new test execution.",
+  "original_archive": {
+    "path": "rust/docs/qualification-hmi-full-sweep-20261106/webrtc",
+    "observed_files": 60,
+    "observed_bytes": 361697,
+    "observed_original_copies": 53,
+    "assembly_reference_commit": "7cf485c08fd6474dbc839c5f1260fa863e25edcf",
+    "assembly_reference_tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+    "prior_integrity_observation": "Before the entrance change, actual tools compared all 53 copies byte-for-byte and verified all 59 checksum entries. This is a retained historical observation; the complete collection is not available now."
+  },
+  "current_access": {
+    "original_scratch_paths_visible": false,
+    "paths_checked": [
+      "/workspace/scratch/f9f576cc6c66/pipecat-rs",
+      "/workspace/scratch/f9f576cc6c66/webrtc-evidence",
+      "/workspace/scratch/f9f576cc6c66/workspace-evidence"
+    ],
+    "source_of_result": "Actual current filesystem read returned false for all three paths.",
+    "unrecoverable_or_destroyed_not_proven": true,
+    "root_store_check": "Root confirmed only four implementation source files were retained, not the old raw evidence/manifests; further key guessing was stopped."
+  },
+  "recovered_original_files": [
+    {
+      "path": "index.json",
+      "sha256": "b9335864ea42ce2b2d09f629669697e03175953d3e70e4117df921effe4c7471",
+      "git_blob_sha": "637c68a2d98eee197a0bc27b2cfb9e59da32d144",
+      "origin": "Complete real tool-output text retained in this task's conversation; recovered bytes accepted only if original recorded hash matches.",
+      "original_hash_matched": true
+    },
+    {
+      "path": "README.md",
+      "sha256": "a8f726c950ac0bc2b3d7739e396992a54877e13bf1b1075e5438e97bb8e9caa9",
+      "git_blob_sha": "292376239f1d3e30b0d1ff440ebbb4dfacdbdeea",
+      "origin": "Complete real tool-output text retained in this task's conversation; recovered bytes accepted only if original recorded hash matches.",
+      "original_hash_matched": true
+    },
+    {
+      "path": "historical/webrtc-shutdown-evidence.json",
+      "sha256": "7e9017fba725c074daa19cbcbfc3f8feec2bd860c3659ad66b24a8fa182eca6a",
+      "git_blob_sha": "f9efefda08ec8b091f62c4460393cf7eb3ce8352",
+      "origin": "Original published e526 file read through GitHub; immutable blob f9efefda08ec8b091f62c4460393cf7eb3ce8352.",
+      "original_hash_matched": true
+    },
+    {
+      "path": "historical/webrtc-fixed-repeat.log",
+      "sha256": "0e676432fc2147d5ea1defd90d19093c4153a5f1c18719277f81c64762da8296",
+      "git_blob_sha": "febbdfc60f371dcfeccf935705b7feec0b98fc34",
+      "origin": "Original published e526 file read through GitHub; immutable blob febbdfc60f371dcfeccf935705b7feec0b98fc34.",
+      "original_hash_matched": true
+    }
+  ],
+  "recovered_original_count": 4,
+  "missing_original_files": [
+    {
+      "path": "source-comparison.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "bfe15f3a480eb03874be5a2514f717c77f2bfe05a16b1b18398662b2f4dc2570",
+      "recorded_bytes": 35276
+    },
+    {
+      "path": "copy-manifest.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "38ce62188eb8bc1209de549fc4306cbaa1ffcadc6ade95b2395d12f65e5320bd",
+      "recorded_bytes": 19102
+    },
+    {
+      "path": "SHA256SUMS.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "aa1f0f2df421b01c69ce7325774d5fa30ee3ede95602a6eae207d4827d0dbf1f",
+      "recorded_bytes": 9196
+    },
+    {
+      "path": "SHA256SUMS",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "d630e7f78695224910c24743c796d1dbcaf9e1f89fcfce5572dc422baba7ddd8",
+      "recorded_bytes": 6073
+    },
+    {
+      "path": "runs/test-source-bound.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "8e6db37fe75b095ff472a1ecefb26e5951be407dada453e54c1c20f0ae0cafc9",
+      "recorded_bytes": 62451
+    },
+    {
+      "path": "runs/test-source-bound.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "0baba03e7606bb5eeaaaf5d973432c9c9bcb982cb180a534179516ebfc0c68ea",
+      "recorded_bytes": null
+    },
+    {
+      "path": "runs/test-j1-source-bound.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "runs/test-j1-source-bound.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "e9592f0f62bdb5cbbeb40266121323aca71a874981f28b9c19028477b543079d",
+      "recorded_bytes": null
+    },
+    {
+      "path": "runs/clippy-j1-source-bound.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "runs/clippy-j1-source-bound.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "32794756e678e97a51dee64509a8ee5c5c4386eb8e63306a00a5ef87a679e5ee",
+      "recorded_bytes": null
+    },
+    {
+      "path": "runs/run_gate.py",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline_repeat.py",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-001.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": "3df381e917e1cd9199803df0728ca8f88bb7c445b018d18358ab6b81439c38ae",
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-002.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-003.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-004.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-005.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-006.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-007.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-008.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-009.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-010.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-011.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-012.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-013.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-014.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-015.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-016.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-017.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-018.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-019.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-020.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-021.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-022.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-023.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-024.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-025.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-026.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-027.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-028.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-029.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-030.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-031.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-032.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-033.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-034.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-035.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-036.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-037.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-038.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-039.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "inherited-binary/baseline-repeat-040.log",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "diagnostics/source-freeze.json",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    },
+    {
+      "path": "diagnostics/webrtc-diagnostics.patch",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": 27181
+    },
+    {
+      "path": "historical/workspace-udp-record-excerpt.txt",
+      "availability": "Original bytes not recovered from currently accessible storage or complete tool output.",
+      "original_sha256": null,
+      "recorded_bytes": null
+    }
+  ],
+  "missing_original_count": 56,
+  "availability_impact": {
+    "old_two_SIGKILL_raw_logs_and_manifests": "Unavailable; historical exit101 observations and recorded log hashes remain in the hash-verified recovered original index. Signal cause remains unestablished; no runtime tests ran.",
+    "old_strict_Clippy_raw_log_and_manifest": "Unavailable; historical exit0 observation and recorded log hash remain in the recovered original index. This is static checking, not current reproducible raw-gate evidence.",
+    "inherited_binary_40_logs_and_manifest": "Unavailable; the recovered index preserves the historical 40/40 observation for one old-binary case. It is never new-source runtime qualification.",
+    "full_238_path_source_manifests": "Unavailable; no later source snapshot is substituted. The two failed builds' connection hash 0fe807... differs from later Clippy's 5050a8... and the index retains that distinction.",
+    "original_SHA256SUMS": "Original bytes unavailable. Its original hash is retained; a new checksum list for this recovery receipt must not be labelled the old list."
+  },
+  "still_open_failures": [
+    "historical_setup_timeout_invocation_25",
+    "historical_workspace_udp_retention_schedule_5_iteration_24"
+  ],
+  "preserved_historical_sources": {
+    "setup_failure": {
+      "repository": "TrillionniumFoundation/pipecat-rs",
+      "commit": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+      "log_path": "rust/docs/qualification-hmi-followthrough-20261106/webrtc-fixed-repeat.log",
+      "log_git_blob": "febbdfc60f371dcfeccf935705b7feec0b98fc34",
+      "metadata_git_blob": "f9efefda08ec8b091f62c4460393cf7eb3ce8352"
+    },
+    "workspace_udp": {
+      "repository": "TrillionniumFoundation/pipecat-rs",
+      "commit": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+      "path": "docs/DRAFT_QUALIFICATION.md",
+      "git_blob": "686b12d944a33380fd03ef528dce85708438465c",
+      "expected_full_document_sha256": "3d859039b90c0581464acec1112175872b8a9fa687c7e65aa4b32cc97546a782",
+      "qualification_document_not_raw_execution_log": true,
+      "original_collection_excerpt_bytes_not_recovered": true,
+      "full_document_hash_verified": true
+    }
+  },
+  "new_test_executions_in_this_receipt": 0,
+  "fabricated_or_synthetic_old_raw_records": false,
+  "new_runs_replace_old_records": false,
+  "readme_interpretation": "Recovered README and index are byte-identical historical archive files and retain historical statements/links. This availability receipt governs their current availability; dangling links must not be interpreted as recovered raw bytes."
+}

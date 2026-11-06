@@ -2,6 +2,52 @@
 
 Environment: Rust 1.99.0, wasm32-unknown-unknown, wasm-bindgen CLI 0.2.129.
 
+## Latest actual browser execution, 2026-11-06
+
+The deployed Rust/WASM bundle ran on the configured `desktop` with Chrome
+156.0.8078.79 and the normal Chromium sandbox. Durable job
+`1a1b0db389b-fc05-7360` completed successfully with exit 0 and complete output.
+`protocol-r4` passed all 23 reported check groups in 204.55 seconds;
+`input-r3` passed all four groups in 4.29 seconds. Both record no page errors,
+cleanup errors or failure. These are fixture groups, not a sum of independent
+native test cases.
+
+The protocol fixture executes actual WebSocket/protobuf and paired browser
+WebRTC, RTVI text/image/transcript/toast/job-group DOM, cancellation, receive-only
+text mode, media counters and resource cleanup. It uses synthetic devices and an
+autoplay override. The separate text-input fixture has no autoplay override: a
+trusted Connect click resumes the native AudioContext and synthetic PCM reaches
+its ended event, with output muted. It also checks Chromium CDP Chinese
+composition, exact Chinese/emoji/newline text, one explicit Send, actual loopback
+TCP abort and manual reconnect without draft/message replay. This is neither
+physical audio/user-hearing acceptance nor OS Pinyin/WAN recovery qualification.
+
+The actual bundled WASM SHA-256 is
+`6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d`.
+Its Rust source and locked dependencies are unchanged from `e526aab`; final
+fixture code was published at `478ab3b` and is byte-identical through `7105367`.
+The original 114 protocol Python assert nodes remain identical. Earlier fixture
+failures, their exact helpers and the independent native-textarea IME control
+are retained; corrected passes do not erase them. The control observes
+`compositionend.isTrusted=false` in this Chrome profile, while start/update and
+composing input are trusted.
+
+See the [complete browser evidence and limits](../docs/qualification-hmi-full-sweep-20261106/browser/README.md),
+[final protocol JSON](../docs/qualification-hmi-full-sweep-20261106/browser/final/protocol-r4.json),
+[input JSON](../docs/qualification-hmi-full-sweep-20261106/browser/final/input-r3.json),
+[run receipts](../docs/qualification-hmi-full-sweep-20261106/browser/final/results.json)
+and [actual 960-by-480 screenshot](../docs/qualification-hmi-full-sweep-20261106/browser/final/browser-acceptance.png).
+Later native/WASM requalification after the local executor replacement has its
+own source/run identity and is reported in the full-sweep report; it does not
+repeat or add to these two browser runs.
+
+## Historical records below
+
+The following older source slices and host restrictions remain historical.
+Their statements that Chromium could not launch describe those executions;
+they do not replace the 2026-11-06 executed result above. Native test counts from
+different source slices are not added together.
+
 ## Replacement-host checks, 2026-10-10 UTC
 
 The isolated recovered browser workspace again passed its 11 native tests,

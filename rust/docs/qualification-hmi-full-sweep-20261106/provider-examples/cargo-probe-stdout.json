@@ -1,0 +1,78 @@
+[
+  {
+    "label": "default-sequential",
+    "exit_code": 0,
+    "elapsed_seconds": 0.248637,
+    "normal_example_before": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe",
+      "exists": false
+    },
+    "normal_example_after": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe",
+      "exists": true,
+      "sha256": "8de4ff976c49cdeaa750f334d3b6383222b0dcfb93b9da18aeafd79a69c36b97",
+      "exit_code": 0,
+      "stdout": "PROBE_REAL_EXAMPLE feature=default\n",
+      "stderr": ""
+    },
+    "example_artifacts": [
+      {
+        "test_harness": false,
+        "executable": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe",
+        "features": []
+      }
+    ]
+  },
+  {
+    "label": "all-targets-after-default",
+    "exit_code": 0,
+    "elapsed_seconds": 0.250293,
+    "normal_example_before": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe",
+      "exists": true,
+      "sha256": "8de4ff976c49cdeaa750f334d3b6383222b0dcfb93b9da18aeafd79a69c36b97",
+      "exit_code": 0,
+      "stdout": "PROBE_REAL_EXAMPLE feature=default\n",
+      "stderr": ""
+    },
+    "normal_example_after": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe",
+      "exists": true,
+      "sha256": "8de4ff976c49cdeaa750f334d3b6383222b0dcfb93b9da18aeafd79a69c36b97",
+      "exit_code": 0,
+      "stdout": "PROBE_REAL_EXAMPLE feature=default\n",
+      "stderr": ""
+    },
+    "example_artifacts": [
+      {
+        "test_harness": true,
+        "executable": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/sequential/debug/examples/provider_probe-7e117902be20c295",
+        "features": [
+          "variant"
+        ]
+      }
+    ]
+  },
+  {
+    "label": "all-targets-fresh",
+    "exit_code": 0,
+    "elapsed_seconds": 0.227918,
+    "normal_example_before": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/fresh/debug/examples/provider_probe",
+      "exists": false
+    },
+    "normal_example_after": {
+      "path": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/fresh/debug/examples/provider_probe",
+      "exists": false
+    },
+    "example_artifacts": [
+      {
+        "test_harness": true,
+        "executable": "/workspace/scratch/f9f576cc6c66/cargo-example-artifact-probe-target/fresh/debug/examples/provider_probe-7e117902be20c295",
+        "features": [
+          "variant"
+        ]
+      }
+    ]
+  }
+]

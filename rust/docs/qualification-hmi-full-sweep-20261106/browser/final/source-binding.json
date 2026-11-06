@@ -1,0 +1,19 @@
+{
+  "published_code": "478ab3b8e0deca51571c41c2890b519f0faeab94",
+  "full_tree": "52644150c51bd2c66052ed4d32f2ad7a844ac71f",
+  "compiled_browser_source": "e526aabaf98522b2294e744ac48d75d9ed89a254",
+  "scope": "Rust client code and locked dependencies unchanged; native diagnostics and qualification fixtures updated",
+  "fixture_changes": [
+    {
+      "file": "browser_acceptance.py",
+      "before_sha256": "b44e646aa7179f4d7ab2d2e69362a17a7495b029a5695110c67325172661ae67",
+      "after_sha256": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e"
+    },
+    {
+      "file": "browser_input_acceptance.py",
+      "before_sha256": "262cfa38a401b2e21b6c81fe5fe474b58e80e1dd3c373b11ca3e1b1b1354971c",
+      "after_sha256": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873"
+    }
+  ],
+  "ime_control_job": "1a1b0d24892-fc05-7332"
+}

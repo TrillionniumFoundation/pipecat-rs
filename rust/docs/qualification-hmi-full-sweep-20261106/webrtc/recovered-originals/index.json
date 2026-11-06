@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "scope": "Local WebRTC preparatory evidence only; separate full-workspace/native/SFU gates are not included or inferred.",
+  "assembly_reference_commit": "7cf485c08fd6474dbc839c5f1260fa863e25edcf",
+  "assembly_reference_tree": "62b1f03d9004bb14523ea973227b10d04240d51c",
+  "local_source_bound_runs": [
+    {
+      "id": "test-source-bound",
+      "metadata": "runs/test-source-bound.json",
+      "raw_log": "runs/test-source-bound.log",
+      "exit_code": 101,
+      "elapsed_seconds": 195.439,
+      "build_jobs": 2,
+      "result": "build_failed_before_runtime",
+      "compiler_signal": "SIGKILL",
+      "failed_compilation_crate": "time",
+      "signal_cause": "not_established",
+      "runtime_tests_executed": 0,
+      "source_snapshot_unchanged": true,
+      "selected_paths": 238,
+      "source_differences_from_assembly": 3,
+      "log_sha256": "0baba03e7606bb5eeaaaf5d973432c9c9bcb982cb180a534179516ebfc0c68ea"
+    },
+    {
+      "id": "test-j1-source-bound",
+      "metadata": "runs/test-j1-source-bound.json",
+      "raw_log": "runs/test-j1-source-bound.log",
+      "exit_code": 101,
+      "elapsed_seconds": 160.392,
+      "build_jobs": 1,
+      "result": "build_failed_before_runtime",
+      "compiler_signal": "SIGKILL",
+      "failed_compilation_crate": "pipecat-core",
+      "signal_cause": "not_established",
+      "runtime_tests_executed": 0,
+      "source_snapshot_unchanged": true,
+      "selected_paths": 238,
+      "source_differences_from_assembly": 3,
+      "log_sha256": "e9592f0f62bdb5cbbeb40266121323aca71a874981f28b9c19028477b543079d"
+    },
+    {
+      "id": "clippy-j1-source-bound",
+      "metadata": "runs/clippy-j1-source-bound.json",
+      "raw_log": "runs/clippy-j1-source-bound.log",
+      "exit_code": 0,
+      "elapsed_seconds": 100.553,
+      "build_jobs": 1,
+      "result": "static_check_passed",
+      "compiler_signal": null,
+      "failed_compilation_crate": null,
+      "signal_cause": null,
+      "runtime_tests_executed": 0,
+      "source_snapshot_unchanged": true,
+      "selected_paths": 238,
+      "source_differences_from_assembly": 2,
+      "log_sha256": "32794756e678e97a51dee64509a8ee5c5c4386eb8e63306a00a5ef87a679e5ee"
+    }
+  ],
+  "local_new_source_runtime_tests_executed": 0,
+  "binary_diagnostics": {
+    "manifest": "inherited-binary/baseline-repeat.json",
+    "binary_path_as_recorded": "/tmp/pipecat-hmi-native-27653505a519/debug/deps/review_lifecycle-a62df5bca02abea8",
+    "binary_sha256_as_recorded": "69d8b93d5b1e57db638946609bf883e8ea054417e4a024a8bd8d6fc9133f82d5",
+    "binary_present_at_assembly": false,
+    "source_binding": "inherited binary path from prior gate; source not freshly rebuilt",
+    "invocations": 40,
+    "passed_invocations": 40,
+    "failed_invocations": 0,
+    "distinct_test_cases": 1,
+    "new_source_runtime_qualification": false,
+    "startup_pair_count_or_data_channel_success_count_not_inferred": true
+  },
+  "targets": {
+    "current_checkout_exclusive_local_target": "/dev/shm/pipecat-webrtc-f9f576cc6c66",
+    "inherited_target_usage": "diagnostic executable invocation only; no build/write by this subtask",
+    "local_toolchain": "Rust 1.99.0; locked/offline; exact environment per raw gate JSON",
+    "later_workspace_gate": "separate evidence; not a result of this directory"
+  },
+  "source_checkpoints": {
+    "two_failed_build_manifests_identical": true,
+    "failed_build_connection_sha256": "0fe80723a54708c5a3b8eb021aeeedb2c1ef494caafa13b5768e1df221b2a454",
+    "clippy_connection_sha256": "5050a881213a22bf5ebce5b65bcac01194f2ac1c6a336bdea4cfe6f7d936d021",
+    "difference_record": "source-comparison.json",
+    "current_clippy_differences": "two subsequently rewritten Markdown documents only among the 238 selected paths",
+    "frozen_manifest": "diagnostics/source-freeze.json",
+    "frozen_patch": "diagnostics/webrtc-diagnostics.patch",
+    "raw_snapshots_are_not_relabelled_as_final_source": true
+  },
+  "open_failures": [
+    {
+      "id": "historical_setup_timeout_invocation_25",
+      "status": "OPEN",
+      "evidence_type": "raw_log_and_original_qualification_metadata",
+      "raw_log": "historical/webrtc-fixed-repeat.log",
+      "metadata": "historical/webrtc-shutdown-evidence.json",
+      "result": "Timeout(data channel) during A/offerer setup before that pair shutdown",
+      "setup_deadline_seconds": 5,
+      "series_passes_before_failure": 24,
+      "failure_invocation": 25,
+      "followup_passes_in_prior_series": 30,
+      "root_cause": "not_established; neither protocol race nor resource pressure is proven",
+      "closed_by_old_binary_40_passes": false
+    },
+    {
+      "id": "historical_workspace_udp_retention_schedule_5_iteration_24",
+      "status": "OPEN",
+      "evidence_type": "historical_qualification_document_record",
+      "document_path": "docs/DRAFT_QUALIFICATION.md",
+      "document_sha256": "3d859039b90c0581464acec1112175872b8a9fa687c7e65aa4b32cc97546a782",
+      "copied_excerpt": "historical/workspace-udp-record-excerpt.txt",
+      "raw_execution_log_in_this_collection": false,
+      "canonical_commit": "167994707ab2b84a7ea3e9de423488752b5dbbbe",
+      "tested_projection": "2cbbb058e1092f5113b27ff522795211c421c6d6",
+      "tested_tree": "3e91f1f6c62671fe8e6504859de34f0bbc9ef339",
+      "recorded_counts": {
+        "passed": 3477,
+        "failed": 1,
+        "ignored": 55
+      },
+      "recorded_exit_code": 101,
+      "diagnostic": "UDP leak schedule=5, iteration=24",
+      "exact_historical_failure_reproduced_by_local_40_runs": false,
+      "closed_by_partial_or_later_passes": false
+    }
+  ],
+  "integrity": {
+    "copy_manifest": "copy-manifest.json",
+    "source_comparison": "source-comparison.json",
+    "checksums": "SHA256SUMS",
+    "machine_checksums": "SHA256SUMS.json",
+    "all_original_run_log_hashes_rechecked": true,
+    "raw_files_normalized_or_edited": false
+  },
+  "interpretation": {
+    "SIGKILL_is_not_proof_of_OOM": true,
+    "static_check_is_not_runtime_acceptance": true,
+    "inherited_binary_passes_are_not_fresh_source_acceptance": true,
+    "later_passes_do_not_erase_retained_failures": true
+  }
+}
