@@ -1,0 +1,20 @@
+{
+  "scope": "Completed libtest summaries in original Cargo raw bytes; not runtime stdout or deduplicated source cases",
+  "head": "8a7c0652c4be02321d1fac6346b19b9ce7931476",
+  "tree": "e8bbba1a5b1af45fdec8be9bcd74df2e63153f6b",
+  "argv": [
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+    "test",
+    "--workspace",
+    "--locked"
+  ],
+  "exit_code": 101,
+  "source_unchanged": true,
+  "log_bytes": 602626,
+  "log_sha256": "b0c28d096e751ed6ab185c7c16c9349fc7690ac70542e15e28dd9b08d7c48ecf",
+  "completed_suites": 442,
+  "passed": 5210,
+  "failed": 2,
+  "ignored": 16,
+  "elapsed_seconds": 232.6605315208435
+}

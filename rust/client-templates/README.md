@@ -184,6 +184,15 @@ python3 tests/browser_acceptance.py
 python3 tests/browser_input_acceptance.py
 ```
 
+The 2026-11-06 requalification used exact Rust 1.99.0, source `7105367`,
+and an independent source/target pair. Its first run passed the existing 54 native
+tests and native all-target strict Clippy, then failed overall when the official
+WASM standard-library download was truncated. A separate WASM-only run passed
+strict Clippy after complete official-hash verification; it did not rerun the
+native phases or the Chromium fixtures. The original failed run remains failed.
+See the [complete raw receipts and source binding](../docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md)
+and [validation record](VALIDATION.md) for the distinct phase results and limits.
+
 Both browser fixtures require Python `aiohttp`, Python `playwright`, and system
 Chromium at `/usr/bin/chromium`. Pass `--browser /path/to/chromium`,
 `--assets /path/to/dist`, and `--output /path/to/evidence` to select an existing

@@ -34,7 +34,24 @@ Text-input 模式使用会抛错的 getUserMedia guard，实际没有触发麦�
 - protocol：`67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e`。
 - input：`13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873`。
 
-[原 source binding](final/source-binding.json) 保留完整归属。输入报告中的 `application_source_present=false` 表示远端仅部署 bundle 和 helper，没有 Rust src；这项原始值没有改成 true。源码绑定来自独立 Git/资产记录。原来本地 54 native tests、native/WASM strict Clippy 和 release build 的完成观察，与入口重置后取不回的旧 raw log 分开记账；当前新 native/WASM 补资格另有运行身份，结果以主报告为准。
+[原 source binding](final/source-binding.json) 保留完整归属。输入报告中的 `application_source_present=false` 表示远端仅部署 bundle 和 helper，没有 Rust src；这项原始值没有改成 true。源码绑定来自独立 Git/资产记录。原来本地 54 native tests、native/WASM strict Clippy 和 release build 的完成观察，与入口重置后取不回的旧 raw log 分开记账；下面的新 native/WASM 补资格保留独立的运行身份和完整原始记录。
+
+## Rust 1.99.0 的新 native/WASM 补资格
+
+补验使用独立 `source-browser` 与 `target-browser`，明确绑定 `7105367d7d607653c3ab758f0131c029c4373faf` / tree `19a5c08fc2cbfeabacd344668fc7b25d03a282c2`，没有重跑上面的 Chromium 两轮，也没有把重复运行算作新增能力。
+
+| 执行阶段 | 实际结果 | 原始证据 |
+| --- | --- | --- |
+| r1 native Rust tests | 原 54 项 passed，0 failed，0 ignored；23.763411 秒 | [逐阶段收据](requalification/evidence/native-tests.json)、[完整 log](requalification/evidence/native-tests.log) |
+| r1 native strict Clippy | exit 0；8.087912 秒 | [逐阶段收据](requalification/evidence/native-strict-clippy.json) |
+| r1 随后的 WASM 组件准备 | 官方包被截断，SHA 校验失败；**r1 整体仍为 failed** | [原总结果](requalification/evidence/result.json)、[下载诊断](requalification/evidence/wasm-download-diagnosis.json) |
+| 独立 r2 WASM-only strict Clippy | exit 0；42.282510 秒，没有再跑 native 阶段 | [r2 总结果](requalification/evidence-wasm-r2/result.json)、[完整 log](requalification/evidence-wasm-r2/wasm-strict-clippy.log) |
+
+原坏包为 8,338,068 字节，完整官方包应为 23,152,600 字节。r2 的 23 个标准 HTTP Range 均一次成功，每块保存边界、HTTP 206、长度和 SHA；整包与官方 manifest 的 SHA 一致后才安装到新的私有 WASM sysroot。r2 观察到源码、六个 native 工具二进制、r1 记录和坏包的前后哈希不变。r1 没有落盘 native 工具二进制的 before/after 字典，因此没有用 r2 哈希补写 r1 资格。
+
+[完整补验索引与边界](requalification/README.md) 包含 48 个原始 UTF-8 文件、命令/环境、源码前后清单、官方 manifest、Range 记录、原失败、实际终态与可恢复压缩包；[target-owner](requalification/target-owner.json) 明确是根据原运行证据生成的事后索引。原 54 项是 Rust 测试，不是新的浏览器、设备或用户质量验收。
+
+本轮对照 `7105367` 与当前源码冻结 `272671b95297313d24db921eceda8e95f3a8d545` / tree `94424ffa2a8fbcda0f81321ee68e7461663e191c`：`rust/client-templates`、vendored JPEG 与 `rust/rust-toolchain.toml` 范围内只有 client README/VALIDATION 文档变化。Rust、Cargo 配置/lock、静态资产、fixture 和 `include_str!` / `include_bytes!` 输入均无差异；这两份 Markdown 不被 Rust include。后续文档提交不会被称为重新执行过的运行源码。
 
 ## 历史失败与 fixture 修正
 

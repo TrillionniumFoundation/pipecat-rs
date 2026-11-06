@@ -1,0 +1,42 @@
+{
+  "index": 14,
+  "attempt": 1,
+  "start": 14680064,
+  "end": 15728639,
+  "expected_bytes": 1048576,
+  "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-wasm32-unknown-unknown.tar.xz",
+  "request_headers": {
+    "Range": "bytes=14680064-15728639",
+    "Accept-Encoding": "identity"
+  },
+  "status": 206,
+  "response_headers": {
+    "Connection": "close",
+    "Content-Length": "1048576",
+    "x-amz-request-id": "DAGM8H4WFAMYPT2N",
+    "x-amz-id-2": "5G8Vsl6sKZxsJUlRm7oQBmyD3QBaROmUVSD6bQ/nVQNGkyzCN1LclIvI3MPQ6gyhxAAufQIhMLBNa9N7+9FOWGGPi8oZuGbC",
+    "Server": "AmazonS3",
+    "Last-Modified": "Thu, 01 Oct 2026 12:21:36 GMT",
+    "ETag": "\"0bdc5500d4e807cf7609efdab0e94292-3\"",
+    "x-amz-version-id": "MZZ8FqurGopKMu3m_QzXlc52NGiI_qHS",
+    "Cache-Control": "public",
+    "Content-Type": "application/x-tar",
+    "x-amz-server-side-encryption": "AES256",
+    "x-amz-storage-class": "INTELLIGENT_TIERING",
+    "Accept-Ranges": "bytes",
+    "Date": "Fri, 06 Nov 2026 14:13:40 GMT",
+    "Via": "1.1 varnish",
+    "Age": "46821",
+    "X-Served-By": "cache-pdk-kfty8610042-PDK",
+    "X-Cache": "HIT",
+    "X-Cache-Hits": "1",
+    "X-Timer": "S1793974420.373231,VS0,VE14",
+    "Content-Range": "bytes 14680064-15728639/23152600"
+  },
+  "path": "/home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/official-wasm-range-r2/range-014-attempt-1.part",
+  "error": null,
+  "final_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-wasm32-unknown-unknown.tar.xz",
+  "actual_bytes": 1048576,
+  "sha256": "ed83ec3944122ee5c3deb959ab285c137fc0ca2df0bf6e89fbbdc0d88eacee17",
+  "elapsed_seconds": 12.583568
+}

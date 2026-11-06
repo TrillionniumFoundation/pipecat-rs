@@ -18,7 +18,15 @@
 | `chinese-synthetic-patch-r1` | ae56473／1.99.1 | 0 pass／1 fail，在scope quota准入失败；没有native加载或8条转写 |
 | `chinese-synthetic-patch-r2` | ae56473／1.99.1 | 1 pass／0 fail，8条实际Piper→Whisper转写；Cargo command总107.41秒 |
 
-完整源码 manifest 的 `manifest_sha256` 是脚本定义的规范内容摘要，`source-before.json`／`source-after.json` 原文件的 SHA 是其实际 JSON bytes 摘要，二者不是同一个哈希概念。原回收清单另外列出14份完整 source manifest 的原远端位置与文件 SHA；它们的后续交付使用单独 archive，不把本包38个文件扩称为已包含这些14份原件。
+完整源码 manifest 的 `manifest_sha256` 是脚本定义的规范内容摘要，`source-before.json`／`source-after.json` 原文件的 SHA 是其实际 JSON bytes 摘要，二者不是同一个哈希概念。原回收清单另外列出14份完整 source manifest 的原远端位置与文件 SHA；这些原件已与 pin r2 的一对 manifest 一起另包交付，不把本包38个文件扩称为已经包含它们。
+
+## 完整 source manifests 与 pin 第二轮
+
+[source-manifests-and-pin-r2.tar.xz](source-manifests-and-pin-r2.tar.xz) 包含 **22 个原文件、7,869,197 bytes**，其中包括16份完整 source-before／after、pin r2 的原 Cargo log／gate／preparation／environment、实际 `run_full_gate.py` 及原回收 manifest。Archive 为203,088 bytes，SHA-256 `07d7a94198f9bea16309c5c832fa6d75e3e7469afd2c0392bcbdb880cdbe70d0`。
+
+对原 index 所列21个文件逐项核对 bytes／原文件 SHA，另外重新计算16份 source map 的 canonical digest；两种摘要均匹配。第22份原 manifest 自身由 archive SHA 及独立交付 receipt 绑定，没有递归伪造“自校验”。[原 index](source-manifests-original-index.json) · [交付核对](source-manifests-delivery.json)
+
+精确 Rust 1.99.0 的 default r2 实际源码为8a7c065，原命令exit101、源前后不变，232.660532秒。原 Cargo log为 **602,626 bytes**，SHA-256 `b0c28d096e751ed6ab185c7c16c9349fc7690ac70542e15e28dd9b08d7c48ecf`；此前观察到的607,265 bytes是带末尾gate JSON的runtime stdout，不是该文件大小。独立从原bytes提取得到442 completed suites、5,210 passed／2 failed／16 ignored，失败位于RTVI first-answer-timing。它仍是中途停止的一次完整命令，不是全workspace通过。[本轮原计数](pin-full-r2-counts.json)
 
 ## 中文诊断的原结果
 

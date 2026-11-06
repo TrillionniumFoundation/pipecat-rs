@@ -1,0 +1,42 @@
+{
+  "scope": "Read-only diagnosis of the first failed WASM component download; bad archive retained unchanged.",
+  "archive": "/home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/official-wasm-component/rust-std-wasm32.tar.xz",
+  "actual_bytes": 8338068,
+  "actual_sha256": "cf3ba01c16cf06744c7f188a724a801759862f637703b03a5e40feb6ca8582f8",
+  "first_32_bytes_hex": "fd377a585a000000ff12d941020021011e0000009b075166e30d05effe5d0039",
+  "expected_sha256": "b760b0c9b08a6843c05de0098bd6802e23178ff473c4715ae57c1d679125bf22",
+  "official_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-wasm32-unknown-unknown.tar.xz",
+  "manifest_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+  "manifest_version": "1.99.0 (b940084d7 2026-09-28)",
+  "head": {
+    "status": 200,
+    "headers": {
+      "Connection": "close",
+      "Content-Length": "23152600",
+      "x-amz-request-id": "DAGYPEED7TH4QK7K",
+      "x-amz-id-2": "B5/udZ13/zlMGd3uSW8gHGyfB/Lj+/RGQED/hKA6pqoWirajf0tBpayeRpKrdrZuMUFLG7S0ANsxkrLkyjXkWDFr/LM1O6W4",
+      "Server": "AmazonS3",
+      "Last-Modified": "Thu, 01 Oct 2026 12:21:36 GMT",
+      "ETag": "\"0bdc5500d4e807cf7609efdab0e94292-3\"",
+      "x-amz-version-id": "MZZ8FqurGopKMu3m_QzXlc52NGiI_qHS",
+      "Cache-Control": "public",
+      "Content-Type": "application/x-tar",
+      "x-amz-server-side-encryption": "AES256",
+      "x-amz-storage-class": "INTELLIGENT_TIERING",
+      "Accept-Ranges": "bytes",
+      "Age": "45968",
+      "Date": "Fri, 06 Nov 2026 13:59:26 GMT",
+      "Via": "1.1 varnish",
+      "X-Served-By": "cache-pdk-kfty8610049-PDK",
+      "X-Cache": "HIT",
+      "X-Cache-Hits": "0",
+      "X-Timer": "S1793973566.489907,VS0,VE1"
+    },
+    "final_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-wasm32-unknown-unknown.tar.xz"
+  },
+  "xz_integrity": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "xz\uff1a /home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/official-wasm-component/rust-std-wasm32.tar.xz\uff1a\u8f93\u5165\u610f\u5916\u7ed3\u675f\n"
+  }
+}

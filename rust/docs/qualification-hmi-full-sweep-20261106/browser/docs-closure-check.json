@@ -1,0 +1,649 @@
+{
+  "scope": "Documentation closeout comparison; no runtime stage was rerun. Two non-included Markdown files are excluded explicitly rather than claiming the entire 72-file scope is byte-identical.",
+  "base_commit": "7105367d7d607653c3ab758f0131c029c4373faf",
+  "frozen_commit": "272671b95297313d24db921eceda8e95f3a8d545",
+  "frozen_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+  "scope_paths": [
+    "rust/client-templates",
+    "rust/vendor/jpeg-decoder-0.3.2",
+    "rust/rust-toolchain.toml"
+  ],
+  "tracked_scope_files": 72,
+  "changed_between_commits": [
+    "rust/client-templates/README.md",
+    "rust/client-templates/VALIDATION.md"
+  ],
+  "compilation_and_fixture_scope_files_after_explicit_doc_exclusions": 70,
+  "compilation_and_fixture_scope_difference_count": 0,
+  "working_compilation_inputs_equal_to_both_commits": true,
+  "literal_include_inputs": [
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/baseline.jpg",
+      "target": "rust/client-templates/tests/fixtures/baseline.jpg",
+      "present": true,
+      "sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/progressive.jpg",
+      "target": "rust/client-templates/tests/fixtures/progressive.jpg",
+      "present": true,
+      "sha256": "d71712f85a0c850320054f08898347f1b9c88f272430c057aa2dee31cfee2a09"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/subsampled.jpg",
+      "target": "rust/client-templates/tests/fixtures/subsampled.jpg",
+      "present": true,
+      "sha256": "15dcc151124d0b47f3f90fde371cd35ad2ed03fa0d393d92e7373cdf0c26d508"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/baseline.jpg",
+      "target": "rust/client-templates/tests/fixtures/baseline.jpg",
+      "present": true,
+      "sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/progressive.jpg",
+      "target": "rust/client-templates/tests/fixtures/progressive.jpg",
+      "present": true,
+      "sha256": "d71712f85a0c850320054f08898347f1b9c88f272430c057aa2dee31cfee2a09"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/subsampled.jpg",
+      "target": "rust/client-templates/tests/fixtures/subsampled.jpg",
+      "present": true,
+      "sha256": "15dcc151124d0b47f3f90fde371cd35ad2ed03fa0d393d92e7373cdf0c26d508"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/send-file.json",
+      "target": "rust/client-templates/tests/fixtures/send-file.json",
+      "present": true,
+      "sha256": "049646043ca457732cab9abb7158e0d5a0535aab9259027ddc77b5c85cae2852"
+    },
+    {
+      "source": "rust/client-templates/tests/image_entry.rs",
+      "literal": "fixtures/baseline.jpg",
+      "target": "rust/client-templates/tests/fixtures/baseline.jpg",
+      "present": true,
+      "sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11"
+    }
+  ],
+  "standalone_vendor_test_include_references_not_compiled_by_browser_gates": [
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "literal": "tower.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/benches/tower.jpg",
+      "present": true,
+      "sha256": "40b5ae0df66540ba3ac60edf2840b4b8edd0500706105f3b63083e3a8993119a"
+    },
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "literal": "tower_progressive.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/benches/tower_progressive.jpg",
+      "present": true,
+      "sha256": "e87bac231e2c11b1aef6981358189ad5c51f67069a43131b1512ed823a7607c6"
+    },
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "literal": "tower_grayscale.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/benches/tower_grayscale.jpg",
+      "present": true,
+      "sha256": "90519862a5bc59ca5702ff802a2f16e8cdcd28b124f891bb03556b920742d94e"
+    },
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "literal": "tower.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/benches/tower.jpg",
+      "present": true,
+      "sha256": "40b5ae0df66540ba3ac60edf2840b4b8edd0500706105f3b63083e3a8993119a"
+    },
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "literal": "../tests/reftest/images/lossless/1/jpeg_lossless_sel1-rgb.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/tests/reftest/images/lossless/1/jpeg_lossless_sel1-rgb.jpg",
+      "present": false,
+      "sha256": null
+    },
+    {
+      "source": "rust/vendor/jpeg-decoder-0.3.2/benches/large_image.rs",
+      "literal": "large_image.jpg",
+      "target": "rust/vendor/jpeg-decoder-0.3.2/benches/large_image.jpg",
+      "present": true,
+      "sha256": "4cd902020e963fffd23e3a0d0be71207efe665265518fe5a3809ba77699a5fd0"
+    }
+  ],
+  "audit_note": "The first include scanner incorrectly attempted to read a missing standalone upstream JPEG test image. The corrected inventory records those references separately; browser gates compile the dependency library, not that vendored package test suite. No missing file was created and the complete 70-file tracked diff check remains unchanged.",
+  "source_comparison": [
+    {
+      "path": "rust/client-templates/.gitignore",
+      "base_sha256": "076803fc08d23ee9c5aca0177d715242ae6e2f2a40857ef0c9df81a1b25aaeea",
+      "frozen_sha256": "076803fc08d23ee9c5aca0177d715242ae6e2f2a40857ef0c9df81a1b25aaeea",
+      "working_sha256": "076803fc08d23ee9c5aca0177d715242ae6e2f2a40857ef0c9df81a1b25aaeea",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/Cargo.lock",
+      "base_sha256": "06ce6d1bf80273eeca285b92225c5a8ea2448b21ecc874c635ae5bc5c7ab11ad",
+      "frozen_sha256": "06ce6d1bf80273eeca285b92225c5a8ea2448b21ecc874c635ae5bc5c7ab11ad",
+      "working_sha256": "06ce6d1bf80273eeca285b92225c5a8ea2448b21ecc874c635ae5bc5c7ab11ad",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/Cargo.toml",
+      "base_sha256": "55d68ca096b5356f6cdfa9d8b24da01e024854d00a7a21c34758480441251ed2",
+      "frozen_sha256": "55d68ca096b5356f6cdfa9d8b24da01e024854d00a7a21c34758480441251ed2",
+      "working_sha256": "55d68ca096b5356f6cdfa9d8b24da01e024854d00a7a21c34758480441251ed2",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/README.md",
+      "base_sha256": "7e5bf1372734058db905159b2f59e259c0e284811e102015193e9d2923af239b",
+      "frozen_sha256": "8eb7de94a3e7c61eba02bb2d957eecae0cb68f20edf53b9063f7a4316babba81",
+      "working_sha256": "b3193f96026e08c07a0e2d0560fd6a39d01dd23434b7eb73c4c2379702c7183d",
+      "documentation_exclusion": true
+    },
+    {
+      "path": "rust/client-templates/VALIDATION.md",
+      "base_sha256": "1e8a8c1064d2bf6e688b74258ecaccc58c0fd63731bc52426efd2f802aef28aa",
+      "frozen_sha256": "a6aaf7c8fabfb63413b205156179fccb3afc77d0f0ae81112b567ffa9a6388df",
+      "working_sha256": "feb9c374d83ce8d3e04a1f37a94be089b2ace1272415890b6f26f16f7e65a03c",
+      "documentation_exclusion": true
+    },
+    {
+      "path": "rust/client-templates/build.sh",
+      "base_sha256": "38d27e6137f765bce9ee0d27bec9ddd6bf9dfeb118f2d2e79b22701a25fd174a",
+      "frozen_sha256": "38d27e6137f765bce9ee0d27bec9ddd6bf9dfeb118f2d2e79b22701a25fd174a",
+      "working_sha256": "38d27e6137f765bce9ee0d27bec9ddd6bf9dfeb118f2d2e79b22701a25fd174a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/browser.rs",
+      "base_sha256": "bad233b3a38daeb9e0b3ec36f107933c24ae3d5cc54de6e6814bb0a4ae267cc3",
+      "frozen_sha256": "bad233b3a38daeb9e0b3ec36f107933c24ae3d5cc54de6e6814bb0a4ae267cc3",
+      "working_sha256": "bad233b3a38daeb9e0b3ec36f107933c24ae3d5cc54de6e6814bb0a4ae267cc3",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/image_entry.rs",
+      "base_sha256": "3613bd1b5719cb0223dbbaae96a34d7609d1eeb6025402460a87ac36bcfa8e58",
+      "frozen_sha256": "3613bd1b5719cb0223dbbaae96a34d7609d1eeb6025402460a87ac36bcfa8e58",
+      "working_sha256": "3613bd1b5719cb0223dbbaae96a34d7609d1eeb6025402460a87ac36bcfa8e58",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/job_groups.rs",
+      "base_sha256": "614e0c0e310446cdc24e680aebcacc4b7c28a500b350e5ecf805b4b3fe0f6194",
+      "frozen_sha256": "614e0c0e310446cdc24e680aebcacc4b7c28a500b350e5ecf805b4b3fe0f6194",
+      "working_sha256": "614e0c0e310446cdc24e680aebcacc4b7c28a500b350e5ecf805b4b3fe0f6194",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/lib.rs",
+      "base_sha256": "aa019816100026fd8b591a81e7bbdb33b313ddeee6058242d6a0b2665db9136a",
+      "frozen_sha256": "aa019816100026fd8b591a81e7bbdb33b313ddeee6058242d6a0b2665db9136a",
+      "working_sha256": "aa019816100026fd8b591a81e7bbdb33b313ddeee6058242d6a0b2665db9136a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/lifecycle.rs",
+      "base_sha256": "461f6565051fa4fd98a3031c853cc3094f1efb5039a6d54759fa2f5e38cfd9c0",
+      "frozen_sha256": "461f6565051fa4fd98a3031c853cc3094f1efb5039a6d54759fa2f5e38cfd9c0",
+      "working_sha256": "461f6565051fa4fd98a3031c853cc3094f1efb5039a6d54759fa2f5e38cfd9c0",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/protocol.rs",
+      "base_sha256": "1d912164fb8155d787b57e8389c7a5ad77e725cf4850a078061d77cd86fb13b1",
+      "frozen_sha256": "1d912164fb8155d787b57e8389c7a5ad77e725cf4850a078061d77cd86fb13b1",
+      "working_sha256": "1d912164fb8155d787b57e8389c7a5ad77e725cf4850a078061d77cd86fb13b1",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/text_entry.rs",
+      "base_sha256": "b0d023a12073a9d94d4ebff44d4338f6a79766fd5b09fd729a6149a35e36d985",
+      "frozen_sha256": "b0d023a12073a9d94d4ebff44d4338f6a79766fd5b09fd729a6149a35e36d985",
+      "working_sha256": "b0d023a12073a9d94d4ebff44d4338f6a79766fd5b09fd729a6149a35e36d985",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/src/toasts.rs",
+      "base_sha256": "5b6a37bf49dc49cbd2d0eb7eefcd3d8b56a21b6e684b9d89d74a72f6509f337a",
+      "frozen_sha256": "5b6a37bf49dc49cbd2d0eb7eefcd3d8b56a21b6e684b9d89d74a72f6509f337a",
+      "working_sha256": "5b6a37bf49dc49cbd2d0eb7eefcd3d8b56a21b6e684b9d89d74a72f6509f337a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/browser_acceptance.py",
+      "base_sha256": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e",
+      "frozen_sha256": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e",
+      "working_sha256": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/browser_input_acceptance.py",
+      "base_sha256": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873",
+      "frozen_sha256": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873",
+      "working_sha256": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/fixtures/README.md",
+      "base_sha256": "bb464736b139c323d9052e815fcded2bf0e9b2384abf0d17034cda9f99221b05",
+      "frozen_sha256": "bb464736b139c323d9052e815fcded2bf0e9b2384abf0d17034cda9f99221b05",
+      "working_sha256": "bb464736b139c323d9052e815fcded2bf0e9b2384abf0d17034cda9f99221b05",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/fixtures/baseline.jpg",
+      "base_sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11",
+      "frozen_sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11",
+      "working_sha256": "af231fc8371206c675c33b379707b81de70f8ae072d440f7977995d903b4ae11",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/fixtures/progressive.jpg",
+      "base_sha256": "d71712f85a0c850320054f08898347f1b9c88f272430c057aa2dee31cfee2a09",
+      "frozen_sha256": "d71712f85a0c850320054f08898347f1b9c88f272430c057aa2dee31cfee2a09",
+      "working_sha256": "d71712f85a0c850320054f08898347f1b9c88f272430c057aa2dee31cfee2a09",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/fixtures/send-file.json",
+      "base_sha256": "049646043ca457732cab9abb7158e0d5a0535aab9259027ddc77b5c85cae2852",
+      "frozen_sha256": "049646043ca457732cab9abb7158e0d5a0535aab9259027ddc77b5c85cae2852",
+      "working_sha256": "049646043ca457732cab9abb7158e0d5a0535aab9259027ddc77b5c85cae2852",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/fixtures/subsampled.jpg",
+      "base_sha256": "15dcc151124d0b47f3f90fde371cd35ad2ed03fa0d393d92e7373cdf0c26d508",
+      "frozen_sha256": "15dcc151124d0b47f3f90fde371cd35ad2ed03fa0d393d92e7373cdf0c26d508",
+      "working_sha256": "15dcc151124d0b47f3f90fde371cd35ad2ed03fa0d393d92e7373cdf0c26d508",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/image_entry.rs",
+      "base_sha256": "55da636e69624e3edb832eabb2536575ccb0cfe27d8625f97b035df12102bfe2",
+      "frozen_sha256": "55da636e69624e3edb832eabb2536575ccb0cfe27d8625f97b035df12102bfe2",
+      "working_sha256": "55da636e69624e3edb832eabb2536575ccb0cfe27d8625f97b035df12102bfe2",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/job_groups.rs",
+      "base_sha256": "345c0ff51eb6e52e4387248ef42accc314d1a35535125748ec9aedde1e25f352",
+      "frozen_sha256": "345c0ff51eb6e52e4387248ef42accc314d1a35535125748ec9aedde1e25f352",
+      "working_sha256": "345c0ff51eb6e52e4387248ef42accc314d1a35535125748ec9aedde1e25f352",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/text_connection.rs",
+      "base_sha256": "db3c040a90d4a781d4bde6413348a2da793eb15be6499e7e741ba8ef450b3157",
+      "frozen_sha256": "db3c040a90d4a781d4bde6413348a2da793eb15be6499e7e741ba8ef450b3157",
+      "working_sha256": "db3c040a90d4a781d4bde6413348a2da793eb15be6499e7e741ba8ef450b3157",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/tests/toasts.rs",
+      "base_sha256": "398427672134f4d68e9177706e1ac37104c2406182c27cd94ce31ebee9950ff1",
+      "frozen_sha256": "398427672134f4d68e9177706e1ac37104c2406182c27cd94ce31ebee9950ff1",
+      "working_sha256": "398427672134f4d68e9177706e1ac37104c2406182c27cd94ce31ebee9950ff1",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/web/config.json",
+      "base_sha256": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+      "frozen_sha256": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+      "working_sha256": "8b8a2481b51e693d25a8026ba35031c736c0c7773fa19c7f54fbe5b151df72bd",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/web/index.html",
+      "base_sha256": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+      "frozen_sha256": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+      "working_sha256": "00e6db56c2f7afd8706b97bb227e3a9207b5a18a204a557a619185ae4b1d2ed7",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/client-templates/web/style.css",
+      "base_sha256": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f",
+      "frozen_sha256": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f",
+      "working_sha256": "63a0ec54b0c9910150e4fc2cd58f41da67f390eace17d762ecfcfaff52c2de9f",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/rust-toolchain.toml",
+      "base_sha256": "2ad6f15416572b4836585087f1d4abc53b8fa2dbd616f8dacfaa587ed6714228",
+      "frozen_sha256": "2ad6f15416572b4836585087f1d4abc53b8fa2dbd616f8dacfaa587ed6714228",
+      "working_sha256": "2ad6f15416572b4836585087f1d4abc53b8fa2dbd616f8dacfaa587ed6714228",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/.cargo_vcs_info.json",
+      "base_sha256": "2447ec6c330febda6a0f02c3a36679990f16aa16531d2a294f406c47ab2c749d",
+      "frozen_sha256": "2447ec6c330febda6a0f02c3a36679990f16aa16531d2a294f406c47ab2c749d",
+      "working_sha256": "2447ec6c330febda6a0f02c3a36679990f16aa16531d2a294f406c47ab2c749d",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/.gitignore",
+      "base_sha256": "aea7ee9b968d1bcb76f04a6a089eceb631b3af6c3d72c001e3ee5fae8052d8d6",
+      "frozen_sha256": "aea7ee9b968d1bcb76f04a6a089eceb631b3af6c3d72c001e3ee5fae8052d8d6",
+      "working_sha256": "aea7ee9b968d1bcb76f04a6a089eceb631b3af6c3d72c001e3ee5fae8052d8d6",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/CHANGELOG.md",
+      "base_sha256": "89f0701654671310c81b725cc2b51c2de253a5160eeb90c8b3f972c4f266fdfd",
+      "frozen_sha256": "89f0701654671310c81b725cc2b51c2de253a5160eeb90c8b3f972c4f266fdfd",
+      "working_sha256": "89f0701654671310c81b725cc2b51c2de253a5160eeb90c8b3f972c4f266fdfd",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/Cargo.lock",
+      "base_sha256": "e34e71b58b21388236c6d59d8c4daee36b539c68b3a2c98bbf5c42fb4c459a7a",
+      "frozen_sha256": "e34e71b58b21388236c6d59d8c4daee36b539c68b3a2c98bbf5c42fb4c459a7a",
+      "working_sha256": "e34e71b58b21388236c6d59d8c4daee36b539c68b3a2c98bbf5c42fb4c459a7a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/Cargo.toml",
+      "base_sha256": "df53a3c85524171542fd8b551233ab71babb9b5eaf6f56e40fddf99b63c20188",
+      "frozen_sha256": "df53a3c85524171542fd8b551233ab71babb9b5eaf6f56e40fddf99b63c20188",
+      "working_sha256": "df53a3c85524171542fd8b551233ab71babb9b5eaf6f56e40fddf99b63c20188",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/Cargo.toml.orig",
+      "base_sha256": "3f39615f2fefddd9fe83ee227e36f27e8fdb83c4a393820cacd09e10a191c36a",
+      "frozen_sha256": "3f39615f2fefddd9fe83ee227e36f27e8fdb83c4a393820cacd09e10a191c36a",
+      "working_sha256": "3f39615f2fefddd9fe83ee227e36f27e8fdb83c4a393820cacd09e10a191c36a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/LICENSE-APACHE",
+      "base_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "frozen_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "working_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/LICENSE-MIT",
+      "base_sha256": "22b83fb92a50418c7df9564b9c179fa2a0e74f293bc58b72dd7e218fc0902143",
+      "frozen_sha256": "22b83fb92a50418c7df9564b9c179fa2a0e74f293bc58b72dd7e218fc0902143",
+      "working_sha256": "22b83fb92a50418c7df9564b9c179fa2a0e74f293bc58b72dd7e218fc0902143",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/LOCAL_PATCH.diff",
+      "base_sha256": "1eb83d5048ab175686f16bbce595c24d853fd2ad28986fcc96e0575656066528",
+      "frozen_sha256": "1eb83d5048ab175686f16bbce595c24d853fd2ad28986fcc96e0575656066528",
+      "working_sha256": "1eb83d5048ab175686f16bbce595c24d853fd2ad28986fcc96e0575656066528",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/PATCHES.md",
+      "base_sha256": "58aad80203d9389a58af245cd1e32f9c6e393ec2aa560a14d538c3adf1a49a05",
+      "frozen_sha256": "58aad80203d9389a58af245cd1e32f9c6e393ec2aa560a14d538c3adf1a49a05",
+      "working_sha256": "58aad80203d9389a58af245cd1e32f9c6e393ec2aa560a14d538c3adf1a49a05",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/README.md",
+      "base_sha256": "cb72ab0179d2c2578d2840bc2bdf96935833178d34466fb5c1982f9f6be9547f",
+      "frozen_sha256": "cb72ab0179d2c2578d2840bc2bdf96935833178d34466fb5c1982f9f6be9547f",
+      "working_sha256": "cb72ab0179d2c2578d2840bc2bdf96935833178d34466fb5c1982f9f6be9547f",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/UPSTREAM_SHA256.json",
+      "base_sha256": "b785c5b32e2cb2bba477395c71e60ff3505212af05a3d03526a77134b8a5aa9d",
+      "frozen_sha256": "b785c5b32e2cb2bba477395c71e60ff3505212af05a3d03526a77134b8a5aa9d",
+      "working_sha256": "b785c5b32e2cb2bba477395c71e60ff3505212af05a3d03526a77134b8a5aa9d",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/decoding_benchmark.rs",
+      "base_sha256": "8a0f2cd1cee342493bee575e9938f0d077eb970dac8d76fe2c3ef9b71105e387",
+      "frozen_sha256": "8a0f2cd1cee342493bee575e9938f0d077eb970dac8d76fe2c3ef9b71105e387",
+      "working_sha256": "8a0f2cd1cee342493bee575e9938f0d077eb970dac8d76fe2c3ef9b71105e387",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/large_image.jpg",
+      "base_sha256": "4cd902020e963fffd23e3a0d0be71207efe665265518fe5a3809ba77699a5fd0",
+      "frozen_sha256": "4cd902020e963fffd23e3a0d0be71207efe665265518fe5a3809ba77699a5fd0",
+      "working_sha256": "4cd902020e963fffd23e3a0d0be71207efe665265518fe5a3809ba77699a5fd0",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/large_image.rs",
+      "base_sha256": "5c45235e625879dd8bbc8bd513864fba6aab513918a79114f4c3bf0fdd801cc0",
+      "frozen_sha256": "5c45235e625879dd8bbc8bd513864fba6aab513918a79114f4c3bf0fdd801cc0",
+      "working_sha256": "5c45235e625879dd8bbc8bd513864fba6aab513918a79114f4c3bf0fdd801cc0",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/tower.jpg",
+      "base_sha256": "40b5ae0df66540ba3ac60edf2840b4b8edd0500706105f3b63083e3a8993119a",
+      "frozen_sha256": "40b5ae0df66540ba3ac60edf2840b4b8edd0500706105f3b63083e3a8993119a",
+      "working_sha256": "40b5ae0df66540ba3ac60edf2840b4b8edd0500706105f3b63083e3a8993119a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/tower_grayscale.jpg",
+      "base_sha256": "90519862a5bc59ca5702ff802a2f16e8cdcd28b124f891bb03556b920742d94e",
+      "frozen_sha256": "90519862a5bc59ca5702ff802a2f16e8cdcd28b124f891bb03556b920742d94e",
+      "working_sha256": "90519862a5bc59ca5702ff802a2f16e8cdcd28b124f891bb03556b920742d94e",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/benches/tower_progressive.jpg",
+      "base_sha256": "e87bac231e2c11b1aef6981358189ad5c51f67069a43131b1512ed823a7607c6",
+      "frozen_sha256": "e87bac231e2c11b1aef6981358189ad5c51f67069a43131b1512ed823a7607c6",
+      "working_sha256": "e87bac231e2c11b1aef6981358189ad5c51f67069a43131b1512ed823a7607c6",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/examples/decode.rs",
+      "base_sha256": "73cb3cdb03f02b7ace7860143d7ead659cd3f04a7e3d35c73450930f651326fb",
+      "frozen_sha256": "73cb3cdb03f02b7ace7860143d7ead659cd3f04a7e3d35c73450930f651326fb",
+      "working_sha256": "73cb3cdb03f02b7ace7860143d7ead659cd3f04a7e3d35c73450930f651326fb",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/rust-toolchain",
+      "base_sha256": "b37685c6d7646baf7933322dcbdadf302fa6d575cf2be7c6c3a2402424453113",
+      "frozen_sha256": "b37685c6d7646baf7933322dcbdadf302fa6d575cf2be7c6c3a2402424453113",
+      "working_sha256": "b37685c6d7646baf7933322dcbdadf302fa6d575cf2be7c6c3a2402424453113",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/arch/mod.rs",
+      "base_sha256": "d7484cefbc186c887e926fa5ea2950c412f95326152e6bc7a19484d3eb3e63b9",
+      "frozen_sha256": "d7484cefbc186c887e926fa5ea2950c412f95326152e6bc7a19484d3eb3e63b9",
+      "working_sha256": "d7484cefbc186c887e926fa5ea2950c412f95326152e6bc7a19484d3eb3e63b9",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/arch/neon.rs",
+      "base_sha256": "9ee5fbebb8621b69e2031162a61269cd0784883fbe574974250ac2a23b66dd74",
+      "frozen_sha256": "9ee5fbebb8621b69e2031162a61269cd0784883fbe574974250ac2a23b66dd74",
+      "working_sha256": "9ee5fbebb8621b69e2031162a61269cd0784883fbe574974250ac2a23b66dd74",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/arch/ssse3.rs",
+      "base_sha256": "c470868f692ecad6428c5dc113c6fa3261cd3c23ce5158c5a8c7174e12298c65",
+      "frozen_sha256": "c470868f692ecad6428c5dc113c6fa3261cd3c23ce5158c5a8c7174e12298c65",
+      "working_sha256": "c470868f692ecad6428c5dc113c6fa3261cd3c23ce5158c5a8c7174e12298c65",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/arch/wasm.rs",
+      "base_sha256": "c3aea9d15b722fa2a57ae9c3b09bf5b3bd4b86d48efa6440e00a9f8688190489",
+      "frozen_sha256": "c3aea9d15b722fa2a57ae9c3b09bf5b3bd4b86d48efa6440e00a9f8688190489",
+      "working_sha256": "c3aea9d15b722fa2a57ae9c3b09bf5b3bd4b86d48efa6440e00a9f8688190489",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/decoder.rs",
+      "base_sha256": "0cf04546cf70bacbc2447d0e6ee7ab96518104eda5bdc17b81280fa162f83764",
+      "frozen_sha256": "0cf04546cf70bacbc2447d0e6ee7ab96518104eda5bdc17b81280fa162f83764",
+      "working_sha256": "0cf04546cf70bacbc2447d0e6ee7ab96518104eda5bdc17b81280fa162f83764",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/decoder/lossless.rs",
+      "base_sha256": "e1249764347a2b1fc3de955e3e822c7dddd29418e3049990fe036259d10df488",
+      "frozen_sha256": "e1249764347a2b1fc3de955e3e822c7dddd29418e3049990fe036259d10df488",
+      "working_sha256": "e1249764347a2b1fc3de955e3e822c7dddd29418e3049990fe036259d10df488",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/error.rs",
+      "base_sha256": "7c0deaa7c58b4f1c00a42616ce0b8b37c1040ac85fcdade36ca20aa0c2435a61",
+      "frozen_sha256": "7c0deaa7c58b4f1c00a42616ce0b8b37c1040ac85fcdade36ca20aa0c2435a61",
+      "working_sha256": "7c0deaa7c58b4f1c00a42616ce0b8b37c1040ac85fcdade36ca20aa0c2435a61",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/huffman.rs",
+      "base_sha256": "822e263fabf588988bbcaebb5df9b96735a08a62b45a407ffad4ae5262dce90c",
+      "frozen_sha256": "822e263fabf588988bbcaebb5df9b96735a08a62b45a407ffad4ae5262dce90c",
+      "working_sha256": "822e263fabf588988bbcaebb5df9b96735a08a62b45a407ffad4ae5262dce90c",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/idct.rs",
+      "base_sha256": "255d74922aedcb287f368b74d1ee3e2bb5d64d959100269eab0224234c94d94f",
+      "frozen_sha256": "255d74922aedcb287f368b74d1ee3e2bb5d64d959100269eab0224234c94d94f",
+      "working_sha256": "255d74922aedcb287f368b74d1ee3e2bb5d64d959100269eab0224234c94d94f",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/lib.rs",
+      "base_sha256": "fdb40d5882aa0d625db53919a5b1880f341357d8cbb48384218b5d4e2f6ea8fe",
+      "frozen_sha256": "fdb40d5882aa0d625db53919a5b1880f341357d8cbb48384218b5d4e2f6ea8fe",
+      "working_sha256": "fdb40d5882aa0d625db53919a5b1880f341357d8cbb48384218b5d4e2f6ea8fe",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/marker.rs",
+      "base_sha256": "e68c3ffc47bfb16b2f08ed169abde7d95369e1a887ba3a6edd3d453ba0e1e2af",
+      "frozen_sha256": "e68c3ffc47bfb16b2f08ed169abde7d95369e1a887ba3a6edd3d453ba0e1e2af",
+      "working_sha256": "e68c3ffc47bfb16b2f08ed169abde7d95369e1a887ba3a6edd3d453ba0e1e2af",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/parser.rs",
+      "base_sha256": "22beb0cbfb24f9246452441abfa45d908ae099ef39c8728d17579160e2892e1e",
+      "frozen_sha256": "22beb0cbfb24f9246452441abfa45d908ae099ef39c8728d17579160e2892e1e",
+      "working_sha256": "22beb0cbfb24f9246452441abfa45d908ae099ef39c8728d17579160e2892e1e",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/strict_tests.rs",
+      "base_sha256": "80c50bef45849e933a437d6cbb9b965f61c509b09efd08d76ee6cd3c99625e0a",
+      "frozen_sha256": "80c50bef45849e933a437d6cbb9b965f61c509b09efd08d76ee6cd3c99625e0a",
+      "working_sha256": "80c50bef45849e933a437d6cbb9b965f61c509b09efd08d76ee6cd3c99625e0a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/upsampler.rs",
+      "base_sha256": "234e6f479cd90166b1db19884ef9ec21c50bf7c838c2bd646e6ee563eafd3f0f",
+      "frozen_sha256": "234e6f479cd90166b1db19884ef9ec21c50bf7c838c2bd646e6ee563eafd3f0f",
+      "working_sha256": "234e6f479cd90166b1db19884ef9ec21c50bf7c838c2bd646e6ee563eafd3f0f",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/worker/immediate.rs",
+      "base_sha256": "7677d198b0eab4cda943a0f60f21f42f9c7c9163dcfe32a77fa50d0b47e90be0",
+      "frozen_sha256": "7677d198b0eab4cda943a0f60f21f42f9c7c9163dcfe32a77fa50d0b47e90be0",
+      "working_sha256": "7677d198b0eab4cda943a0f60f21f42f9c7c9163dcfe32a77fa50d0b47e90be0",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/worker/mod.rs",
+      "base_sha256": "6cb62e38a8735b27c93e52d4762accf4bf3f75e7305c8c1ca2efa9649037cc8a",
+      "frozen_sha256": "6cb62e38a8735b27c93e52d4762accf4bf3f75e7305c8c1ca2efa9649037cc8a",
+      "working_sha256": "6cb62e38a8735b27c93e52d4762accf4bf3f75e7305c8c1ca2efa9649037cc8a",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/worker/multithreaded.rs",
+      "base_sha256": "6d5bb0d3ed09bf179bee4a0b3c625d497b3b35535545cf780b2497d333c8fdd9",
+      "frozen_sha256": "6d5bb0d3ed09bf179bee4a0b3c625d497b3b35535545cf780b2497d333c8fdd9",
+      "working_sha256": "6d5bb0d3ed09bf179bee4a0b3c625d497b3b35535545cf780b2497d333c8fdd9",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/src/worker/rayon.rs",
+      "base_sha256": "7ae36b76d8de63c009f3990e085c46691438a081aeb564fe277cfec68e5bbfe1",
+      "frozen_sha256": "7ae36b76d8de63c009f3990e085c46691438a081aeb564fe277cfec68e5bbfe1",
+      "working_sha256": "7ae36b76d8de63c009f3990e085c46691438a081aeb564fe277cfec68e5bbfe1",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/tests/lib.rs",
+      "base_sha256": "577139e54a05e0ad47e8f936a22642cc9a22df1582ad9f66111d01f31d9e7e67",
+      "frozen_sha256": "577139e54a05e0ad47e8f936a22642cc9a22df1582ad9f66111d01f31d9e7e67",
+      "working_sha256": "577139e54a05e0ad47e8f936a22642cc9a22df1582ad9f66111d01f31d9e7e67",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/tests/rayon-0.rs",
+      "base_sha256": "09cd6f6f4cc6cb23e629a53801cbd981e4c84ce380b0206892ee2b7907edc004",
+      "frozen_sha256": "09cd6f6f4cc6cb23e629a53801cbd981e4c84ce380b0206892ee2b7907edc004",
+      "working_sha256": "09cd6f6f4cc6cb23e629a53801cbd981e4c84ce380b0206892ee2b7907edc004",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/tests/rayon-1.rs",
+      "base_sha256": "48c65a31da2d3891ac52191813351293907588d1f10549f53a649b287af15784",
+      "frozen_sha256": "48c65a31da2d3891ac52191813351293907588d1f10549f53a649b287af15784",
+      "working_sha256": "48c65a31da2d3891ac52191813351293907588d1f10549f53a649b287af15784",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/tests/rayon-2.rs",
+      "base_sha256": "85c50e208788b731fc8d66d9e0efaf4c1bf12dc223ac2a7e90f4289fd49c07fa",
+      "frozen_sha256": "85c50e208788b731fc8d66d9e0efaf4c1bf12dc223ac2a7e90f4289fd49c07fa",
+      "working_sha256": "85c50e208788b731fc8d66d9e0efaf4c1bf12dc223ac2a7e90f4289fd49c07fa",
+      "documentation_exclusion": false
+    },
+    {
+      "path": "rust/vendor/jpeg-decoder-0.3.2/tests/rayon.rs",
+      "base_sha256": "fc3688f55a39a07cb54fe615bc4beb468d61bc3e0ef1bb87b5ca01c7b3d85d7e",
+      "frozen_sha256": "fc3688f55a39a07cb54fe615bc4beb468d61bc3e0ef1bb87b5ca01c7b3d85d7e",
+      "working_sha256": "fc3688f55a39a07cb54fe615bc4beb468d61bc3e0ef1bb87b5ca01c7b3d85d7e",
+      "documentation_exclusion": false
+    }
+  ],
+  "qualification_archive_files": 68,
+  "verified_checksum_entries": 67,
+  "archive_checksums_file_sha256": "5a36f07bdf7e4a769a0ae42aa0241f366ca4f8e63d1bc508a130b2b1261436ab",
+  "browser_runtime_scope": {
+    "protocol_result": "passed",
+    "input_result": "passed",
+    "page_and_cleanup_errors_empty": true,
+    "current_fixture_hashes_match_original_runtime_receipts": true,
+    "fixture_hashes": {
+      "tests/browser_acceptance.py": "67e5a18fc8583504d957c991e85235e01be3be746e4e0dd4260d5b7a23bd1b3e",
+      "tests/browser_input_acceptance.py": "13ee11fb9d30e1fc39f783e102d155b0ff5dd59b9292465376ff4ba373388873"
+    },
+    "asset_hashes_equal": true,
+    "input_application_source_present": false
+  },
+  "historical_validation_suffix_unchanged": true,
+  "modified_documentation_paths": [
+    "rust/docs/qualification-hmi-full-sweep-20261106/browser/README.md",
+    "rust/client-templates/README.md",
+    "rust/client-templates/VALIDATION.md"
+  ]
+}

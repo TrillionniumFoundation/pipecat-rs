@@ -1,0 +1,18 @@
+{
+  "scope": "Durable unreferenced GitHub blob written and read back before repository assembly; the envelope reconstructs the exact verified compressed raw export.",
+  "repository": "TrillionniumFoundation/pipecat-rs",
+  "raw_envelope_blob": "97235c67c72f47181ba313c5c9f1e385d4e7aa0e",
+  "envelope_sha256": "28d9a545602be62ac0fe4b0c835ec7e378deed742fc8bfe671e8fa5f9adc59f3",
+  "envelope_bytes": 247310,
+  "github_full_text_readback_equal": true,
+  "encoding": "gzip+base64",
+  "archive_file": "raw-evidence.json.gz",
+  "archive_sha256": "a2abde0dbf3eb5998dd3d323cb3e79d9ef98d64b618775d6c28b08daee018e20",
+  "archive_bytes": 185129,
+  "actual_runtime_tool_receipt_blob": "914c4afcc5281b24be20e44673f0d654dbd4541d",
+  "script_blobs": {
+    "scripts/desktop_browser_requalification_r1.py": "54ac54e6694c3d62be71ab6a4e652e51ee615e35",
+    "scripts/desktop_browser_wasm_diagnosis_r1.py": "78756080bd3ba7907dad64922a1e817d7d6ffa3a",
+    "scripts/desktop_browser_wasm_r2.py": "46871e5ae0deb358efb25a5cb4eaf244fb493fbc"
+  }
+}

@@ -1,5 +1,7 @@
 # Rust Core / Hepta HMI：运行路径加固与全量能力账（2026-11-06）
 
+> 本页保留前一阶段的源码、结果与当时边界。后续完整 workspace 推进、已恢复的原 ALC897 环境、实际 SFU 与 browser 运行及新增失败，见 [HMI 全量推进报告](HMI_FULL_SWEEP_20261106.md)。下文“尚未重跑／入口未恢复”等陈述属于本页原时间点；原 WebRTC invocation-25 与生产组合门槛仍须按后续报告分别结算，不能用后来的通过抹去。
+
 ## 结论
 
 本轮把三个缺口推进到了实际运行路径：**pipeline 的 payload 字节准入、Linux 原生媒体进程监管、WebRTC DTLS 启动与关闭的生命周期修复**。Hepta 本地语音输入已经启用严格预算；公开的 `local_speech CONFIG_JSON OWNER_CONNECTION_ID` 默认入口已经在 Linux 启动受监管 native child。原 Hepta conversation/turn、签名观察、权限和模型／工具执行 owner 仍是唯一权威。

@@ -21,6 +21,8 @@
 | 原始证据 checkpoint | `8279c5566c861fc047b7e36f4a44524e34c00767` / `b78833c213d17f7d5bb6455f9cefdc0d8567d459` | 59 个 docs/evidence 文件；与 8a7 编译源码相同 |
 | Scalar tool-result fixture | `72cac7fdfc65585219ebf757992ffa5b12c63dcb` / `20fed35e5a3822a0f14d892b904e108776942649` | 3文件4行旧wire期待修正；该中间checkpoint没有执行完整runtime gate |
 | Redacted-history trailing user | `ae134e942411c6b0ad64d7f5b6caa1c603919c57` / `b5115bcf53c8992d59117ffd8396f6eea57b9c9d` | 两处静态旧长度期待，增加唯一wireuser点号的精确断言；完整default r3候选 |
+| 早期 raw 与 owner probe | `0d4da9a89473fdbc87ad528f3fe081e53226a3b5` / `9fc41d8346eed823ce75da7b1179a7d231bd9df7` | 15 个 docs/evidence 文件；与 ae134 编译源码相同 |
+| Grok listener 失败诊断 | `272671b95297313d24db921eceda8e95f3a8d545` / `94424ffa2a8fbcda0f81321ee68e7461663e191c` | 只增加 bounded 观测；原 12 个 app_cli scenario、单次重绑 oracle 与期限不变 |
 
 早期本地 commit 与发布 commit 的 metadata 不同，但曾按全树逐字节核对相同；它们是同一源码检查点的不同 commit 身份，不是两次产品修补。最终运行以报告中的 published SHA 和运行前后 manifest 为准。[发布桥接](qualification-hmi-full-sweep-20261106/publication-artifact-cleanup.json) · [signed helper 修补](qualification-hmi-full-sweep-20261106/signed-assistant-helper-fix.json)
 
@@ -91,6 +93,16 @@ Rust 1.99.1 的下一次完整 default 已编译通过，但在 Nova 的 85 个 
 
 独立清理审查发现原 `Child::wait` 位于 scenario deadline 外，没有自己的等待上限。现在 kill 后以 `try_wait` 在 3 秒窗口内核对实际退出，每 10ms 观察一次；只有取得 exit status 才设置 reaped。cleanup JSONL 分开记录 kill、wait error、timeout 与 elapsed。正常 Drop 清理失败仍使测试失败；已经 unwind 时避免二次 panic。即便后续 Drop 的第二次尝试成功，第一次失败仍不被清除。外层 owned job 仍是最终内核／I/O 期限边界；不承诺任意 kernel-stuck 进程硬实时 reap。[SFU 规则与证据](../crates/pipecat-livekit/qualification/LOCAL_SFU.md)
 
+### 3.7 Grok fixture listener 重绑失败仍未归因
+
+精确 pin 第三轮完整 default 在 Grok 的 `app_cli` 中得到 11 passed／1 failed：`actual_binary_server_vad_rapid_burst_preserves_speech_and_joins` 的辅助 listener 在 drop 后立即单次重绑，返回 `AddrInUse`，随后 peer join 传播 panic。实际产品 child 的退出、PCM／report 与 join 断言先于这一 peer await，已执行通过；失败的监听器由测试 peer 创建。原日志没有地址、inode、持有者或 TCP 状态，不能由此判断是 retained owner、端口重新分配、TIME_WAIT 或资源压力。
+
+新增诊断记录 drop 前的 fd、socket inode 与 descriptor target；原 drop 与单次 bind 之间没有插入操作。失败先输出原 errno，再读取有界的当前进程 fd 与精确／mapped endpoint、同端口 wildcard 的 TCP 行。fd 扫描上限 4,096 entries／64 matches，单张 proc TCP 表上限 1 MiB／8,192 lines／64 matches；截断、read error、race／unreadable 均显式输出，不扫描全机进程。快照不是原子的，失败后找不到原 inode 也不证明 bind 当时无人持有。drop 前少量 metadata 读取本身可能影响调度；后续通过不能倒推原 r3 未失败。
+
+独立的本地 Linux socket 控制只证明一种可能性：原 inode 已释放后，受控竞争 listener 占用同一 endpoint，单次 bind 同样报 errno 98；竞争 listener 关闭后，下一次单次 bind 成功。它没有 TCP payload／连接，也不是 desktop 原 r3 的复现，没有给原失败指定原因。原 `no_connection` 60ms 与单次重绑断言继续保留。[独立控制与范围](qualification-hmi-full-sweep-20261106/native/grok-listener/control-delivery.json)
+
+诊断复查限定为原完整 12-case harness、默认并行、最多 20 次、重复窗口不超过 300 秒且首败停；编译时间与该窗口分账。后续完整 workspace 仍运行原命令，单独诊断的通过不清除 r3，也不转成 240 个新覆盖项。
+
 ## 4. 真实媒体与本地模型的资格范围
 
 ### SFU 三个实际场景
@@ -123,6 +135,10 @@ Piper 四项使用真实 ORT/eSpeak/Piper CPU 路径，保留固定 English fixt
 
 实际 bundle 来自 e526 的 Rust browser／locked dependencies；478 发布了最终 helpers，直到710编译输入不变；后续媒体独立测试 helper 和文档也不改变 browser 编译输入。打包后 WASM SHA 为 `6dc704bd6d05f09b53fbe4136f6a7ea119bd7bcbf8cd4b34e28818980d3a622d`。远端 `application_source_present=false` 原值保留，源码绑定来自独立 Git 与资产核对。新的 native/WASM 补资格有自己的运行身份，不给原实际 browser 运行重复加分。
 
+新的 Rust 1.99.0 补资格在独立 `source-browser/target-browser`、710 的实际源码上完成：原生 `cargo test --locked --offline` **54 passed／0 failed／0 ignored**，23.763411 秒；原生 `cargo clippy --locked --offline --all-targets -- -D warnings` exit 0，8.087912 秒。r1 随后的官方 WASM std 下载只有 8,338,068／23,152,600 bytes，XZ 截断且摘要不符，因此 **r1 整体仍为失败**。r2 只恢复同一官方组件，完整摘要匹配后安装到独立 WASM sysroot；仅运行 WASM target 的 strict Clippy，exit 0，42.282510 秒，没有重复计入原生测试。
+
+10 份已记录的前后 source map 覆盖同一 72 个文件、摘要相同。r2 核对六个 native tool binary 前后摘要不变；r1 的 native-before 字典未在失败前落盘，不能把 r2 摘要追记成 r1 的前后证明。完整 raw export、48 份原始文本、官方 manifest／range 记录、脚本和实际 runtime returns 已按原字节核对。[新补资格与原始证据](qualification-hmi-full-sweep-20261106/browser/requalification/README.md)
+
 ## 6. 历史失败与本轮失败账
 
 | 事件 | 原结果与当前解释 |
@@ -133,8 +149,11 @@ Piper 四项使用真实 ORT/eSpeak/Piper CPU 路径，保留固定 English fixt
 | Rust1.99.1 full r2 | Nova83 pass／2fail，误用Inworld普通example有实际二进制证据；完整运行在此停止 |
 | 精确 pin default r1 | media-transport 独立readiness target 9pass／2fail；尾部 user compatibility 点号被helper错算，原signed内容／产品adapter不变 |
 | 精确 pin default r2 | RTVI first-answer-timing target 153pass／2fail；辅助端按旧 nested-text 读取本应为 scalar string 的工具结果，三处同类fixture最小修正，产品adapter不变 |
+| 精确 pin default r3 | Grok app_cli 11pass／1fail；fixture listener 单次重绑 AddrInUse。当前没有原 inode／TCP 状态证据，原因仍开放；新增诊断而未放宽 oracle |
+| Grok 诊断启动 r1 | source diff 白名单遗漏已发布的主报告路径，fetch／diff 后、checkout／编译／selection 前退出127；0 rounds，source-pin仍为干净ae134。这是运行器前置失败，精确16路径白名单修正后用新job/evidence身份执行，不计产品test失败 |
 | 中文合成诊断 r1 | 私有scope的 max_segment_bytes=16MiB 超过2MiB产品上限；在LocalSpeech::load准入即失败，没有native model或8次STT执行；只修fixture配置 |
 | Browser protocol r1/r2、input r1/r2 | 各自原partial groups、stdout/JSON/helper与修正均保留；最终r3/r4不覆盖旧失败 |
+| Browser Rust 补资格 r1 | 原生54 tests 与 strict Clippy分别通过；随后WASM std下载截断，整体failed。r2仅WASM恢复与Clippy通过，不改写r1整体结果 |
 | 原本地两次SIGKILL构建 | 0 tests；没有证明OOM或协议原因，当前raw不可访问与已知历史观察分开 |
 | 原 fmt-all | vendored递归／缺module的失败保留；owned-member格式成功不是该命令成功 |
 | 原两项远端 UNKNOWN | 原host/job ID对账未取得有效状态，不重放；后来的环境检查不清除UNKNOWN |

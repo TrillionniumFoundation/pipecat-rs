@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "pid": 2,
+  "scope": "controlled same-endpoint competing-listener witness only; not historical r3 reproduction",
+  "source_sha256": "4dd4f1adb71246b3d5ce30cec8276a50ae7a111bca198c5d88e9d028ca258db8",
+  "platform": "linux",
+  "observations": [
+    {
+      "stage": "original-listening",
+      "socket": {
+        "fd": 3,
+        "inode": 1769398,
+        "address": [
+          "127.0.0.1",
+          39549
+        ],
+        "reuseaddr": 1,
+        "reuseport": 0,
+        "inheritable": false
+      },
+      "rows": [
+        {
+          "local_hex": "0100007F:9A7D",
+          "remote_hex": "00000000:0000",
+          "state_hex": "0A",
+          "inode": 1769398,
+          "row": "2: 0100007F:9A7D 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1769398 1 00000000ceea16f8 100 0 0 10 0"
+        }
+      ]
+    },
+    {
+      "stage": "original-dropped",
+      "original_inode_fds": [],
+      "rows": []
+    },
+    {
+      "stage": "competitor-listening",
+      "socket": {
+        "fd": 3,
+        "inode": 1769405,
+        "address": [
+          "127.0.0.1",
+          39549
+        ],
+        "reuseaddr": 1,
+        "reuseport": 0,
+        "inheritable": false
+      },
+      "original_inode_fds": [],
+      "rows": [
+        {
+          "local_hex": "0100007F:9A7D",
+          "remote_hex": "00000000:0000",
+          "state_hex": "0A",
+          "inode": 1769405,
+          "row": "2: 0100007F:9A7D 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1769405 1 0000000043558ce7 100 0 0 10 0"
+        }
+      ]
+    },
+    {
+      "stage": "single-rebind-with-competitor",
+      "errno": 98,
+      "error_name": "EADDRINUSE",
+      "original_inode_fds": [],
+      "rows": [
+        {
+          "local_hex": "0100007F:9A7D",
+          "remote_hex": "00000000:0000",
+          "state_hex": "0A",
+          "inode": 1769405,
+          "row": "2: 0100007F:9A7D 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1769405 1 0000000043558ce7 100 0 0 10 0"
+        }
+      ]
+    },
+    {
+      "stage": "single-rebind-after-competitor-close",
+      "socket": {
+        "fd": 3,
+        "inode": 1769412,
+        "address": [
+          "127.0.0.1",
+          39549
+        ],
+        "reuseaddr": 1,
+        "reuseport": 0,
+        "inheritable": false
+      },
+      "original_inode_fds": [],
+      "competitor_inode_fds": [],
+      "rows": [
+        {
+          "local_hex": "0100007F:9A7D",
+          "remote_hex": "00000000:0000",
+          "state_hex": "0A",
+          "inode": 1769412,
+          "row": "2: 0100007F:9A7D 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1769412 1 00000000b5f663e9 100 0 0 10 0"
+        }
+      ]
+    }
+  ],
+  "failure": null,
+  "cleanup_errors": [],
+  "original_test_changed": false,
+  "retry_count": 0,
+  "connections_or_payloads_sent": 0,
+  "socket_policy": {
+    "family": "AF_INET",
+    "type": "SOCK_STREAM",
+    "SO_REUSEADDR": 1,
+    "SO_REUSEPORT": 0,
+    "reference": "https://docs.rs/tokio/1.53.2/src/tokio/net/tcp/listener.rs.html",
+    "limit": "Matches the relevant Unix reuse setting; this is not executing the Rust fixture or claiming every Tokio option is identical."
+  },
+  "snapshot_limit": "proc/self/fd and exact IPv4 endpoint rows are bounded observations, not atomic system-wide snapshots.",
+  "all_socket_objects_closed": true,
+  "final_owned_inode_holders": {
+    "1769398": [],
+    "1769405": [],
+    "1769412": []
+  },
+  "elapsed_seconds": 0.006850147000477591
+}

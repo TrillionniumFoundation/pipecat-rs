@@ -1,0 +1,41 @@
+{
+  "scope": "Retrospective source/target ownership index generated after completion from actual launch scripts and results. This file was not a pre-run owner marker.",
+  "source": "/home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/source-browser",
+  "target": "/home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/target-browser",
+  "source_commit": "7105367d7d607653c3ab758f0131c029c4373faf",
+  "source_tree": "19a5c08fc2cbfeabacd344668fc7b25d03a282c2",
+  "tracked_scope_file_count": 72,
+  "phase_source_maps_equal": true,
+  "ownership_basis": [
+    {
+      "phase": "r1",
+      "job_id": "1a1b11b87e0-fc05-75d5",
+      "script": "scripts/desktop_browser_requalification_r1.py",
+      "script_sha256": "b24721de874e2dbac9b2bd2f8ea2fd399971af4e28db52d11d93f159f5ed68d5",
+      "observed_script_requirements": [
+        "task root must not already exist",
+        "git clone --no-hardlinks --no-checkout into independent source-browser",
+        "detached exact commit and tree validation",
+        "explicit CARGO_TARGET_DIR in newly created task root",
+        "no other checkout target is copied"
+      ],
+      "result": "evidence/result.json"
+    },
+    {
+      "phase": "r2",
+      "job_id": "1a1b134cc7a-fc05-76e6",
+      "script": "scripts/desktop_browser_wasm_r2.py",
+      "script_sha256": "d95ff5d274f1b517f410ca8a8f03410de1c6963271ca9762ac3e6cc7a5a567a9",
+      "exclusive_lock": "/home/qian-qi/workspace/pipecat-browser-requalification-f9f576cc6c66/browser-target.lock",
+      "same_source_target_as_r1": true,
+      "same_source_bytes_as_r1": true,
+      "result": "evidence-wasm-r2/result.json"
+    }
+  ],
+  "limits": [
+    "No pre-r1 target-owner marker is claimed.",
+    "r1 records native tool versions and selected absolute tool paths, but its native-before binary hash dictionary was not written before the later download failure.",
+    "r2 before/after equality is observed for six native tool binaries only, not every native sysroot file.",
+    "Recorded source scope hashes do not claim a full registry dependency or system-library digest."
+  ]
+}

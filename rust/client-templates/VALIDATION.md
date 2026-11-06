@@ -37,9 +37,49 @@ See the [complete browser evidence and limits](../docs/qualification-hmi-full-sw
 [input JSON](../docs/qualification-hmi-full-sweep-20261106/browser/final/input-r3.json),
 [run receipts](../docs/qualification-hmi-full-sweep-20261106/browser/final/results.json)
 and [actual 960-by-480 screenshot](../docs/qualification-hmi-full-sweep-20261106/browser/final/browser-acceptance.png).
-Later native/WASM requalification after the local executor replacement has its
-own source/run identity and is reported in the full-sweep report; it does not
-repeat or add to these two browser runs.
+The later native/WASM requalification below has its own source/run identity;
+it does not repeat or add to these two browser runs.
+
+## New native/WASM requalification, 2026-11-06
+
+An independent `source-browser` checkout and `target-browser` ran with exact
+Rust 1.99.0 at commit `7105367d7d607653c3ab758f0131c029c4373faf`, tree
+`19a5c08fc2cbfeabacd344668fc7b25d03a282c2`. This is new raw evidence after the
+local executor replacement, not a reconstruction of unavailable older logs.
+
+| Run / phase | Exact Cargo arguments | Observed result |
+| --- | --- | --- |
+| r1 native tests | `test --locked --offline` | Existing 54 passed, 0 failed, 0 ignored; 23.763411 s |
+| r1 native strict Clippy | `clippy --locked --offline --all-targets -- -D warnings` | exit 0; 8.087912 s |
+| r1 subsequent WASM preparation | Official Rust WASM standard-library download | Truncated archive, failed checksum; **overall r1 failed** |
+| Separate r2 WASM-only strict Clippy | `clippy --locked --offline --target wasm32-unknown-unknown -- -D warnings` | exit 0; 42.282510 s |
+
+The first archive contained 8,338,068 of the expected 23,152,600 bytes and failed
+XZ integrity. Its bytes and failure record were retained. r2 used 23 ordinary
+HTTP ranges, checked each exact 206 response/range/length, and verified the full
+archive against the official manifest before installation into a new private
+WASM sysroot. It did not repeat the native tests, native Clippy, release packaging,
+or either Chromium fixture.
+
+The recorded 72-file source scope is unchanged across all before/after maps.
+r2 also records equal before/after hashes for six native tool binaries and the
+retained r1 records/bad archive. r1 recorded exact native tool versions but did
+not persist its tool-binary before/after hash dictionary before the download
+failure; the r2 observation is not backdated into r1.
+
+Jobs are `1a1b11b87e0-fc05-75d5` for r1 and `1a1b134cc7a-fc05-76e6` for r2.
+The [complete requalification record](../docs/qualification-hmi-full-sweep-20261106/browser/requalification/README.md)
+links all raw logs, stage results, exact argv/environment, source maps, official
+manifest, range receipts and runtime terminal records. Its target-owner index
+is explicitly generated after completion from those original records.
+
+Comparing the recorded source with current freeze
+`272671b95297313d24db921eceda8e95f3a8d545` / tree
+`94424ffa2a8fbcda0f81321ee68e7461663e191c` finds only README/VALIDATION changes
+in the tracked browser/JPEG/toolchain-file scope. Neither Markdown file is a
+Rust include input. Rust, Cargo/lock files, static assets, fixtures and vendored
+JPEG are unchanged. These documentation updates are not another execution of
+the tests or the browser bundle; the phase results above remain bound to `7105367`.
 
 ## Historical records below
 
