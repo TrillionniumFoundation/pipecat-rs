@@ -1,0 +1,451 @@
+Unmodified pipecat-webrtc and vendored WebRTC baseline 5e889453; 32 iterations x 6 schedules per invocation
+
+=== baseline invocation 1 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.51s
+
+exit_code=0
+
+=== baseline invocation 2 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.45s
+
+exit_code=0
+
+=== baseline invocation 3 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.23s
+
+exit_code=0
+
+=== baseline invocation 4 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.57s
+
+exit_code=0
+
+=== baseline invocation 5 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.32s
+
+exit_code=0
+
+=== baseline invocation 6 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.39s
+
+exit_code=0
+
+=== baseline invocation 7 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.35s
+
+exit_code=0
+
+=== baseline invocation 8 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.36s
+
+exit_code=0
+
+=== baseline invocation 9 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.59s
+
+exit_code=0
+
+=== baseline invocation 10 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.34s
+
+exit_code=0
+
+=== baseline invocation 11 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.33s
+
+exit_code=0
+
+=== baseline invocation 12 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.31s
+
+exit_code=0
+
+=== baseline invocation 13 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.23s
+
+exit_code=0
+
+=== baseline invocation 14 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.46s
+
+exit_code=0
+
+=== baseline invocation 15 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.31s
+
+exit_code=0
+
+=== baseline invocation 16 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.35s
+
+exit_code=0
+
+=== baseline invocation 17 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.24s
+
+exit_code=0
+
+=== baseline invocation 18 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.50s
+
+exit_code=0
+
+=== baseline invocation 19 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.36s
+
+exit_code=0
+
+=== baseline invocation 20 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.44s
+
+exit_code=0
+
+=== baseline invocation 21 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.09s
+
+exit_code=0
+
+=== baseline invocation 22 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.48s
+
+exit_code=0
+
+=== baseline invocation 23 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.22s
+
+exit_code=0
+
+=== baseline invocation 24 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.80s
+
+exit_code=0
+
+=== baseline invocation 25 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.58s
+
+exit_code=0
+
+=== baseline invocation 26 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.76s
+
+exit_code=0
+
+=== baseline invocation 27 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.21s
+
+exit_code=0
+
+=== baseline invocation 28 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.28s
+
+exit_code=0
+
+=== baseline invocation 29 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.36s
+
+exit_code=0
+
+=== baseline invocation 30 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.55s
+
+exit_code=0
+
+=== baseline invocation 31 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.30s
+
+exit_code=0
+
+=== baseline invocation 32 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.13s
+
+exit_code=0
+
+=== baseline invocation 33 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.34s
+
+exit_code=0
+
+=== baseline invocation 34 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.14s
+
+exit_code=0
+
+=== baseline invocation 35 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.11s
+
+exit_code=0
+
+=== baseline invocation 36 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 3.37s
+
+exit_code=0
+
+=== baseline invocation 37 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.14s
+
+exit_code=0
+
+=== baseline invocation 38 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.47s
+
+exit_code=0
+
+=== baseline invocation 39 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.43s
+
+exit_code=0
+
+=== baseline invocation 40 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.41s
+
+exit_code=0
+
+=== baseline invocation 41 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.44s
+
+exit_code=0
+
+=== baseline invocation 42 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.47s
+
+exit_code=0
+
+=== baseline invocation 43 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.66s
+
+exit_code=0
+
+=== baseline invocation 44 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.45s
+
+exit_code=0
+
+=== baseline invocation 45 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.30s
+
+exit_code=0
+
+=== baseline invocation 46 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.38s
+
+exit_code=0
+
+=== baseline invocation 47 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.45s
+
+exit_code=0
+
+=== baseline invocation 48 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.70s
+
+exit_code=0
+
+=== baseline invocation 49 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.56s
+
+exit_code=0
+
+=== baseline invocation 50 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.37s
+
+exit_code=0

@@ -1,0 +1,186 @@
+{
+  "binary_sha256": "24e44824bfeeed5ec5b8b2ee7f0153362b3b59e4409b3cd676e1a761de18516b",
+  "observations": [
+    {
+      "elapsed": 0.21500737899987143,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    },
+    {
+      "elapsed": 0.7948091299986118,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    },
+    {
+      "elapsed": 1.7956611320005322,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    },
+    {
+      "elapsed": 3.8627200919981988,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    },
+    {
+      "elapsed": 8.222185917999013,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    },
+    {
+      "elapsed": 16.22956282800078,
+      "wrapper": {
+        "pid": 6,
+        "stat": "6 (local_speech) S 2 1 1 0 -1 4194304 779 0 0 0 1 1 0 0 20 0 2 0 3116357 89530368 1813 18446744073709551615 93907515968704 93907523988000 140725235940256 0 0 0 0 4096 1088 0 0 0 17 3 0 0 0 0 0 93907524419656 93907524425080 93908248150016 140725235944167 140725235944279 140725235944279 140725235949495 0\n",
+        "wchan": "do_epoll_wait",
+        "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n",
+        "cmdline": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech /tmp/pipecat-proc-fifo-vm2axw5j/config.fifo 41 ",
+        "status": "Name:\tlocal_speech\nState:\tS (sleeping)\nTgid:\t6\nPid:\t6\nPPid:\t2\nThreads:\t2",
+        "threads": [
+          {
+            "tid": "6",
+            "comm": "local_speech\n",
+            "wchan": "do_epoll_wait",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/6/children'",
+            "syscall": "232 0x3 0x5568b7c74190 0x400 0x1cffd 0x0 0x0 0x7ffd25b2a2a8 0x7fc5caed872e\n"
+          },
+          {
+            "tid": "8",
+            "comm": "tokio-rt-worker\n",
+            "wchan": "anon_pipe_read",
+            "children": "[Errno 2] No such file or directory: '/proc/6/task/8/children'",
+            "syscall": "0 0x0 0x7fc5c4000c70 0x2000 0x0 0x0 0x0 0x7fc5cae37d68 0x7fc5caed872e\n"
+          }
+        ]
+      },
+      "exit_status": null,
+      "native_identity": null,
+      "stderr": ""
+    }
+  ],
+  "stderr": ""
+}

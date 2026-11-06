@@ -1,0 +1,39 @@
+    Checking pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+    Checking pipecat-services v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-services)
+    Checking pipecat-text v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-text)
+    Checking pipecat-protocol v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-protocol)
+    Checking pipecat-media-transport v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-media-transport)
+    Checking pipecat-processors v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-processors)
+    Checking pipecat-local-audio v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-local-audio)
+    Checking pipecat-piper v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-piper)
+    Checking pipecat-whisper v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-whisper)
+    Checking pipecat-vad v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-vad)
+    Checking pipecat-pipeline v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-pipeline)
+    Checking pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Checking pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+error: this `if` statement can be collapsed
+   --> crates/pipecat-hepta/examples/local_speech.rs:85:13
+    |
+ 85 | /             if std::thread::Builder::new()
+ 86 | |                 .name("media-diagnostic".into())
+ 87 | |                 .spawn(move || {
+ 88 | |                     use std::io::Write;
+...   |
+106 | |             }
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+ 92 ~                 .is_ok()
+ 93 ~                 && completion.recv_timeout(Duration::from_millis(100)).is_err() {
+ 94 |                     // On Linux a failed endpoint must not hang in stdio cleanup
+...
+103 |                     }
+104 ~                 }
+    |
+
+error: could not compile `pipecat-hepta` (example "local_speech") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,10 @@
+Diff in /workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core/src/lib.rs:7:
+ mod heartbeat;
+ mod idle;
+ mod payload_budget;
+-pub use payload_budget::PayloadLimits;
+ pub use heartbeat::{HeartbeatConfig, HeartbeatMonitor, HeartbeatSnapshot};
++pub use payload_budget::PayloadLimits;
+ mod llm_continuation;
+ mod realtime_context;
+ mod speculation;

@@ -79,7 +79,13 @@ The new regression module is `src/shutdown_start_tests.rs`. The historical test
 in `tests/review_lifecycle.rs` subsequently gains failure diagnostics only; its
 acceptance criteria, A-then-B wait order and five-second per-peer setup deadlines
 are unchanged. The 46-test package result above precedes that diagnostic-only
-edit. Repository formatting and whitespace checks cover only the modified files.
+edit. The later frozen-source gate also passed **46 tests, 0 failed, 0 ignored**
+including that edit, with strict selected-package Clippy and unchanged source
+before/after. Its published code is
+`6367d62babf97cab96a756b58427c8ee5fac5f15`, full tree
+`652aceec8a2dbf70acc6d58dcfc39af12e710f82`; see the
+[source-bound final evidence](../../docs/qualification-hmi-followthrough-20261106/final-gates.json).
+Repository formatting and whitespace checks cover only the modified files.
 Full-workspace qualification remains a separate gate and cannot be inferred from
 these package results.
 

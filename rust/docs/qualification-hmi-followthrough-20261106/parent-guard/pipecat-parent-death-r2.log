@@ -1,0 +1,71 @@
+    Blocking waiting for file lock on build directory
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling version_check v0.9.5
+   Compiling libc v0.2.190
+   Compiling syn v3.0.6
+   Compiling generic-array v0.14.7
+   Compiling typenum v1.20.1
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling errno v0.3.14
+   Compiling rustix v1.1.5
+   Compiling thiserror v2.0.21
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling signal-hook-registry v1.4.8
+   Compiling digest v0.10.7
+   Compiling thiserror-impl v2.0.21
+   Compiling tokio-macros v2.7.2
+   Compiling serde_derive v1.0.229
+   Compiling mio v1.2.4
+   Compiling socket2 v0.6.5
+   Compiling cpufeatures v0.2.17
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling bitflags v2.13.2
+   Compiling bytes v1.12.1
+   Compiling cfg-if v1.0.5
+   Compiling memchr v2.8.3
+   Compiling linux-raw-sys v0.12.1
+   Compiling sha2 v0.10.9
+   Compiling tokio v1.53.2
+   Compiling pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 39.09s
+     Running tests/parent_death.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/parent_death-51ae7d7490325d99)
+
+running 4 tests
+test parent_guard_helper ... ignored, subprocess fixture; invoked by the three process tests
+
+running 1 test
+test parent_guard_helper ... {"case":"validate","invalid_rejected":3,"signal":"SIGKILL","valid_parent":644}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+test invalid_or_mismatched_parent_is_rejected_before_binding ... ok
+
+running 1 test
+test parent_guard_helper ... {"case":"stale","native_pid":657,"native_reaped":true,"resource_opened":false,"stale_parent_rejected":true}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s
+
+
+test parent_lost_before_arming_is_rejected_before_resource_open ... ok
+
+running 1 test
+test parent_guard_helper ... {"case":"death","listener_released":true,"native_pid":660,"native_reaped":true,"native_signal":9,"start_time":3053335}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.04s
+
+
+test supervisor_sigkill_kills_reaps_native_and_releases_listener ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

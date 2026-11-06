@@ -1,0 +1,47 @@
+{
+  "scope": "Linux same-process parent-death binding; no physical media or live owner qualification",
+  "source_sha256": {
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "05770d4ca626ace39b8cf9de1d8b0d03a1a3ec604956bd2c7b83b175fafac87a",
+    "rust/crates/pipecat-hepta/tests/parent_death.rs": "313a6ef90cd46a31cc57ff1857e28472f281355f4aee183262283ed4cf4020e6",
+    "rust/scripts/qualify_hmi_media_process.py": "096ea112ba142c8caf552bcb7a8907bfe003e540006290f2a6cc969a23c26efc",
+    "rust/crates/pipecat-hepta/Cargo.toml": "5fdd985245424e2c70b413db621572a03d5abcf411eb55f30abf6635f77b4816",
+    "rust/crates/pipecat-hepta/src/lib.rs": "251e3d074d0acfb3414b6f3e3950d9d448abacb70a6d4be2491cc7fd88b07068",
+    "rust/Cargo.lock": "3a9fc48a04164e55641d92a0fb6ef4d970adc99c0a179047ca6d4ffd69bce5ef"
+  },
+  "toolchain": "rustc/cargo 1.99.0 x86_64-unknown-linux-gnu",
+  "cargo_test": {
+    "command": "cargo test --offline --locked -p pipecat-hepta --features process-supervision --test parent_death -- --nocapture",
+    "passed": 3,
+    "failed": 0,
+    "ignored": 1,
+    "ignored_reason": "subprocess-only helper invoked explicitly by the real three tests",
+    "log": "pipecat-parent-death-r3.log"
+  },
+  "clippy": {
+    "command": "cargo clippy --offline --locked -p pipecat-hepta --features process-supervision --test parent_death -- -D warnings",
+    "exit_code": 0,
+    "log": "pipecat-parent-death-clippy.log"
+  },
+  "dependency_recovery": {
+    "initial_offline_attempt": "missing linux-raw-sys0.12.1 package, no code test ran; retained r1 log",
+    "version_changes": false,
+    "rustix-1.1.5.crate": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+    "linux-raw-sys-0.12.1.crate": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+  },
+  "python_harness": {
+    "syntax_check": "py_compile passed",
+    "real_proc_metadata_check": {
+      "pid_ppid_starttime": "passed",
+      "changed_starttime_not_same_incarnation": "passed",
+      "live_child_not_counted_as_exit": "passed",
+      "original_child_exit_observed_without_claiming_waitpid": "passed"
+    },
+    "physical_capture_execution": "NOT_RUN"
+  },
+  "limits": [
+    "PDEATHSIG requests SIGKILL; does not promise immediate completion of uninterruptible kernel operations",
+    "No rollback of media already submitted",
+    "Only the bound native process, not arbitrary descendants",
+    "macOS and Windows containment not implemented or qualified"
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "file": "native-build-before-freeze.log",
+    "origin": "/tmp/pipecat-native-binary-followthrough-r2.log",
+    "sha256": "faa98e6530e074955676287275b97608bdc548e109c8c6415e22bf356c6c1957"
+  },
+  {
+    "file": "native-all-targets-before-freeze.log",
+    "origin": "/tmp/pipecat-native-followthrough-r1.log",
+    "sha256": "e3f4f4b151dc73fe8a847608cbf8194c9cca1e1d8efdf74c7186c093263c59fd"
+  },
+  {
+    "file": "supervisor-metadata-development-failure.log",
+    "origin": "/tmp/pipecat-supervisor-tests-r2.log",
+    "sha256": "54ed999d5cc1befd6e39851249a82d438c9adbc1e8df3b9aad63d6ba3cedc432"
+  },
+  {
+    "file": "supervisor-r3-before-final-controls.log",
+    "origin": "/tmp/pipecat-supervisor-tests-r3.log",
+    "sha256": "dd393b1e436dcc021e1e46e4a44977c10236d7ef69c6449d9e2017d0fc7304ae"
+  },
+  {
+    "file": "webrtc-pending-fixture-development-failure.log",
+    "origin": "/tmp/webrtc-fixed-pending-handshake.log",
+    "sha256": "0cb97add8ad84129ab24996839ec7e2741042f63f7ae951e136638d5c86da958"
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "observed_at_utc": "2026-11-06T10:53:50.690509+00:00",
+  "repository": "TrillionniumFoundation/pipecat-rs",
+  "pull_request": "https://github.com/TrillionniumFoundation/pipecat-rs/pull/2",
+  "branch": "work/hmi-core-audit-20261106",
+  "expected_prior_head": "5e889453a6956b03c6d0745663a87b0e604adebd",
+  "tested_local_code_commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+  "published_code_commit": "6367d62babf97cab96a756b58427c8ee5fac5f15",
+  "tested_tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+  "published_tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+  "publication_method": "Authorized GitHub Git Data API; returned blob SHAs and full tree matched local Git objects before branch ref update.",
+  "ref_update": {
+    "expected_sha": "5e889453a6956b03c6d0745663a87b0e604adebd",
+    "force": false,
+    "success": true
+  },
+  "independent_verification": {
+    "argv": [
+      "git",
+      "fetch",
+      "--no-tags",
+      "https://github.com/TrillionniumFoundation/pipecat-rs.git",
+      "refs/heads/work/hmi-core-audit-20261106:refs/remotes/verified/hmi-core-audit-20261106"
+    ],
+    "exit_code": 0,
+    "fetched_commit": "6367d62babf97cab96a756b58427c8ee5fac5f15",
+    "fetched_tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+    "git_diff_all_tracked_paths": [],
+    "complete_tree_equal": true
+  },
+  "evidence_followup": "A subsequent documentation/evidence-only commit does not change qualified implementation bytes."
+}

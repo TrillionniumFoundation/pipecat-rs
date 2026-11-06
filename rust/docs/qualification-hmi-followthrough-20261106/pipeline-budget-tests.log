@@ -1,0 +1,20 @@
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-core)
+    Finished `test` profile [unoptimized] target(s) in 19.56s
+     Running tests/payload_budgets.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/payload_budgets-26f4b05e07c7ba08)
+
+running 12 tests
+test bounded_measurement_handles_escaped_strings_and_rejects_deep_json ... ok
+test invalid_external_cancel_is_rejected_before_input_is_closed ... ok
+test exact_limit_includes_routing_metadata_and_rejects_overflow ... ok
+test owned_output_wait_rejects_oversize_even_when_output_is_full ... ok
+test oversized_processor_output_is_never_admitted ... ok
+test system_media_cannot_consume_control_item_or_byte_reservations ... ok
+test invalid_profile_is_rejected_without_constructing_queue ... ok
+test system_and_start_have_reserved_bytes_and_interruption_releases_data ... ok
+test strict_profile_rejects_opaque_native_and_callback_payloads ... ok
+test bytes_can_fill_before_items_and_dequeue_wakes_external_sender ... ok
+test runtime_external_wait_internal_failure_and_cancel_remain_distinct ... ok
+test dropping_pending_send_or_closing_does_not_leak_reservations ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

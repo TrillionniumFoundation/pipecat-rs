@@ -1,0 +1,32 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/scripts/qualify_hmi_supervisor_entry.py", line 33, in invocation
+    output, error = child.communicate(
+                    ^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech', '/tmp/pipecat-entry-9og2q403/absent.json', '41']' timed out after 4 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/scripts/qualify_hmi_supervisor_entry.py", line 102, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/scripts/qualify_hmi_supervisor_entry.py", line 75, in main
+    **invocation(binary, [missing, "41"], stderr_full=True),
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/scripts/qualify_hmi_supervisor_entry.py", line 46, in invocation
+    child.communicate(timeout=3)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech', '/tmp/pipecat-entry-9og2q403/absent.json', '41']' timed out after 3 seconds

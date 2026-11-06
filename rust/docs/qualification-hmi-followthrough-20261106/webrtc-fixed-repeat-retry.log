@@ -1,0 +1,272 @@
+Follow-up of fixed stress invocation25 data-channel setup timeout; original test and 5-second setup / 2-second UDP rebind limits unchanged. Prior failure retained, not replaced.
+binary_sha256=c0449275d19534deb5e85aa09fd458431bd8dbcc1e155cfc17d7a2a0bd5b3dab
+
+=== unchanged fixed stress retry invocation 1 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.20s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 2 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.77s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 3 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.48s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 4 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.57s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 5 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.62s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 6 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 6.03s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 7 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 5.71s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 8 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 6.83s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 9 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 5.35s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 10 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.62s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 11 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.46s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 12 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.44s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 13 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.36s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 14 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.44s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 15 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.32s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 16 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.28s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 17 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.26s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 18 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.25s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 19 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.38s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 20 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.35s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 21 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.14s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 22 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.48s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 23 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.46s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 24 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.18s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 25 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.19s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 26 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.16s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 27 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.31s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 28 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.38s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 29 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.33s
+
+exit_code=0
+
+=== unchanged fixed stress retry invocation 30 ===
+
+running 1 test
+test repeated_peer_shutdown_schedules_release_both_udp_ports ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.20s
+
+exit_code=0

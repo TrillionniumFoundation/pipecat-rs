@@ -1,5 +1,7 @@
 # Draft source qualification
 
+> Later branch follow-through: [2026-11-06 HMI runtime hardening](../rust/docs/HMI_FOLLOWTHROUGH_20261106.md) records payload admission, actual Linux media-process containment and deterministic DTLS shutdown repairs on a newer pinned tree. It includes a fresh selected-package gate and preserves a separate unexplained data-channel setup timeout. It does not replace the historical full-workspace failure or qualify a release; the source identities and results below remain historical.
+
 ## Status: unqualified working-branch candidate
 
 This export is a source review draft, not a release or a merge-ready checkpoint. Its canonical source is `839e95528f8319e2f1d1017331608fa29d677556`, tree `69657601d51fe702cef7742ec765feb929410d44`. The full gate for this exact export is **NOT_RUN**. No Cargo, native executable, original Python implementation, original test or provider SDK was run while preparing this export. Scope-specific historical acceptance does not establish acceptance of this combined tree.

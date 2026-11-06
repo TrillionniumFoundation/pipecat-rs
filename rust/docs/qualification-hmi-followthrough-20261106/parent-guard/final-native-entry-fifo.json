@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "observed_at_utc": "2026-11-06T10:51:28.642168+00:00",
+  "case": "final_frozen_local_speech_supervisor_killed_during_native_config_open",
+  "scope": "Actual Linux entrypoint and parent binding; no model/device/live owner qualification.",
+  "expected_commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+  "expected_tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+  "probe_script_sha256": "0bd7ab5cdec292bed1d679097e2f4f77b2275d70aab2bcf629fad49ac6faa11e",
+  "device_effects_performed": false,
+  "model_load_attempted": false,
+  "native_emergency_cleanup": false,
+  "case_passed": true,
+  "not_a_performance_benchmark": true,
+  "passed": true,
+  "source_before": {
+    "commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+    "tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+    "worktree_status": ""
+  },
+  "binary": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+  "binary_sha256": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "binary_mtime_ns": 1793962179224169493,
+  "binary_size": 22170456,
+  "final_gates": "/workspace/scratch/b2b6f3e38b6d/verification/final-gates.json",
+  "final_gates_sha256": "cc911aec09d1b92bf3b4c8f1e4e354e1bfb1b065e846305674baebfa079b6006",
+  "final_gates_passed": true,
+  "build_log": "/workspace/scratch/b2b6f3e38b6d/verification/final-native-build.log",
+  "build_log_sha256": "9136ecfd631e30c01e74cbc4eabaf806ae95d22421a35f4c5cc5280ea1dbf4f0",
+  "native_build_argv": [
+    "/workspace/scratch/27653505a519/toolchain/rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo",
+    "build",
+    "--locked",
+    "--offline",
+    "--manifest-path",
+    "rust/Cargo.toml",
+    "-p",
+    "pipecat-hepta",
+    "--features",
+    "local-speech",
+    "--example",
+    "local_speech"
+  ],
+  "source_sha256": {
+    "rust/Cargo.lock": "3a9fc48a04164e55641d92a0fb6ef4d970adc99c0a179047ca6d4ffd69bce5ef",
+    "rust/crates/pipecat-hepta/Cargo.toml": "5fdd985245424e2c70b413db621572a03d5abcf411eb55f30abf6635f77b4816",
+    "rust/crates/pipecat-hepta/examples/local_speech.rs": "189e304937aeef6c3f3ee8a73b62b705839320adf0a29fa913f69d6eb0aed648",
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "5d4e443c2b4a03236dca9f0f2255bc28a6d857c7268b2746575ec384e128d546",
+    "rust/crates/pipecat-hepta/src/process_supervision.rs": "b8311d77b16fcd6e92128b3ba8f1988355ccc7799f7a821e72c6ea19b8938212",
+    "rust/scripts/qualify_hmi_media_process.py": "92236514e64df01263a073fa2d8bf1020b217b89ff171172ed10599cfb992df7"
+  },
+  "source_binding": "Clean frozen commit/tree matches both final-gates snapshots; successful native-build log and binary SHA match that manifest. Running executable hashes are checked separately below.",
+  "supervisor_process": {
+    "pid": 12,
+    "parent_pid": 2,
+    "start_time_ticks": 3250094,
+    "state": "R"
+  },
+  "running_supervisor_exe_sha256": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "native_process": {
+    "pid": 13,
+    "parent_pid": 12,
+    "start_time_ticks": 3250095,
+    "state": "S"
+  },
+  "running_native_exe_sha256": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "native_blocked_wchan": "wait_for_partner",
+  "native_open_descriptors": [
+    "anon_inode:[eventfd]",
+    "anon_inode:[eventpoll]",
+    "anon_inode:[eventpoll]",
+    "pipe:[7789451]",
+    "pipe:[7790324]",
+    "pipe:[7790325]",
+    "socket:[7792039]",
+    "socket:[7792039]",
+    "socket:[7792040]"
+  ],
+  "supervisor_exit_code": -9,
+  "native_exit": {
+    "pid": 13,
+    "start_time_ticks": 3250095,
+    "observed_state": "absent",
+    "exited": true,
+    "waitpid_owned_by_harness": false
+  },
+  "parent_kill_to_native_exit_ms": 1.339,
+  "stdout_bytes": 0,
+  "stderr": "",
+  "native_terminal_observed": false,
+  "effects_status": "No device/model stage entered; no media terminal manufactured.",
+  "cleanup_errors": [],
+  "binary_sha256_after": "212bf44ae88bee0c0640fa109ea308404a284f3b9157f8388737a1cc6858d973",
+  "final_gates_sha256_after": "cc911aec09d1b92bf3b4c8f1e4e354e1bfb1b065e846305674baebfa079b6006",
+  "build_log_sha256_after": "9136ecfd631e30c01e74cbc4eabaf806ae95d22421a35f4c5cc5280ea1dbf4f0",
+  "source_after": {
+    "commit": "772e3ca152c53a33f70b2f47bab8610efd6e5ce8",
+    "tree": "652aceec8a2dbf70acc6d58dcfc39af12e710f82",
+    "worktree_status": ""
+  }
+}

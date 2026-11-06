@@ -1,0 +1,90 @@
+{
+  "scope": "Linux same-process parent-death binding; no physical media or live owner qualification",
+  "source_sha256": {
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "05770d4ca626ace39b8cf9de1d8b0d03a1a3ec604956bd2c7b83b175fafac87a",
+    "rust/crates/pipecat-hepta/tests/parent_death.rs": "313a6ef90cd46a31cc57ff1857e28472f281355f4aee183262283ed4cf4020e6",
+    "rust/scripts/qualify_hmi_media_process.py": "92236514e64df01263a073fa2d8bf1020b217b89ff171172ed10599cfb992df7",
+    "rust/crates/pipecat-hepta/Cargo.toml": "5fdd985245424e2c70b413db621572a03d5abcf411eb55f30abf6635f77b4816",
+    "rust/crates/pipecat-hepta/src/lib.rs": "251e3d074d0acfb3414b6f3e3950d9d448abacb70a6d4be2491cc7fd88b07068",
+    "rust/Cargo.lock": "3a9fc48a04164e55641d92a0fb6ef4d970adc99c0a179047ca6d4ffd69bce5ef"
+  },
+  "toolchain": "rustc/cargo 1.99.0 x86_64-unknown-linux-gnu",
+  "cargo_test": {
+    "command": "cargo test --offline --locked -p pipecat-hepta --features process-supervision --test parent_death -- --nocapture",
+    "passed": 3,
+    "failed": 0,
+    "ignored": 1,
+    "ignored_reason": "subprocess-only helper invoked explicitly by the real three tests",
+    "log": "pipecat-parent-death-r3.log"
+  },
+  "clippy": {
+    "command": "cargo clippy --offline --locked -p pipecat-hepta --features process-supervision --test parent_death -- -D warnings",
+    "exit_code": 0,
+    "log": "pipecat-parent-death-clippy.log"
+  },
+  "dependency_recovery": {
+    "initial_offline_attempt": "missing linux-raw-sys0.12.1 package, no code test ran; retained r1 log",
+    "version_changes": false,
+    "rustix-1.1.5.crate": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+    "linux-raw-sys-0.12.1.crate": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+  },
+  "python_harness": {
+    "syntax_check": "py_compile passed",
+    "real_proc_metadata_check": {
+      "pid_ppid_starttime": "passed",
+      "changed_starttime_not_same_incarnation": "passed",
+      "live_child_not_counted_as_exit": "passed",
+      "original_child_exit_observed_without_claiming_waitpid": "passed"
+    },
+    "physical_capture_execution": "NOT_RUN",
+    "source_after_proc_fallback_sha256": "59e122430922f7f887550a73e9f088790717704bf288e0615ca4e00941aefdda",
+    "kernel_compatibility_fix": "task/TID/children absent on this kernel; added bounded metadata PPid fallback with exact identity checks",
+    "initial_probe_failure_preserved": "native-entry-fifo-smoke-r1.json and native-entry-probe.json; no device effect and no native child identity was established in that failed inventory",
+    "source_after_pidfd_cleanup_sha256": "92236514e64df01263a073fa2d8bf1020b217b89ff171172ed10599cfb992df7",
+    "pidfd_cleanup": {
+      "artifact": "harness-pidfd-cleanup.json",
+      "passed": true,
+      "mismatched_incarnation_refused": true,
+      "exact_task_child_killed_and_reaped": true,
+      "without_pidfd": "fail closed, no numeric-PID fallback",
+      "changes_since_final_binary_smoke": "Only emergency-cleanup helper changed after FIFO R3. R3 used no emergency cleanup; native binary is unchanged."
+    }
+  },
+  "limits": [
+    "PDEATHSIG requests SIGKILL; does not promise immediate completion of uninterruptible kernel operations",
+    "No rollback of media already submitted",
+    "Only the bound native process, not arbitrary descendants",
+    "macOS and Windows containment not implemented or qualified"
+  ],
+  "native_entry_binary_smoke": {
+    "result": "PASS for final build r2 binary SHA; actual default supervisor entrypoint",
+    "artifact": "native-entry-fifo-smoke-r3.json",
+    "build_log": "/tmp/pipecat-native-binary-followthrough-r2.log",
+    "build_log_sha256": "faa98e6530e074955676287275b97608bdc548e109c8c6415e22bf356c6c1957",
+    "binary_sha256": "f24e908180b2aecbb20a33ec3e9dd3f420ddbd1a7fd3bce1acc8057cba2e2581",
+    "binary_unchanged_during_probe": true,
+    "native_wait_state_before_kill": "wait_for_partner",
+    "native_exit_observed": true,
+    "native_waitpid_owned": false,
+    "native_emergency_cleanup": false,
+    "stdout_bytes": 0,
+    "device_or_model_stage_entered": false,
+    "native_terminal_observed": false,
+    "parent_to_native_exit_ms_observation": 1.186,
+    "not_a_performance_benchmark": true,
+    "source_binding": "Parent reported final build r2 complete before this probe; the binary SHA below is the directly tested artifact. Source fingerprints describe the frozen workspace at probe time."
+  },
+  "native_entry_binary_smoke_previous": {
+    "result": "PASS for binary SHA only; final source rebuild needs its own run",
+    "artifact": "native-entry-fifo-smoke-r2.json",
+    "binary_sha256": "24e44824bfeeed5ec5b8b2ee7f0153362b3b59e4409b3cd676e1a761de18516b",
+    "native_wait_state_before_kill": "wait_for_partner",
+    "native_exit_observed": true,
+    "native_waitpid_owned": false,
+    "stdout_bytes": 0,
+    "device_or_model_stage_entered": false,
+    "parent_to_native_exit_ms_observation": 11.56,
+    "not_a_performance_benchmark": true,
+    "workspace_main_changed_since_binary_build": true
+  }
+}

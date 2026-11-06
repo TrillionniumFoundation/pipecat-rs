@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-11-06T10:35:32.192385+00:00",
+  "case": "actual_local_speech_supervisor_killed_during_native_config_open",
+  "scope": "same built entrypoint and Linux parent binding; no models/devices/owner",
+  "binary": "/tmp/pipecat-hmi-native-27653505a519/debug/examples/local_speech",
+  "binary_sha256": "f24e908180b2aecbb20a33ec3e9dd3f420ddbd1a7fd3bce1acc8057cba2e2581",
+  "binary_mtime_ns": 1793961227344046616,
+  "build_log": "/tmp/pipecat-native-binary-followthrough-r2.log",
+  "build_log_sha256": "faa98e6530e074955676287275b97608bdc548e109c8c6415e22bf356c6c1957",
+  "source_binding": "Parent reported final build r2 complete before this probe; the binary SHA below is the directly tested artifact. Source fingerprints describe the frozen workspace at probe time.",
+  "workspace_source_sha256_at_probe": {
+    "rust/Cargo.lock": "3a9fc48a04164e55641d92a0fb6ef4d970adc99c0a179047ca6d4ffd69bce5ef",
+    "rust/crates/pipecat-hepta/Cargo.toml": "5fdd985245424e2c70b413db621572a03d5abcf411eb55f30abf6635f77b4816",
+    "rust/crates/pipecat-hepta/examples/local_speech.rs": "42ac5378168e7d4010f259d4841d1f44289de1a42c6a3863183e0f9937391088",
+    "rust/crates/pipecat-hepta/src/parent_guard.rs": "05770d4ca626ace39b8cf9de1d8b0d03a1a3ec604956bd2c7b83b175fafac87a",
+    "rust/crates/pipecat-hepta/src/process_supervision.rs": "b8311d77b16fcd6e92128b3ba8f1988355ccc7799f7a821e72c6ea19b8938212",
+    "rust/scripts/qualify_hmi_media_process.py": "59e122430922f7f887550a73e9f088790717704bf288e0615ca4e00941aefdda"
+  },
+  "device_effects_performed": false,
+  "model_load_attempted": false,
+  "native_emergency_cleanup": false,
+  "passed": true,
+  "supervisor_process": {
+    "pid": 5,
+    "parent_pid": 2,
+    "start_time_ticks": 3154442,
+    "state": "R"
+  },
+  "native_process": {
+    "pid": 6,
+    "parent_pid": 5,
+    "start_time_ticks": 3154442,
+    "state": "R"
+  },
+  "native_blocked_wchan": "wait_for_partner",
+  "native_open_descriptors": [
+    "anon_inode:[eventfd]",
+    "anon_inode:[eventpoll]",
+    "anon_inode:[eventpoll]",
+    "pipe:[7564589]",
+    "pipe:[7564590]",
+    "pipe:[7565968]",
+    "socket:[7566712]",
+    "socket:[7566712]",
+    "socket:[7566713]"
+  ],
+  "native_exit": {
+    "pid": 6,
+    "start_time_ticks": 3154442,
+    "observed_state": "absent",
+    "exited": true,
+    "waitpid_owned_by_harness": false
+  },
+  "parent_kill_to_native_exit_ms": 1.186,
+  "stdout_bytes": 0,
+  "stderr": "",
+  "native_terminal_observed": false,
+  "effects_status": "no device/model stage entered; no media terminal manufactured",
+  "binary_unchanged": true
+}

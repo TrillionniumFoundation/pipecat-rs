@@ -1,5 +1,7 @@
 # Rust Core 与 Hepta HMI：本轮交付、边界和验收（2026-11-06）
 
+> 后续推进见 [运行路径加固与全量能力账](HMI_FOLLOWTHROUGH_20261106.md)：严格 payload 准入、实际 Linux native 进程监管、DTLS 启动／关闭修复，以及新的冻结源码验证。本文继续保留此前 checkpoint 的源码、计数和未通过项；新的分项工程结果仍未构成生产 HMI 或 full-workspace 资格。
+
 ## 结论
 
 当前正确产品边界是 **原 Hepta conversation/owner + 内生 HMI 组合 + 可复用 Rust 媒体 Core**。继续推进现有 Rust 适配器，完整 Pipecat 兼容库作为独立工作线维护。当前源码尚不能被宣布为生产 HMI Organ；实际 owner 的媒体进程组合、物理闭环、音视频、权限恢复及跨平台时延仍未完成。

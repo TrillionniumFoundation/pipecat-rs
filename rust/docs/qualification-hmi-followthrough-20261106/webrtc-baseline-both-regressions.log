@@ -1,0 +1,26 @@
+    Blocking waiting for file lock on build directory
+   Compiling webrtc v0.14.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/vendor/webrtc-0.14.0)
+   Compiling pipecat-webrtc v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-webrtc)
+    Finished `test` profile [unoptimized] target(s) in 1m 24s
+     Running unittests src/lib.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_webrtc-6e5b96744b3c439a)
+
+running 2 tests
+
+thread 'connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake' (72) panicked at crates/pipecat-webrtc/src/shutdown_start_tests.rs:241:5:
+stop must finish a pending DTLS start with an error: Err(Elapsed(()))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports' (71) panicked at crates/pipecat-webrtc/src/shutdown_start_tests.rs:128:6:
+DTLS starts resumed after stop retained real UDP candidates: Elapsed(())
+test connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake ... FAILED
+test connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports ... FAILED
+
+failures:
+
+failures:
+    connection::shutdown_start_tests::close_during_dtls_connecting_callback_releases_both_udp_ports
+    connection::shutdown_start_tests::stop_cancels_an_already_pending_native_dtls_handshake
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 18 filtered out; finished in 2.06s
+
+error: test failed, to rerun pass `-p pipecat-webrtc --lib`

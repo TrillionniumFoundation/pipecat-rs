@@ -1,0 +1,36 @@
+   Compiling pipecat-hepta v0.1.0 (/workspace/scratch/b2b6f3e38b6d/pipecat-rs/rust/crates/pipecat-hepta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running tests/parent_death.rs (/tmp/pipecat-hmi-native-27653505a519/debug/deps/parent_death-51ae7d7490325d99)
+
+running 4 tests
+test parent_guard_helper ... ignored, subprocess fixture; invoked by the three process tests
+
+running 1 test
+test parent_guard_helper ... {"case":"death","listener_released":true,"native_pid":42,"native_reaped":true,"native_signal":9,"start_time":3075901}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s
+
+
+
+running 1 test
+test parent_guard_helper ... {"case":"validate","invalid_rejected":3,"signal":"SIGKILL","valid_parent":29}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+test supervisor_sigkill_kills_reaps_native_and_releases_listener ... ok
+test invalid_or_mismatched_parent_is_rejected_before_binding ... ok
+
+running 1 test
+test parent_guard_helper ... {"case":"stale","native_pid":44,"native_reaped":true,"resource_opened":false,"stale_parent_rejected":true}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s
+
+
+test parent_lost_before_arming_is_rejected_before_resource_open ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

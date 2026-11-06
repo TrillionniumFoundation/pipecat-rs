@@ -1,0 +1,4 @@
+error: failed to create directory `/workspace/scratch/27653505a519/target/debug/.fingerprint/pipecat-hepta-8c96759728c37373`
+
+Caused by:
+  No space left on device (os error 28)
