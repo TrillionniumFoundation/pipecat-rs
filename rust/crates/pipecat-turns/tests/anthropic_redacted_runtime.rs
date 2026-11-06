@@ -345,8 +345,8 @@ async fn mixed_redacted_history_and_real_tools_replay_exact_second_http_order() 
     assert_eq!(
         second["messages"][2],
         json!({"role":"user","content":[
-            {"type":"tool_result","tool_use_id":"tool-a","content":[{"type":"text","text":"{\"n\":1}"}]},
-            {"type":"tool_result","tool_use_id":"tool-b","content":[{"type":"text","text":"{\"n\":2}"}]}
+            {"type":"tool_result","tool_use_id":"tool-a","content":"{\"n\":1}"},
+            {"type":"tool_result","tool_use_id":"tool-b","content":"{\"n\":2}"}
         ]})
     );
     assert_eq!(effects.load(Ordering::SeqCst), 2);
