@@ -1,0 +1,62 @@
+{
+  "schema": "pipecat-root-evals-cache-deadline-readonly-review-v1",
+  "created_utc": "2026-11-06T17:26:40.723325+00:00",
+  "scope": "Read-only source analysis of two failures reported from the original all-features no-fail-fast r2 line-rendered view. This document is derived analysis, not original execution bytes.",
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "path": "rust/crates/pipecat-evals/src/user_speech_cache.rs",
+    "bytes": 64307,
+    "sha256": "7af9dd93b4116a7ab062623502c77d6bbcdd5dfe75c7c9ac678fa21bde959bb7",
+    "git_blob_sha1": "c3b15bad19238747827d08916f38fd251c004bc4",
+    "current_source_exact_pinned_bytes": true
+  },
+  "observed_harness_from_agent_original_view": {
+    "passed": 220,
+    "failed": 2,
+    "ignored": 0,
+    "reported_harness_seconds": 4.72,
+    "error": "called Result::unwrap() on an Err value: Timeout"
+  },
+  "cases": [
+    {
+      "case": "user_speech_cache::tests::timely_command_between_empty_poll_and_timeout_is_not_discarded",
+      "source_first_line": 1617,
+      "lookup_unwrap_line": 1630,
+      "body_sha256": "cdbb31a9c01177a33b4dfc762ed7a885af5cc360708e688b66e420b32f4d83b8",
+      "production_budget_milliseconds": 100,
+      "failed_expression_from_agent_original_line_view": "tx.lookup().await.unwrap();",
+      "later_statements_not_reached": [
+        "gate.entered().await",
+        "tx.commit",
+        "fixed deadline sleep/release sequence",
+        "tx.join and subsequent persistence/file assertions"
+      ]
+    },
+    {
+      "case": "user_speech_cache::tests::late_commit_cannot_extend_the_original_production_deadline",
+      "source_first_line": 1644,
+      "lookup_unwrap_line": 1657,
+      "body_sha256": "afcd9137fa982db6e9ce2810c50ee25c1331a4c79e63e9aaa259baa87c91a17c",
+      "production_budget_milliseconds": 100,
+      "failed_expression_from_agent_original_line_view": "tx.lookup().await.unwrap();",
+      "later_statements_not_reached": [
+        "gate.entered().await",
+        "tx.commit",
+        "fixed deadline sleep/release sequence",
+        "tx.join and subsequent persistence/file assertions"
+      ]
+    }
+  ],
+  "source_findings": [
+    "The 100ms production_deadline is created before native worker startup and is passed unchanged through Namespace::open, namespace.scan and lookup.",
+    "The failed oneshot lookup result is produced before either test reaches its command-phase barrier.",
+    "The shown failures therefore do not observe a late commit extending its production deadline or a timely command being discarded after the empty poll."
+  ],
+  "limits": [
+    "Original byte offsets, full harness bytes and their SHA are pending the already requested export; line-rendered text is not represented as raw evidence.",
+    "No per-case lookup duration or exact failing native deadline-check stage was printed. The 4.72s harness duration is not a lookup duration.",
+    "No attribution to CPU scheduling, I/O contention, resource pressure or cache protocol defect is supported by these observations.",
+    "No source, product deadline, test deadline or expected result was changed. No retry was executed by this review."
+  ],
+  "original_failure_preserved": true
+}

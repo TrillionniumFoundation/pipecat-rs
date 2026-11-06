@@ -1,0 +1,28 @@
+{
+  "schema": "pipecat-moq-original-full-log-corroboration-v1",
+  "scope": "original full Cargo log corroborates the earlier runtime-tail extraction; no new execution",
+  "full_raw": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/final-matrix-pin-r1/originals/evidence/full-workspace-rust-1.99.0-r5/cargo-test-workspace.log",
+    "bytes": 436838,
+    "sha256": "646703b53acac51ede7550e708a6b3ad664a875ac3441078d27c1fb2169f36e2"
+  },
+  "original_range_receipt": {
+    "header": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_moq-9303b098e3099349)",
+    "kind": "Running",
+    "raw_start_byte": 428673,
+    "raw_end_byte": 436838,
+    "raw_slice_sha256": "8a1fc305fac84714d2124c04c1af1aaeba6261e09c7214822d20e58a3e843c65",
+    "summary_matches_in_block": 1,
+    "status": "FAILED",
+    "passed": 80,
+    "failed": 1,
+    "ignored": 0,
+    "measured": 0,
+    "filtered_out": 0,
+    "summary_offset": 436681,
+    "summary_raw": "test result: FAILED. 80 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s",
+    "ignored_cases": []
+  },
+  "matches_tail_derived_slice_exact_bytes": true,
+  "case_names_sha256": "e87d053861a5d96597d28371305e85676864b27477334abcf218a843539f2a41"
+}

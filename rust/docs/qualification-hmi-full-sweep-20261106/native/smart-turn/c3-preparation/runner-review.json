@@ -1,0 +1,50 @@
+{
+  "schema": "pipecat-ort-c3-independent-runner-review-v1",
+  "scope": "read-only source, existing archive and original C1 receipts; no native/model/Cargo execution, runtime load, package installation or remote calls",
+  "decision": "no remaining blocking issue in the frozen execution plan",
+  "runner": {
+    "path": "task-helpers/desktop_smart_turn_wheel_pin_r3.py",
+    "bytes": 36363,
+    "sha256": "7d23169a11c4790a4cb7294932fb43143d6933c08e1f041ef34daee5b7b22e98",
+    "git_blob_sha1": "fe3ac2987eb69b0cfda7a6c2d1b5e666ccb2c587",
+    "ast_valid": true
+  },
+  "source_contract": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "manifest_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+    "qualification_owner_lock": "qualification-owner-pin.lock",
+    "preceding_stages": [
+      "grok",
+      "default",
+      "expanded",
+      "models",
+      "webrtc",
+      "aishell"
+    ],
+    "qualification_failures_are_not_silently_changed_to_success": true,
+    "integrity_exit_125_and_unresolved_cleanup_block_admission": true
+  },
+  "reviewed_properties": [
+    "The official wheel archive has exact SHA9a04 and size16019285, and the one selected regular nonencrypted member is bound by unique RECORD row, exact20571088 bytes and SHAa0df84; the separately recorded independent precheck read actual local bytes.",
+    "The archive is only read; only the predetermined native member is written into a new private directory using create-only paths. No extractall, package installer, Python onnxruntime import, library load or inference occurs during preparation.",
+    "The native executable is the original C1e20adb1f67f6bd5f42ce30b0ad13a0ae568dcb80d4fcd7b2a0237366892fffbc/25576B; C source, official header, original report/stdout, old3c818 library, model, threef32 files, three probabilities and original environment receipt are all pinned before and after.",
+    "AST contains exactly one subprocess.Popen and one urllib.request.urlopen; there is no retry or recompilation path. The pinned C source has one session and exactly one Run per each of speech,tone,silence, unchanged API20/SEQ/thread1/ALL/CPUInput settings.",
+    "The six preceding receipts must be terminal on0cc with source checks; expanded, models, WebRTC, Grok and AISHELL have their actual-schema integrity/containment checks. AISHELL0 admitted inference attempts require an explicit nonzero terminal failure;1 may still have a retained functional failure.",
+    "Probe launch attempt is saved before Popen; actual PID and process-start count are saved immediately on successful Popen. A failed launch is not reported as a started model run.",
+    "The native process has a separate PGID and at most60s wait constrained by the whole budget. Cleanup makes bounded TERM2s/KILL2s/final1s leader waits and records actual leader status plus non-atomic group presence; no all-descendant-join claim is made.",
+    "Original native exit, comparison exit, containment/integrity wrapper status and total elapsed are separate. Exactly8 output JSON records, loaded library path/version/API, unchanged C1 session/model records, three exact case/input/output/value-bit pairs and returned cleanup are verified before completed_native_cases=3.",
+    "The original1e-5 probability tolerance and golden files remain unchanged; per-case deltas and bit equality against C1 are additional observations. The script explicitly does not clear prior failures or qualify production.",
+    "Inner180s budget is checked through the final receipt write; the required outer210s job remains the hard process-lifetime bound. CPU200%,4GiB,nice10 policy belongs to the external launcher."
+  ],
+  "limits": [
+    "The45s download budget is observed between blocking reads and checked after transfer; the10s socket setting is an inactivity timeout, not a universal hard whole-transfer bound. The required210s external job bound remains necessary.",
+    "The original C1 inherited loader environment and dependency closure were not fully recorded. This runner records current selected loader variables and does not reconstruct missing historical settings.",
+    "Same host and fixed artifact/input/session comparison cannot identify the original Python oracle library, its CPU/build or a single responsible compiler flag.",
+    "Review confirms the prepared plan only. Current remote executable, source, preceding stage terminal status and actual runtime behavior are rechecked by the runner/launcher at execution time."
+  ],
+  "related_preparation_review": {
+    "path": "preparation-review.json",
+    "sha256": "3e37d88a1eb58761c671a047413f88ca3d0ad2106aac09d13e517e2f48513bcb"
+  }
+}

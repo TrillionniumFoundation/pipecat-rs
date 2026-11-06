@@ -1,0 +1,495 @@
+{
+  "schema": "pipecat-public-aishell-offline-diagnostic-v1",
+  "scope": "one public prerecorded human utterance, Whisper subconfiguration only; no devices or Hepta admission",
+  "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "source": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin",
+  "target": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin",
+  "start_unix": 1793987420.6957486,
+  "stages": [
+    {
+      "label": "rustc-version",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+        "--version"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust",
+      "timeout_seconds": 15,
+      "started_unix": 1793987421.7955704,
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup": null,
+      "pid": 1291506,
+      "elapsed_seconds": 0.016853360924869776,
+      "stdout": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/rustc-version.stdout.log",
+        "bytes": 36,
+        "sha256": "8dc912acd5bfeafc70b01b1d2a2afb0844afa02f5dba2f1ae8d5c212d005afb6"
+      },
+      "stderr": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/rustc-version.stderr.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "label": "cargo-version",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "--version"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust",
+      "timeout_seconds": 15,
+      "started_unix": 1793987421.8136866,
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup": null,
+      "pid": 1291509,
+      "elapsed_seconds": 0.008799287024885416,
+      "stdout": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/cargo-version.stdout.log",
+        "bytes": 36,
+        "sha256": "1f88eaf7fe1aaec83184752cf4c944cd22f00184136ff36a3e4c318cc60ef566"
+      },
+      "stderr": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/cargo-version.stderr.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "label": "metadata",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "metadata",
+        "--no-deps",
+        "--locked",
+        "--offline",
+        "--format-version",
+        "1"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust",
+      "timeout_seconds": 30,
+      "started_unix": 1793987422.356608,
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup": null,
+      "pid": 1291585,
+      "elapsed_seconds": 0.06544623919762671,
+      "stdout": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/metadata.stdout.log",
+        "bytes": 454312,
+        "sha256": "80a271250e8a310a3ec19b04dc6d346f660e325e53e0b2e9a8745859b5cd36e8"
+      },
+      "stderr": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/metadata.stderr.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "label": "build-normal-example",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+        "build",
+        "--locked",
+        "--offline",
+        "-p",
+        "pipecat-hepta",
+        "--features",
+        "local-speech",
+        "--example",
+        "stt_fixture",
+        "--message-format=json-render-diagnostics"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust",
+      "timeout_seconds": 300,
+      "started_unix": 1793987422.4296107,
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup": null,
+      "pid": 1291586,
+      "elapsed_seconds": 4.16151710995473,
+      "stdout": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/build-normal-example.stdout.log",
+        "bytes": 200500,
+        "sha256": "c88d7ac34b25c22f626e825074a42e64b4216979cd89e1a98d6a68a5a1f0b45c"
+      },
+      "stderr": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/build-normal-example.stderr.log",
+        "bytes": 188,
+        "sha256": "c90e912c87326f52d038628e9d96445d23f51159b77577d23900e852641ed07e"
+      }
+    },
+    {
+      "label": "inference",
+      "argv": [
+        "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+        "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+        "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav"
+      ],
+      "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust",
+      "timeout_seconds": 60,
+      "started_unix": 1793987426.643894,
+      "exit_code": 0,
+      "timed_out": false,
+      "exception": null,
+      "cleanup": null,
+      "pid": 1291694,
+      "elapsed_seconds": 14.50675057596527,
+      "stdout": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/inference.stdout.log",
+        "bytes": 715,
+        "sha256": "0bfd1a9ad0817f17b8f5da1555dd75a29f3ad841774159c9571b22b5d34b5817"
+      },
+      "stderr": {
+        "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/aishell-human-pin-r1/inference.stderr.log",
+        "bytes": 28614,
+        "sha256": "1b9a732f3550df75b2683e62a9c177f28eb1cfbabcc3423203709b32d96e5705"
+      }
+    }
+  ],
+  "failure": null,
+  "execution_and_identity_checks_succeeded": true,
+  "quality_passed": null,
+  "inference_attempts": 1,
+  "automatic_retry": false,
+  "required_outer_policy": {
+    "deadline_seconds": 600,
+    "cpu_percent": 200,
+    "memory_bytes": 8589934592,
+    "nice": 10,
+    "enforcement": "caller-owned runtime job, not asserted by this Python file"
+  },
+  "effects": {
+    "physical_audio": false,
+    "new_hepta_owner_or_conversation": false,
+    "input_configuration_changes": false,
+    "download_commands_requested": false,
+    "cargo_offline": true
+  },
+  "exclusive_lock": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/qualification-owner-pin.lock",
+  "source_before_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "preceding_default": {
+    "evidence": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5",
+    "exit_code": 101,
+    "source_unchanged": true,
+    "scope": "A nonzero default remains failed; this diagnostic does not replace that result."
+  },
+  "environment_overrides": {
+    "CARGO_HOME": "/home/qian-qi/.cargo",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUSTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+    "RUSTDOC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+    "RUSTUP_TOOLCHAIN": "1.99.0",
+    "PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin:/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.local/bin:/home/qian-qi/.elan/bin:/home/qian-qi/.cargo/bin:/home/qian-qi/.local/bin:/opt/gradle/current/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.1:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin",
+    "PIPECAT_ONNX_RUNTIME": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "ORT_DYLIB_PATH": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+    "PIPECAT_SILERO_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/vad/data/silero_vad.onnx",
+    "PIPECAT_SMART_TURN_MODEL": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+    "CC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang",
+    "CXX": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/llvm-21/bin/clang++",
+    "LD_LIBRARY_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LIBCLANG_PATH": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/llvm21-ranged-r1/usr/lib/x86_64-linux-gnu",
+    "LK_CUSTOM_WEBRTC": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/native-ranged-r1/linux-x64-release",
+    "CARGO_TARGET_DIR": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin"
+  },
+  "versions": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+  },
+  "input_profile": {
+    "whisper_settings": {
+      "language": "zh",
+      "no_speech_probability": 0.4,
+      "initial_prompt": "以下是简体中文语音。",
+      "temperature": 0.0,
+      "translate_to_english": false,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      }
+    },
+    "wav_rate_hz": 16000,
+    "wav_channels": 1,
+    "wav_frames": 68496,
+    "wav_duration_seconds": 4.281,
+    "reference": "广州市房地产中介协会分析",
+    "reference_utf8_sha256": "401af2278283e9f79fb83d46d7b2ab8639f8c9947f924229194f8306e2fd73ee",
+    "reference_limit": "The independently retrieved pinned upstream data.list is in the repository evidence; this desktop run reads the matching original source-actual record.",
+    "qualification_scope": "Whisper subconfiguration only; old owner/grant/media-store fields are never admitted."
+  },
+  "files_before": {
+    "script": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8"
+    },
+    "manifest_helper": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    },
+    "preceding_default_gate": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/gate.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af"
+    },
+    "preceding_default_environment": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/environment.json",
+      "bytes": 2003,
+      "sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026"
+    },
+    "native-tool-cargo": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "bytes": 36160240,
+      "sha256": "e951141cc55a6cd7b9876d187bd30a3720e6086b99413af95e3b8de1cdd72f14"
+    },
+    "native-tool-rustc": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+      "bytes": 647376,
+      "sha256": "f3834d26669b03f6855fa54bd2381443123e860167bc0c7a8dd137e5cf6e5e4f"
+    },
+    "native-tool-rustdoc": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+      "bytes": 12568360,
+      "sha256": "a1321a60578a6b2e3e0ff428201b8618bbd9a9fbcd475c0d0f151bbf17cb0a9e"
+    },
+    "native-tool-rustfmt": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustfmt",
+      "bytes": 5255360,
+      "sha256": "a3ab6c445b26eda8d7bcfd5cc3f4b068dd7136af96822fd21378fc6fe8c2f2a3"
+    },
+    "native-tool-cargo-clippy": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo-clippy",
+      "bytes": 1223088,
+      "sha256": "2d6d576cdd70e29c1c6b6ae8026b35f6295b6bd67e6845552697440d9c3edf15"
+    },
+    "native-tool-clippy-driver": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/clippy-driver",
+      "bytes": 16256512,
+      "sha256": "ecf6d74d4e13728405acd3749bff486db899e793b5e3cd179ab663f7fe9d6fe6"
+    },
+    "stt_source": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-hepta/examples/stt_fixture.rs",
+      "bytes": 1997,
+      "sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a"
+    },
+    "config": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+      "bytes": 2702,
+      "sha256": "d6fcd5f1a04d0deae47fea2672b1c78707a1b2f136136faa33e05477cf77c1c6"
+    },
+    "model": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+      "bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+    },
+    "wav": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav",
+      "bytes": 137036,
+      "sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+    },
+    "provenance": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source-actual.json",
+      "bytes": 700,
+      "sha256": "1f67bee54368ee8319a2c4bdd0087b5141dfce32fcaf9430423de37d4c1c17e2"
+    },
+    "compiled_executable": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+      "bytes": 6128472,
+      "sha256": "290da17f12da82e1acf138eb272d603be919d9ad136e307c1ee5475fafba2a6c"
+    }
+  },
+  "compiler_artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-hepta#0.1.0",
+    "manifest_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-hepta/Cargo.toml",
+    "target": {
+      "kind": [
+        "example"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "stt_fixture",
+      "src_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-hepta/examples/stt_fixture.rs",
+      "edition": "2021",
+      "required-features": [
+        "local-speech"
+      ],
+      "doc": false,
+      "doctest": false,
+      "test": false
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default",
+      "local-speech",
+      "process-supervision"
+    ],
+    "filenames": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture"
+    ],
+    "executable": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+    "fresh": false
+  },
+  "inference_json": {
+    "load_us": 206838,
+    "model_sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    "scope": "offline_wav_stt_no_device_or_hepta_admission",
+    "settings": {
+      "initial_prompt": "以下是简体中文语音。",
+      "language": "zh",
+      "no_speech_probability": 0.4000000059604645,
+      "strategy": {
+        "beam_search": {
+          "beam_size": 5
+        }
+      },
+      "temperature": 0.0,
+      "translate_to_english": false
+    },
+    "stt_us": 5038608,
+    "transcript": {
+      "audio_duration_seconds": 4.281,
+      "language": "zh",
+      "segments": [
+        {
+          "end_ms": 30000,
+          "no_speech_probability": 1.928615711221937e-05,
+          "start_ms": 0,
+          "text": "廣州市佛地产中间协会分析。"
+        }
+      ],
+      "text": "廣州市佛地产中间协会分析。"
+    },
+    "wav_sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13"
+  },
+  "shutdown_evidence": {
+    "success_json_observed_after_awaited_shutdown": true,
+    "source_sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a",
+    "process_exit_code": 0,
+    "limit": "A successful fixed-source process with its original JSON; no device or production-owner shutdown is involved."
+  },
+  "runner_exit_before_integrity_checks": 0,
+  "files_after": {
+    "script": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/aishell-human-launch-pin-r1/desktop_aishell_pin_r1.py",
+      "bytes": 23707,
+      "sha256": "c67e13bf9e25fcbf4c8a1e12a40a5484053f282a3f1f3ee8422897208d92e6e8",
+      "unchanged": true
+    },
+    "manifest_helper": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+      "unchanged": true
+    },
+    "preceding_default_gate": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/gate.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af",
+      "unchanged": true
+    },
+    "preceding_default_environment": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/full-workspace-rust-1.99.0-r5/environment.json",
+      "bytes": 2003,
+      "sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026",
+      "unchanged": true
+    },
+    "native-tool-cargo": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "bytes": 36160240,
+      "sha256": "e951141cc55a6cd7b9876d187bd30a3720e6086b99413af95e3b8de1cdd72f14",
+      "unchanged": true
+    },
+    "native-tool-rustc": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustc",
+      "bytes": 647376,
+      "sha256": "f3834d26669b03f6855fa54bd2381443123e860167bc0c7a8dd137e5cf6e5e4f",
+      "unchanged": true
+    },
+    "native-tool-rustdoc": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustdoc",
+      "bytes": 12568360,
+      "sha256": "a1321a60578a6b2e3e0ff428201b8618bbd9a9fbcd475c0d0f151bbf17cb0a9e",
+      "unchanged": true
+    },
+    "native-tool-rustfmt": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/rustfmt",
+      "bytes": 5255360,
+      "sha256": "a3ab6c445b26eda8d7bcfd5cc3f4b068dd7136af96822fd21378fc6fe8c2f2a3",
+      "unchanged": true
+    },
+    "native-tool-cargo-clippy": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo-clippy",
+      "bytes": 1223088,
+      "sha256": "2d6d576cdd70e29c1c6b6ae8026b35f6295b6bd67e6845552697440d9c3edf15",
+      "unchanged": true
+    },
+    "native-tool-clippy-driver": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/clippy-driver",
+      "bytes": 16256512,
+      "sha256": "ecf6d74d4e13728405acd3749bff486db899e793b5e3cd179ab663f7fe9d6fe6",
+      "unchanged": true
+    },
+    "stt_source": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-hepta/examples/stt_fixture.rs",
+      "bytes": 1997,
+      "sha256": "80e684c447625fdb35401bf1622db9b6b47279bc46ed5b1283b901dc619ef25a",
+      "unchanged": true
+    },
+    "config": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/qualification-speech-release.json",
+      "bytes": 2702,
+      "sha256": "d6fcd5f1a04d0deae47fea2672b1c78707a1b2f136136faa33e05477cf77c1c6",
+      "unchanged": true
+    },
+    "model": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+      "bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "unchanged": true
+    },
+    "wav": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/aishell-human.wav",
+      "bytes": 137036,
+      "sha256": "2f9fc9c912bb71c85fb286cb88b599c81efb8f727c727a5ea8f6d1c89c55ac13",
+      "unchanged": true
+    },
+    "provenance": {
+      "path": "/home/qian-qi/workspace/hepta-hmi-20261029/human-chinese-source-actual.json",
+      "bytes": 700,
+      "sha256": "1f67bee54368ee8319a2c4bdd0087b5141dfce32fcaf9430423de37d4c1c17e2",
+      "unchanged": true
+    },
+    "compiled_executable": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/examples/stt_fixture",
+      "bytes": 6128472,
+      "sha256": "290da17f12da82e1acf138eb272d603be919d9ad136e307c1ee5475fafba2a6c",
+      "unchanged": true
+    }
+  },
+  "files_unchanged": true,
+  "source_after_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "source_unchanged": true,
+  "status_after": "",
+  "end_unix": 1793987442.330047,
+  "elapsed_seconds": 21.634362198179588,
+  "phase": "completed",
+  "wrapper_exit_code": 0
+}

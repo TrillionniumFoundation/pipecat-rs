@@ -1,0 +1,77 @@
+{
+  "schema": "pipecat-root-strict-preparation-verification-v1",
+  "created_utc": "2026-11-06T18:25:34.912376+00:00",
+  "scope": "Only immutable preparation originals; this does not claim a native command was executed. Actual execution is separately recorded.",
+  "original_count": 9,
+  "original_bytes": 109545,
+  "archive_bytes": 20164,
+  "archive_sha256": "64d5ad916f48a36fc86b4cb3065c0fae437eb9a6c01b7e4f32406b0927f7ceab",
+  "all_member_bytes_and_original_hashes_match": true,
+  "git_blob_sha1s_match": true,
+  "source_contract_exactly_equals_published_q_contract": true,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 7820,
+      "sha256": "481e9da2658f9ad4b447c67c547c1ddf545f7a4744ac8c9ef050a1c8035d47fa",
+      "blob": "251232c812cccb5b80aef16ea65c0565d0fb4a63",
+      "readback_equal": true
+    },
+    {
+      "path": "actual-source-contract.json",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3",
+      "blob": "d4ca7e16e8a94ad1c5841089d109ea31924b4a67",
+      "readback_equal": true
+    },
+    {
+      "path": "author-audit.json",
+      "bytes": 3416,
+      "sha256": "eef174387451642d14f0441dbc3a5d3a75bca34126da7575c80289dd02724709",
+      "blob": "02d4b826a3601aa840a087b20a9967bb7993a766",
+      "readback_equal": true
+    },
+    {
+      "path": "comparison-to-reviewed-moq.diff",
+      "bytes": 35445,
+      "sha256": "564d3571649d8c081bfb99b958f9770c28aa39159dbc5c92ce5769efa3c5aa32",
+      "blob": "a56af2c8cfe7873f5805b222c296226b1dc5a63d",
+      "readback_equal": true
+    },
+    {
+      "path": "independent-review.json",
+      "bytes": 5260,
+      "sha256": "f59c93d5259ca6fbacbc385cf329e04e8cad305b2e6dfa7a666d124dbe336da3",
+      "blob": "c771281d166650d168f2e9c0c35d9ef3d4c2533a",
+      "readback_equal": true
+    },
+    {
+      "path": "original-0cc-default-gate.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af",
+      "blob": "e84ed38b01b9df1aad33d7097dc6d4739976086d",
+      "readback_equal": true
+    },
+    {
+      "path": "original-0cc-environment.json",
+      "bytes": 2003,
+      "sha256": "2a85b9407e7990a522063635508efbfeb014e7298dafb82f4460e929acfee026",
+      "blob": "daa04dc7da026d21715c206304ed692e36da7790",
+      "readback_equal": true
+    },
+    {
+      "path": "original-0cc-strict-gate.json",
+      "bytes": 3214,
+      "sha256": "a9778f0aabaeeb9b6b12182978361f4d160c3f4b25dbe21e3ed2a8b09e89067e",
+      "blob": "4a3842bfc6f0925a0caaaf96cd8f46173eaadc12",
+      "readback_equal": true
+    },
+    {
+      "path": "reviewed-runner.py",
+      "bytes": 36029,
+      "sha256": "2d2a93bf3e82524e5c7822a0bd3fe42de1d8a361362cd3ee59dce1e90cb3352c",
+      "blob": "80dec6e691c7463cdfbde1a98c14809416d1e7d7",
+      "readback_equal": true
+    }
+  ]
+}

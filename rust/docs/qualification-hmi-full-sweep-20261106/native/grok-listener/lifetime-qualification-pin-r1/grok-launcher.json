@@ -1,0 +1,80 @@
+{
+  "schema": "pipecat-grok-lifetime-launch-v1",
+  "phase": "completed",
+  "start_unix": 1793983782.095913,
+  "files_before": [
+    {
+      "name": "desktop_grok_lifetime_pin_r1.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_lifetime_pin_r1.py",
+      "bytes": 21149,
+      "sha256": "df34ba548570a00fef92de695e1fdd4199c7b82c40ff457eb24b5a792ad57788"
+    },
+    {
+      "name": "desktop_final_gate_pin_v7_r5.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_final_gate_pin_v7_r5.py",
+      "bytes": 4938,
+      "sha256": "74e7ff4d5811247e0d49ee9f7c94939424430384c4975e9f41029c6fdd45d789"
+    },
+    {
+      "name": "source-contract.json",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/final-native-pin-r5/source-contract.json",
+      "bytes": 11841,
+      "sha256": "538da3b8b642c7e7afe771cda5045e02e742635cb6e30c08301c17b8eaa73fe8"
+    },
+    {
+      "name": "run_full_gate.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4"
+    }
+  ],
+  "files_after": [
+    {
+      "name": "desktop_grok_lifetime_pin_r1.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_lifetime_pin_r1.py",
+      "bytes": 21149,
+      "sha256": "df34ba548570a00fef92de695e1fdd4199c7b82c40ff457eb24b5a792ad57788",
+      "unchanged": true
+    },
+    {
+      "name": "desktop_final_gate_pin_v7_r5.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_final_gate_pin_v7_r5.py",
+      "bytes": 4938,
+      "sha256": "74e7ff4d5811247e0d49ee9f7c94939424430384c4975e9f41029c6fdd45d789",
+      "unchanged": true
+    },
+    {
+      "name": "source-contract.json",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/final-native-pin-r5/source-contract.json",
+      "bytes": 11841,
+      "sha256": "538da3b8b642c7e7afe771cda5045e02e742635cb6e30c08301c17b8eaa73fe8",
+      "unchanged": true
+    },
+    {
+      "name": "run_full_gate.py",
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/run_full_gate.py",
+      "bytes": 5176,
+      "sha256": "c6b639d10e4e0d48910d007a161d7b35e81744bd5e31f878f960bdcd452b47e4",
+      "unchanged": true
+    }
+  ],
+  "requested_resource_budget": {
+    "cpu_quota_percent": 800,
+    "memory_max_bytes": 34359738368,
+    "nice": 10,
+    "timeout_seconds": 900
+  },
+  "actual_argv": [
+    "/usr/bin/python3",
+    "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_grok_lifetime_pin_r1.py",
+    "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "6529eac0c56d6f3b0c6686d469d0305f672e516731b416b96afbd93f0dc76df5",
+    "538da3b8b642c7e7afe771cda5045e02e742635cb6e30c08301c17b8eaa73fe8"
+  ],
+  "cwd": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66",
+  "runner_exit_code": 0,
+  "files_unchanged": true,
+  "exit_code": 0,
+  "end_unix": 1793983861.5473382
+}

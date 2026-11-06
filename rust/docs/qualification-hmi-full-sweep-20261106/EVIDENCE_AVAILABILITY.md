@@ -18,8 +18,10 @@
 | 原 browser native gate | 本地曾观察 54 tests、native/WASM strict Clippy 与构建结果；远端实际使用的 bundle/资产哈希和打包收据已恢复 | 不把缺失的旧 native raw logs 写成可下载；新的 desktop 精确 pin 补资格独立记账 |
 | 新 browser Rust／WASM 补资格 | 新身份下的54 tests、native strict Clippy、首次WASM下载失败及独立r2 WASM strict Clippy，48原文本与完整export均已按原size/SHA交付 | r1整体失败不被两个native phase通过或r2成功覆盖；不重复计算54项，也不补写r1未落盘的tool binary前后摘要 |
 | Provider Cargo 产物探针 | 原执行脚本和当时完整打印 stdout 已有 Git blob，并恢复在本目录；最终 13 文件重建有独立 static validation 与完整新 SHA | 原临时 Cargo JSONL/stderr 当前不可取，不由脚本推导并补写成原 raw；重建是新检查点 |
-| 完整 workspace／SFU／模型原始输出 | 保存在 desktop 各原 evidence 目录，由同 job 身份对账并回收；主报告给出最终交付位置 | source manifest、runtime log、状态回执分开；构建 exit 0 不计为测试执行 |
+| 完整 workspace／SFU／模型原始输出 | 早前各包、首轮扩展112原件、最终矩阵147原件、最终模型131原件、终态runtime366原件与strict-Q35原件均按原size／SHA回收并交付；各自完整source maps另算canonical并核对 | 新日志不补成缺失历史raw；source manifest、runtime log、状态回执分开；构建exit0不计为测试执行 |
 
 原 fmt-all log 的已记录 SHA-256 为 `ef35829143bc20d4bf8bd7e0af896cd9562e060f762bdd8904c5da75e09079f0`；旧 37-file archive 的已记录 SHA 为 `e75fc1c2ecaa7defd8e922cb4fa933cb2eb95e77e75db9f600f120a786e8abf9`。这些仅是可供以后追回原文件时使用的记录，不证明当前文件可用。新的全 member 格式检查另记运行，不能修复原 `cargo fmt --all` 对 vendored path dependencies 的失败历史。
 
 第一次与第二次入口事件的说明来自该次工具返回和恢复观察；它不等同于环境 JSON 对物理 desktop 的模型／codec 探针。两个旧 UNKNOWN job 仍保留原 ID，对账失败不自动重放。整个恢复过程中没有根据摘要生成“原始日志”、修改锁定依赖、凭空建立生产 owner 或把旧 fixture generation 升为当前 grants。
+
+原模型131件包没有19个独立runner-execution.json，旧可读范围说明保持原样；最后runtime包另补19份receipt与95份伴随原件，已与原batch／gate逐项核对。最后两项已知cache回收／export job的终态对账也按其精确ID单独保存，不改变另外两个历史UNKNOWN。[补件独立核对](native/model-optins-pin-r2/runner-supplement-independent-review.json) · [已知job对账](native/known-earlier-jobs-final-reconciliation.json)

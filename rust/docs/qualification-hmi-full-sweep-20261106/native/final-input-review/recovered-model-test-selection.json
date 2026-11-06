@@ -1,0 +1,425 @@
+{
+  "scope": "Read-only source eligibility review against recovered 10/29 local assets; recommendations only, no execution, assertion change or asset download.",
+  "source_local_head": "9801ea99c34a978cb8fac9618828d7fbfb62e95a",
+  "source_sha256": {
+    "rust/crates/pipecat-piper/tests/adversarial_review.rs": "370e0337e69443df3da2b6abaf0b1b8f508ff96d52a9d9042b05f00b6d56b73f",
+    "rust/crates/pipecat-piper/tests/native_inference.rs": "a5b548d6c3388970d7029ebf5e5ed3d25fd93878b481f00b0958ca71813dcfbb",
+    "rust/crates/pipecat-piper/tests/native_pipeline.rs": "63565a6191983feb17e137b3a10da622ac1a2ca63995e3b3cb62c47a64bafc86",
+    "rust/crates/pipecat-runner/src/whisper.rs": "a833be8bcba4863169c1c3ea3f2a9b70f8079a67a75b5afa7d2e67df9c0e7f4f",
+    "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs": "d9f7e14225e0df18ce8bbce634266c235b08efb99accb85ed73ed06a5cdca2c6",
+    "rust/crates/pipecat-whisper/src/config.rs": "155851ebfab603efb112d7c443c01742444c1e9073cb2572e30d61ecf927f02d",
+    "rust/crates/pipecat-whisper/src/processor.rs": "6abc7e57b8d1e07e9a69c2ef10d26fad843f429845da9df20f997574f7a38c01",
+    "rust/crates/pipecat-whisper/src/service.rs": "2f0c7605e7638219331da614551ee3cacde87f85dd40ae5f66f5bf4689e437c1",
+    "rust/crates/pipecat-whisper/tests/review_contracts.rs": "f6b4a19e194ad2dc20e64ed4c5d6ff7adcbf6d183b59783417f9daf47e876156",
+    "rust/crates/pipecat-whisper/tests/usability.rs": "fb8209a7dcf842ea19a27fc586132fc596113e0b455e1aa1b5650a55f5e4b369"
+  },
+  "whisper_model": {
+    "env": "PIPECAT_WHISPER_MODEL",
+    "path": "/home/qian-qi/workspace/hepta-hmi-20261029/assets/whisper-base.bin",
+    "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    "kind": "multilingual; deliberately not substituted for English-only test contracts"
+  },
+  "recommended_whisper_cases": [
+    {
+      "package": "pipecat-whisper",
+      "target": "--lib",
+      "test_name": "service::tests::last_owner_drop_waits_for_inference_after_aborted_join_waiter",
+      "source_file": "rust/crates/pipecat-whisper/src/service.rs",
+      "line": 591,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--lib",
+        "service::tests::last_owner_drop_waits_for_inference_after_aborted_join_waiter",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test review_contracts",
+      "test_name": "drop_after_cancelled_join_does_not_depend_on_blocking_pool_capacity",
+      "source_file": "rust/crates/pipecat-whisper/tests/review_contracts.rs",
+      "line": 44,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "drop_after_cancelled_join_does_not_depend_on_blocking_pool_capacity",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test review_contracts",
+      "test_name": "vad_overflow_discards_remainder_through_stop",
+      "source_file": "rust/crates/pipecat-whisper/tests/review_contracts.rs",
+      "line": 88,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "vad_overflow_discards_remainder_through_stop",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test review_contracts",
+      "test_name": "rejected_oversized_frame_discards_the_active_prefix",
+      "source_file": "rust/crates/pipecat-whisper/tests/review_contracts.rs",
+      "line": 94,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "review_contracts",
+        "rejected_oversized_frame_discards_the_active_prefix",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test usability",
+      "test_name": "public_settings_recover_only_on_valid_effective_change",
+      "source_file": "rust/crates/pipecat-whisper/tests/usability.rs",
+      "line": 89,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "public_settings_recover_only_on_valid_effective_change",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test usability",
+      "test_name": "coalesced_recovery_discards_vad_prefix_and_tail",
+      "source_file": "rust/crates/pipecat-whisper/tests/usability.rs",
+      "line": 310,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "coalesced_recovery_discards_vad_prefix_and_tail",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-whisper",
+      "target": "--test usability",
+      "test_name": "terminal_frames_cleanup_while_unusable_without_flushing_speech",
+      "source_file": "rust/crates/pipecat-whisper/tests/usability.rs",
+      "line": 414,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-whisper",
+        "--test",
+        "usability",
+        "terminal_frames_cleanup_while_unusable_without_flushing_speech",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--lib",
+      "test_name": "whisper::tests::owned_health_gates_fixed_windows_and_shares_native_settings_recovery",
+      "source_file": "rust/crates/pipecat-runner/src/whisper.rs",
+      "line": 505,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::owned_health_gates_fixed_windows_and_shares_native_settings_recovery",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--lib",
+      "test_name": "whisper::tests::dropping_the_last_runner_handle_joins_the_session_native_owner",
+      "source_file": "rust/crates/pipecat-runner/src/whisper.rs",
+      "line": 692,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--lib",
+        "whisper::tests::dropping_the_last_runner_handle_joins_the_session_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--test whisper_lifecycle",
+      "test_name": "stopping_one_native_session_joins_only_its_owner_and_reuses_the_slot",
+      "source_file": "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs",
+      "line": 161,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "stopping_one_native_session_joins_only_its_owner_and_reuses_the_slot",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--test whisper_lifecycle",
+      "test_name": "later_initialization_failure_joins_the_native_model_before_releasing_admission",
+      "source_file": "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs",
+      "line": 225,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "later_initialization_failure_joins_the_native_model_before_releasing_admission",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--test whisper_lifecycle",
+      "test_name": "authorized_but_unready_client_expires_and_joins_its_native_owner",
+      "source_file": "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs",
+      "line": 273,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "authorized_but_unready_client_expires_and_joins_its_native_owner",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    },
+    {
+      "package": "pipecat-runner",
+      "target": "--test whisper_lifecycle",
+      "test_name": "rejected_browser_and_unused_session_expiry_never_start_native_workers",
+      "source_file": "rust/crates/pipecat-runner/tests/whisper_lifecycle.rs",
+      "line": 323,
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "pipecat-runner",
+        "--test",
+        "whisper_lifecycle",
+        "rejected_browser_and_unused_session_expiry_never_start_native_workers",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ]
+    }
+  ],
+  "execution_notes": [
+    "Reuse the qualified full-gate toolchain and exclusive target or invoke its matching compiled harness by exact name; commands are serialized, not whole-target blind --ignored.",
+    "All listed cases preserve their original expectations. Native load/inference failures must remain failures; do not alter text, language, assertion or deadline to force passing.",
+    "Only the model path is required by the 13 cases. They use generated PCM/owner lifecycle or test-owned loopback sockets; no JFK, physical device, provider credential or Hepta production identity.",
+    "The rejected-browser case deliberately verifies no native model starts; count it as admission/cleanup, not inference."
+  ],
+  "piper": {
+    "eligible_original_genuine_model_cases_already_scheduled": [
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::native_cancel_drop_then_reload_preserves_global_owner"
+      },
+      {
+        "target": "--test native_inference",
+        "test_name": "genuine_cpu_inference_cancellation_resampling_and_global_owner"
+      },
+      {
+        "target": "--test native_inference",
+        "test_name": "malformed_model_config_and_output_bounds_fail_explicitly"
+      },
+      {
+        "target": "--test native_pipeline",
+        "test_name": "genuine_native_long_utterance_crosses_default_capacity_slow_output_exactly"
+      }
+    ],
+    "manifest": "PIPECAT_PIPER_MANIFEST must deserialize directly as PiperConfig. Use the identical hash-bound piper subobject from the task-private Chinese configuration; a whole LocalSpeechConfig is not a PiperConfig.",
+    "voice_limit": "Original test text is English but these four cases do not assert an English-only model identity or transcript. The recovered zh voice is a valid candidate for the original ownership/cancellation/PCM-bound assertions; any actual failure remains recorded, and passing does not qualify English or Chinese speech quality.",
+    "synthetic_onnx_cases_input_eligible": [
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::model_inputs_preserve_normalized_ids_scales_and_speaker_snapshots"
+      },
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::model_hash_mismatch_and_changed_runtime_identity_fail_closed"
+      },
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::completed_single_slot_request_can_be_followed_by_immediate_submission"
+      },
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::quiet_audio_normalization_matches_piper_13_and_zero_guard"
+      },
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::finite_nonempty_output_and_resampled_sample_bounds_are_enforced"
+      },
+      {
+        "target": "--test adversarial_review",
+        "test_name": "native::dropped_drain_waiter_does_not_lose_join_or_accepted_result"
+      }
+    ],
+    "synthetic_onnx_note": "These six do not lack external ONNX fixture downloads: fixture_config, constant_model and probe_model build small test-owned ONNX/config bytes in Rust, retain only the supplied pinned ORT runtime, and set espeak=None. They are real-runtime invariant tests, not genuine speech. Do not add all six merely to increase counts; dropped_drain_waiter_does_not_lose_join_or_accepted_result is the directly relevant optional owner-join regression if the parent chooses it."
+  },
+  "excluded_or_out_of_scope": [
+    {
+      "scope": "Whisper native_inference all 7, Whisper usability coalesced_recovery_retires_active_and_queued_native_results, runner lib final_partial_window_includes_the_normalizer_tail_exactly_once, runner whisper_lifecycle stop/idle native_audio and vad_pre_roll 3, runner whisper_flow 2",
+      "count": 14,
+      "reason": "Require PIPECAT_WHISPER_FIXTURE upstream JFK WAV, not among the supplied verified input set. No replacement with Chinese TTS or synthetic silence. The first native_inference case additionally asserts !model.is_multilingual()."
+    },
+    {
+      "scope": "pipecat-whisper --test usability unusable_audio_passthrough_controls_and_targeted_recovery",
+      "count": 1,
+      "reason": "Hidden English-only expectation: proposes language es then requires InvalidRequest and unchanged en settings. config.rs validate_model rejects es only for non-multilingual models; multilingual recovered model cannot satisfy the unchanged contract. Do not run as though any GGML suffices."
+    },
+    {
+      "scope": "Moonshine native_inference",
+      "count": 8,
+      "reason": "Missing supplied Moonshine native wheel libraries, small-en/tiny-en bundle JSON/model assets and beckett.wav. Whisper/Piper cannot substitute."
+    },
+    {
+      "scope": "RNNoise native tests",
+      "count": 5,
+      "reason": "Supplied asset set does not include the pinned RNNoise library/direct-C reference PCM or separately compiled synthetic ABI shared-library fixtures. ORT/Piper synthetic ONNX generation does not supply these."
+    },
+    {
+      "scope": "pipecat-project four independent generated-app builds; network-bus local-route case",
+      "count": 5,
+      "reason": "Not blocked by a speech model; these require their own build/cache/route prerequisites and are outside this narrow HMI model-owner follow-through. No blind execution to add counts."
+    },
+    {
+      "scope": "pipecat-speech native Silero case",
+      "count": 1,
+      "reason": "Separate Silero/runtime/fixture composition test; no Whisper/Piper substitution. The environment report independently has a recovered Silero hash, but this narrow request supplied Whisper/Piper/ORT/eSpeak and the task is owner lifecycle; do not silently expand the run."
+    },
+    {
+      "scope": "Chinese synthetic 1 + local SFU 3 + physical output 1 + parent_guard_helper 1",
+      "count": 6,
+      "reason": "Explicitly excluded from this supplemental selection: the first four have separate parent plans, physical output remains outside execution, and helper is invoked by ordinary process tests."
+    }
+  ]
+}

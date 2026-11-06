@@ -1,0 +1,75 @@
+{
+  "schema": "pipecat-strict-after-moq-author-static-audit-v1",
+  "scope": "AST and source-byte inspection only; no helper import, Cargo/native/model invocation or remote call.",
+  "runner": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/task-helpers/desktop_strict_clippy_after_moq_pin_r1.py",
+    "bytes": 36029,
+    "sha256": "2d2a93bf3e82524e5c7822a0bd3fe42de1d8a361362cd3ee59dce1e90cb3352c",
+    "git_blob_sha1": "80dec6e691c7463cdfbde1a98c14809416d1e7d7"
+  },
+  "reviewed_moq_baseline": {
+    "bytes": 33499,
+    "sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af"
+  },
+  "unchanged_top_level_function_ast": {
+    "Failed": true,
+    "identity": true,
+    "relative_path": true,
+    "group_probe": true,
+    "contain": true
+  },
+  "unchanged_nested_function_ast": {
+    "save": true,
+    "budget": true,
+    "observe": true,
+    "require_process": true,
+    "git_read": true,
+    "snapshot": true
+  },
+  "changed_common_functions": {
+    "run_owned": "Removes unused repeat-round branch; retains the same Popen, log identity, timeout and PGID containment; message describes compile/format scope.",
+    "stopped_phase": "Preserves first_failed_phase and last_failed_phase separately so a failed postcheck does not erase the original failing phase."
+  },
+  "actual_root_contract": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/final-diagnostic-source-freeze-r1/source-contract.json",
+    "bytes": 11511,
+    "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3",
+    "head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+    "tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+    "canonical": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+    "changed_paths": 102,
+    "source_sha256": {
+      "rust/crates/pipecat-evals/src/simulation/quality.rs": "4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780",
+      "rust/crates/pipecat-moq/src/tests.rs": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219"
+    }
+  },
+  "original_strict_gate": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/final-matrix-pin-r1/originals/evidence/strict-clippy-pin-r2/gate.json",
+    "bytes": 3214,
+    "sha256": "a9778f0aabaeeb9b6b12182978361f4d160c3f4b25dbe21e3ed2a8b09e89067e",
+    "exit_code": 101,
+    "argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/tools/rust-1.99.0-r1/bin/cargo",
+      "clippy",
+      "--workspace",
+      "--all-targets",
+      "--all-features",
+      "--locked",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exact_original_argv_match": true
+  },
+  "native_overrides_match_original_strict": true,
+  "official_original_build_environment_whitelist_reused": true,
+  "original_default_is_not_claimed_as_Q_qualification": true,
+  "runtime_deadlines": {
+    "inner_all_phases_seconds": 870,
+    "outer_job_seconds": 900,
+    "cleanup_postflight_reserve_seconds": 15
+  },
+  "format_scope": "Two leaf files, --check --edition 2021 --config skip_children=true; workspace and both package editions statically read as 2021.",
+  "failure_accounting": "Normal formatter nonzero remains recorded and does not suppress the single strict command; phase timeout/termination/cleanup/integrity aborts further admission. Original process, phase and final wrapper exits remain separate.",
+  "execution_state": "Prepared and not executed."
+}

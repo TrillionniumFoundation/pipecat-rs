@@ -1,0 +1,14 @@
+{
+  "schema": "pipecat-root-cache-failure-raw-verification-v1",
+  "created_utc": "2026-11-06T17:42:30.459172+00:00",
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "full_command_raw_sha256": "32f0935dbbd2910f61cfbfbec89b7d6a807f60d27e734c45f87ea540f5b213ad",
+  "slice_sha256": "7199047625672730f71f39a16f02bba9f824b722a988b893924af26a977608d5",
+  "slice_bytes": 23963,
+  "raw_start_byte": 213785,
+  "raw_end_byte": 237748,
+  "exact_full_raw_slice_verified": true,
+  "two_original_lookup_timeout_panics_verified": true,
+  "original_source_review_preserved": true,
+  "historical_pending_raw_text_in_source_review_is_not_rewritten": true
+}

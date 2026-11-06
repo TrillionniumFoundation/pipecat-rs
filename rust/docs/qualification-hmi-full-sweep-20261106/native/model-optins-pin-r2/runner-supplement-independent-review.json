@@ -1,0 +1,187 @@
+{
+  "schema": "pipecat-model-runner-supplement-independent-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793989924.7459803,
+  "scope": "Read-only reconciliation of the newly recovered 19 original per-command wrapper receipts and their 95 companion files. No native execution, new model observation, archive modification or source change.",
+  "verdict": "All 19 original runner receipts agree with the previously reviewed batch and gates.",
+  "source": {
+    "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+    "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+    "canonical_source_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+  },
+  "supplement_manifest": {
+    "path": "workspace-evidence/final-runtime-pin-r1/original-files-manifest.json",
+    "bytes": 120116,
+    "sha256": "e0fb4a353eb14b72cb6bd962105fbc2f71f356f7a56e4dbe21177fb1b3250611"
+  },
+  "supplement_archive_observed_identity": {
+    "path": "workspace-evidence/final-runtime-pin-r1.tar.xz",
+    "bytes": 294272,
+    "sha256": "846769a82c14822c074209a58e9e33300b921dd8494833dcd9b68dd0490a1eb5"
+  },
+  "prior_batch": {
+    "path": "workspace-evidence/model-optins-pin-r2/originals/evidence/optins-batch-pin-r2/batch.json",
+    "bytes": 27672,
+    "sha256": "0d3ccc453e91f204ca8e339d0a8fb21c9c3a03a124374a3155661e3cfc5f2a43"
+  },
+  "prior_full_review": {
+    "path": "workspace-evidence/model-optins-pin-r2/independent-review.json",
+    "bytes": 48821,
+    "sha256": "2c3d89c0b4a256e855885dcb574c3e54f8b9432e6e1cfbadaaa2f56d7d2ba503"
+  },
+  "reviewed_counts": {
+    "wrapper_receipts": 19,
+    "companion_files": 95,
+    "selected_original_files_rehashed_against_manifest": 114,
+    "selected_original_bytes": 438967,
+    "existing_cases_confirmed": 21,
+    "new_runtime_cases": 0
+  },
+  "checks": {
+    "request_argv_equals_original_gate_and_receipt": true,
+    "request_environment_equals_original_gate": true,
+    "exact_source_head_tree_paths_and_canonical": true,
+    "expected_passed_and_exact_selection": true,
+    "phase_completed_and_all_five_exit_fields_zero": true,
+    "runner_and_wrapper_original_copies_equal_declared_pre_post_hashes": true,
+    "actual_batch_script_hashes_match": true,
+    "all_original_default_failure_101_receipts_retained": true
+  },
+  "common_scripts": {
+    "runner": {
+      "bytes": 4657,
+      "sha256": "8654269c9b24b6ee828d71a4827f54e3366de6177f760471644b72fea4749f35"
+    },
+    "wrapper": {
+      "bytes": 12714,
+      "sha256": "ec7df29d960309ec486ed403636d1151c8ac35a86842bbb692a08ddbd5b2eba6"
+    }
+  },
+  "stages": [
+    {
+      "stage": "local-sfu",
+      "runner_receipt_bytes": 2652,
+      "runner_receipt_sha256": "95b9a0b520af040423f2060ed5b09d638c58050aeea739146a8127d3c12e47e0",
+      "original_gate_sha256": "68e605d5c69b3afbefe2aafdc0ac01aa04ee0d9817a4310e1ab7ae0c89e6bf17"
+    },
+    {
+      "stage": "chinese-synthetic",
+      "runner_receipt_bytes": 2809,
+      "runner_receipt_sha256": "508b3d6b7bf9254f539c43b6dea7c2d26cc15812daff6bc6b376506ab51857ce",
+      "original_gate_sha256": "b1f5969587bb27a0e6ae9c35d0a1dace06692426b3c1e66694e24358de7df04d"
+    },
+    {
+      "stage": "piper-genuine-owner",
+      "runner_receipt_bytes": 2821,
+      "runner_receipt_sha256": "572ba884de18f4249b8fe0301064ef791a473b5d40d6206c3fa77f523d1b0c24",
+      "original_gate_sha256": "7a148e38a48110290ec3116c809290d053802f539a03edd643625af6e5efba4b"
+    },
+    {
+      "stage": "piper-invalid-bounds",
+      "runner_receipt_bytes": 2819,
+      "runner_receipt_sha256": "c4d8b3af1f3c14d35a6d44c38c9edf910a632ac396cfa26bd4381ff925534491",
+      "original_gate_sha256": "d772fcc30f2cc505466db23a84c3bb456f17a4d3189df29b857b29947c9204cc"
+    },
+    {
+      "stage": "piper-cancel-reload",
+      "runner_receipt_bytes": 2822,
+      "runner_receipt_sha256": "908ffc500d9efb6f9cab7899725e6ed0649e727980f7f8762bba59238fcb1d43",
+      "original_gate_sha256": "89e194f9f2f7e3f5bc1c8012b225fd87240b51c62560cd66c21a7e0e8294e657"
+    },
+    {
+      "stage": "piper-long-pipeline",
+      "runner_receipt_bytes": 2832,
+      "runner_receipt_sha256": "a123cfc762e93bf74f03b7a3dcf204046a675c382db2a13cb490ca1baf675cf3",
+      "original_gate_sha256": "b19969db27dc52bf53ee49b686f2d0ab8930f5ab0573750e9ea28cd715cd1191"
+    },
+    {
+      "stage": "whisper-owner-01",
+      "runner_receipt_bytes": 2801,
+      "runner_receipt_sha256": "21155ccbabf3155cc47b5e241a257a38c1db7ae12dd1a43342481db48611e04c",
+      "original_gate_sha256": "5e33e7bd3200c06350d5c5b030dcb5776173f50ecd9d5c417b3a49837bc0b251"
+    },
+    {
+      "stage": "whisper-owner-02",
+      "runner_receipt_bytes": 2816,
+      "runner_receipt_sha256": "7df19165aa7796f59069f634c796f956d3c55966608bdb9aaf718daf53779bdb",
+      "original_gate_sha256": "faaba16d019d97ac5316c83c4dc82074a53f9a0d06515b0ff6b1012b5a5be69b"
+    },
+    {
+      "stage": "whisper-owner-03",
+      "runner_receipt_bytes": 2793,
+      "runner_receipt_sha256": "32a56b6b34c92b9fb4ee4d62a5baf5a2546659e2928ff423196161de21596d84",
+      "original_gate_sha256": "340e3cd596c45847b3c7984207ee5c155b3f1a154c422d9126d93dc62154e308"
+    },
+    {
+      "stage": "whisper-owner-04",
+      "runner_receipt_bytes": 2800,
+      "runner_receipt_sha256": "92d88c5f5d8f9e69901c51418208ade15bfd6389d8c43d364a1c92eb3f9815af",
+      "original_gate_sha256": "88703e821688e8d1f2d8dc7918459d81bba78b41c15a3dfdd7edd2237b61e8d5"
+    },
+    {
+      "stage": "whisper-owner-05",
+      "runner_receipt_bytes": 2796,
+      "runner_receipt_sha256": "d3678cfda7ae6a5e632de78fd827299c4d5b2599dab17c91a728ffc8aca61905",
+      "original_gate_sha256": "6e8b7d57bcb5ba34979c16eac3bd4841a6f1ce8121745ec40d1e2e634b419189"
+    },
+    {
+      "stage": "whisper-owner-06",
+      "runner_receipt_bytes": 2789,
+      "runner_receipt_sha256": "f0279f20db56d3cbb1a04149e8f7131341ffa96da9002b726babd9ea9249e4db",
+      "original_gate_sha256": "41e50a5864e1edf4d051cc45623fd5efdfd58fc062380c12875bd3ea313cfcea"
+    },
+    {
+      "stage": "whisper-owner-07",
+      "runner_receipt_bytes": 2804,
+      "runner_receipt_sha256": "c41e1ea2ea65d3b690be6342791c92338b75bc46e4853f22d5cf928cd0bc82fa",
+      "original_gate_sha256": "3e549ebdc1d7b1a7d833e89b46edd380bd2e541d36720335d192ed3b5e75d686"
+    },
+    {
+      "stage": "whisper-owner-08",
+      "runner_receipt_bytes": 2807,
+      "runner_receipt_sha256": "2687f549cc03a11e5c5d6b33913ca0642c9c36b1148dd40b8ab1ffdfe1baa768",
+      "original_gate_sha256": "4fccc98a80ae4668dd812ca553b510f168737a9ab13b595fd9d33e06cae09eab"
+    },
+    {
+      "stage": "whisper-owner-09",
+      "runner_receipt_bytes": 2801,
+      "runner_receipt_sha256": "c8f9a3d3a7d48d18a800a5bd5009cd39f3546b0ae32fb2a821bede76220f7014",
+      "original_gate_sha256": "c474454780eb2474ee35b294d4a399371bd464b7e447f91ad5894036b0f47a7b"
+    },
+    {
+      "stage": "whisper-owner-10",
+      "runner_receipt_bytes": 2817,
+      "runner_receipt_sha256": "ae160b3b93ccd23252c42b9b04aa2dbecc0986b1238618b44a29b2bab8d50310",
+      "original_gate_sha256": "afd6da21a7ea6b789a99674b71f49900d05bef69c9550208415d85b8e490b92f"
+    },
+    {
+      "stage": "whisper-owner-11",
+      "runner_receipt_bytes": 2827,
+      "runner_receipt_sha256": "f828806d1b6f5f8ea32085bbb354edf5aff91122b8056a522df03701dd431185",
+      "original_gate_sha256": "af7b0867505e5b4be02cbb9e1d2131ca0adef49be8f26c06ae8e594869eb56ee"
+    },
+    {
+      "stage": "whisper-owner-12",
+      "runner_receipt_bytes": 2813,
+      "runner_receipt_sha256": "057a5691b8ff9ed6543fc6027139445aa22c301e8b40f75bd24b38ae01d2dbd5",
+      "original_gate_sha256": "28c69548209ddacee88cf3198746fd104b75c2938dde15c43171a0c8d0ef6f70"
+    },
+    {
+      "stage": "whisper-owner-13",
+      "runner_receipt_bytes": 2818,
+      "runner_receipt_sha256": "57502424e1eec3db9fd4e28bf1f669933c70cae53e34dc30d3d98a64b5667baf",
+      "original_gate_sha256": "4ddf2e00194a103f95fd33ef4185ed16f9a6bc615cb71005e4cdfea5a3526b54"
+    }
+  ],
+  "availability_accounting": {
+    "old_archive_original_count": 131,
+    "old_archive_per_command_runner_execution_count": 0,
+    "old_review_bytes_unchanged": true,
+    "new_archive_declared_original_count": 366,
+    "selected_supplement_scope": "Exactly the 19 known requests/{stage}-pin-r2 directories, each with runner-execution.json, argv.json, environment.json, preceding-default.json and the two executed script copies.",
+    "other_new_archive_members_independently_reviewed_here": false,
+    "old_scope_statement": "The earlier review correctly states that those per-command receipts were absent from the original 131-file archive. This later supplement closes their delivery gap without rewriting that historical review or adding tests."
+  },
+  "lifecycle_and_quality_limit": "These recovered wrapper receipts corroborate command identity and recorded exits; they do not add per-child cleanup observations, transcript quality thresholds, audible playback, live device permissions or production owner admission beyond the previously reviewed original evidence.",
+  "per_stage_results": "Every listed stage is completed; runner, wrapper and original command exits are all 0. Exact selection is 3 cases for local-sfu and 1 for each remaining stage. All retain source0cc unchanged, exact script copies/pre/post hashes and the preceding default exit101."
+}

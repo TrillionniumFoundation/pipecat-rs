@@ -1,0 +1,39 @@
+{
+  "schema": "pipecat-quality-ledger-clippy-candidate-v1",
+  "created_utc": "2026-11-06T17:30:54.203862+00:00",
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "path": "rust/crates/pipecat-evals/src/simulation/quality.rs",
+  "original": {
+    "bytes": 10154,
+    "sha256": "a0f106f04631889c2520eef07413e39dc420cc7dbcb0b8aa57b278961c4ecb1d",
+    "git_blob_sha1": "5898aa68fdd431f63ac1181ceeb76f9feb1f8931"
+  },
+  "candidate": {
+    "bytes": 10190,
+    "sha256": "4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780",
+    "git_blob_sha1": "b53f9272a5938144908e84ff6351467c14b64da9"
+  },
+  "patch": {
+    "bytes": 597,
+    "sha256": "a056743ad98502520129d9e4dbaba43961b984216cb59ea9ee140af900dfa400",
+    "git_blob_sha1": "861f8a765fe88279d1e596ffd79999faadf27483"
+  },
+  "original_failure": {
+    "command": "strict all-features all-targets Clippy under -D warnings",
+    "lint": "clippy::field_reassign_with_default",
+    "reported_source_line": 218,
+    "raw_block_state": "Agent original line-rendered view available; exact original bytes pending the requested terminal-stage export."
+  },
+  "change": "Use an explicit entries field with a derived-default struct update in the one existing 2048-entry limit fixture.",
+  "checks": {
+    "unique_original_replacement": true,
+    "reverse_replacement_exact_original": true,
+    "default_derive_is_present": true,
+    "product_implementation_bytes_unchanged": true,
+    "original_2048_count_unchanged": true,
+    "test_names_and_assertions_unchanged": true,
+    "no_lint_allow_added": true
+  },
+  "reasoning": "QualityLedger derives Default over Vec, String, usize and bool fields. The fixture retains the same 2048 JSON entries and all other default field values; its exact subsequent user(...).is_err() oracle is unchanged.",
+  "state": "Reviewed candidate only, not applied. Active model/WebRTC/AISHELL/C3 qualification remains on unchanged0cc."
+}

@@ -1,0 +1,81 @@
+{
+  "schema": "pipecat-strict-after-moq-independent-static-review-v1",
+  "reviewer": "/root/hmi_runtime",
+  "created_unix": 1793988612.6607785,
+  "scope": "Full read-only source and existing-receipt review. No remote call, helper import, Cargo, native test, model or Clippy execution; no repository source changes.",
+  "verdict": "No blocking issue found in the frozen prepared runner. Actual launch and qualification results are separate.",
+  "runner": {
+    "path": "workspace-evidence/task-helpers/desktop_strict_clippy_after_moq_pin_r1.py",
+    "bytes": 36029,
+    "sha256": "2d2a93bf3e82524e5c7822a0bd3fe42de1d8a361362cd3ee59dce1e90cb3352c"
+  },
+  "source": {
+    "head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+    "tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+    "canonical_source_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d",
+    "contract_sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3",
+    "published_changed_paths_independently_compared": 102,
+    "only_non_documentation_changes": [
+      "rust/crates/pipecat-moq/src/tests.rs",
+      "rust/crates/pipecat-evals/src/simulation/quality.rs"
+    ],
+    "two_reviewed_git_source_sha256_matches": true
+  },
+  "source_chain_review": [
+    "The same-Q MoQ receipt must have terminal phase, an actual integer exit, intact complete source map, head/tree/status, containment/log integrity and before/after file identities. Every started process must have a retained original exit and successful owned-group cleanup.",
+    "The actual C3 reference.json schema and its six preceding stage names and phases were read. C3 source0cc, raw identity, native process count/cleanup and original comparison failure remain separate from Q. The exact six original receipt files are rehashed against the already admitted C3 record.",
+    "Original default and strict gate bytes were independently rehashed and parsed: both original exit101 remain historical evidence. Their source0cc is not presented as Q workspace execution.",
+    "Whole Q Git changed-path list and two reviewed source bytes were checked through local immutable Git objects, in addition to checking contract JSON values."
+  ],
+  "command_environment": {
+    "original_strict_gate_bytes": 3214,
+    "original_strict_gate_sha256": "a9778f0aabaeeb9b6b12182978361f4d160c3f4b25dbe21e3ed2a8b09e89067e",
+    "strict_argv_tail": [
+      "clippy",
+      "--workspace",
+      "--all-targets",
+      "--all-features",
+      "--locked",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exact_original_argv_tail_verified": true,
+    "native_overrides_equal_original_strict": true,
+    "selected_environment_projection_equal_original_default": true,
+    "limit": "Exact recorded overrides and the existing whitelist are compared; this is not a proof about an unrecorded complete historical environment.",
+    "rust_ready_sha256": "0d8da014686ec0eb66874e90527e668836830f873a3ac98f43de4451fe7bf3c9",
+    "tool_identity": "Four official ready.json executable identities are required; rustdoc/clippy-driver, selected compilers, Python, Git and the runner/helper are also observed before and after."
+  },
+  "ownership_and_failure_review": {
+    "one_owner_lock": true,
+    "no_nested_lock_taking_inner_runner": true,
+    "inner_seconds": 870,
+    "outer_required_seconds": 900,
+    "reserve_seconds": 15,
+    "ordinary_formatter_failure": "Each of two leaf format checks retains its original nonzero result; the one unchanged strict Clippy command may still run, and the overall result remains nonzero.",
+    "unsafe_phase": "Launch exception, timeout, signal exit, unresolved containment or raw-log integrity stops new qualification phase admission. Source/script/tool identity failures produce integrity125.",
+    "exit_accounting": "Original pre-cleanup and final process exit, phase exit, containment/log-integrity exit, wrapper exit and overall result remain separate. first_failed_phase and last_failed_phase preserve distinct failures.",
+    "cleanup": "Only newly owned process groups may receive TERM2s and KILL1s. The recorded actual leader reap and non-atomic final group absence do not claim all descendants were individually joined.",
+    "final_checks": "Whole-source snapshot, head/tree/status, every observed file and elapsed budget are checked before final exit; the elapsed budget is checked again after result persistence."
+  },
+  "independent_ast_verification": {
+    "reviewed_moq_baseline_sha256": "bfbba41f328657e6db1bc3498a0636d2209e84ae163ff51c0912bc277d94e8af",
+    "identical_common_definitions": [
+      "Failed",
+      "identity",
+      "relative_path",
+      "group_probe",
+      "contain",
+      "main.save",
+      "main.budget",
+      "main.observe",
+      "main.require_process",
+      "main.git_read",
+      "main.snapshot"
+    ],
+    "run_owned_change": "Removed the unused repeat-round branch and adapted scope wording; launch/owned-group/timeout/raw-log lifecycle was read in full.",
+    "stopped_phase_change": "Stores first and last failed phase independently."
+  },
+  "observed_limit": "This is static review of an authorized bounded launcher. It is not a Clippy pass, a Q full-workspace runtime gate, a model inference, or production HMI qualification."
+}

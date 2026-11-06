@@ -1,0 +1,28 @@
+{
+  "schema": "pipecat-root-moq-diagnostic-review-v1",
+  "created_utc": "2026-11-06T17:12:36.920317+00:00",
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "current_published_docs_head": "5d3f6e1a25d64655c2e6d66e7b8c649a1cc98d7f",
+  "source_file": "rust/crates/pipecat-moq/src/tests.rs",
+  "candidate": {
+    "path": "tests.rs",
+    "bytes": 28377,
+    "sha256": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219",
+    "git_blob_sha1": "deb00799ba0f38c6eaa12a65977df5a2dca9eda2"
+  },
+  "checks": {
+    "source_sha256_matches": true,
+    "patch_check_exit_code": 0,
+    "all_other_source_bytes_unchanged": true,
+    "original_expected_result_exact": true,
+    "same_two_awaits": true,
+    "original_failure_slice_exact_in_observed_runtime_tail": true
+  },
+  "state": "Reviewed candidate only, not applied or executed. Existing native matrix remains on unchanged source0cc16.",
+  "limits": [
+    "The original r5 result variant is absent from its failure output and remains unknown.",
+    "Added elapsed spans the whole connect and any cleanup; it is not an isolated peer-announcement delay.",
+    "accepting.is_finished is a non-atomic task termination observation, not a stage witness.",
+    "A later original-source pass does not erase or attribute the r5 failure."
+  ]
+}

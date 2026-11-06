@@ -1,0 +1,19 @@
+{
+  "schema": "pipecat-root-moq-preparation-verification-v1",
+  "archive": {
+    "file": "preparation-originals.tar.xz",
+    "bytes": 29664,
+    "sha256": "a57b416a38815c275b64402c7e0f1de1db47235775e01bef90eaf22557f5a0d7"
+  },
+  "original_count": 15,
+  "original_bytes": 149168,
+  "archive_member_count": 16,
+  "all_original_hashes_git_ids_and_archive_bytes_verified": true,
+  "actual_registry_client_exact_official_source": true,
+  "actual_registry_commit": "b00be0ffc3734addcdd5e6ad4b348ae055e70957",
+  "client_sha256": "3b8d7eda5f0f686febefceb4417dd06510ce06d54c1ccd572e721fb815fe9407",
+  "original_full_moq_target_exact": true,
+  "original_moq_target_bytes": 8165,
+  "original_moq_target_sha256": "8a1fc305fac84714d2124c04c1af1aaeba6261e09c7214822d20e58a3e843c65",
+  "scope": "Read-only preparation review; no new harness or product qualification. Original r5 actual Result remains unknown."
+}

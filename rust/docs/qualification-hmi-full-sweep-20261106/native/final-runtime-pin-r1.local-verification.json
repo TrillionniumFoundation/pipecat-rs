@@ -1,0 +1,68 @@
+{
+  "archive_path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/final-runtime-pin-r1.tar.xz",
+  "archive_bytes": 294272,
+  "archive_sha256": "846769a82c14822c074209a58e9e33300b921dd8494833dcd9b68dd0490a1eb5",
+  "original_count": 366,
+  "original_bytes": 10683065,
+  "tar_members": 369,
+  "tar_member_bytes": 10852304,
+  "source_maps": [
+    {
+      "name": "evidence/aishell-human-pin-r1/source-after.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/aishell-human-pin-r1/source-before.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/source-after.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/final-diagnostic-source-preparation-r1/source-before.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-after.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/moq-diagnostic-pin-r1/source-before.json",
+      "canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/source-after.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/smart-turn-wheel-reference-pin-r3/source-before.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/source-after.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/webrtc-stress-pin-r1/source-before.json",
+      "canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    }
+  ],
+  "all_original_bytes_verified": true,
+  "excluded_retained_artifacts": [
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "bytes": 16019285,
+      "sha256": "9a04aafb802c1e5573ba4552f8babcb5021b041eb4cfa802c9b7644ca3510eca",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    },
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "bytes": 20571088,
+      "sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    }
+  ]
+}

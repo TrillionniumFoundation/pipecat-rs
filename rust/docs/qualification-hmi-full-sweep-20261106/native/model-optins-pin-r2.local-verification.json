@@ -1,0 +1,172 @@
+{
+  "archive": "/workspace/scratch/f9f576cc6c66/workspace-evidence/model-optins-pin-r2.tar.xz",
+  "bytes": 202460,
+  "sha256": "73584f7779a7063e35d1288cfc65c5691b4057d175d11abbdbf5e2dbba19ffe2",
+  "tar_member_count": 134,
+  "tar_member_bytes": 21100078,
+  "original_count": 131,
+  "original_bytes": 21020427,
+  "canonical_source_maps": [
+    {
+      "name": "evidence/chinese-synthetic-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/chinese-synthetic-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/local-sfu-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/local-sfu-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/model-inputs-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/model-inputs-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-cancel-reload-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-cancel-reload-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-genuine-owner-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-genuine-owner-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-invalid-bounds-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-invalid-bounds-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-long-pipeline-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/piper-long-pipeline-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-01-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-01-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-02-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-02-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-03-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-03-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-04-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-04-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-05-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-05-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-06-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-06-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-07-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-07-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-08-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-08-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-09-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-09-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-10-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-10-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-11-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-11-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-12-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-12-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-13-pin-r2/source-after.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    },
+    {
+      "name": "evidence/whisper-owner-13-pin-r2/source-before.json",
+      "sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535"
+    }
+  ],
+  "all_original_bytes_verified": true
+}

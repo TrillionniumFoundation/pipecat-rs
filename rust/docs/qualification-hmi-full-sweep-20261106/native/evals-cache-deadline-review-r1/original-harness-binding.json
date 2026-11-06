@@ -1,0 +1,17 @@
+{
+  "header": "Running unittests src/lib.rs (/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/target-pin/debug/deps/pipecat_evals-46a03f7eca78a082)",
+  "kind": "Running",
+  "raw_start_byte": 213785,
+  "raw_end_byte": 237748,
+  "raw_slice_sha256": "7199047625672730f71f39a16f02bba9f824b722a988b893924af26a977608d5",
+  "summary_matches_in_block": 1,
+  "status": "FAILED",
+  "passed": 220,
+  "failed": 2,
+  "ignored": 0,
+  "measured": 0,
+  "filtered_out": 0,
+  "summary_offset": 237588,
+  "summary_raw": "test result: FAILED. 220 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s",
+  "ignored_cases": []
+}

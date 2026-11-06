@@ -1,0 +1,33 @@
+{
+  "schema": "pipecat-strict-q-delivery-v1",
+  "archive_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/strict-clippy-final-q-r1/strict-clippy-final-q-r1.tar.xz",
+  "archive_bytes": 160008,
+  "archive_sha256": "9aa9fa08a6d092869f57e731736a81dd696faafb3b5d308fb15e6e7aa7d2697f",
+  "original_count": 35,
+  "original_bytes": 1896241,
+  "original_manifest_bytes": 12518,
+  "original_manifest_sha256": "c82ed0ecda42135a8c4d3bb289976c5410423fe617bcf71a8b4a133ffe108b33",
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/strict-clippy-final-q-r1/part-000.b64",
+      "bytes": 60000,
+      "sha256": "34efc0331656b4ae3574c121c495ece1f58fe85532d5aeff7dc299d85b5376b0"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/strict-clippy-final-q-r1/part-001.b64",
+      "bytes": 60000,
+      "sha256": "a9081a92e09f336eeb31a5c96d8f36eabcec80b6d917590305efdfdb27d64530"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/strict-clippy-final-q-r1/part-002.b64",
+      "bytes": 60000,
+      "sha256": "420d94e0cafc71a7202242e528e4c797447e47cd1529cc396b0aa33f262b8a85"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/strict-clippy-final-q-r1/part-003.b64",
+      "bytes": 33344,
+      "sha256": "4359d397faddcd670c57ec5b42e85f789857dbf82e2328dda354ca102b08eca0"
+    }
+  ],
+  "completed_unix": 1793989782.1199677
+}

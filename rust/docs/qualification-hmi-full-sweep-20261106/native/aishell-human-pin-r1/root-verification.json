@@ -1,0 +1,65 @@
+{
+  "schema": "pipecat-root-aishell-output-verification-v1",
+  "created_utc": "2026-11-06T18:07:43.316506+00:00",
+  "head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "source_canonical_sha256": "1e07f773ca2827e8db5b06175f96137b5d85bb6dcb68229d29601efe29658535",
+  "observed_immutable_files": 16,
+  "raw_stdout_exactly_equals_recorded_json": true,
+  "inference_attempts": 1,
+  "wrapper_exit_code": 0,
+  "quality_passed": null,
+  "reference": "广州市房地产中介协会分析",
+  "actual": "廣州市佛地产中间协会分析。",
+  "normalization": "Unicode punctuation and whitespace removal only; no traditional/simplified folding.",
+  "reference_codepoints": 12,
+  "levenshtein_edits": 3,
+  "cer": 0.25,
+  "audio_duration_seconds": 4.281,
+  "raw_segment_end_ms": 30000,
+  "timestamp_quality_limit": "The raw end exceeds the recording duration; no clipping, alignment qualification or cause attribution.",
+  "stt_submit_result_seconds": 5.038608,
+  "load_seconds": 0.206838,
+  "native_stage_seconds": 14.50675057596527,
+  "whole_runner_seconds": 21.634362198179588,
+  "normal_process_wait_exit": 0,
+  "normal_stage_cleanup_field": null,
+  "all_descendants_joined_claim": false,
+  "files": [
+    {
+      "file": "result.json",
+      "bytes": 21639,
+      "sha256": "63e3a40d1075d53f65c95b3877d71d34f632b9667540f726a994379d1ca49b35"
+    },
+    {
+      "file": "launcher.json",
+      "bytes": 10239,
+      "sha256": "a00bb9b8a3dd81e141a6769fffcb15d914e3e3a516409137be386201fbaa15fa"
+    },
+    {
+      "file": "runtime-start.json",
+      "bytes": 8439,
+      "sha256": "20ce106233a2d4ed35b405b8e8b114008a7c14f6055f52d1693d0fefa71f9e40"
+    },
+    {
+      "file": "runtime-status.json",
+      "bytes": 952,
+      "sha256": "d62e0841d63e84412b89833a82a2b5034fd34757a6f217607805bbb98b600bfd"
+    },
+    {
+      "file": "inference.stdout.log",
+      "bytes": 715,
+      "sha256": "0bfd1a9ad0817f17b8f5da1555dd75a29f3ad841774159c9571b22b5d34b5817"
+    },
+    {
+      "file": "inference.stderr.log",
+      "bytes": 28614,
+      "sha256": "1b9a732f3550df75b2683e62a9c177f28eb1cfbabcc3423203709b32d96e5705"
+    },
+    {
+      "file": "independent-review.json",
+      "bytes": 10319,
+      "sha256": "8512f375a55742b28a707813aa04839864d23b989806a8054237614fc22e1616"
+    }
+  ]
+}

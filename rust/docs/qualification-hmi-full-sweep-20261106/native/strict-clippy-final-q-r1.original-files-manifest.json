@@ -1,0 +1,223 @@
+{
+  "schema": "pipecat-strict-q-originals-v1",
+  "head": "c1c3addb07dde0a143462c10961ff2494eeba90a",
+  "tree": "4df0d197540551ed9b74d4e11c0936e5bedee5f5",
+  "observed_unix": 1793989781.56306,
+  "files": [
+    {
+      "name": "desktop_strict_clippy_after_moq_pin_r1.py",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/desktop_strict_clippy_after_moq_pin_r1.py",
+      "bytes": 36029,
+      "sha256": "2d2a93bf3e82524e5c7822a0bd3fe42de1d8a361362cd3ee59dce1e90cb3352c"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/base-tree.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/base-tree.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/base-tree.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/base-tree.stdout.log",
+      "bytes": 41,
+      "sha256": "13a4ee5a02706fd2801a316df5293b544aaa8ee16835e44b6a5eea2a86b8fccb"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/environment.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/environment.json",
+      "bytes": 2094,
+      "sha256": "16c5f7328e5bae8baee2427e4a82269d400432bc9fd763a61e02a08d325c9355"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/format-moq-diagnostic.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-moq-diagnostic.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/format-quality-ledger.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/format-quality-ledger.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/head_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/head_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/head_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/head_after.stdout.log",
+      "bytes": 41,
+      "sha256": "c23c5fd5fb1c597470b303b60ed6b808b93bc4a869875bc4576bd6003fe1eb00"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/original-0cc-default-gate.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/original-0cc-default-gate.json",
+      "bytes": 4847,
+      "sha256": "3ecde89b358f86a3a8e36a1f182c1f2bd0e524ad56f30bcd4d56ec3b4dc397af"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/original-0cc-strict-gate.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/original-0cc-strict-gate.json",
+      "bytes": 3214,
+      "sha256": "a9778f0aabaeeb9b6b12182978361f4d160c3f4b25dbe21e3ed2a8b09e89067e"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/preceding-c3.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/preceding-c3.json",
+      "bytes": 40137,
+      "sha256": "db6ce0db08d63c04adaaf15c63af31ccb9a3f2ada54ec2ba54a7600d22eeea59"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/preceding-moq.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/preceding-moq.json",
+      "bytes": 351652,
+      "sha256": "c9fe5d9258c85932e57a768c9c7015f7161c90354ac7dbcea078fbc028ab5967"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-after-paths.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-after-paths.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-after-paths.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-after-paths.stdout.log",
+      "bytes": 140122,
+      "sha256": "98c82af82d27ff9ecba9d855aa4225442505850b9de4bfd5f51ec551d25384eb"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-after.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-after.json",
+      "bytes": 516509,
+      "sha256": "39646109ab95f26af2058228442972c1e6844b7c15d836ca4b9c3c3135905966",
+      "source_files_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-before-paths.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-before-paths.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-before-paths.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-before-paths.stdout.log",
+      "bytes": 140122,
+      "sha256": "98c82af82d27ff9ecba9d855aa4225442505850b9de4bfd5f51ec551d25384eb"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-before.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-before.json",
+      "bytes": 516509,
+      "sha256": "39646109ab95f26af2058228442972c1e6844b7c15d836ca4b9c3c3135905966",
+      "source_files_canonical_sha256": "23a585582dba548ece61948fcb87ec32a0689ff46bef20ace1739edd3986e20d"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-contract.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-contract.json",
+      "bytes": 11511,
+      "sha256": "c255d772305af493508754d78797cad6a8abb827aa40669b2b392b5c0b3256a3"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-diff.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-diff.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-diff.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-diff.stdout.log",
+      "bytes": 10131,
+      "sha256": "bab452b5e685f78372ae4ef742802658183a5b06763964ba152d52b2a6e3058d"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-head.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-head.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-head.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-head.stdout.log",
+      "bytes": 41,
+      "sha256": "c23c5fd5fb1c597470b303b60ed6b808b93bc4a869875bc4576bd6003fe1eb00"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-status.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-status.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-status.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-status.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-tree.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-tree.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/source-tree.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/source-tree.stdout.log",
+      "bytes": 41,
+      "sha256": "ad76d29f490ceff344dad0d0d582faf1cf9ff29a584180fd371d1e785115627c"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/status_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/status_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/status_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/status_after.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/strict-clippy.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/strict-clippy.stdout.log",
+      "bytes": 14726,
+      "sha256": "108bed385f7d898c9f23d8b374966897053a9866b7ae349270c19eb931baf348"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/tree_after.stderr.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/tree_after.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/tree_after.stdout.log",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/tree_after.stdout.log",
+      "bytes": 41,
+      "sha256": "ad76d29f490ceff344dad0d0d582faf1cf9ff29a584180fd371d1e785115627c"
+    },
+    {
+      "name": "evidence/strict-clippy-after-moq-pin-r1/verification.json",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/evidence/strict-clippy-after-moq-pin-r1/verification.json",
+      "bytes": 69866,
+      "sha256": "f11090ea838fb5b606d40cd048daec5d503cc080c7a086729f030d24a14da26c"
+    },
+    {
+      "name": "source-pin/rust/crates/pipecat-evals/src/simulation/quality.rs",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-evals/src/simulation/quality.rs",
+      "bytes": 10190,
+      "sha256": "4f5b66f3ba68317ab834ef8883ee0ed149477a2d032cae9ab243da513da02780"
+    },
+    {
+      "name": "source-pin/rust/crates/pipecat-moq/src/tests.rs",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-moq/src/tests.rs",
+      "bytes": 28377,
+      "sha256": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219"
+    }
+  ],
+  "scope": "Read-only export after the sole Q strict command and two leaf format checks terminated. No native command is executed by this export. Original earlier failures and full-matrix scope remain unchanged.",
+  "original_count": 35,
+  "original_bytes": 1896241
+}

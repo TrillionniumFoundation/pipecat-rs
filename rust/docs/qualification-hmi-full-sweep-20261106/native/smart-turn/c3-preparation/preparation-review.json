@@ -1,0 +1,111 @@
+{
+  "schema": "pipecat-ort-c3-independent-preparation-review-v1",
+  "scope": "read-only local archive and original C1 contract audit; no extraction, package import, shared-library loading, model/native/Cargo execution or remote calls",
+  "archive_member_checks": {
+    "scope": "read-only independent archive/member check; no extraction/load/import/execute",
+    "official_wheel_url": "https://files.pythonhosted.org/packages/8b/08/eead6895ed83b56711ca6c0d31d82f109401b9937558b425509e497d6fb4/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "archive_bytes": 16019285,
+    "archive_sha256": "9a04aafb802c1e5573ba4552f8babcb5021b041eb4cfa802c9b7644ca3510eca",
+    "member": "onnxruntime/capi/libonnxruntime.so.1.21.0",
+    "member_bytes": 20571088,
+    "member_sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+    "record_entry": [
+      "onnxruntime/capi/libonnxruntime.so.1.21.0",
+      "sha256=oN-E-uDwnZ7KPWkZ9oW6Q18a5stijhKLabzyorllUEw",
+      "20571088"
+    ],
+    "member_occurrences": 1,
+    "all_archive_names_unique": true,
+    "regular_file_mode": "0o100775",
+    "read_matches_existing_extraction": true,
+    "distinct_from_C1_3c818": true
+  },
+  "original_C1": {
+    "source_head": "272671b95297313d24db921eceda8e95f3a8d545",
+    "source_tree": "94424ffa2a8fbcda0f81321ee68e7461663e191c",
+    "reported_executable_identity": {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+      "resolved": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+      "bytes": 25576,
+      "sha256": "e20adb1f67f6bd5f42ce30b0ad13a0ae568dcb80d4fcd7b2a0237366892fffbc"
+    },
+    "executable_current_remote_identity_checked": false,
+    "original_probe_argv": [
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-ort-reference-pin-r1/ort_reference_probe",
+      "/home/qian-qi/workspace/hepta-hmi-20261029/assets/onnxruntime-linux-x64-1.21.0/lib/libonnxruntime.so.1.21.0",
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/src/pipecat/audio/turn/smart_turn/data/smart-turn-v3.2-cpu.onnx",
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_speech.f32",
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_tone.f32",
+      "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/source-pin/rust/crates/pipecat-vad/tests/fixtures/smart_turn_silence.f32"
+    ],
+    "original_native_exit": 0,
+    "original_overall_exit": 1,
+    "session_contract": {
+      "kind": "session",
+      "execution": "ORT_SEQUENTIAL",
+      "inter_threads": 1,
+      "intra_threads": 1,
+      "optimization": "ORT_ENABLE_ALL",
+      "memory": "Cpu/Arena/CPUInput",
+      "telemetry": false,
+      "explicit_providers": []
+    },
+    "case_order": [
+      "speech",
+      "tone",
+      "silence"
+    ],
+    "run_calls_per_case_from_C_source": 1,
+    "one_session_for_three_cases": true,
+    "output_records": 8
+  },
+  "input_evidence": [
+    {
+      "path": "smart-turn/reference-probe-r1/ort_reference_probe.c",
+      "bytes": 11814,
+      "sha256": "fed472ea3c7b8deb7039327c2a10bb4cbc49f0af6c34c5c7f38445809fd7d547"
+    },
+    {
+      "path": "smart-turn/reference-probe-r1/onnxruntime_c_api.h",
+      "bytes": 219712,
+      "sha256": "7783e9664bdb0b1b36145b5c8587dd1bc9a399aa000edf2e3dd03003cafc6882"
+    },
+    {
+      "path": "smart-turn/ort-reference-pin-r1/reference.json",
+      "bytes": 27385,
+      "sha256": "7c0720620aaea61615e1a50795ad84118c6881563198e4d42534f9e565c67b4e"
+    },
+    {
+      "path": "smart-turn/ort-reference-pin-r1/probe.stdout.log",
+      "bytes": 1814,
+      "sha256": "09afb06777afba21d8055a6ecb08712ab6a077e2b6829382f12ef5d9837a1780"
+    },
+    {
+      "path": "smart-turn/ort-reference-pin-r1/probe.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "smart-turn/wheel-preparation-r1/pypi-metadata.json",
+      "bytes": 21104,
+      "sha256": "8817fbf4182ba56cb0ae80db6fc459a0c927c777247286603e66b88bbd90ee38"
+    },
+    {
+      "path": "smart-turn/wheel-preparation-r1/wheel-retrieval.json",
+      "bytes": 79180,
+      "sha256": "613f1a28edc83496d40afdf6e9683801f13e5c276d0d69b9f704a7c785cd103c"
+    },
+    {
+      "path": "smart-turn/wheel-preparation-r1/static-member-inspection.json",
+      "bytes": 6444,
+      "sha256": "df4fe95ad0506603155388f2ab0475761e8f88438dc83fdeaaf95698808673a6"
+    }
+  ],
+  "runner_review": "pending HMI frozen runner; this precheck does not authorize or represent C3 execution",
+  "limits": [
+    "Original golden runtime/build/Python ABI/CPU identity remains unknown.",
+    "The C1 current remote executable must still be checked against e20adb SHA immediately before any authorized C3 use.",
+    "The C1 source head is historical272; current C3 must bind the actual0cc source separately while keeping model/features/probabilities unchanged.",
+    "A different C API library comparison can demonstrate sensitivity to identified runtime artifacts on the same host; it cannot identify the original golden runtime or a single responsible compiler flag."
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "pipecat-moq-absent-peer-diagnostic-candidate-v1",
+  "scope": "unapplied diagnostic-only candidate; no Rust/Cargo/native execution",
+  "source_head": "0cc16e8123cb05aaad480d5ab7860a267d998bac",
+  "source_tree": "aec037b9cf2be53fcf6f85fdc149382942277702",
+  "source": {
+    "path": "rust/crates/pipecat-moq/src/tests.rs",
+    "bytes": 27935,
+    "sha256": "c07b007f6fbd5d8ac215c4334ee531756f292796cb7ed600a17faeab63749bb0",
+    "git_blob_sha1": "02430814d0b4d15f263902aadccb77192f5223c6"
+  },
+  "candidate": {
+    "path": "tests.rs",
+    "bytes": 28377,
+    "sha256": "8695fd709059794132f88133a5d17bb6f3e82e8cd8b84dcdf9bce62176633219",
+    "git_blob_sha1": "deb00799ba0f38c6eaa12a65977df5a2dca9eda2"
+  },
+  "patch": {
+    "path": "candidate.patch",
+    "bytes": 1049,
+    "sha256": "841fd31cabf588a9027190d1ed942639961a20ece095ae3986f77fb2efbf125b",
+    "git_blob_sha1": "1405c9b216902bdc4f8294417f69085921c90eba"
+  },
+  "original_tail": {
+    "path": "/workspace/scratch/f9f576cc6c66/workspace-evidence/full-default-pin-r5-observed/runtime-tail.log",
+    "bytes": 16384,
+    "sha256": "586e90d1b201d5dc0b4007f96045e8d5b0100ee5a153e779f58f331658f96122",
+    "git_blob_sha1": "0ff2097fe65c60a06c3c8e8f65f553986a9b26e6"
+  },
+  "slice": {
+    "path": "original-failure-slice.log",
+    "bytes": 543,
+    "sha256": "45de97583f34063b40ab59d225267aca03cf4aa1b148bd9545c4c71a201b4fdd",
+    "git_blob_sha1": "e9099f0af9bcaffa4db4d8b8c9f309d0510563de",
+    "offset_start_in_tail": 9028,
+    "offset_end_exclusive_in_tail": 9571
+  },
+  "unchanged": {
+    "timeout_150_ms": true,
+    "original_matches_expression": true,
+    "spawn_order": true,
+    "all_await_expressions_and_order": true,
+    "existing_accepting_join_and_drop": true,
+    "all_other_source_bytes": true,
+    "no_retry": true,
+    "no_additional_accepted_result": true
+  },
+  "observational_limits": [
+    "The original failure has no actual result; a WebTransport timeout is a possible path, not a proven cause.",
+    "is_finished reports sampled task termination, not proof of a specific handshake milestone.",
+    "elapsed includes the whole connect invocation and any internal cancellation cleanup; it is not the peer-announcement wait duration.",
+    "Original assertion-before-accepting-cleanup order is intentionally preserved by this diagnostic-only candidate."
+  ]
+}

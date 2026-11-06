@@ -1,0 +1,14 @@
+{
+  "schema": "pipecat-root-c3-preparation-archive-verification-v1",
+  "archive": {
+    "file": "preparation-originals.tar.xz",
+    "bytes": 67044,
+    "sha256": "621face5e4478310aa1474bbcb3545015a01c83e56a8f97b6fc330498ae5d434"
+  },
+  "original_count": 18,
+  "original_bytes": 403545,
+  "archive_member_count": 19,
+  "all_original_bytes_and_index_verified": true,
+  "primary_manifest_fourteen_files_match_sizes_sha256_and_git_blob_ids": true,
+  "scope": "Preparation only. Actual C3 execution will have a separate identity, original stdout and result report."
+}

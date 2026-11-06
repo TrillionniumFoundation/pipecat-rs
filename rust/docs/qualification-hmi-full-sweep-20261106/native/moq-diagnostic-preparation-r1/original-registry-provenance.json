@@ -1,0 +1,29 @@
+{
+  "scope": "Only the exact registry source selected by the recorded compiler artifact is read; no Cargo command or registry scan is executed.",
+  "artifact_source_candidates": [
+    "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/src/lib.rs"
+  ],
+  "files": [
+    {
+      "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/.cargo_vcs_info.json",
+      "archive_name": "registry/moq-net-0.3.7/.cargo_vcs_info.json",
+      "bytes": 104,
+      "sha256": "aadfab79abeb7e97515bea7b13b8ed7b5a76bc5abec06f4c59e38a12c0251058",
+      "git_blob": "4d11b9ff62408c4cdab14bfde9204185f5bee748"
+    },
+    {
+      "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/moq-net-0.3.7/src/client.rs",
+      "archive_name": "registry/moq-net-0.3.7/src/client.rs",
+      "bytes": 38489,
+      "sha256": "3b8d7eda5f0f686febefceb4417dd06510ce06d54c1ccd572e721fb815fe9407",
+      "git_blob": "75abdb5e3b229086ca08316f7fbeb8d9b60600ab"
+    }
+  ],
+  "cargo_vcs_info": {
+    "git": {
+      "sha1": "b00be0ffc3734addcdd5e6ad4b348ae055e70957"
+    },
+    "path_in_vcs": "rs/moq-net"
+  },
+  "matches_official_client_blob_75abdb5e": true
+}

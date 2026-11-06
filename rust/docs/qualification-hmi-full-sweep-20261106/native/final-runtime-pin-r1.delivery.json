@@ -1,0 +1,64 @@
+{
+  "schema": "pipecat-final-runtime-delivery-v1",
+  "archive_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/final-runtime-pin-r1.tar.xz",
+  "archive_bytes": 294272,
+  "archive_sha256": "846769a82c14822c074209a58e9e33300b921dd8494833dcd9b68dd0490a1eb5",
+  "original_count": 366,
+  "original_bytes": 10683065,
+  "original_manifest_bytes": 120116,
+  "original_manifest_sha256": "e0fb4a353eb14b72cb6bd962105fbc2f71f356f7a56e4dbe21177fb1b3250611",
+  "parts": [
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-000.b64",
+      "bytes": 60000,
+      "sha256": "c87f5bc19778ae90dc0fde66d0aff1c612d4804f49ffdcd10539e0551c4c3f90"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-001.b64",
+      "bytes": 60000,
+      "sha256": "4ae2a97225d40709ce48bbab98a25f96344785c03d77ab5531ca6578ce834de5"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-002.b64",
+      "bytes": 60000,
+      "sha256": "476250404db0b33cbbf92971e05059265fa067465692c9da0db141128412445d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-003.b64",
+      "bytes": 60000,
+      "sha256": "21cd2ac4d8355b886ddb3f49a9086ce506a4df79ea8a3a2e4c7349ce4b5d6e1d"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-004.b64",
+      "bytes": 60000,
+      "sha256": "87d95f9e0f94f7e609b0664e9bc8de6243575c78e4ec258ea8ae3af6ceb84a8b"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-005.b64",
+      "bytes": 60000,
+      "sha256": "17034c36213c262583ed5245f429ac163d5947f51b9bf5a559566fa04c787d26"
+    },
+    {
+      "path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/exports/final-runtime-pin-r1/part-006.b64",
+      "bytes": 32364,
+      "sha256": "b570148c9208705cf701a3189e305e56e52e185efc5bd12a65c748004bcedd42"
+    }
+  ],
+  "excluded_retained_artifacts": [
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/onnxruntime-1.21.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "bytes": 16019285,
+      "sha256": "9a04aafb802c1e5573ba4552f8babcb5021b041eb4cfa802c9b7644ca3510eca",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    },
+    {
+      "name": "requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "remote_path": "/home/qian-qi/workspace/pipecat-workspace-f9f576cc6c66/requests/smart-turn-wheel-reference-pin-r3/runtime/libonnxruntime.so.1.21.0",
+      "bytes": 20571088,
+      "sha256": "a0df84fae0f09d9eca3d6919f685ba435f1ae6cb628e128b69bcf2a2b965504c",
+      "reason": "Large official distribution artifact retained unchanged on desktop; original download/extraction identities and all raw execution evidence are included."
+    }
+  ],
+  "completed_unix": 1793989650.214193
+}

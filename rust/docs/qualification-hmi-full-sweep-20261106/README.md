@@ -9,10 +9,18 @@
 - [追加 owner 入口探针](environment/owner-entry-followup-r1.json)：12 份选定工程文件的完整读取与摘要；没有得到真实 thread／unit／socket 组合，不外推为整机不存在。
 - [WebRTC 当前证据可用性](webrtc/RECOVERY.md)：旧 60 文件中确切恢复 4 份、56 份未恢复；原 invocation-25 失败仍有完整原文。以该入口解释 preserved README/index，不能将其中旧相对链接当成现已交付。
 - [Provider 示例产物身份修复](provider-examples/README.md)：四个同名 Cargo example 的覆盖、普通 executable 与 test harness 的区别，以及最终 gate 的显式 build 要求。
-- [Native 完整原始记录](native/README.md)：早期38原件、source／pin r2另包、最新83索引原件及其导出index；完整default补充原log和独立计数、失败诊断、8条原合成中文输出分别保存。
+- [Native 完整原始记录](native/README.md)：早期38原件、source／pin r2另包、83原件、首轮扩展112原件与最终矩阵147原件分别保存；完整命令、失败诊断、工具链与source maps保留各自身份。
 - [Grok 重绑独立控制](native/grok-listener/control-delivery.json)：本地受控端口竞争，只证明错误的非唯一归因；不清除 desktop r3 的未归因失败。
 - [Grok 原系统调用记录](native/grok-listener/trace-r1/README.md)：原12-case首轮11/1、父close成功后bind失败与另一child pre-exec窗口重叠；完整310,585-byte trace及其观测限制。
 - [Grok 生命周期隔离修补](native/grok-listener/lifetime-gate/README.md)：真实child回收前保留共享许可，listener原单次bind位于独占窗口；独立继承FD控制不冒充历史失败的当轮证据。
+- [冻结源码的完整复验](native/final-matrix-pin-r1.root-verification.json)：147原件、20份source map、四条命令逐case／summary独立计数，新增MoQ与cache Lookup失败保留。
+- [最终模型／SFU批次](native/model-optins-pin-r2.root-verification.json)：131原件、40 source maps、19命令／21项case执行；8条中文属于原1项case，CER诊断与执行门分开。
+- [单条AISHELL真人录音](native/aishell-human-pin-r1/root-verification.json)：一次离线example，实际3／12字编辑差异、4.281秒输入与30,000ms segment末端的原metadata差异均保留。
+- [另一官方ORT C API binary对照](native/smart-turn/wheel-reference-pin-r3/root-verification.json)：三项输出与原C1 ALL逐bit相同，原概率门仍全部失败，未重建历史Python oracle。
+- [最后366份runtime原件](native/final-runtime-pin-r1.root-verification.json)：WebRTC100、MoQ20、AISHELL、C3、Q prepare与19套模型wrapper补件，10份source maps。
+- [最后35份strict-Q原件](native/strict-clippy-final-q-r1.root-verification.json)：一次原strict命令及两文件格式全部0，2份Q source maps，保留旧strict／fmt失败。
+- [最后严格命令的执行准备](native/strict-after-moq-preparation-r1/root-verification.json)：9份原件、原argv／环境与Q契约的独立核对；准备文件不冒充实际执行结果。
+- [最后两份诊断／lint源码契约](native/final-diagnostic-source-freeze-r1/source-contract.json)：c1c3的完整2,422路径canonical身份；0cc16完整矩阵不冒称在此HEAD执行。
 - [首轮完整扩展矩阵](native/expanded-and-reference-pin-r1.root-verification.json)：112份原件、14份完整source map，原219个harness与完整补充731个harness的独立计数；原24项失败及strict/fmt失败全部保留。
 - [Bot-audio进程级观测隔离](native/bot-audio-response/original-raw-review-r1.json)：原15个失败的逐case worker身份／HTTP状态与同进程fixture互扰；原严格等式和期限不变。
 - [Cartesia精确签名历史](native/cartesia-eager/README.md)：原request的signed blocks正确，旧helper拒绝既有wire user点号；完整消息数组和roles按实际provider精确核对。
@@ -23,4 +31,4 @@
 - [四项源码冻结与精确路径](fixture-source-freeze.json)：0cc16e8/tree aec037b，只有四份测试源码相对522改变；后续docs提交与实际native测试HEAD分开。
 - [证据入口变化与可用性](EVIDENCE_AVAILABILITY.md)：哪些是原字节回收、哪些是新观察，哪些旧 raw 当前取不到。
 
-完整 workspace、精确 Rust 1.99.0、真实本地 SFU、合成中文模型、Piper／Whisper 生命周期和 WebRTC 固定次数连跑，由 [本轮主报告](../HMI_FULL_SWEEP_20261106.md) 逐项结算。此索引不为仍在运行或尚未执行的阶段预填通过。
+完整 workspace、精确 Rust 1.99.0、真实本地 SFU、合成中文模型、Piper／Whisper 生命周期和 WebRTC 固定次数连跑，由 [本轮主报告](../HMI_FULL_SWEEP_20261106.md) 逐项结算。本轮授权的工程资格作业已全部终态；未执行的生产／设备能力继续列为未验收。
