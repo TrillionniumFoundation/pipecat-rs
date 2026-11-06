@@ -149,13 +149,150 @@ async fn no_connection(listener: &TcpListener) {
         .await
         .is_err());
 }
+fn socket_holders(inode: Option<u64>) -> Value {
+    const MAX_ENTRIES: usize = 4096;
+    const MAX_MATCHES: usize = 64;
+    let Some(inode) = inode else {
+        return json!({"available":false,"reason":"original socket inode unavailable"});
+    };
+    let entries = match fs::read_dir("/proc/self/fd") {
+        Ok(entries) => entries,
+        Err(error) => return json!({"available":false,"error":error.to_string()}),
+    };
+    let expected = PathBuf::from(format!("socket:[{inode}]"));
+    let mut fds = vec![];
+    let mut raced_or_unreadable = 0;
+    let mut scanned_entries = 0;
+    let mut truncated = false;
+    for entry in entries {
+        if scanned_entries == MAX_ENTRIES {
+            truncated = true;
+            break;
+        }
+        scanned_entries += 1;
+        match entry {
+            Ok(entry) => match fs::read_link(entry.path()) {
+                Ok(target) if target == expected => {
+                    fds.push(entry.file_name().to_string_lossy().into_owned());
+                    if fds.len() == MAX_MATCHES {
+                        truncated = true;
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => raced_or_unreadable += 1,
+            },
+            Err(_) => raced_or_unreadable += 1,
+        }
+    }
+    fds.sort();
+    json!({
+        "available":true,"matching_fds":fds,"raced_or_unreadable_entries":raced_or_unreadable,
+        "scanned_entries":scanned_entries,"max_entries":MAX_ENTRIES,
+        "max_matches":MAX_MATCHES,"truncated":truncated
+    })
+}
+fn tcp_endpoint_snapshot(address: SocketAddr, ipv6: bool) -> Value {
+    use std::io::Read;
+    const MAX_BYTES: usize = 1024 * 1024;
+    const MAX_LINES: usize = 8192;
+    const MAX_MATCHES: usize = 64;
+    let path = if ipv6 {
+        "/proc/net/tcp6"
+    } else {
+        "/proc/net/tcp"
+    };
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) => return json!({"path":path,"available":false,"error":error.to_string()}),
+    };
+    let octets = match (address.ip(), ipv6) {
+        (std::net::IpAddr::V4(ip), false) => ip.octets().to_vec(),
+        (std::net::IpAddr::V4(ip), true) => ip.to_ipv6_mapped().octets().to_vec(),
+        (std::net::IpAddr::V6(ip), true) => ip.octets().to_vec(),
+        (std::net::IpAddr::V6(ip), false) => match ip.to_ipv4_mapped() {
+            Some(ip) => ip.octets().to_vec(),
+            None => return json!({"path":path,"available":true,"rows":[]}),
+        },
+    };
+    let hex: String = octets
+        .chunks_exact(4)
+        .map(|word| format!("{:08X}", u32::from_ne_bytes(word.try_into().unwrap())))
+        .collect();
+    let exact = format!("{hex}:{:04X}", address.port());
+    let wildcard = format!("{}:{:04X}", "0".repeat(hex.len()), address.port());
+    let mut bytes = vec![];
+    let read_error = file
+        .take(MAX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .err()
+        .map(|error| error.to_string());
+    let mut truncated = bytes.len() > MAX_BYTES || read_error.is_some();
+    if truncated {
+        bytes.truncate(MAX_BYTES);
+        // A size- or error-limited final fragment is not a complete proc row.
+        let complete = bytes
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+            .map_or(0, |i| i + 1);
+        bytes.truncate(complete);
+    }
+    let scanned_bytes = bytes.len();
+    let text = String::from_utf8_lossy(&bytes);
+    let mut rows = vec![];
+    let mut scanned_lines = 0;
+    for line in text.lines() {
+        if scanned_lines == MAX_LINES {
+            truncated = true;
+            break;
+        }
+        scanned_lines += 1;
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() < 10 || (fields[1] != exact && fields[1] != wildcard) {
+            continue;
+        }
+        rows.push(json!({
+            "local_endpoint_hex":fields[1], "state_hex":fields[3], "inode":fields[9],
+            "scope":if fields[1] == exact {"exact_or_mapped_endpoint"} else {"same_port_wildcard"}
+        }));
+        if rows.len() == MAX_MATCHES {
+            truncated = true;
+            break;
+        }
+    }
+    json!({
+        "path":path,"available":true,"rows":rows,"read_error":read_error,"truncated":truncated,
+        "scanned_bytes":scanned_bytes,"scanned_lines":scanned_lines,
+        "max_bytes":MAX_BYTES,"max_lines":MAX_LINES,"max_matches":MAX_MATCHES
+    })
+}
 async fn release(listener: TcpListener) {
     no_connection(&listener).await;
     let address = listener.local_addr().unwrap();
+    let fd = std::os::fd::AsRawFd::as_raw_fd(&listener);
+    let descriptor = format!("/proc/self/fd/{fd}");
+    let metadata = fs::metadata(&descriptor);
+    let inode = metadata
+        .as_ref()
+        .ok()
+        .map(std::os::unix::fs::MetadataExt::ino);
+    let descriptor_target = fs::read_link(&descriptor);
     drop(listener);
-    let rebound = TcpListener::bind(address)
-        .await
-        .expect("fixture listener not released");
+    let rebound = TcpListener::bind(address).await.unwrap_or_else(|error| {
+        let before = json!({
+            "pid":std::process::id(), "address":address.to_string(), "fd":fd, "socket_inode":inode,
+            "descriptor":descriptor_target.ok().map(|path| path.to_string_lossy().into_owned()),
+            "metadata_error":metadata.err().map(|error| error.to_string())
+        });
+        eprintln!("fixture listener not released: {error:?}; before_drop={before}");
+        let diagnostic = json!({
+            "before_drop":before, "original_inode_holders_after_drop":socket_holders(inode),
+            "tcp":tcp_endpoint_snapshot(address,false), "tcp6":tcp_endpoint_snapshot(address,true),
+            "bind_error_kind":format!("{:?}",error.kind()), "bind_raw_os_error":error.raw_os_error(),
+            "scope":"non-atomic post-failure snapshots; absent entries do not prove absence at bind time"
+        });
+        panic!("fixture listener not released: {error}; listener_release_diagnostic={diagnostic}")
+    });
     drop(rebound);
 }
 async fn wire(ws: &mut Ws, mut value: Value) {
