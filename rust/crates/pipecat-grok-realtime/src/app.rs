@@ -56,7 +56,9 @@ impl GrokPipelineFailure {
             E::StartupTimeout => Self::StartupTimeout,
             E::ShutdownTimeout => Self::ShutdownTimeout,
             E::Closed => Self::Closed,
-            E::DuplicateStart | E::TerminalUpstream | E::Backpressure(_) => Self::Admission,
+            E::DuplicateStart | E::TerminalUpstream | E::Backpressure(_) | E::InvalidPayload(_) => {
+                Self::Admission
+            }
             E::ProcessorPanic(_) => Self::Panic,
             E::Execution(_) => Self::Execution,
             E::AlreadyJoined => Self::JoinUnavailable,

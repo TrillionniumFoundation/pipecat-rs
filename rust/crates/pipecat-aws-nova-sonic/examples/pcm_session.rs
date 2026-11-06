@@ -448,6 +448,7 @@ fn pipeline_error(error: &PipelineError) -> &'static str {
         PipelineError::DuplicateStart => "duplicate pipeline start",
         PipelineError::TerminalUpstream => "invalid terminal direction",
         PipelineError::Backpressure(_) => "pipeline backpressure",
+        PipelineError::InvalidPayload(_) => "invalid pipeline payload",
         PipelineError::ProcessorPanic(_) => "pipeline task panicked",
         PipelineError::Execution(_) => "pipeline execution or cleanup failure",
         PipelineError::AlreadyJoined => "pipeline was already joined",
