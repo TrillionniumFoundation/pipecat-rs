@@ -1,0 +1,61 @@
+{
+  "binary_sha256": "2524fcbfb94f127753c89489733e5c9e5f29f4fee5b657ed2d2811879d08cbc4",
+  "binary_bytes": 20598536,
+  "scope": "real_binary_startup_rejections_before_native_load_no_devices",
+  "checks": [
+    {
+      "name": "missing_connection",
+      "argv": [
+        "/nonexistent/hmi.json"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: \"usage: local_speech CONFIG_JSON OWNER_CONNECTION_ID; stdin/stdout use bounded JSONL\"\n",
+      "passed": true
+    },
+    {
+      "name": "zero_connection",
+      "argv": [
+        "/nonexistent/hmi.json",
+        "0"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: ParseIntError { kind: Zero }\n",
+      "passed": true
+    },
+    {
+      "name": "nonnumeric_connection",
+      "argv": [
+        "/nonexistent/hmi.json",
+        "invalid"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: ParseIntError { kind: InvalidDigit }\n",
+      "passed": true
+    },
+    {
+      "name": "overflow_connection",
+      "argv": [
+        "/nonexistent/hmi.json",
+        "18446744073709551616"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: ParseIntError { kind: PosOverflow }\n",
+      "passed": true
+    },
+    {
+      "name": "valid_connection_missing_config",
+      "argv": [
+        "/nonexistent/hmi.json",
+        "18"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }\n",
+      "passed": true
+    }
+  ]
+}

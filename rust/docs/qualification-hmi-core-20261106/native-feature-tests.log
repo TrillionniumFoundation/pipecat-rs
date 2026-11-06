@@ -1,0 +1,260 @@
+ Downloading crates ...
+  Downloaded anstream v1.0.0
+  Downloaded alsa v0.11.0
+  Downloaded alsa-sys v0.4.0
+  Downloaded aho-corasick v1.1.5
+  Downloaded anstyle-parse v1.0.0
+  Downloaded anstyle v1.0.14
+  Downloaded autocfg v1.5.1
+  Downloaded anstyle-query v1.1.5
+  Downloaded cmake v0.1.58
+  Downloaded fs_extra v1.3.0
+  Downloaded getopts v0.2.24
+  Downloaded cexpr v0.6.0
+  Downloaded clang-sys v1.9.1
+  Downloaded clap v4.6.7
+  Downloaded clap_derive v4.6.7
+  Downloaded clap_lex v1.1.1
+  Downloaded colorchoice v1.0.5
+  Downloaded dasp_sample v0.11.0
+  Downloaded bindgen v0.72.1
+  Downloaded chrono v0.4.45
+  Downloaded clap_builder v4.6.7
+  Downloaded cpal v0.18.2
+  Downloaded heck v0.5.0
+  Downloaded iana-time-zone v0.1.65
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded itertools v0.13.0
+  Downloaded libloading v0.8.9
+  Downloaded matrixmultiply v0.3.11
+  Downloaded minimal-lexical v0.2.1
+  Downloaded num-integer v0.1.47
+  Downloaded nom v7.1.3
+  Downloaded num-traits v0.2.19
+  Downloaded prettyplease v0.2.37
+  Downloaded transpose v0.2.3
+  Downloaded num-complex v0.4.6
+  Downloaded rawpointer v0.2.1
+  Downloaded regex v1.13.1
+  Downloaded unicase v2.10.0
+  Downloaded utf8parse v0.2.2
+  Downloaded pkg-config v0.3.34
+  Downloaded primal-check v0.3.4
+  Downloaded pulldown-cmark-escape v0.11.0
+  Downloaded shlex v1.3.0
+  Downloaded strsim v0.11.1
+  Downloaded strum v0.28.0
+  Downloaded strum_macros v0.28.0
+  Downloaded ort-sys v2.0.0-rc.9
+  Downloaded glob v0.3.4
+  Downloaded semver v1.0.28
+  Downloaded strength_reduce v0.2.4
+  Downloaded ort v2.0.0-rc.9
+  Downloaded unicode-normalization v0.1.25
+  Downloaded pulldown-cmark v0.13.4
+  Downloaded ndarray v0.16.1
+  Downloaded rustfft v6.4.1
+  Downloaded unicode-width v0.2.2
+  Downloaded regex-syntax v0.8.11
+  Downloaded regex-automata v0.4.18
+  Downloaded whisper-rs-sys v0.15.0
+  Downloaded sentencex v0.1.32
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.190
+   Compiling cfg-if v1.0.5
+   Compiling syn v3.0.6
+   Compiling pin-project-lite v0.2.17
+   Compiling bytes v1.12.1
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.6.0
+   Compiling itoa v1.0.18
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.4
+   Compiling synstructure v0.14.0
+   Compiling autocfg v1.5.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling bitflags v2.13.2
+   Compiling version_check v0.9.5
+   Compiling serde_core v1.0.229
+   Compiling memchr v2.8.3
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling zerofrom v0.1.8
+   Compiling tokio-macros v2.7.2
+   Compiling yoke v0.8.3
+   Compiling tokio v1.53.2
+   Compiling zerovec-derive v0.11.6
+   Compiling zerovec v0.11.8
+   Compiling displaydoc v0.2.7
+   Compiling generic-array v0.14.7
+   Compiling num-traits v0.2.19
+   Compiling syn v2.0.119
+   Compiling futures-core v0.3.34
+   Compiling typenum v1.20.1
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling zmij v1.0.23
+   Compiling pkg-config v0.3.34
+   Compiling tinystr v0.8.4
+   Compiling libloading v0.8.9
+   Compiling writeable v0.6.4
+   Compiling serde_json v1.0.151
+   Compiling once_cell v1.21.4
+   Compiling litemap v0.8.3
+   Compiling thiserror v2.0.21
+   Compiling smallvec v1.16.2
+   Compiling glob v0.3.4
+   Compiling icu_locale_core v2.3.0
+   Compiling clang-sys v1.9.1
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling zerotrie v0.2.5
+   Compiling potential_utf v0.1.6
+   Compiling thiserror-impl v2.0.21
+   Compiling ring v0.17.14
+   Compiling icu_properties_data v2.3.0
+   Compiling prettyplease v0.2.37
+   Compiling log v0.4.34
+   Compiling icu_normalizer_data v2.3.0
+   Compiling rustc-hash v2.1.3
+   Compiling utf8_iter v1.0.4
+   Compiling icu_collections v2.3.0
+   Compiling icu_provider v2.3.1
+   Compiling digest v0.10.7
+   Compiling http v1.5.0
+   Compiling percent-encoding v2.3.2
+   Compiling regex-syntax v0.8.11
+   Compiling cpufeatures v0.2.17
+   Compiling minimal-lexical v0.2.1
+   Compiling zeroize v1.9.1
+   Compiling rustls-pki-types v1.15.1
+   Compiling nom v7.1.3
+   Compiling regex-automata v0.4.18
+   Compiling sha2 v0.10.9
+   Compiling http-body v1.1.0
+   Compiling tracing-core v0.1.36
+   Compiling futures-macro v0.3.34
+   Compiling async-trait v0.1.92
+   Compiling getrandom v0.2.17
+   Compiling slab v0.4.12
+   Compiling untrusted v0.9.0
+   Compiling httparse v1.10.1
+   Compiling futures-task v0.3.34
+   Compiling bindgen v0.72.1
+   Compiling either v1.19.0
+   Compiling futures-util v0.3.34
+   Compiling itertools v0.13.0
+   Compiling pipecat-core v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-core)
+   Compiling tracing v0.1.44
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling cexpr v0.6.0
+   Compiling regex v1.13.1
+   Compiling num-integer v0.1.47
+   Compiling rustls v0.23.45
+   Compiling shlex v1.3.0
+   Compiling try-lock v0.2.5
+   Compiling heck v0.5.0
+   Compiling tower-service v0.3.3
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling want v0.3.2
+   Compiling idna_adapter v1.2.2
+   Compiling rustls-webpki v0.103.15
+   Compiling form_urlencoded v1.2.2
+   Compiling matrixmultiply v0.3.11
+   Compiling cmake v0.1.58
+   Compiling fs_extra v1.3.0
+   Compiling anstyle-query v1.1.5
+   Compiling atomic-waker v1.1.2
+   Compiling semver v1.0.28
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling colorchoice v1.0.5
+   Compiling subtle v2.6.1
+   Compiling anstyle v1.0.14
+   Compiling anstream v1.0.0
+   Compiling whisper-rs-sys v0.15.0
+   Compiling hyper v1.12.0
+   Compiling idna v1.1.0
+   Compiling num-complex v0.4.6
+   Compiling alsa-sys v0.4.0
+   Compiling ort-sys v2.0.0-rc.9
+   Compiling futures-channel v0.3.34
+   Compiling sync_wrapper v1.0.2
+   Compiling aho-corasick v1.1.5
+   Compiling strsim v0.11.1
+   Compiling rawpointer v0.2.1
+   Compiling ipnet v2.12.2
+   Compiling tower-layer v0.3.3
+   Compiling clap_lex v1.1.1
+   Compiling base64 v0.23.1
+   Compiling hyper-util v0.1.21
+   Compiling clap_builder v4.6.7
+   Compiling tower v0.5.3
+   Compiling url v2.5.8
+   Compiling tokio-rustls v0.26.6
+   Compiling strum_macros v0.28.0
+   Compiling clap_derive v4.6.7
+   Compiling webpki-roots v1.0.9
+   Compiling pipecat-audio v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-audio)
+   Compiling futures-sink v0.3.34
+   Compiling ryu v1.0.23
+   Compiling unicode-width v0.2.2
+   Compiling pulldown-cmark v0.13.4
+   Compiling getopts v0.2.24
+   Compiling serde_urlencoded v0.7.1
+   Compiling tokio-util v0.7.20
+   Compiling hyper-rustls v0.27.10
+   Compiling clap v4.6.7
+   Compiling strum v0.28.0
+   Compiling tower-http v0.6.11
+   Compiling ndarray v0.16.1
+   Compiling http-body-util v0.1.5
+   Compiling whisper-rs v0.16.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-whisper/vendor/whisper-rs)
+   Compiling unicase v2.10.0
+   Compiling strength_reduce v0.2.4
+   Compiling tinyvec v1.13.3
+   Compiling base64 v0.22.1
+   Compiling pulldown-cmark-escape v0.11.0
+   Compiling cpal v0.18.2
+   Compiling reqwest v0.12.28
+   Compiling unicode-normalization v0.1.25
+   Compiling transpose v0.2.3
+   Compiling sentencex v0.1.32
+   Compiling ort v2.0.0-rc.9
+   Compiling alsa v0.11.0
+   Compiling primal-check v0.3.4
+   Compiling iana-time-zone v0.1.65
+   Compiling dasp_sample v0.11.0
+   Compiling chrono v0.4.45
+   Compiling rustfft v6.4.1
+   Compiling pipecat-text v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-text)
+   Compiling pipecat-services v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-services)
+   Compiling pipecat-media-transport v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-media-transport)
+   Compiling pipecat-local-audio v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-local-audio)
+   Compiling pipecat-piper v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-piper)
+   Compiling pipecat-vad v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-vad)
+   Compiling pipecat-whisper v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-whisper)
+   Compiling pipecat-hepta v0.1.0 (/workspace/scratch/27653505a519/pipecat-rs/rust/crates/pipecat-hepta)
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/rustc6C60lw/symbols.o" "<2 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libtest-*,libgetopts-*,librustc_std_workspace_std-*}.rlib" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/{libpipecat_hepta-4979613088b34eca,libpipecat_whisper-93d8107e501677c5,libchrono-89a13fd68afe1d56,libiana_time_zone-cb55bd941ea0576a,libwhisper_rs-e7fd539ad240055b,libwhisper_rs_sys-65beffa21f6efc14,libpipecat_vad-583a6cc69877e8b3,librustfft-22feeb5eb07a081c,libprimal_check-d7458e1f56686925,libtranspose-9779214bb59f40ca,libstrength_reduce-3579637ea9804c9f,libpipecat_piper-fa54065f36686532,libpipecat_text-84cf671aa98d0d61,libsentencex-a7703d5edbf5f9f5,libstrum-0d2ee1a839550349,librustc_hash-eae8c487c1b4dc4b,libregex-b8f973f381aa960d,libregex_automata-d42382d31ef954be,libaho_corasick-0fc31818b7d57122,libregex_syntax-6c726b1287494f99,libpulldown_cmark-9c36ce885f9a719c,libunicase-6849eb1fbec945f2,libpulldown_cmark_escape-c5bc1bb381103919,libpipecat_services-0b0ff1555525015e,libreqwest-5a664b58037297bf,libserde_urlencoded-6e20917e9c086480,libryu-ed977b606803fa79,libbase64-31e2b5c523263982,libhyper_rustls-57169699b290ddfd,libwebpki_roots-9dd8988ea6ecc1ff,libtokio_rustls-937e05c0e9bb1e09,librustls-e510b955f668103b,libsubtle-b24e64197ced0dc3,libwebpki-747b838a3a7e1217,libring-3385e7e7b76b2598,libgetrandom-9ae5c89831507186,libuntrusted-c4249a76c523c668,librustls_pki_types-f8c07ab0fcd226c4,libzeroize-b8f85bf9af81301a,libtower_http-c9662a23cbe962d9,libtower-c631ac8b0a0567f2,libtower_layer-16d3f15e23c0dd04,libhyper_util-72417ea87da84691,libbase64-88a03ba1117f41bd,libipnet-955a4d999b6a0b43,libfutures_channel-5b847ab64fbba427,libtower_service-b5375304e5c19552,libhyper-aa32493252954ed2,libwant-25d3517549a56997,libtry_lock-98de9a42b079a47c,libhttparse-4ebc3c5cd7e3453e,libatomic_waker-8e9a2361397e5d91,libfutures_util-4399934da7a7d721,libslab-64388eb4e9bf586b,libfutures_task-eb7d389c43a79633,libtokio_util-d8696bf8c3e0531b,libfutures_sink-a810dbeb9f6a3689,libhttp_body_util-23fe0235293b022a,libhttp_body-36c9db34a91a4b65,liblog-f8c37662cc012b30,liburl-aabd7e2136971529,libidna-bc2f93dfd5358aa5,libidna_adapter-c8fc33ea723665d7,libicu_properties-e0012f4b9dd37f0a,libicu_properties_data-23b485fb50671837,libicu_normalizer-a9db70c8a3a2abf6,libsmallvec-21515eccdc6b54f0,libicu_normalizer_data-e4ca16b3068d3206,libicu_collections-9462c99b56b7d044,libutf8_iter-bc7ee56be4daef3f,libpotential_utf-8089d7546c977815,libicu_provider-fc45cd539c256b03,libicu_locale_core-d5b399f6bedd91f0,libtinystr-f123439030bcafa6,liblitemap-b996e08485a22898,libwriteable-28e3585ee43828be,libzerovec-832b9a65e0c0cde2,libzerotrie-ba2d4434e527ff82,libyoke-14278c23e0e244ac,libstable_deref_trait-299693ca6d1d0366,libzerofrom-d773cb14f3d5ae05,libform_urlencoded-4578dabc689cc71b,libpercent_encoding-0a20e802c96eb497,libhttp-529d7246193601b7,libsync_wrapper-1f130115f0d159b1,libfutures_core-c66a5fb3b29423ff,libort-c9a233973f9f7489,liblibloading-57e845640e310b24,libtracing-9499db81407318b7,libtracing_core-5c28dc2b2a2f69c2,libonce_cell-437f537a3ff84864,libort_sys-0e91e15143c6c1fc,libndarray-72d340aa6f45cc42,libmatrixmultiply-3ce40d95113aa3f2,libnum_complex-d754b6041c68b3ea,libnum_integer-fe9186f96809246b,libnum_traits-e499e2f6fa15fd52,librawpointer-db4372439b328f7e,libunicode_normalization-bf55ebe226ba8d4a,libtinyvec-ca7dc581f3a03a5c,libpipecat_local_audio-7f41bd1b7058b327,libpipecat_media_transport-c39227bc72f5ff56,libcpal-32ac223262fa7c87,libdasp_sample-7a2e280161034ac0,libalsa-ced18642afe42dbb,libbitflags-5a4e44694db2c296,libalsa_sys-7fbd439e027e1373,libpipecat_core-a3e28bf74daf2069,libtokio-20cc1a15ec707da6,libsocket2-72a51299a2a9c04e,libbytes-5c7552e459571a76,libmio-bfaad105bf050de0,liblibc-e3683aa881c1e51c,libpin_project_lite-60db0d7be62c1ed6,libserde_json-42a4f89cd13049b3,libmemchr-cdf3f32fe31a0ff4,libitoa-728d7899ac7aa759,libzmij-1471f7e754272b58,libpipecat_audio-33477e3658bbbdbd,libthiserror-7f49548525baa3de,libsha2-2fc502fc5c28e3c8,libcpufeatures-c4b0198afa6fd939,libcfg_if-c5749788b74aba21,libdigest-7f63e24d96b3cb07,libblock_buffer-2c682cbd1bcdbcad,libcrypto_common-0079e1a829d46179,libgeneric_array-17f00f4665fef02f,libtypenum-e27be429f003f67f,libserde-6ea78e4c222334a4,libserde_core-c9ecec66d2f8c974}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lstdc++" "-ldl" "-lasound" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/rustc6C60lw/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/ring-fed9f540fe5609df/out" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src/CMakeFiles/whisper.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/ggml-cpu" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/ggml-cpu/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-base.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/CMakeScratch" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdASM" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdCXX" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdCXX/tmp" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdC" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdC/tmp" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/pkgRedirects" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out" "-L" "/workspace/scratch/27653505a519/native-sysroot/usr/lib/x86_64-linux-gnu" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/media_command-0b015f7930a927d8" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-Wl,--strip-debug" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: unable to find library -lasound
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `pipecat-hepta` (test "media_command") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/rustcxg1oUn/symbols.o" "<17 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libtest-*,libgetopts-*,librustc_std_workspace_std-*}.rlib" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/{libpipecat_whisper-93d8107e501677c5,libchrono-89a13fd68afe1d56,libiana_time_zone-cb55bd941ea0576a,libwhisper_rs-e7fd539ad240055b,libwhisper_rs_sys-65beffa21f6efc14,libpipecat_vad-583a6cc69877e8b3,librustfft-22feeb5eb07a081c,libprimal_check-d7458e1f56686925,libtranspose-9779214bb59f40ca,libstrength_reduce-3579637ea9804c9f,libpipecat_piper-fa54065f36686532,libpipecat_text-84cf671aa98d0d61,libsentencex-a7703d5edbf5f9f5,libstrum-0d2ee1a839550349,librustc_hash-eae8c487c1b4dc4b,libregex-b8f973f381aa960d,libregex_automata-d42382d31ef954be,libaho_corasick-0fc31818b7d57122,libregex_syntax-6c726b1287494f99,libpulldown_cmark-9c36ce885f9a719c,libunicase-6849eb1fbec945f2,libpulldown_cmark_escape-c5bc1bb381103919,libpipecat_services-0b0ff1555525015e,libreqwest-5a664b58037297bf,libserde_urlencoded-6e20917e9c086480,libryu-ed977b606803fa79,libbase64-31e2b5c523263982,libhyper_rustls-57169699b290ddfd,libwebpki_roots-9dd8988ea6ecc1ff,libtokio_rustls-937e05c0e9bb1e09,librustls-e510b955f668103b,libsubtle-b24e64197ced0dc3,libwebpki-747b838a3a7e1217,libring-3385e7e7b76b2598,libgetrandom-9ae5c89831507186,libuntrusted-c4249a76c523c668,librustls_pki_types-f8c07ab0fcd226c4,libzeroize-b8f85bf9af81301a,libtower_http-c9662a23cbe962d9,libtower-c631ac8b0a0567f2,libtower_layer-16d3f15e23c0dd04,libhyper_util-72417ea87da84691,libbase64-88a03ba1117f41bd,libipnet-955a4d999b6a0b43,libfutures_channel-5b847ab64fbba427,libtower_service-b5375304e5c19552,libhyper-aa32493252954ed2,libwant-25d3517549a56997,libtry_lock-98de9a42b079a47c,libhttparse-4ebc3c5cd7e3453e,libatomic_waker-8e9a2361397e5d91,libfutures_util-4399934da7a7d721,libslab-64388eb4e9bf586b,libfutures_task-eb7d389c43a79633,libtokio_util-d8696bf8c3e0531b,libfutures_sink-a810dbeb9f6a3689,libhttp_body_util-23fe0235293b022a,libhttp_body-36c9db34a91a4b65,liblog-f8c37662cc012b30,liburl-aabd7e2136971529,libidna-bc2f93dfd5358aa5,libidna_adapter-c8fc33ea723665d7,libicu_properties-e0012f4b9dd37f0a,libicu_properties_data-23b485fb50671837,libicu_normalizer-a9db70c8a3a2abf6,libsmallvec-21515eccdc6b54f0,libicu_normalizer_data-e4ca16b3068d3206,libicu_collections-9462c99b56b7d044,libutf8_iter-bc7ee56be4daef3f,libpotential_utf-8089d7546c977815,libicu_provider-fc45cd539c256b03,libicu_locale_core-d5b399f6bedd91f0,libtinystr-f123439030bcafa6,liblitemap-b996e08485a22898,libwriteable-28e3585ee43828be,libzerovec-832b9a65e0c0cde2,libzerotrie-ba2d4434e527ff82,libyoke-14278c23e0e244ac,libstable_deref_trait-299693ca6d1d0366,libzerofrom-d773cb14f3d5ae05,libform_urlencoded-4578dabc689cc71b,libpercent_encoding-0a20e802c96eb497,libhttp-529d7246193601b7,libsync_wrapper-1f130115f0d159b1,libfutures_core-c66a5fb3b29423ff,libort-c9a233973f9f7489,liblibloading-57e845640e310b24,libtracing-9499db81407318b7,libtracing_core-5c28dc2b2a2f69c2,libonce_cell-437f537a3ff84864,libort_sys-0e91e15143c6c1fc,libndarray-72d340aa6f45cc42,libmatrixmultiply-3ce40d95113aa3f2,libnum_complex-d754b6041c68b3ea,libnum_integer-fe9186f96809246b,libnum_traits-e499e2f6fa15fd52,librawpointer-db4372439b328f7e,libunicode_normalization-bf55ebe226ba8d4a,libtinyvec-ca7dc581f3a03a5c,libpipecat_local_audio-7f41bd1b7058b327,libpipecat_media_transport-c39227bc72f5ff56,libcpal-32ac223262fa7c87,libdasp_sample-7a2e280161034ac0,libalsa-ced18642afe42dbb,libbitflags-5a4e44694db2c296,libalsa_sys-7fbd439e027e1373,libpipecat_core-a3e28bf74daf2069,libtokio-20cc1a15ec707da6,libsocket2-72a51299a2a9c04e,libbytes-5c7552e459571a76,libmio-bfaad105bf050de0,liblibc-e3683aa881c1e51c,libpin_project_lite-60db0d7be62c1ed6,libserde_json-42a4f89cd13049b3,libmemchr-cdf3f32fe31a0ff4,libitoa-728d7899ac7aa759,libzmij-1471f7e754272b58,libpipecat_audio-33477e3658bbbdbd,libthiserror-7f49548525baa3de,libsha2-2fc502fc5c28e3c8,libcpufeatures-c4b0198afa6fd939,libcfg_if-c5749788b74aba21,libdigest-7f63e24d96b3cb07,libblock_buffer-2c682cbd1bcdbcad,libcrypto_common-0079e1a829d46179,libgeneric_array-17f00f4665fef02f,libtypenum-e27be429f003f67f,libserde-6ea78e4c222334a4,libserde_core-c9ecec66d2f8c974}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libpanic_unwind-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lstdc++" "-ldl" "-lasound" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/rustcxg1oUn/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/ring-fed9f540fe5609df/out" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/src/CMakeFiles/whisper.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/ggml-cpu" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/ggml-cpu/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/src/CMakeFiles/ggml-base.dir" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/ggml/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/CMakeScratch" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdASM" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdCXX" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdCXX/tmp" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdC" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/4.4.4/CompilerIdC/tmp" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out/build/CMakeFiles/pkgRedirects" "-L" "/tmp/pipecat-hmi-native-27653505a519/debug/build/whisper-rs-sys-0acf79a67336cebe/out" "-L" "/workspace/scratch/27653505a519/native-sysroot/usr/lib/x86_64-linux-gnu" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/tmp/pipecat-hmi-native-27653505a519/debug/deps/pipecat_hepta-91d5d27e1fb93471" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-Wl,--strip-debug" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: unable to find library -lasound
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `pipecat-hepta` (lib test) due to 1 previous error

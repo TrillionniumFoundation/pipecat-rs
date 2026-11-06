@@ -1,0 +1,40 @@
+[
+  {
+    "name": "native-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "rust/Cargo.toml",
+      "-p",
+      "pipecat-hepta",
+      "--features",
+      "local-speech",
+      "--all-targets",
+      "--locked",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 175.42017433
+  },
+  {
+    "name": "native-example-build",
+    "command": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "rust/Cargo.toml",
+      "-p",
+      "pipecat-hepta",
+      "--features",
+      "local-speech",
+      "--example",
+      "local_speech",
+      "--locked"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.6933747680013767
+  }
+]
