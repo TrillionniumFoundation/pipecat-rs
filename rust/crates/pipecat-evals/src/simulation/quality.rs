@@ -214,8 +214,10 @@ mod tests {
         assert!(ledger.text(&"x".repeat(MAX_TEXT + 1)).is_err());
         ledger.bytes = MAX_HISTORY;
         assert!(ledger.user("x", 2).is_err());
-        let mut ledger = QualityLedger::default();
-        ledger.entries = vec![json!({}); 2048];
+        let mut ledger = QualityLedger {
+            entries: vec![json!({}); 2048],
+            ..QualityLedger::default()
+        };
         assert!(ledger.user("x", 2).is_err());
     }
     #[test]

@@ -351,9 +351,18 @@ async fn drop_aborts_tasks_even_when_senders_and_monitors_are_retained() {
 async fn absent_peer_has_a_bounded_deadline() {
     let (mut config, listener) = Listener::new();
     config.limits.connect_timeout = Duration::from_millis(150);
+    let connect_timeout = config.limits.connect_timeout;
+    let end_timeout = config.limits.end_timeout;
     let accepting = tokio::spawn(listener.accept(false, 1));
+    let started = std::time::Instant::now();
     let result = bounded(MoqConnection::connect(config)).await;
-    assert!(matches!(result, Err(Error::Timeout("peer announcement"))));
+    let elapsed = started.elapsed();
+    assert!(
+        matches!(result, Err(Error::Timeout("peer announcement"))),
+        "expected peer announcement timeout; actual={:?}, elapsed={elapsed:?}, connect_timeout={connect_timeout:?}, end_timeout={end_timeout:?}, accepting_finished={}",
+        result.as_ref().map(|_| ()),
+        accepting.is_finished(),
+    );
     drop(bounded(accepting).await.unwrap());
 }
 
